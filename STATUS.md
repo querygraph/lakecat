@@ -5,6 +5,12 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/testing slice:
+  `Harden lineage-drain scope scalar summaries`.
+  Raw lineage-drain summaries now fail closed when view warehouse/name/namespace,
+  management project/warehouse, policy id, or policy ODRL hash scalar evidence
+  is malformed or blank, preventing compact QGLake/QueryGraph proof from
+  silently omitting those anchors.
 - Latest documentation/book slice:
   `Expand release vocabulary and Sail engine argument`.
   The LakeCat book now has a canonical release-vocabulary chapter that

@@ -13198,8 +13198,9 @@ Grust, OpenLineage, QGLake, or QueryGraph can inherit them. The current
 hardening work has been deliberately strict: malformed counts, duplicate
 standard names, short hashes, decorated locations, raw-secret claims, malformed
 view versions, malformed credential exceptions, malformed QueryGraph hashes,
-and malformed TypeSec-style identity fields fail closed rather than
-disappearing from a compact proof summary.
+malformed TypeSec-style identity fields, and malformed scalar scope anchors
+such as view, management, policy, and policy ODRL evidence fail closed rather
+than disappearing from a compact proof summary.
 
 These concepts are LakeCat extensions today. The future proposal candidates
 inside them are the neutral pieces: exact retry, pointer-history proof,

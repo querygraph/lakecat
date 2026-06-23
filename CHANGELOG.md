@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened lineage-drain scope scalar summaries. Raw replay summary
+  construction now rejects malformed or blank view scope, management scope,
+  policy id, and policy ODRL hash evidence instead of silently dropping those
+  scalar anchors before QGLake/QueryGraph compact proof consumes them.
 - Added a canonical release-vocabulary chapter to the LakeCat book. The new
   chapter thoroughly separates standard Iceberg parlance from LakeCat
   catalog-control concepts, TypeSec governed-access extensions,

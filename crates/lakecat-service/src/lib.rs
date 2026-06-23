@@ -6976,20 +6976,24 @@ fn lineage_drain_event_summary(
 ) -> Result<LineageDrainEventSummary, LakeCatError> {
     let payload = event.payload.get("payload").unwrap_or(&event.payload);
     let view = payload.get("view");
-    let view_warehouse = view
-        .and_then(|view| view.get("warehouse"))
-        .or_else(|| payload.get("warehouse"))
-        .and_then(Value::as_str)
-        .map(str::to_string);
-    let view_namespace = namespace_summary_parts(
+    let view_warehouse = lineage_summary_optional_nonblank_string_value(
+        event,
+        view.and_then(|view| view.get("warehouse"))
+            .or_else(|| payload.get("warehouse")),
+        "view warehouse",
+    )?;
+    let view_namespace = lineage_summary_namespace_parts(
+        event,
         view.and_then(|view| view.get("namespace"))
             .or_else(|| payload.get("namespace")),
-    );
-    let view_name = view
-        .and_then(|view| view.get("name"))
-        .and_then(Value::as_str)
-        .or_else(|| payload.get("view").and_then(Value::as_str))
-        .map(str::to_string);
+        "view namespace",
+    )?;
+    let view_name = lineage_summary_optional_nonblank_string_value(
+        event,
+        view.and_then(|view| view.get("name"))
+            .or_else(|| payload.get("view")),
+        "view name",
+    )?;
     let view_name_ref = view_name.as_deref();
     let view_version = if let Some(view) = view.filter(|view| view.get("view-version").is_some()) {
         Some(lineage_summary_positive_u64_field(
@@ -7166,13 +7170,15 @@ fn lineage_drain_event_summary(
             .transpose()?
             .unwrap_or_default(),
         policy_id: policy
-            .and_then(|policy| policy.get("policy-id"))
-            .and_then(Value::as_str)
-            .map(str::to_string),
+            .map(|policy| {
+                lineage_summary_optional_nonblank_string_field(event, policy, "policy-id")
+            })
+            .transpose()?
+            .flatten(),
         policy_odrl_hash: policy
-            .and_then(|policy| policy.get("odrl-hash"))
-            .and_then(Value::as_str)
-            .map(str::to_string),
+            .map(|policy| lineage_summary_optional_full_hash_field(event, policy, "odrl-hash"))
+            .transpose()?
+            .flatten(),
         project_count: lineage_summary_optional_count_alias_field(
             event,
             payload,
@@ -7324,14 +7330,16 @@ fn lineage_drain_event_summary(
             .map(|_| lineage_summary_string_array_field(event, payload, "effective-stats-fields"))
             .transpose()?
             .unwrap_or_default(),
-        management_scope_project_id: payload
-            .get("project-id")
-            .and_then(Value::as_str)
-            .map(str::to_string),
-        management_scope_warehouse: payload
-            .get("warehouse")
-            .and_then(Value::as_str)
-            .map(str::to_string),
+        management_scope_project_id: lineage_summary_optional_nonblank_string_field(
+            event,
+            payload,
+            "project-id",
+        )?,
+        management_scope_warehouse: lineage_summary_optional_nonblank_string_field(
+            event,
+            payload,
+            "warehouse",
+        )?,
         standards: payload
             .get("standards")
             .map(|_| lineage_summary_string_array_field(event, payload, "standards"))
@@ -7910,6 +7918,32 @@ fn lineage_summary_optional_nonblank_string_field(
     Ok(Some(value.to_string()))
 }
 
+fn lineage_summary_optional_nonblank_string_value(
+    event: &OutboxEvent,
+    value: Option<&Value>,
+    label: &str,
+) -> Result<Option<String>, LakeCatError> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    if value.is_null() {
+        return Ok(None);
+    }
+    let Some(value) = value.as_str() else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} must be a string when present"),
+        ));
+    };
+    if value.trim().is_empty() {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} must not be blank"),
+        ));
+    }
+    Ok(Some(value.to_string()))
+}
+
 fn lineage_summary_counted_string_array_field(
     event: &OutboxEvent,
     object: &Value,
@@ -7947,15 +7981,49 @@ fn lineage_summary_counted_string_array_field(
     Ok(strings)
 }
 
-fn namespace_summary_parts(value: Option<&Value>) -> Vec<String> {
+fn lineage_summary_namespace_parts(
+    event: &OutboxEvent,
+    value: Option<&Value>,
+    label: &str,
+) -> Result<Vec<String>, LakeCatError> {
     match value {
-        Some(Value::Array(parts)) => parts
-            .iter()
-            .filter_map(Value::as_str)
-            .map(str::to_string)
-            .collect(),
-        Some(Value::String(path)) => path.split('.').map(str::to_string).collect(),
-        _ => Vec::new(),
+        None | Some(Value::Null) => Ok(Vec::new()),
+        Some(Value::Array(parts)) => {
+            let mut namespace = Vec::with_capacity(parts.len());
+            for part in parts {
+                let Some(part) = part.as_str() else {
+                    return Err(outbox_evidence_error(
+                        event,
+                        &format!("{label} must contain strings"),
+                    ));
+                };
+                if part.trim().is_empty() {
+                    return Err(outbox_evidence_error(
+                        event,
+                        &format!("{label} must not contain blank strings"),
+                    ));
+                }
+                namespace.push(part.to_string());
+            }
+            Ok(namespace)
+        }
+        Some(Value::String(path)) => {
+            let mut namespace = Vec::new();
+            for part in path.split('.') {
+                if part.trim().is_empty() {
+                    return Err(outbox_evidence_error(
+                        event,
+                        &format!("{label} must not contain blank strings"),
+                    ));
+                }
+                namespace.push(part.to_string());
+            }
+            Ok(namespace)
+        }
+        Some(_) => Err(outbox_evidence_error(
+            event,
+            &format!("{label} must be a string or string array when present"),
+        )),
     }
 }
 
@@ -50076,6 +50144,103 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("policy-count must be an unsigned integer when present"));
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_scope_scalars() {
+        let receipt = OutboxProjectionReceipt::default();
+        let cases = [
+            (
+                "evt-bad-summary-view-warehouse",
+                "view.loaded",
+                json!({
+                    "view": {
+                        "warehouse": 42,
+                        "namespace": ["default"],
+                        "name": "events_view"
+                    }
+                }),
+                "view warehouse must be a string when present",
+            ),
+            (
+                "evt-bad-summary-view-namespace",
+                "view.loaded",
+                json!({
+                    "view": {
+                        "warehouse": "local",
+                        "namespace": ["default", 42],
+                        "name": "events_view"
+                    }
+                }),
+                "view namespace must contain strings",
+            ),
+            (
+                "evt-blank-summary-view-name",
+                "view.loaded",
+                json!({
+                    "view": {
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "name": " "
+                    }
+                }),
+                "view name must not be blank",
+            ),
+            (
+                "evt-blank-summary-policy-id",
+                "policy-binding.upserted",
+                json!({
+                    "policy": {
+                        "policy-id": " "
+                    }
+                }),
+                "policy-id must not be blank",
+            ),
+            (
+                "evt-bad-summary-policy-odrl-hash",
+                "policy-binding.upserted",
+                json!({
+                    "policy": {
+                        "policy-id": "agent-read",
+                        "odrl-hash": "sha256:short"
+                    }
+                }),
+                "odrl-hash must contain full SHA-256 digest evidence",
+            ),
+            (
+                "evt-bad-summary-management-project",
+                "warehouse.listed",
+                json!({
+                    "project-id": 42
+                }),
+                "project-id must be a string when present",
+            ),
+            (
+                "evt-blank-summary-management-warehouse",
+                "table.commits-listed",
+                json!({
+                    "warehouse": " "
+                }),
+                "warehouse must not be blank",
+            ),
+        ];
+
+        for (event_id, event_type, payload, expected_message) in cases {
+            let event = OutboxEvent {
+                event_id: event_id.to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: event_type.to_string(),
+                payload: json!({
+                    "payload": payload
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            };
+            let err = lineage_drain_event_summary(&event, &receipt)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains(expected_message), "{err}");
+        }
     }
 
     #[test]
