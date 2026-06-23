@@ -8362,10 +8362,11 @@ the wrapped outbox envelope for namespace lifecycle events, so those claims
 cannot be placed beside an otherwise valid checked inner namespace payload. Raw
 lineage-drain summaries now reuse those same validators for `namespace.listed`,
 `namespace.created`, `namespace.loaded`, and `namespace.dropped`: namespace
-inventory must be count-bound and duplicate-free, lifecycle namespaces must be
-valid paths or component arrays, receipt actions must match the event type, and
-closed wrappers cannot carry unverified QueryGraph or lineage sidecars before
-compact QGLake standard catalog proof inherits the evidence.
+inventory counts must match the listed namespace paths and remain
+duplicate-free, lifecycle namespaces must be valid paths or component arrays,
+receipt actions must match the event type, and closed wrappers cannot carry
+unverified QueryGraph or lineage sidecars before compact QGLake standard
+catalog proof inherits the evidence.
 Catalog read replay has the same fail-closed shape: `catalog.config-read`
 events must carry a valid warehouse, and `namespace.listed` events must carry
 both a valid warehouse and an unsigned namespace count before the read evidence

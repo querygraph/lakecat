@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw namespace-list count-binding summary coverage:
+  raw lineage-drain `namespace.listed` summaries now explicitly prove
+  `namespace-count` must match the number of `namespace-paths`; archived
+  namespace inventory proof cannot inflate standard catalog discovery counts
+  before compact QGLake proof inherits it.
+- Local verification for this raw namespace-list count-binding slice passed:
+  `cargo fmt -p lakecat-service -- --check`; and
+  `cargo test -p lakecat-service lineage_drain_summary_rejects_malformed_namespace_events -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest raw view-list count-binding summary coverage:
   raw lineage-drain `view.listed` summaries now explicitly prove
   `view-count` must match the number of `view-names`; archived view inventory

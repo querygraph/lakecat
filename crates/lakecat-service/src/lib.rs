@@ -54873,6 +54873,15 @@ mod tests {
                 "namespace list namespace-paths must contain non-empty strings",
             ),
             (
+                "evt-bad-summary-namespace-count-mismatch",
+                "namespace.listed",
+                json!({
+                    "namespace-count": 2,
+                    "namespace-paths": ["default"]
+                }),
+                "namespace list namespace-paths count must match namespace list count",
+            ),
+            (
                 "evt-duplicate-summary-namespace-paths",
                 "namespace.listed",
                 json!({

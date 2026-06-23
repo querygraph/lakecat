@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added raw namespace-list summary count-binding coverage. Raw lineage-drain
+  `namespace.listed` summaries now explicitly prove `namespace-count` must
+  match `namespace-paths` before compact QGLake standard catalog discovery
+  proof can inherit archived namespace inventory.
 - Added raw view-list summary count-binding coverage. Raw lineage-drain
   `view.listed` summaries now explicitly prove `view-count` must match
   `view-names` before compact QGLake view inventory proof can inherit archived
