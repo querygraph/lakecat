@@ -197,6 +197,10 @@ require_pattern 'sail-iceberg = \{ path = "../../../sail/crates/sail-iceberg", o
   "lakecat-cli must keep sail-iceberg optional outside the qglake-fixture feature"
 require_pattern 'cargo run -p lakecat-cli --features qglake-fixture -- qglake-fixture' scripts/qglake-handoff-local.sh \
   "local QGLake handoff must opt into the fixture feature only for the generator step"
+require_pattern 'LAKECAT_GRUST_TURSO_PATH="\$GRUST_TURSO_PATH"' scripts/qglake-handoff-local.sh \
+  "local QGLake handoff must configure a dedicated Grust Turso graph database"
+require_pattern 'cargo run -p lakecat-service --features sail-local,grust-turso-local,typesec-local,turso-local' scripts/qglake-handoff-local.sh \
+  "local QGLake handoff must exercise Grust Turso graph projection end to end"
 
 for sibling in ../sail/crates/sail-catalog ../sail/crates/sail-common-datafusion; do
   require_dir "$sibling"

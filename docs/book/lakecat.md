@@ -7883,8 +7883,11 @@ bridges. Grust now follows the local 0.10 path checkout so LakeCat can use
 `grust-turso` for durable catalog graph projection. The graph boundary is still
 Grust-owned: LakeCat emits catalog graph events, `grust-local` keeps a
 memory-backed Grust sink for fast tests, and `grust-turso-local` bootstraps a
-Grust `TursoGraphStore` when durable graph persistence is being exercised.
-TypeSec still resolves from the published `typesec` 0.8.0 crate.
+Grust `TursoGraphStore` when durable graph persistence is being exercised. The
+live QGLake handoff harness uses that Turso-backed sink with an explicit
+`LAKECAT_GRUST_TURSO_PATH`, so the same end-to-end QueryGraph acceptance flow
+that validates replay and import also proves LakeCat is not doing graph storage
+work locally. TypeSec still resolves from the published `typesec` 0.8.0 crate.
 
 Sail is different today: LakeCat still uses local Sail paths plus a checked-in
 patch bridge for helper APIs that are not yet published. Before pushing a slice

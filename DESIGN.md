@@ -380,8 +380,11 @@ boundary cleanup rather than new architecture:
   checkout while `grust-turso` is ahead of the published facade line. LakeCat's
   `grust-local` feature keeps the fast memory-backed projection sink, and
   `grust-turso-local` bootstraps a Grust `TursoGraphStore` for durable catalog
-  graph projection. Graph persistence, traversal, and future Cypher-over-Turso
-  behavior remain Grust-owned.
+  graph projection. The live `scripts/qglake-handoff-local.sh` harness should
+  run the service with `grust-turso-local` and `LAKECAT_GRUST_TURSO_PATH`, so
+  the QGLake/QueryGraph acceptance path exercises the same durable Grust Turso
+  backend. Graph persistence, traversal, and future Cypher-over-Turso behavior
+  remain Grust-owned.
 - Refresh README, book artifacts, `STATUS.md`, and version/release notes from
   the same commit that passes the full gate.
 - Cut a release tag only after the broad local gate, QGLake handoff,

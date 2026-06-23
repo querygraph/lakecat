@@ -25,6 +25,7 @@ QUERYGRAPH_IMPORT_OUTPUT="$RUN_DIR/querygraph-import.json"
 LAKECAT_HANDOFF_VERIFY_OUTPUT="$RUN_DIR/lakecat-handoff-verify.json"
 LAKECAT_HANDOFF_SELF_VERIFY_OUTPUT="$RUN_DIR/lakecat-handoff-self-verify.json"
 TURSO_PATH="$RUN_DIR/lakecat.turso"
+GRUST_TURSO_PATH="$RUN_DIR/lakecat-graph.turso"
 SERVICE_LOG="$RUN_DIR/lakecat-service.log"
 LOCATION="file://$RUN_DIR/events"
 METADATA_LOCATION="$LOCATION/metadata/00000.json"
@@ -1772,16 +1773,18 @@ ensure_bind_addr_free
 mkdir -p "$RUN_DIR"
 rm -f "$BUNDLE" "$DRAIN" "$IMPORT_PLAN" "$SUMMARY" \
   "$LAKECAT_REPLAY_OUTPUT" "$LAKECAT_HANDOFF_VERIFY_OUTPUT" "$LAKECAT_HANDOFF_SELF_VERIFY_OUTPUT" "$QUERYGRAPH_VERIFY_OUTPUT" "$QUERYGRAPH_IMPORT_OUTPUT" \
-  "$TURSO_PATH" "$TURSO_PATH-wal" "$TURSO_PATH-shm" "$SERVICE_LOG"
+  "$TURSO_PATH" "$TURSO_PATH-wal" "$TURSO_PATH-shm" \
+  "$GRUST_TURSO_PATH" "$GRUST_TURSO_PATH-wal" "$GRUST_TURSO_PATH-shm" "$SERVICE_LOG"
 rm -rf "$RUN_DIR/events"
 
-echo "Starting LakeCat at $CATALOG_URL"
+echo "Starting LakeCat at $CATALOG_URL with Grust Turso graph projection"
 (
   cd "$ROOT_DIR"
   LAKECAT_BIND_ADDR="$CATALOG_BIND" \
     LAKECAT_WAREHOUSE="$WAREHOUSE" \
     LAKECAT_TURSO_PATH="$TURSO_PATH" \
-    cargo run -p lakecat-service --features sail-local,grust-local,typesec-local,turso-local \
+    LAKECAT_GRUST_TURSO_PATH="$GRUST_TURSO_PATH" \
+    cargo run -p lakecat-service --features sail-local,grust-turso-local,typesec-local,turso-local \
     >"$SERVICE_LOG" 2>&1
 ) &
 SERVICE_PID="$!"

@@ -6,6 +6,24 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Run QGLake handoff over Grust Turso graph projection`.
+  The live `scripts/qglake-handoff-local.sh` harness now starts LakeCat with
+  `grust-turso-local` and a dedicated `LAKECAT_GRUST_TURSO_PATH`, so the
+  end-to-end QGLake/QueryGraph acceptance path exercises Grust's Turso-backed
+  catalog graph sink instead of only the memory-backed Grust sink. Graph
+  persistence and future graph-query/Cypher-over-Turso behavior remain
+  Grust-owned; LakeCat only configures the sink and emits catalog graph events.
+- Local verification for this Grust Turso handoff slice is green:
+  `bash -n scripts/qglake-handoff-local.sh scripts/check-local-dependency-contract.sh scripts/check-release-readiness.sh`
+  passed; `scripts/check-local-dependency-contract.sh` passed;
+  `scripts/qglake-handoff-local.sh` passed with the service started on
+  `grust-turso-local`; `docs/book/build.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `cargo test -p lakecat-service --features grust-turso-local --lib outbox_drain_projects_table_events_to_sinks -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-graph --features grust-turso-local --lib grust_turso_store_persists_lakecat_catalog_projection_boundary -- --test-threads=1`
+  passed; `git diff --check` passed.
+- Latest implementation/testing slice:
   `Tighten handoff receipt-chain hash coverage`.
   The local QGLake handoff script now rejects extra hash-shaped
   `chainHashes` or `receiptHashes` evidence that is not represented by the

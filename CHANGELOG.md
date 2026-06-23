@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Moved the live QGLake handoff harness onto Grust Turso graph projection.
+  `scripts/qglake-handoff-local.sh` now starts the service with
+  `grust-turso-local` and a dedicated `LAKECAT_GRUST_TURSO_PATH`, so the
+  end-to-end QueryGraph acceptance path exercises Grust's Turso graph backend
+  instead of only the memory-backed Grust sink.
 - Tightened local QGLake handoff receipt-chain hash coverage. The handoff
   script now requires each `receiptChains[]` group's `chainHashes` and
   `receiptHashes` arrays to exactly match the nested structural chain and
