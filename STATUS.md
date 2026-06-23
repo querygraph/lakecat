@@ -5,6 +5,12 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/testing slice:
+  `Harden lineage-drain response manifest proof`.
+  Lineage-drain responses now fail closed if the acknowledged delivered count,
+  top-level event-type manifest, replay summary sequence, or aggregate
+  graph/lineage event counts drift before the response is returned to
+  QGLake/QueryGraph handoff consumers.
 - Latest documentation/book slice:
   `Expand standards and Sail engine-boundary book guidance`.
   The LakeCat book now includes a sharper decision model for whether a concept

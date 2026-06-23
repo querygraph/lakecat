@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened lineage-drain response manifest proof. Drain responses now validate
+  that the delivered count, top-level event-type sequence, replay summary
+  sequence, and aggregate graph/lineage event counts all reconcile before the
+  outbox acknowledgement is returned, preventing QGLake/QueryGraph handoff
+  proof from treating a drifted compact event manifest as accepted.
 - Expanded the LakeCat book's standards and engine-boundary explanation with
   an explicit extension/proposal/product-surface decision model and a
   step-by-step governed scan example. The new text shows how ordinary Iceberg

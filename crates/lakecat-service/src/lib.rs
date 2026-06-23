@@ -1234,7 +1234,7 @@ pub async fn drain_outbox_once(
             "outbox drain acknowledgement mismatch: projected {projected} event(s) but marked {delivered} delivered"
         )));
     }
-    Ok(LineageDrainResponse {
+    let response = LineageDrainResponse {
         delivered,
         event_types,
         graph_events,
@@ -1248,7 +1248,60 @@ pub async fn drain_outbox_once(
         typedid_envelope_hash: None,
         typedid_proof_hash: None,
         events: summaries,
-    })
+    };
+    validate_lineage_drain_response_manifest(&response)?;
+    Ok(response)
+}
+
+fn validate_lineage_drain_response_manifest(
+    response: &LineageDrainResponse,
+) -> Result<(), LakeCatError> {
+    if response.delivered != response.events.len() {
+        return Err(LakeCatError::Conflict(format!(
+            "lineage drain response delivered count {} did not match replay summary count {}",
+            response.delivered,
+            response.events.len()
+        )));
+    }
+    if response.event_types.len() != response.events.len() {
+        return Err(LakeCatError::Conflict(format!(
+            "lineage drain response event_types count {} did not match replay summary count {}",
+            response.event_types.len(),
+            response.events.len()
+        )));
+    }
+    for (index, (event_type, summary)) in response
+        .event_types
+        .iter()
+        .zip(response.events.iter())
+        .enumerate()
+    {
+        if event_type != &summary.event_type {
+            return Err(LakeCatError::Conflict(format!(
+                "lineage drain response event_types[{index}] {event_type} did not match events[{index}].event_type {}",
+                summary.event_type
+            )));
+        }
+    }
+    let graph_events: usize = response.events.iter().map(|event| event.graph_events).sum();
+    if response.graph_events != graph_events {
+        return Err(LakeCatError::Conflict(format!(
+            "lineage drain response graph_events {} did not match replay summary graph_events {}",
+            response.graph_events, graph_events
+        )));
+    }
+    let lineage_events: usize = response
+        .events
+        .iter()
+        .map(|event| event.lineage_events)
+        .sum();
+    if response.lineage_events != lineage_events {
+        return Err(LakeCatError::Conflict(format!(
+            "lineage drain response lineage_events {} did not match replay summary lineage_events {}",
+            response.lineage_events, lineage_events
+        )));
+    }
+    Ok(())
 }
 
 fn validate_projection_receipt_evidence(
@@ -14297,6 +14350,77 @@ mod tests {
             contexts[0]["request-identity"]["principal"]["subject"],
             serde_json::json!("alice@example.com")
         );
+    }
+
+    #[test]
+    fn lineage_drain_response_manifest_rejects_summary_drift() {
+        let namespace_summary: LineageDrainEventSummary = serde_json::from_value(json!({
+            "event-id": "evt-namespace",
+            "event-type": "namespace.created",
+            "graph-events": 1,
+            "lineage-events": 1
+        }))
+        .unwrap();
+        let table_summary: LineageDrainEventSummary = serde_json::from_value(json!({
+            "event-id": "evt-table",
+            "event-type": "table.created",
+            "graph-events": 2,
+            "lineage-events": 1
+        }))
+        .unwrap();
+        let response = LineageDrainResponse {
+            delivered: 2,
+            event_types: vec!["namespace.created".to_string(), "table.created".to_string()],
+            graph_events: 3,
+            lineage_events: 2,
+            principal_subject: None,
+            principal_kind: None,
+            authorization_receipt_hash: None,
+            authorization_receipt_action: None,
+            request_identity_state: None,
+            request_identity_source: None,
+            typedid_envelope_hash: None,
+            typedid_proof_hash: None,
+            events: vec![namespace_summary, table_summary],
+        };
+        validate_lineage_drain_response_manifest(&response).unwrap();
+
+        let mut delivered_drift = response.clone();
+        delivered_drift.delivered = 1;
+        let message = validate_lineage_drain_response_manifest(&delivered_drift)
+            .expect_err("delivered count drift should fail")
+            .to_string();
+        assert!(message.contains("delivered count 1 did not match replay summary count 2"));
+
+        let mut event_type_count_drift = response.clone();
+        event_type_count_drift.event_types.pop();
+        let message = validate_lineage_drain_response_manifest(&event_type_count_drift)
+            .expect_err("event type count drift should fail")
+            .to_string();
+        assert!(message.contains("event_types count 1 did not match replay summary count 2"));
+
+        let mut event_type_order_drift = response.clone();
+        event_type_order_drift.event_types.swap(0, 1);
+        let message = validate_lineage_drain_response_manifest(&event_type_order_drift)
+            .expect_err("event type order drift should fail")
+            .to_string();
+        assert!(message.contains(
+            "event_types[0] table.created did not match events[0].event_type namespace.created"
+        ));
+
+        let mut graph_count_drift = response.clone();
+        graph_count_drift.graph_events = 4;
+        let message = validate_lineage_drain_response_manifest(&graph_count_drift)
+            .expect_err("graph event aggregate drift should fail")
+            .to_string();
+        assert!(message.contains("graph_events 4 did not match replay summary graph_events 3"));
+
+        let mut lineage_count_drift = response;
+        lineage_count_drift.lineage_events = 3;
+        let message = validate_lineage_drain_response_manifest(&lineage_count_drift)
+            .expect_err("lineage event aggregate drift should fail")
+            .to_string();
+        assert!(message.contains("lineage_events 3 did not match replay summary lineage_events 2"));
     }
 
     #[tokio::test]
