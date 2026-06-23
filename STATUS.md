@@ -6,6 +6,11 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest release-contract slice:
+  `Add release-candidate clean gate`.
+  `scripts/check-release-readiness.sh --release-candidate` now requires a clean
+  tree before and after the complete full gate and rejects skipped book or
+  handoff evidence, matching the release checklist's clean-candidate rule.
+- Latest release-contract slice:
   `Align release-readiness help`.
   `scripts/check-release-readiness.sh --help` now describes the current quick
   gate surface, including workflow and release-version contracts, and documents

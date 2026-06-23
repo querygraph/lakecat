@@ -125,7 +125,7 @@ For first-release readiness, run the local release gate instead of relying on
 cloud CI. The full release checklist lives in [RELEASE.md](RELEASE.md):
 
 ```bash
-scripts/check-release-readiness.sh
+scripts/check-release-readiness.sh --release-candidate
 ```
 
 The full gate runs shell syntax checks, the local dependency contract, workflow

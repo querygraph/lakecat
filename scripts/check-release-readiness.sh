@@ -7,10 +7,11 @@ cd "$repo_root"
 mode="full"
 skip_handoff=0
 skip_book=0
+require_clean=0
 
 usage() {
   cat <<'USAGE'
-Usage: scripts/check-release-readiness.sh [--quick] [--skip-handoff] [--skip-book]
+Usage: scripts/check-release-readiness.sh [--quick] [--release-candidate] [--skip-handoff] [--skip-book]
 
 Runs the local-first LakeCat release gate. Full mode is intentionally heavier
 than a per-slice check and is meant to replace cloud CI as the release proof
@@ -19,6 +20,9 @@ while CI remains manual-only.
 Options:
   --quick         Run syntax, dependency, workflow, release-version, formatting,
                   and diff checks. This is not release evidence by itself.
+  --release-candidate
+                  Require a clean tree before and after the complete full gate.
+                  This rejects skipped book or handoff proof.
   --skip-handoff Skip scripts/qglake-handoff-local.sh in full mode and report
                   partial evidence instead of release-candidate success.
   --skip-book    Skip docs/book/build.sh in full mode and report partial
@@ -32,6 +36,9 @@ for arg in "$@"; do
       mode="quick"
       skip_handoff=1
       skip_book=1
+      ;;
+    --release-candidate)
+      require_clean=1
       ;;
     --skip-handoff)
       skip_handoff=1
@@ -55,6 +62,23 @@ run() {
   printf '\n==> %s\n' "$*"
   "$@"
 }
+
+require_clean_tree() {
+  local phase="$1"
+  if [[ -n "$(git status --short)" ]]; then
+    echo "release candidate gate requires a clean tree $phase" >&2
+    git status --short >&2
+    exit 1
+  fi
+}
+
+if [[ "$require_clean" -ne 0 ]]; then
+  if [[ "$mode" != "full" || "$skip_book" -ne 0 || "$skip_handoff" -ne 0 ]]; then
+    echo "--release-candidate requires the complete full gate without skipped evidence" >&2
+    exit 2
+  fi
+  require_clean_tree "before running checks"
+fi
 
 run bash -n scripts/check-local-dependency-contract.sh
 run bash -n scripts/check-workflow-trigger-contract.sh
@@ -111,6 +135,9 @@ if [[ "$mode" == "full" ]]; then
 fi
 
 run git diff --check
+if [[ "$require_clean" -ne 0 ]]; then
+  require_clean_tree "after running checks"
+fi
 
 echo
 if [[ "$mode" == "quick" ]]; then
@@ -124,5 +151,9 @@ elif [[ "$skip_book" -ne 0 || "$skip_handoff" -ne 0 ]]; then
     echo "Skipped QGLake handoff proof."
   fi
 else
-  echo "LakeCat full release-readiness checks passed."
+  if [[ "$require_clean" -ne 0 ]]; then
+    echo "LakeCat release-candidate checks passed from a clean tree."
+  else
+    echo "LakeCat full release-readiness checks passed."
+  fi
 fi

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added an explicit release-candidate mode to the local release gate. The new
+  `--release-candidate` option requires a clean tree before and after the full
+  gate and rejects skipped book or handoff proof.
 - Aligned the release-readiness CLI help with the current quick-gate behavior.
   The usage text now names workflow and release-version contracts, and explains
   that skipped book or handoff rows produce partial evidence.

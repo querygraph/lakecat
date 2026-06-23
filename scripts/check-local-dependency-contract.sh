@@ -151,6 +151,10 @@ require_pattern 'partial release-readiness checks passed with skipped release-ca
   "release-readiness gate must label skipped full runs as partial evidence"
 require_pattern 'workflow, release-version, formatting' scripts/check-release-readiness.sh \
   "release-readiness help must describe the current quick-gate contract surface"
+require_pattern 'release-candidate' scripts/check-release-readiness.sh \
+  "release-readiness help must document clean release-candidate mode"
+require_pattern 'release candidate gate requires a clean tree' scripts/check-release-readiness.sh \
+  "release-readiness gate must enforce clean-tree release-candidate evidence"
 require_pattern 'partial[[:space:]]+evidence instead of release-candidate success' scripts/check-release-readiness.sh \
   "release-readiness help must describe skipped full runs as partial evidence"
 require_pattern 'docs/book/check_pdf_layout\.sh' RELEASE.md \

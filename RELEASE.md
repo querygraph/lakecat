@@ -56,7 +56,7 @@ aligned with the same active Grust path checkout.
 Run the broad local gate from the clean release candidate commit:
 
 ```sh
-scripts/check-release-readiness.sh
+scripts/check-release-readiness.sh --release-candidate
 ```
 
 The full gate must pass without `--skip-book` or `--skip-handoff` for a release
@@ -66,6 +66,8 @@ artifacts, formatting, default workspace tests, explicit Turso/Sail/TypeSec/
 Grust feature tests, all-features CLI and workspace tests, book rebuild, EPUB
 metadata and PDF layout validation, QGLake handoff replay verification, and
 `git diff --check`.
+`--release-candidate` additionally requires the tree to be clean before and
+after the complete full gate.
 The QGLake handoff proof must run QueryGraph `lakecat-verify` and
 `lakecat-import` through `cargo run --locked` against the local `qg-rust`
 manifest, then persist both outputs in the saved handoff summary.
@@ -128,6 +130,7 @@ committed:
 
 ```sh
 git status --short --branch
+scripts/check-release-readiness.sh --release-candidate
 git tag -a v0.1.0 -m "LakeCat 0.1.0"
 git push origin master
 git push origin v0.1.0
