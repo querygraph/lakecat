@@ -18,6 +18,18 @@ Updated: 2026-06-23
   `grust_turso_store_runs_cypher_over_lakecat_catalog_projection_boundary`
   regression as its own explicit row, and the local dependency contract rejects
   release gates that drop that LakeCat-to-Grust Turso Cypher proof.
+- Latest release-docs slice:
+  `Clarify post-v0.1.0 release posture`.
+  `RELEASE.md` now records that `v0.1.0` is already tagged and pushed, warns
+  not to retag that published baseline for follow-up hardening, and the release
+  version contract verifies that the local `v0.1.0` tag is an ancestor of the
+  current tree when present.
+- Local verification for this release-docs slice is green:
+  `bash -n scripts/check-release-version-contract.sh scripts/check-local-dependency-contract.sh`
+  passed; `scripts/check-release-version-contract.sh` passed;
+  `scripts/check-local-dependency-contract.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed; `git diff --check`
+  passed.
 - Local verification for this release-contract slice is green:
   `bash -n scripts/check-release-readiness.sh scripts/check-local-dependency-contract.sh`
   passed; `scripts/check-local-dependency-contract.sh` passed;

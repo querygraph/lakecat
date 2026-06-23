@@ -5,6 +5,14 @@ manual-only. A release is ready only when the evidence below is collected from
 a clean local tree and the resulting documentation, book artifacts, and release
 notes are committed and pushed.
 
+## Published Baseline
+
+`v0.1.0` is already tagged and pushed. Current `master` is post-tag hardening on
+top of that first release baseline, not a reason to move or recreate the tag.
+The release version contract verifies that the local `v0.1.0` tag is an
+ancestor of the current tree when the tag is present, so follow-up release-gate
+or Grust/Turso proof work can continue without rewriting published history.
+
 ## Scope
 
 The first release covers the locally verifiable LakeCat catalog substrate:
@@ -142,6 +150,11 @@ git push origin v0.1.0
 ```
 
 Use a different tag only if `Cargo.toml` version has changed.
+
+For post-`v0.1.0` hardening while `Cargo.toml` remains at `0.1.0`, do not
+retag `v0.1.0`. Keep changes under `Unreleased`, keep the local release gate
+green, and cut the next tag only after the workspace version and release notes
+move forward together.
 
 ## Deferred Work Ledger
 

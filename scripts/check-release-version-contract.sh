@@ -59,6 +59,11 @@ release_tag="$(sed -n 's/.*git tag -a v\([0-9][0-9A-Za-z.-]*\) .*/\1/p' RELEASE.
 [[ -n "$release_tag" ]] || fail "could not read release tag command from RELEASE.md"
 [[ "$release_tag" == "$workspace_version" ]] || \
   fail "RELEASE.md tag v$release_tag does not match workspace version $workspace_version"
+local_tag="v$workspace_version"
+if git rev-parse -q --verify "refs/tags/$local_tag" >/dev/null; then
+  git merge-base --is-ancestor "$local_tag^{}" HEAD || \
+    fail "published release tag $local_tag must be an ancestor of HEAD"
+fi
 release_date="$(date -u +%F)"
 rg -q "^## $workspace_version - $release_date$" CHANGELOG.md || \
   fail "CHANGELOG.md must contain release heading '$workspace_version - $release_date'"

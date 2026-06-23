@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Clarified the post-`v0.1.0` release posture. `RELEASE.md` now records that
+  `v0.1.0` is already tagged and pushed, warns not to retag it for follow-up
+  hardening, and the release version contract verifies that the local release
+  tag remains an ancestor of the current tree when present.
 - Refreshed the full local release-candidate proof from the current release
   gate head. `scripts/check-release-readiness.sh --release-candidate` passed
   from clean head `b9ec44a2`, covering the explicit Grust Turso Cypher

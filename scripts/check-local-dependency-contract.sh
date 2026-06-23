@@ -121,6 +121,8 @@ require_pattern 'scripts/check-release-version-contract.sh' scripts/check-releas
   "release-readiness gate must run the release version contract"
 require_pattern 'require_file CHANGELOG\.md' scripts/check-release-version-contract.sh \
   "release version contract must verify the changelog release heading"
+require_pattern 'published release tag \$local_tag must be an ancestor of HEAD' scripts/check-release-version-contract.sh \
+  "release version contract must guard the published release tag ancestry"
 require_pattern 'run cargo test --workspace --all-features$' scripts/check-release-readiness.sh \
   "release-readiness gate must run the complete all-features workspace test"
 require_pattern 'cargo test -p lakecat-api --lib' scripts/check-release-readiness.sh \
@@ -178,6 +180,8 @@ require_pattern 'docs/book/check_pdf_layout\.sh' RELEASE.md \
   "RELEASE.md must include the PDF layout artifact check"
 require_pattern 'git tag -a v0\.1\.0' RELEASE.md \
   "RELEASE.md must document the current workspace release tag"
+require_pattern 'retag `v0\.1\.0`' RELEASE.md \
+  "RELEASE.md must preserve the post-v0.1.0 no-retag rule"
 require_pattern 'Typed Iceberg v4 support belongs in Sail' RELEASE.md \
   "RELEASE.md must keep typed Iceberg v4 in the deferred Sail-owned ledger"
 
