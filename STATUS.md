@@ -5,6 +5,11 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-docs slice:
+  `Align README release gate summary`.
+  `README.md` now names the release version contract and EPUB/PDF artifact
+  validators as part of the full local release gate, and the dependency
+  contract guards those public operator-facing claims.
 - Latest release-contract slice:
   `Extend version contract across crates`.
   `scripts/check-release-version-contract.sh` now verifies every

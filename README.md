@@ -129,10 +129,12 @@ scripts/check-release-readiness.sh
 ```
 
 The full gate runs shell syntax checks, the local dependency contract, workflow
-trigger checks, formatting, default workspace tests, integration feature tests,
-the Turso store row, service feature rows, Grust/TypeSec/Sail feature rows,
-explicit all-features CLI tests, all-features workspace tests, book rebuild,
-QGLake handoff proof, and `git diff --check`.
+trigger checks, release version consistency across all LakeCat crates and book
+artifacts, formatting, default workspace tests, integration feature tests, the
+Turso store row, service feature rows, Grust/TypeSec/Sail feature rows,
+explicit all-features CLI tests, all-features workspace tests, book rebuild
+with EPUB metadata and PDF layout validation, QGLake handoff proof, and
+`git diff --check`.
 Use `--quick` for a faster script/contract smoke check while developing a
 narrow slice.
 

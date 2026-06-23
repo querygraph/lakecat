@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Updated and guarded the README release-gate summary. The public operator
+  checklist now names the release version contract and EPUB/PDF artifact
+  validators, and the local dependency contract requires those README claims.
 - Extended the release version contract across all LakeCat crates. The check now
   verifies that every `crates/lakecat-*` manifest inherits
   `version.workspace = true` and that Cargo metadata resolves each LakeCat

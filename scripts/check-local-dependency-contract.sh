@@ -170,6 +170,10 @@ require_pattern 'scripts/qglake-handoff-local.sh' DESIGN.md \
   "DESIGN.md must name the QGLake handoff proof"
 require_pattern 'First-release scope is intentionally narrower' README.md \
   "README.md must preserve the first-release scope warning"
+require_pattern 'release version consistency across all LakeCat crates and book' README.md \
+  "README.md must include the release version contract in the full-gate summary"
+require_pattern 'EPUB metadata and PDF layout validation' README.md \
+  "README.md must include book artifact validators in the full-gate summary"
 require_pattern '### Standard, Extension, Or Proposal\?' docs/book/lakecat.md \
   "LakeCat book must keep the standard/extension/proposal taxonomy"
 require_pattern 'The handoff between LakeCat and Sail should therefore be compact and typed' docs/book/lakecat.md \
