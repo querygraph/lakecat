@@ -89,8 +89,9 @@ soft-delete, or restore paths can return or mutate REST-visible table state.
 That prevents a damaged local store row from quietly remapping a standard
 Iceberg table operation while leaving the JSON payload looking plausible.
 Pointer-history proof follows the same rule: decoded commit records are bound
-back to the durable `metadata_pointer_log` table key before commit history can
-be returned to operators, replay validators, or QueryGraph handoff code.
+back to the durable `metadata_pointer_log` table key and principal row evidence
+before commit history can be returned to operators, replay validators, or
+QueryGraph handoff code.
 Soft-delete tombstones follow it too: restore validates the durable tombstone
 row key and decoded tombstone identity before a hidden table can reappear.
 
@@ -9374,7 +9375,10 @@ pointer-history discipline before compact proof generation: the table commit
 count must match the sequence-number and commit-hash arrays, commit sequences
 must be positive and strictly increasing, and commit hashes must be
 full SHA-256-shaped before pointer-history evidence can enter the compact handoff
-proof. The graph projection helper applies the same fail-closed posture to the
+proof. The store-level source of that proof is also row-bound: decoded commit
+records must match durable pointer-log table identity and principal evidence
+before those records can be summarized. The graph projection helper applies the
+same fail-closed posture to the
 commit-history summary it consumes: missing, count-drifted, or non-string
 `commit-hashes` fail before commit graph nodes are emitted, so graph evidence
 cannot silently carry a null commit hash if a future internal path bypasses the

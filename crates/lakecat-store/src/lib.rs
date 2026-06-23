@@ -6181,7 +6181,7 @@ pub mod turso_store {
             let mut rows = conn
                 .query(
                     "select table_key, sequence_number, previous_metadata_location,
-                            new_metadata_location, request_hash, committed_at,
+                            new_metadata_location, request_hash, principal_json, committed_at,
                             record_json
                      from metadata_pointer_log
                      where table_key = ?1
@@ -6198,7 +6198,7 @@ pub mod turso_store {
                 .map_err(turso_error)?;
             let mut commits = Vec::new();
             while let Some(row) = rows.next().await.map_err(turso_error)? {
-                let commit: TableCommitRecord = decode_json(row_string(&row, 6)?)?;
+                let commit: TableCommitRecord = decode_json(row_string(&row, 7)?)?;
                 commit.validate_for_table(ident)?;
                 validate_turso_commit_record_row(&commit, ident, &row)?;
                 commits.push(commit);
@@ -7394,7 +7394,12 @@ pub mod turso_store {
                 "table commit record request hash does not match pointer log row".to_string(),
             ));
         }
-        if record.committed_at != parse_turso_datetime(row_string(row, 5)?, "commit committed_at")?
+        if record.principal != decode_json::<Principal>(row_string(row, 5)?)? {
+            return Err(LakeCatError::Internal(
+                "table commit record principal does not match pointer log row".to_string(),
+            ));
+        }
+        if record.committed_at != parse_turso_datetime(row_string(row, 6)?, "commit committed_at")?
         {
             return Err(LakeCatError::Internal(
                 "table commit record timestamp does not match pointer log row".to_string(),
@@ -9779,6 +9784,77 @@ pub mod turso_store {
                 err,
                 LakeCatError::Internal(message)
                     if message.contains("table commit record table does not match requested table")
+            ));
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_commit_history_principal_row_drift() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let ident = TableIdent::new(
+                warehouse.clone(),
+                namespace.clone(),
+                TableName::new("events").unwrap(),
+            );
+            let writer =
+                Principal::new("did:example:writer", lakecat_core::PrincipalKind::Agent).unwrap();
+            let shadow =
+                Principal::new("did:example:shadow", lakecat_core::PrincipalKind::Agent).unwrap();
+            store
+                .create_namespace(&warehouse, namespace.clone())
+                .await
+                .unwrap();
+            store
+                .create_table(TableRecord::new(
+                    ident.clone(),
+                    "file:///tmp/events".to_string(),
+                    Some("file:///tmp/events/metadata/00000.json".to_string()),
+                    serde_json::json!({"format-version": 3}),
+                    writer.clone(),
+                ))
+                .await
+                .unwrap();
+            store
+                .commit_table(
+                    &ident,
+                    TableCommit {
+                        requirements: vec![],
+                        updates: vec![serde_json::json!({"action": "noop"})],
+                        expected_previous_metadata_location: Some(
+                            "file:///tmp/events/metadata/00000.json".to_string(),
+                        ),
+                        new_metadata_location: Some(
+                            "file:///tmp/events/metadata/00001.json".to_string(),
+                        ),
+                        new_metadata: Some(serde_json::json!({"format-version": 3})),
+                        idempotency_key: None,
+                        idempotency_request_hash: None,
+                        principal: writer,
+                        authorization_receipt: None,
+                    },
+                )
+                .await
+                .unwrap();
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update metadata_pointer_log set principal_json = ?2 where table_key = ?1",
+                (table_key(&ident), encode_json(&shadow).unwrap()),
+            )
+            .await
+            .unwrap();
+
+            let err = store
+                .table_commit_records(&ident, 0, None)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains(
+                        "table commit record principal does not match pointer log row"
+                    )
             ));
         }
 

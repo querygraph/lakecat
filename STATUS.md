@@ -6,6 +6,19 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Harden Turso pointer-log principal validation`.
+  Turso commit-history reads now bind decoded commit records back to durable
+  `metadata_pointer_log.principal_json` row evidence as well as table scope
+  before returning pointer-history proof.
+- Local verification for this Turso pointer-log principal scope slice is green:
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_commit_history_principal_row_drift -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed.
+- Latest implementation/testing slice:
   `Harden Turso soft-delete row-key validation`.
   Turso restore now carries the durable `soft_deletes.table_key` row column
   through tombstone validation, and regression coverage proves tombstone

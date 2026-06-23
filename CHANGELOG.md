@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened Turso metadata pointer-log principal row validation.
+  Commit-history reads now bind decoded commit records back to the durable
+  `metadata_pointer_log.principal_json` row evidence as well as table scope
+  before returning pointer-history proof.
 - Hardened Turso soft-delete tombstone row-key validation. Restore now carries
   the durable `soft_deletes.table_key` row column through tombstone validation,
   and regression coverage proves tombstone row-key remaps fail closed instead
