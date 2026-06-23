@@ -1105,6 +1105,24 @@ function requireHashArray(value, label) {
     seen.add(item);
   }
 }
+function requireHash(value, label) {
+  if (typeof value !== "string" || !/^sha256:[0-9a-fA-F]{64}$/.test(value)) {
+    console.error(`LakeCat view replay evidence ${label} must contain a full SHA-256 hash`);
+    process.exit(1);
+  }
+}
+function sameArray(left, right) {
+  return Array.isArray(left)
+    && Array.isArray(right)
+    && left.length === right.length
+    && left.every((item, index) => item === right[index]);
+}
+function requireNullable(value, label) {
+  if (value !== null && value !== undefined) {
+    console.error(`LakeCat view replay evidence ${label} must be null`);
+    process.exit(1);
+  }
+}
 if (!Number.isInteger(evidence.viewCount) || evidence.viewCount < 0) {
   console.error("LakeCat view replay evidence is missing viewCount");
   process.exit(1);
@@ -1151,6 +1169,7 @@ if (!Array.isArray(evidence.tombstoneReceipts) || evidence.tombstoneReceipts.len
   process.exit(1);
 }
 const tombstonedViews = new Set();
+const tombstoneReceiptHashesByStableId = new Map();
 for (const [index, receipt] of evidence.tombstoneReceipts.entries()) {
   if (!receipt || typeof receipt !== "object" || !receipt.stableId) {
     console.error(`LakeCat view tombstone receipt evidence ${index} is missing stableId`);
@@ -1167,6 +1186,11 @@ for (const [index, receipt] of evidence.tombstoneReceipts.entries()) {
   }
   tombstonedViews.add(`${receipt.stableId}\0${receipt.expectedViewVersion}`);
   requireHashArray(receipt.receiptHashes, `tombstone ${index} receiptHashes`);
+  const tombstoneReceiptHashes = tombstoneReceiptHashesByStableId.get(receipt.stableId) ?? new Set();
+  for (const receiptHash of receipt.receiptHashes) {
+    tombstoneReceiptHashes.add(receiptHash);
+  }
+  tombstoneReceiptHashesByStableId.set(receipt.stableId, tombstoneReceiptHashes);
   requireHashArray(receipt.replayEventHashes, `tombstone ${index} replayEventHashes`);
   requireHashArray(receipt.openLineageHashes, `tombstone ${index} openLineageHashes`);
 }
@@ -1175,6 +1199,7 @@ if (!Array.isArray(evidence.receiptChains) || evidence.receiptChains.length === 
   process.exit(1);
 }
 const verifiedChainHashes = new Set();
+const coveredReceiptHashesByStableId = new Map();
 for (const [index, chain] of evidence.receiptChains.entries()) {
   if (!chain || typeof chain !== "object" || !chain.warehouse) {
     console.error(`LakeCat view receipt-chain evidence ${index} is missing warehouse`);
@@ -1198,11 +1223,121 @@ for (const [index, chain] of evidence.receiptChains.entries()) {
     console.error(`LakeCat view receipt-chain evidence ${index} receiptHashes do not cover chainHashes`);
     process.exit(1);
   }
+  if (!Array.isArray(chain.chains) || chain.chains.length !== chain.verifiedChainCount) {
+    console.error(`LakeCat view receipt-chain evidence ${index} chains do not match verifiedChainCount`);
+    process.exit(1);
+  }
   for (const chainHash of chain.chainHashes) {
     verifiedChainHashes.add(chainHash);
   }
+  for (const [chainIndex, item] of chain.chains.entries()) {
+    if (!item || typeof item !== "object") {
+      console.error(`LakeCat view receipt-chain evidence ${index}.${chainIndex} is malformed`);
+      process.exit(1);
+    }
+    requireHash(item.chainHash, `chain ${index}.${chainIndex} chainHash`);
+    if (!chain.chainHashes.includes(item.chainHash)) {
+      console.error(`LakeCat view receipt-chain evidence ${index}.${chainIndex} chainHash is not covered by chainHashes`);
+      process.exit(1);
+    }
+    if (item.chainVerified !== true) {
+      console.error(`LakeCat view receipt-chain evidence ${index}.${chainIndex} is not verified`);
+      process.exit(1);
+    }
+    if (item.warehouse !== chain.warehouse || !sameArray(item.namespace, chain.namespace)) {
+      console.error(`LakeCat view receipt-chain evidence ${index}.${chainIndex} identity does not match its chain group`);
+      process.exit(1);
+    }
+    if (!item.stableId || typeof item.stableId !== "string" || !item.name || typeof item.name !== "string") {
+      console.error(`LakeCat view receipt-chain evidence ${index}.${chainIndex} is missing view identity`);
+      process.exit(1);
+    }
+    if (!Array.isArray(item.receipts) || item.receipts.length === 0) {
+      console.error(`LakeCat view receipt-chain evidence ${index}.${chainIndex} is missing receipts`);
+      process.exit(1);
+    }
+    if (item.receiptCount !== item.receipts.length) {
+      console.error(`LakeCat view receipt-chain evidence ${index}.${chainIndex} receiptCount does not match receipts`);
+      process.exit(1);
+    }
+    let previous = null;
+    for (const [receiptIndex, receipt] of item.receipts.entries()) {
+      if (!receipt || typeof receipt !== "object") {
+        console.error(`LakeCat view receipt-chain receipt ${index}.${chainIndex}.${receiptIndex} is malformed`);
+        process.exit(1);
+      }
+      if (
+        receipt.stableId !== item.stableId ||
+        receipt.warehouse !== item.warehouse ||
+        receipt.name !== item.name ||
+        !sameArray(receipt.namespace, item.namespace)
+      ) {
+        console.error(`LakeCat view receipt-chain receipt ${index}.${chainIndex}.${receiptIndex} identity does not match chain identity`);
+        process.exit(1);
+      }
+      requireHash(receipt.receiptHash, `chain ${index}.${chainIndex} receipt ${receiptIndex} receiptHash`);
+      if (!chain.receiptHashes.includes(receipt.receiptHash)) {
+        console.error(`LakeCat view receipt-chain receipt ${index}.${chainIndex}.${receiptIndex} receiptHash is not covered by receiptHashes`);
+        process.exit(1);
+      }
+      const coveredReceiptHashes = coveredReceiptHashesByStableId.get(receipt.stableId) ?? new Set();
+      coveredReceiptHashes.add(receipt.receiptHash);
+      coveredReceiptHashesByStableId.set(receipt.stableId, coveredReceiptHashes);
+      if (!Number.isInteger(receipt.viewVersion) || receipt.viewVersion <= 0) {
+        console.error(`LakeCat view receipt-chain receipt ${index}.${chainIndex}.${receiptIndex} viewVersion is invalid`);
+        process.exit(1);
+      }
+      if (receipt.operation !== "upsert" && receipt.operation !== "drop") {
+        console.error(`LakeCat view receipt-chain receipt ${index}.${chainIndex}.${receiptIndex} operation is unsupported`);
+        process.exit(1);
+      }
+      if (!previous) {
+        if (receipt.operation !== "upsert" || receipt.viewVersion !== 1) {
+          console.error(`LakeCat view receipt-chain ${index}.${chainIndex} must start with version 1 upsert`);
+          process.exit(1);
+        }
+        requireNullable(receipt.previousViewVersion, `chain ${index}.${chainIndex} first receipt previousViewVersion`);
+        requireNullable(receipt.previousReceiptHash, `chain ${index}.${chainIndex} first receipt previousReceiptHash`);
+      } else {
+        requireHash(receipt.previousReceiptHash, `chain ${index}.${chainIndex} receipt ${receiptIndex} previousReceiptHash`);
+        if (
+          receipt.previousViewVersion !== previous.viewVersion ||
+          receipt.previousReceiptHash !== previous.receiptHash
+        ) {
+          console.error(`LakeCat view receipt-chain receipt ${index}.${chainIndex}.${receiptIndex} previous links do not match the prior receipt`);
+          process.exit(1);
+        }
+        const expectedVersion = receipt.operation === "upsert"
+          ? previous.viewVersion + 1
+          : previous.viewVersion;
+        if (receipt.viewVersion !== expectedVersion) {
+          console.error(`LakeCat view receipt-chain receipt ${index}.${chainIndex}.${receiptIndex} transition is invalid`);
+          process.exit(1);
+        }
+      }
+      previous = receipt;
+    }
+    const latest = item.receipts[item.receipts.length - 1];
+    if (item.latestViewVersion !== latest.viewVersion || item.latestOperation !== latest.operation) {
+      console.error(`LakeCat view receipt-chain evidence ${index}.${chainIndex} latest receipt summary does not match receipts`);
+      process.exit(1);
+    }
+    if (item.tombstoned !== (latest.operation === "drop")) {
+      console.error(`LakeCat view receipt-chain evidence ${index}.${chainIndex} tombstoned flag does not match the latest operation`);
+      process.exit(1);
+    }
+  }
   requireHashArray(chain.replayEventHashes, `chain ${index} replayEventHashes`);
   requireHashArray(chain.openLineageHashes, `chain ${index} openLineageHashes`);
+}
+for (const [stableId, receiptHashes] of tombstoneReceiptHashesByStableId.entries()) {
+  const coveredReceiptHashes = coveredReceiptHashesByStableId.get(stableId) ?? new Set();
+  for (const receiptHash of receiptHashes) {
+    if (!coveredReceiptHashes.has(receiptHash)) {
+      console.error("LakeCat view tombstone receipt evidence is not covered by verified receipt chains");
+      process.exit(1);
+    }
+  }
 }
 for (const [index, view] of evidence.views.entries()) {
   if (!verifiedChainHashes.has(view.acceptedReceiptChainHash)) {

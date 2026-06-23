@@ -19,8 +19,8 @@ The first release covers the locally verifiable LakeCat catalog substrate:
 - Governed scan/fetch and credential proof around TypeSec-style restrictions
   and Sail-planned work.
 - QGLake handoff proof for bootstrap, management, scan/fetch, credentials,
-  view receipt chains, table commit history, OpenLineage, Grust projection, and
-  QueryGraph import evidence.
+  structural view receipt chains, table commit history, OpenLineage, Grust
+  projection, and QueryGraph import evidence.
 - Reader-facing docs that keep the same standard-vs-extension posture as the
   code: `README.md`, `DESIGN.md`, `STATUS.md`, `CHANGELOG.md`, and
   `docs/book/lakecat.md`.

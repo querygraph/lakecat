@@ -770,6 +770,13 @@ object must be closed over the fields LakeCat verifies. A handoff or captured
 replay sidecar cannot attach unverified view lifecycle, tombstone,
 receipt-chain, principal, replay, or OpenLineage claims beside checked
 structural view proof.
+The local QGLake handoff script must also walk the nested receipt-chain
+structure instead of accepting only group-level hashes: each verified chain
+must start with a version-1 upsert, each later receipt must point at the prior
+receipt hash and use the expected version transition, operations must be from
+the supported lifecycle set, receipt identity must match the chain and group
+identity, tombstone flags must match the latest receipt operation, and every
+compact tombstone receipt hash must be covered by a verified chain.
 Lineage-drain replay summaries must also stay bound to the drain-level event
 type manifest: a compact QGLake handoff cannot include a replay summary for an
 event type that the drain did not declare as delivered, and repeated event

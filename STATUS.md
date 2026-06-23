@@ -6,6 +6,15 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Tighten handoff view receipt-chain structure`.
+  The local QGLake handoff script now validates nested view receipt-chain
+  structure before accepting compact handoff proof. It walks every verified
+  chain and receipt, binds receipt identity back to the chain/group identity,
+  requires version-1 upsert heads, verifies previous receipt links, rejects
+  unsupported operations and skipped versions, requires tombstone flags to match
+  the latest operation, and ensures tombstone receipt hashes are covered by
+  verified receipt chains.
+- Latest implementation/testing slice:
   `Use Grust Turso graph projection`.
   LakeCat now follows the local Grust 0.10 path checkout so it can use
   `grust-turso` for durable catalog graph projection. The new

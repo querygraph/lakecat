@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Tightened the local QGLake handoff view receipt-chain verifier. The handoff
+  script now walks nested structural chains and receipts, rejecting invalid
+  chain heads, forged previous links, unsupported operations, skipped versions,
+  tombstone/version drift, identity splices, and tombstone receipts not covered
+  by verified chains before compact handoff proof is accepted.
 - Added a Grust Turso durable graph projection path. LakeCat now follows the
   local Grust 0.10 path checkout, exposes `grust-turso-local`, bootstraps
   Grust's `TursoGraphStore` for the service graph sink, and proves LakeCat

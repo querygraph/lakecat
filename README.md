@@ -110,7 +110,11 @@ handoff summary directory before LakeCat hashes or parses them, and the primary
 bundle/lineage/import/captured-output artifact objects reject unexpected fields
 beside the checked `path` and `sha256` evidence. A saved handoff summary cannot
 attach alternate hashes, mirror artifacts, or unverified captured-output claims
-beside otherwise valid files.
+beside otherwise valid files. View receipt-chain proof is structural in this
+local gate as well: the script walks verified chains and receipts, checks
+version-1 upsert heads, previous receipt links, supported operations, version
+transitions, identity binding, tombstone posture, and tombstone receipt coverage
+before compact handoff proof is accepted.
 
 For first-release readiness, run the local release gate instead of relying on
 cloud CI. The full release checklist lives in [RELEASE.md](RELEASE.md):
