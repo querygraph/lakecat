@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Extended the release version contract across all LakeCat crates. The check now
+  verifies that every `crates/lakecat-*` manifest inherits
+  `version.workspace = true` and that Cargo metadata resolves each LakeCat
+  package to the workspace release version.
 - Added a release version contract check. The new script verifies that the
   workspace package version, `RELEASE.md` tag command, book `VERSION.md`
   Kindle name/link, and versioned EPUB symlink all agree before the release

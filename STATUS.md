@@ -6,6 +6,12 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest release-contract slice:
+  `Extend version contract across crates`.
+  `scripts/check-release-version-contract.sh` now verifies every
+  `crates/lakecat-*` manifest inherits `version.workspace = true` and that
+  Cargo metadata resolves each LakeCat package to the workspace release
+  version, closing the remaining crate-version drift path before release.
+- Latest release-contract slice:
   `Check release version contract`.
   The local release gate now runs `scripts/check-release-version-contract.sh`.
   The script verifies that `[workspace.package].version`, the release tag in

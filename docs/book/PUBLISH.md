@@ -160,8 +160,9 @@ docs/book/check_pdf_layout.sh docs/book/dist/lakecat.pdf
 ```
 
 The release version contract rejects drift between `[workspace.package].version`
-in `Cargo.toml`, the `RELEASE.md` tag command, `docs/book/dist/VERSION.md`, and
-the versioned Kindle EPUB symlink.
+in `Cargo.toml`, all `crates/lakecat-*` package versions resolved by Cargo
+metadata, the `RELEASE.md` tag command, `docs/book/dist/VERSION.md`, and the
+versioned Kindle EPUB symlink.
 
 The validator rejects:
 

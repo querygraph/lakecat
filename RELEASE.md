@@ -61,10 +61,11 @@ scripts/check-release-readiness.sh
 
 The full gate must pass without `--skip-book` or `--skip-handoff` for a release
 candidate. It covers shell syntax, dependency contracts, manual workflow trigger
-contracts, release version consistency, formatting, default workspace tests,
-explicit Turso/Sail/TypeSec/Grust feature tests, all-features CLI and workspace
-tests, book rebuild, EPUB metadata and PDF layout validation, QGLake handoff
-replay verification, and `git diff --check`.
+contracts, release version consistency across all LakeCat crates and book
+artifacts, formatting, default workspace tests, explicit Turso/Sail/TypeSec/
+Grust feature tests, all-features CLI and workspace tests, book rebuild, EPUB
+metadata and PDF layout validation, QGLake handoff replay verification, and
+`git diff --check`.
 The QGLake handoff proof must run QueryGraph `lakecat-verify` and
 `lakecat-import` through `cargo run --locked` against the local `qg-rust`
 manifest, then persist both outputs in the saved handoff summary.

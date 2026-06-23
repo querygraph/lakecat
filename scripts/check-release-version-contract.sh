@@ -32,6 +32,28 @@ workspace_version="$(
 
 [[ -n "$workspace_version" ]] || fail "could not read [workspace.package] version from Cargo.toml"
 
+while IFS= read -r -d '' manifest; do
+  if ! rg -q '^version\.workspace[[:space:]]*=[[:space:]]*true$' "$manifest"; then
+    fail "$manifest must inherit version.workspace = true"
+  fi
+done < <(find crates -mindepth 2 -maxdepth 2 -name Cargo.toml -path 'crates/lakecat-*/*' -print0 | sort -z)
+
+metadata_file="$(mktemp)"
+trap 'rm -f "$metadata_file"' EXIT
+cargo metadata --format-version 1 --no-deps > "$metadata_file"
+metadata_mismatches="$(
+  jq -r --arg version "$workspace_version" '
+    .packages[]
+    | select(.name | startswith("lakecat-"))
+    | select(.version != $version)
+    | "\(.name)\t\(.version)"
+  ' "$metadata_file"
+)"
+
+if [[ -n "$metadata_mismatches" ]]; then
+  fail "LakeCat package versions do not match $workspace_version: $metadata_mismatches"
+fi
+
 release_tag="$(sed -n 's/.*git tag -a v\([0-9][0-9A-Za-z.-]*\) .*/\1/p' RELEASE.md | head -n 1)"
 [[ -n "$release_tag" ]] || fail "could not read release tag command from RELEASE.md"
 [[ "$release_tag" == "$workspace_version" ]] || \
