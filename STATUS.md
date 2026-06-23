@@ -5,6 +5,21 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest docs/book slice:
+  `Expand release catalog concept guidance`.
+  The LakeCat book now includes a readiness and standards matrix for the Rust
+  service spine, Turso-backed local store, Iceberg REST-compatible
+  namespace/table paths, commit CAS, idempotency/pointer-log/audit/outbox
+  replay hardening, governed scan and credential receipts, and
+  QueryGraph/QGLake/OpenLineage proof surfaces. It explicitly separates
+  standard Iceberg parlance, LakeCat/QueryGraph/TypeSec extensions, and
+  possible future Iceberg-adjacent optional profiles, and adds a Sail
+  push-down ledger for engine-owned table facts.
+- Local verification for this docs/book slice is green:
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest implementation/testing slice:
   `Harden view receipt-chain replay scope`.
   Raw `view.version-receipt-chains-listed` replay now rejects nested chain or

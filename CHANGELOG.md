@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's release concept guidance with a readiness and
+  standards matrix for the Rust service spine, Turso local store, Iceberg REST
+  paths, commit CAS, idempotency/pointer-log/audit/outbox replay hardening,
+  governed scan and credential receipts, and QueryGraph/QGLake/OpenLineage
+  proof surfaces. The book now more directly separates standard Iceberg
+  parlance from LakeCat/QueryGraph/TypeSec extensions and adds a Sail
+  push-down ledger showing which table-shaped facts belong in the engine.
 - Hardened service view receipt-chain replay scope admission. Raw
   `view.version-receipt-chains-listed` replay now rejects nested chain or
   receipt warehouse/namespace evidence that drifts from the top-level payload
