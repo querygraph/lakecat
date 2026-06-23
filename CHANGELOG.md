@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Hardened memory idempotency replay scope binding. Memory idempotent commit
+  replay records now carry and validate the table-key anchor before explicit
+  replay or commit-path retry returns a stored response.
 - Hardened memory namespace-drop dependency scope binding. Memory namespace
   deletion now validates dependent table, view, and policy-binding records
   against their map keys before deciding a namespace is empty.

@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest memory idempotency replay scope binding:
+  memory idempotent commit replay records now carry and validate the table-key
+  anchor before explicit replay or commit-path retry returns a stored response,
+  matching Turso's durable idempotency row-scope drift rejection.
+- Local verification for this memory idempotency replay scope slice passed:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_rejects_table_idempotency_map_scope_drift -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_table_idempotency_row_scope_drift -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest memory namespace-drop dependency scope binding:
   memory namespace deletion now validates dependent table, view, and
   policy-binding records against their map keys before deciding a namespace is

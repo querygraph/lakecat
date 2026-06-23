@@ -232,8 +232,10 @@ The current working plan is:
    cleanup, object-store portability, and redacted operator-facing errors.
    Memory/Turso table rows and idempotency responses must bind decoded JSON back
    to the memory map key or row/query table identity before returning standard
-   table records or committing over the row, including idempotent retry
-   responses returned through the commit path itself.
+   table records or committing over the row; memory idempotent replay records
+   must also carry the table-key anchor that Turso stores in the durable
+   idempotency row. Both explicit replay and idempotent retry responses returned
+   through the commit path itself must fail closed on drift.
    Backend object-store error details should be represented by hash evidence,
    not raw paths, bucket/object names, or configuration text. Metadata object
    writes must target child objects under the selected storage profile root, not
