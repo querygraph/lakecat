@@ -7559,6 +7559,12 @@ kebab-case field names. LakeCat accepts either spelling for the verified
 one semantic field before acknowledgement, graph projection, or OpenLineage
 projection. That keeps a replay sidecar from hiding a conflicting pointer,
 hash, timestamp, format, or snapshot claim beside the field LakeCat verifies.
+Replay admission also applies the same credential-shape guard as the
+metadata-object write path: metadata-location proof fields must not carry query
+strings, fragments, obvious credential markers, or URI userinfo. A forged or
+stale outbox row therefore cannot smuggle `access:secret@` style authority
+material into Grust projection, OpenLineage replay, or QGLake/QueryGraph commit
+proof after the original request validator has already learned to reject it.
 
 Operators and QueryGraph can read that pointer-log evidence through a governed
 management endpoint:

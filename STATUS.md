@@ -5,6 +5,21 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest metadata-location proof admission hardening:
+  replay/projection validation now rejects URI userinfo in catalog location
+  evidence before `table.commit` or other location-bearing outbox rows can be
+  acknowledged, projected to Grust, emitted as OpenLineage, or inherited by
+  QGLake/QueryGraph proof. The metadata-object write path already rejected
+  userinfo before object-store writes; this closes the matching replay-side
+  admission gap for forged or stale outbox evidence.
+- Local verification for this metadata-location proof admission slice passed:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_decorated_table_commit_metadata_locations -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain_rejects_decorated -- --test-threads=1`;
+  `git diff --check`; and `scripts/check-release-readiness.sh --quick`.
+  The quick gate passed and correctly reported that executable changes exist
+  after clean proof head `93ee0a20`; the next release refresh must rerun the
+  full local release-candidate gate before claiming final proof freshness.
 - Latest book release-readiness clarification:
   the book source now explains the manual CI vs. local release-proof split:
   intentionally triggered GitHub Actions runs dependency, workflow-trigger, and

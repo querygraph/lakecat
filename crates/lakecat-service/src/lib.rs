@@ -3498,6 +3498,12 @@ fn validate_optional_location_evidence(
             &format!("{label} must not contain decorated location material"),
         ));
     }
+    if location_has_userinfo(location) {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} must not include userinfo"),
+        ));
+    }
     let normalized = location.to_ascii_lowercase();
     for marker in [
         "token=",
@@ -22211,6 +22217,12 @@ mod tests {
                 "table commit new metadata location must not contain credential material",
             ),
             (
+                "evt-userinfo-commit-new-metadata",
+                "file:///tmp/events/metadata/00000.json",
+                "s3://access:secret@lakecat-demo/events/metadata/00001.json",
+                "table commit new metadata location must not include userinfo",
+            ),
+            (
                 "evt-decorated-commit-previous-metadata",
                 "s3://lakecat-demo/events/metadata/00000.json#secret",
                 "file:///tmp/events/metadata/00001.json",
@@ -22221,6 +22233,12 @@ mod tests {
                 "s3://lakecat-demo/events/metadata/access_key=secret.json",
                 "file:///tmp/events/metadata/00001.json",
                 "table commit previous metadata location must not contain credential material",
+            ),
+            (
+                "evt-userinfo-commit-previous-metadata",
+                "s3://access:secret@lakecat-demo/events/metadata/00000.json",
+                "file:///tmp/events/metadata/00001.json",
+                "table commit previous metadata location must not include userinfo",
             ),
         ];
 
@@ -22281,6 +22299,8 @@ mod tests {
             assert!(message.contains(expected), "{message}");
             assert!(message.contains("event-id-hash=sha256:"), "{message}");
             assert!(!message.contains(event_id), "{message}");
+            assert!(!message.contains("access:secret"), "{message}");
+            assert!(!message.contains("lakecat-demo"), "{message}");
             assert!(
                 store.delivered.lock().await.is_empty(),
                 "malformed commit metadata location must fail before acknowledgement"

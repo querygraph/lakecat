@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened replay admission for metadata-location evidence. Outbox projection
+  now rejects URI userinfo in table commit and other catalog location proof
+  fields before graph or lineage delivery, closing a gap where
+  credential-bearing metadata pointers could bypass the object-write validator
+  through forged replay evidence.
 - Clarified the book's release-readiness narrative for manual CI. The book now
   explains that intentionally triggered GitHub Actions runs dependency,
   workflow-trigger, and release-version preflights, while release-proof
