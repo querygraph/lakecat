@@ -1373,9 +1373,14 @@ fn validate_outbox_event_evidence(event: &OutboxEvent) -> Result<(), LakeCatErro
             "outbox event type is not supported for projection",
         ));
     }
-    validate_outbox_event_type_binding(event, &event.payload, "outbox payload")?;
+    validate_outbox_event_type_binding(event, &event.payload, "outbox payload", true)?;
     if !std::ptr::eq(payload, &event.payload) {
-        validate_outbox_event_type_binding(event, payload, "outbox inner payload")?;
+        validate_outbox_event_type_binding(
+            event,
+            payload,
+            "outbox inner payload",
+            outbox_event_id_matches_payload_hash(event),
+        )?;
     }
     validate_read_restriction_policy_hashes(
         event,
@@ -1470,8 +1475,15 @@ fn validate_outbox_event_type_binding(
     event: &OutboxEvent,
     payload: &Value,
     label: &str,
+    required: bool,
 ) -> Result<(), LakeCatError> {
     let Some(event_type) = payload.get("event-type") else {
+        if required {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{label} missing event-type"),
+            ));
+        }
         return Ok(());
     };
     let Some(event_type) = event_type.as_str().filter(|value| !value.trim().is_empty()) else {
@@ -1487,6 +1499,10 @@ fn validate_outbox_event_type_binding(
         ));
     }
     Ok(())
+}
+
+fn outbox_event_id_matches_payload_hash(event: &OutboxEvent) -> bool {
+    content_hash_json(&event.payload).is_ok_and(|hash| hash == event.event_id)
 }
 
 fn is_known_outbox_event_type(event_type: &str) -> bool {
@@ -40114,6 +40130,77 @@ mod tests {
                 "{event_type} must fail before lineage projection"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_missing_inner_payload_event_type_before_projection() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let payload = json!({
+            "audit-event-id": "audit-missing-inner-event-type",
+            "event-type": "table.created",
+            "table": &table,
+            "payload": {
+                "version": 1,
+                "metadata-location": "file:///tmp/events/metadata/00000.json",
+                "authorization-receipt": {
+                    "principal": {
+                        "subject": "agent:writer",
+                        "kind": "agent"
+                    },
+                    "action": "table-create",
+                    "allowed": true,
+                    "engine": "test",
+                    "policy_hash": null,
+                    "checked_at": chrono::Utc::now(),
+                },
+            }
+        });
+        let event_id = content_hash_json(&payload).expect("payload hash should be stable");
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: event_id.clone(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.created".to_string(),
+                payload,
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("missing inner payload event type should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("outbox inner payload missing event-type"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains(&event_id));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "unbound inner payloads must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "unbound inner payloads must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "unbound inner payloads must fail before lineage projection"
+        );
     }
 
     #[tokio::test]

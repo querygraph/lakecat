@@ -5,6 +5,24 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest outbox event-type binding hardening:
+  service-side replay/projection validation now rejects hash-bound pending
+  outbox rows whose outer envelope carries a supported event type but whose
+  inner replay payload omits `event-type`. The store already requires
+  top-level event-type binding and event-id/content-hash agreement; this closes
+  the matching projection-side gap before acknowledgement, Grust graph
+  emission, OpenLineage emission, QGLake replay, or QueryGraph import can
+  inherit unbound replay evidence from durable store rows.
+- Local verification for this outbox event-type binding slice passed:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_missing_inner_payload_event_type_before_projection -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain_rejects_unknown_event_type_before_projection -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain_rejects -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features -- --test-threads=1`;
+  `git diff --check`; and `scripts/check-release-readiness.sh --quick`.
+  The quick gate passed and correctly reported that executable changes now
+  exist after clean proof head `0ba1fe1c`; rerun the full local
+  release-candidate gate before claiming final proof freshness.
 - Latest metadata-location proof admission hardening:
   replay/projection validation now rejects URI userinfo in catalog location
   evidence before `table.commit` or other location-bearing outbox rows can be

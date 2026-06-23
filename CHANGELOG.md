@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened outbox replay event-type binding. Service projection validation now
+  rejects forged hash-bound pending outbox rows whose outer envelope names a
+  supported event type but whose inner replay payload omits `event-type`, so
+  graph, OpenLineage, QGLake, and QueryGraph proof surfaces cannot inherit
+  unbound replay evidence from durable store rows.
 - Hardened replay admission for metadata-location evidence. Outbox projection
   now rejects URI userinfo in table commit and other catalog location proof
   fields before graph or lineage delivery, closing a gap where

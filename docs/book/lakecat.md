@@ -9758,6 +9758,13 @@ management-list counts are receipt-backed: the compact proof and captured
 replay must also agree on replay and OpenLineage hash arrays for
 `server.listed`, `project.listed`, `warehouse.listed`, `policy-binding.listed`,
 and `storage-profile.listed`.
+The same admission rule applies to the outbox event envelope itself. The store
+requires the top-level pending outbox payload to name the event type, and the
+service projection path now also requires a hash-bound durable row's inner
+replay payload to carry the same `event-type` before Grust, OpenLineage,
+QGLake, or QueryGraph sees it. A forged row cannot say "this is a table event"
+in the outer envelope while projecting an unbound inner payload into the graph
+or lineage stream.
 It also compares the captured LakeCat replay
 `replay-evidence.management.storageProfileUpsert` object with the compact
 `lakecatReplayVerification.storageProfileUpsertProof`, including the
