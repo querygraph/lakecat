@@ -482,6 +482,10 @@ fast tests honest about replay identity even when no Turso file is involved.
 Replay validation then closes the loop: durable evidence must be well-formed,
 scoped, hash-shaped, redacted, and admitted before graph projection,
 OpenLineage projection, QGLake handoff, or QueryGraph import can trust it.
+Even a catalog-config read is treated this way: the advertised defaults,
+overrides, endpoints, tenant records, and authorization receipt must pass the
+same replay schema before compact QGLake proof can treat that configuration as
+evidence of what the catalog promised.
 
 Governed scans and governed credential decisions are not standard Iceberg
 table semantics. They are LakeCat/TypeSec/Sail extensions around standard

@@ -7271,6 +7271,10 @@ fn lineage_drain_event_summary(
         let payload = event.payload.get("payload").unwrap_or(&event.payload);
         validate_credential_vend_event_evidence(event, payload)?;
     }
+    if event.event_type == "catalog.config-read" {
+        let payload = event.payload.get("payload").unwrap_or(&event.payload);
+        validate_catalog_config_read_event_evidence(event, payload)?;
+    }
     let payload = event.payload.get("payload").unwrap_or(&event.payload);
     let view = payload.get("view");
     let view_warehouse = lineage_summary_optional_nonblank_string_value(
@@ -53318,83 +53322,71 @@ mod tests {
     #[test]
     fn lineage_drain_summary_rejects_malformed_catalog_config_fields() {
         let receipt = OutboxProjectionReceipt::default();
-        let malformed_defaults = OutboxEvent {
-            event_id: "evt-bad-summary-config-defaults".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "catalog.config-read".to_string(),
-            payload: json!({
-                "payload": {
-                    "defaults": [{
-                        "key": "lakecat.compatibility",
-                        "value": false
-                    }]
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut malformed_defaults =
+            valid_lineage_summary_catalog_config_event("evt-bad-summary-config-defaults");
+        malformed_defaults.payload["payload"]["defaults"][0]["value"] = json!(false);
         let err = lineage_drain_event_summary(&malformed_defaults, &receipt)
             .unwrap_err()
             .to_string();
-        assert!(err.contains("lineage drain catalog config defaults must contain string values"));
+        assert!(err.contains("catalog config-read defaults must contain string values"));
 
-        let duplicate_overrides = OutboxEvent {
-            event_id: "evt-duplicate-summary-config-overrides".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "catalog.config-read".to_string(),
-            payload: json!({
-                "payload": {
-                    "overrides": [
-                        {"key": "warehouse", "value": "local"},
-                        {"key": "warehouse", "value": "shadow"}
-                    ]
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut duplicate_overrides =
+            valid_lineage_summary_catalog_config_event("evt-duplicate-summary-config-overrides");
+        duplicate_overrides.payload["payload"]["overrides"] = json!([
+            {"key": "warehouse", "value": "local"},
+            {"key": "warehouse", "value": "shadow"}
+        ]);
         let err = lineage_drain_event_summary(&duplicate_overrides, &receipt)
             .unwrap_err()
             .to_string();
-        assert!(
-            err.contains("lineage drain catalog config overrides must not contain duplicate keys")
-        );
+        assert!(err.contains("catalog config-read overrides must not contain duplicate keys"));
 
-        let non_array_endpoints = OutboxEvent {
-            event_id: "evt-bad-summary-config-endpoints".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "catalog.config-read".to_string(),
-            payload: json!({
-                "payload": {
-                    "endpoints": {
-                        "route": "GET /catalog/v1/config"
-                    }
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut non_array_endpoints =
+            valid_lineage_summary_catalog_config_event("evt-bad-summary-config-endpoints");
+        non_array_endpoints.payload["payload"]["endpoints"] =
+            json!({ "route": "GET /catalog/v1/config" });
         let err = lineage_drain_event_summary(&non_array_endpoints, &receipt)
             .unwrap_err()
             .to_string();
-        assert!(err.contains("endpoints must be an array when present"));
+        assert!(err.contains("catalog config-read endpoints must be an array"));
 
-        let duplicate_endpoints = OutboxEvent {
-            event_id: "evt-duplicate-summary-config-endpoint".to_string(),
+        let mut duplicate_endpoints =
+            valid_lineage_summary_catalog_config_event("evt-duplicate-summary-config-endpoint");
+        duplicate_endpoints.payload["payload"]["endpoints"] =
+            json!(["GET /catalog/v1/config", "GET /catalog/v1/config"]);
+        let err = lineage_drain_event_summary(&duplicate_endpoints, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("catalog config-read endpoints must not contain duplicate entries"));
+    }
+
+    fn valid_lineage_summary_catalog_config_event(event_id: &str) -> OutboxEvent {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        OutboxEvent {
+            event_id: event_id.to_string(),
             sink: "lakecat.lineage-and-graph".to_string(),
             event_type: "catalog.config-read".to_string(),
             payload: json!({
+                "audit-event-id": format!("audit-{event_id}"),
+                "event-type": "catalog.config-read",
                 "payload": {
-                    "endpoints": ["GET /catalog/v1/config", "GET /catalog/v1/config"]
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "catalog-config",
+                        "allowed": true,
+                        "engine": "lakecat-test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "defaults": catalog_config_defaults_json(),
+                    "overrides": [],
+                    "endpoints": catalog_config_endpoints_json(),
                 }
             }),
             created_at: chrono::Utc::now(),
             delivered_at: None,
-        };
-        let err = lineage_drain_event_summary(&duplicate_endpoints, &receipt)
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("endpoints must not contain duplicate values"));
+        }
     }
 
     #[test]

@@ -5,6 +5,18 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw catalog-config summary hardening slice:
+  `Validate raw catalog config summaries`.
+  Raw lineage-drain summary construction now reuses the service replay
+  validator for `catalog.config-read` evidence, rejecting malformed advertised
+  defaults, overrides, endpoints, tenant records, and authorization receipts
+  before compact QGLake configuration proof can inherit them.
+- Local verification for this raw catalog-config summary slice passed:
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_catalog_config_fields -- --test-threads=1`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`; `git diff --check`.
 - Latest raw credential-vend summary hardening slice:
   `Validate raw credential-vend summaries`.
   Raw lineage-drain summary construction now reuses the service replay

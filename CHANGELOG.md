@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened raw catalog-config summary extraction. Raw lineage-drain summary
+  construction now reuses the service replay validator for `catalog.config-read`
+  evidence, so malformed advertised defaults, overrides, endpoints, tenant
+  records, or authorization receipts cannot bypass replay admission before
+  compact QGLake configuration proof inherits them.
 - Hardened raw credential-vend summary extraction. Raw lineage-drain summary
   construction now reuses the service replay validator for
   `credentials.vend-attempted` evidence, so malformed credential response,
