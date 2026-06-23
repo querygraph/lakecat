@@ -5,6 +5,19 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest docs/book slice:
+  `Expand catalog contract chapter`.
+  The LakeCat book now front-loads the distinction between standard Iceberg
+  catalog parlance, LakeCat's Rust/Turso control spine, TypeSec/Sail governed
+  scan and credential paths, QueryGraph/QGLake/OpenLineage proof surfaces, and
+  future optional-profile candidates. It also makes the detailed argument that
+  reusable table interpretation belongs in Sail rather than a LakeCat shadow
+  engine.
+- Local verification for this docs/book slice is green:
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest implementation/testing slice:
   `Harden table commit replay aliases`.
   Service `table.commit` replay admission now accepts either snake_case or

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book with a front-loaded catalog contract chapter. The
+  new chapter separates standard Iceberg catalog parlance from LakeCat's Rust
+  and Turso control spine, TypeSec/Sail governed scan and credential paths,
+  QueryGraph/QGLake/OpenLineage proof surfaces, and future optional-profile
+  candidates, while making the case that table interpretation belongs in Sail
+  rather than a LakeCat shadow engine.
 - Hardened service table-commit replay alias admission. `table.commit` replay
   now accepts either snake_case or kebab-case evidence aliases for the verified
   commit envelope, while rejecting duplicate aliases before acknowledgement,
