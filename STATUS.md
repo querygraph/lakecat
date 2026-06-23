@@ -5,6 +5,17 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest fetched-scan required-filter provenance coverage:
+  service outbox drain and lineage-drain summary regression tests now prove the
+  unsourced `required-filters` rejection for both planned and fetched scan
+  replay. This keeps scan planning and scan-task fetch proof aligned before
+  acknowledgement, graph projection, OpenLineage projection, or QGLake summary
+  construction.
+- Local verification for this fetched required-filter coverage slice passed:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_scan_fetch_unsourced_required_filters -- --test-threads=1`;
+  `cargo test -p lakecat-service lineage_drain_summary_rejects_malformed_scan_required_filters -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest governed scan required-filter provenance hardening:
   live outbox drain and lineage-drain summary construction now reject
   non-empty `required-filters` evidence when no read-restriction row predicate

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added fetched-scan coverage for unsourced required filters. Service outbox
+  drain and lineage-drain summary regression tests now prove both planned and
+  fetched scan replay reject non-empty `required-filters` evidence when no
+  read-restriction row predicate is present.
 - Hardened scan required-filter provenance at replay admission. Live outbox
   drain and lineage-drain summary construction now reject non-empty
   `required-filters` evidence when no read-restriction row predicate is present,
