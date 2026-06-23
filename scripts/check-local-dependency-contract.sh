@@ -4,6 +4,9 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
+tmpdir="$(mktemp -d)"
+trap 'rm -rf "$tmpdir"' EXIT
+
 fail() {
   echo "dependency contract check failed: $*" >&2
   exit 1
@@ -110,6 +113,8 @@ require_pattern 'workflow_dispatch:' .github/workflows/ci.yml \
 require_manual_only_workflows
 require_pattern 'scripts/check-local-dependency-contract.sh' scripts/check-release-readiness.sh \
   "release-readiness gate must run the dependency contract"
+require_pattern 'tmpdir="\$\(mktemp -d\)"' scripts/check-local-dependency-contract.sh \
+  "dependency contract must use per-run temp files for cargo metadata"
 require_pattern 'scripts/check-workflow-trigger-contract.sh' scripts/check-release-readiness.sh \
   "release-readiness gate must run the workflow trigger self-test"
 require_pattern 'scripts/check-release-version-contract.sh' scripts/check-release-readiness.sh \
@@ -304,16 +309,20 @@ require_pattern 'name = "grust-graph"' ../querygraph/qg-rust/Cargo.lock \
 require_pattern 'version = "0\.10\.0"' ../querygraph/qg-rust/Cargo.lock \
   "local QueryGraph lockfile must resolve the Grust 0.10.0 path crate used by LakeCat handoff verification"
 
-cargo metadata --format-version 1 --no-deps > /tmp/lakecat-dependency-contract-metadata.json
-require_pattern '"name":"grust-graph".*"source":null.*"req":"\^0\.10\.0".*"path":"/Users/alexy/src/grust/crates/grust"' /tmp/lakecat-dependency-contract-metadata.json \
+metadata_json="$tmpdir/metadata.json"
+full_metadata_json="$tmpdir/full-metadata.json"
+full_metadata_lines_json="$tmpdir/full-metadata-lines.json"
+
+cargo metadata --format-version 1 --no-deps > "$metadata_json"
+require_pattern '"name":"grust-graph".*"source":null.*"req":"\^0\.10\.0".*"path":"/Users/alexy/src/grust/crates/grust"' "$metadata_json" \
   "cargo metadata must resolve LakeCat's grust-graph dependency to the local Grust 0.10 path"
-require_pattern '"name":"typesec".*"source":"registry\+https://github.com/rust-lang/crates.io-index".*"req":"\^0\.8\.0"' /tmp/lakecat-dependency-contract-metadata.json \
+require_pattern '"name":"typesec".*"source":"registry\+https://github.com/rust-lang/crates.io-index".*"req":"\^0\.8\.0"' "$metadata_json" \
   "cargo metadata must resolve typesec to crates.io with version requirement ^0.8.0"
-cargo metadata --format-version 1 --all-features > /tmp/lakecat-dependency-contract-full-metadata.json
-tr '{' '\n' < /tmp/lakecat-dependency-contract-full-metadata.json > /tmp/lakecat-dependency-contract-full-metadata-lines.json
-require_pattern '"name":"grust-cypher","version":"0\.10\.0".*"source":null' /tmp/lakecat-dependency-contract-full-metadata-lines.json \
+cargo metadata --format-version 1 --all-features > "$full_metadata_json"
+tr '{' '\n' < "$full_metadata_json" > "$full_metadata_lines_json"
+require_pattern '"name":"grust-cypher","version":"0\.10\.0".*"source":null' "$full_metadata_lines_json" \
   "full cargo metadata must resolve grust-cypher 0.10.0 from the local Grust path"
-require_pattern '"name":"grust-turso","version":"0\.10\.0".*"source":null' /tmp/lakecat-dependency-contract-full-metadata-lines.json \
+require_pattern '"name":"grust-turso","version":"0\.10\.0".*"source":null' "$full_metadata_lines_json" \
   "full cargo metadata must resolve grust-turso 0.10.0 from the local Grust path"
 
 echo "LakeCat local dependency contract is intact."

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened the local dependency-contract metadata checks for parallel local
+  runs. Cargo metadata snapshots now live in a per-run temporary directory
+  instead of fixed `/tmp/lakecat-dependency-contract-*` files, avoiding false
+  dependency drift failures when quick and focused checks overlap.
 - Broadened the release-candidate Grust Turso graph proof. The local release
   gate now runs the `grust_turso_store` test filter so both durable catalog
   graph persistence and traversal over Grust's Turso backend are covered.

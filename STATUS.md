@@ -6,6 +6,12 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest release-contract slice:
+  `Isolate dependency-contract metadata temp files`.
+  `scripts/check-local-dependency-contract.sh` now writes Cargo metadata
+  snapshots into a per-run temp directory and cleans them up on exit, so
+  overlapping local quick/focused checks do not clobber shared
+  `/tmp/lakecat-dependency-contract-*` files and report false dependency drift.
+- Latest release-contract slice:
   `Run Grust Turso traversal in release gate`.
   `scripts/check-release-readiness.sh` now runs the `grust_turso_store` test
   filter for `lakecat-graph --features grust-turso-local`, so the authoritative
