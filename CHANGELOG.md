@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened raw lineage-drain credential summary extraction. Compact credential
+  summaries now validate each `credential-response-evidence` entry's
+  `issuer-config-hash` and unsigned `issuer-config-entry-count`, including the
+  canonical empty issuer-config hash when the count is zero, before QGLake
+  summary proof can accept redacted credential prefix evidence.
 - Bound empty issuer-config credential evidence. Returned
   `credential-response-evidence` entries with `issuer-config-entry-count = 0`
   now must carry the canonical empty issuer-config hash, so replay cannot pair

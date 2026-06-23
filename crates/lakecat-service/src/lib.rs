@@ -8060,12 +8060,45 @@ fn lineage_summary_credential_prefix_hashes(
 ) -> Result<Vec<String>, LakeCatError> {
     let entries = optional_array_field(event, payload, "credential-response-evidence")?
         .expect("field presence was checked by caller");
-    lineage_summary_required_hashes_from_objects(
+    let mut hashes = Vec::with_capacity(entries.len());
+    for entry in entries {
+        validate_credential_response_entry_schema(event, entry)?;
+        validate_required_full_hash_field(event, entry, "prefix-hash")?;
+        validate_required_full_hash_field(event, entry, "issuer-config-hash")?;
+        let Some(issuer_config_entry_count) = entry
+            .get("issuer-config-entry-count")
+            .and_then(Value::as_u64)
+        else {
+            return Err(outbox_evidence_error(
+                event,
+                "lineage drain credential-response issuer-config-entry-count must be unsigned",
+            ));
+        };
+        if issuer_config_entry_count == 0 {
+            let expected_empty_hash = content_hash_json(&json!([]))?;
+            validate_string_field_equals(
+                event,
+                entry,
+                "issuer-config-hash",
+                &expected_empty_hash,
+                "lineage drain credential-response",
+            )?;
+        }
+        hashes.push(
+            entry
+                .get("prefix-hash")
+                .and_then(Value::as_str)
+                .expect("prefix hash field was validated")
+                .to_string(),
+        );
+    }
+    let hash_refs = hashes.iter().map(String::as_str).collect::<Vec<_>>();
+    validate_unique_hash_array(
         event,
-        entries,
-        "prefix-hash",
+        &hash_refs,
         "lineage drain credential-response prefix-hashes",
-    )
+    )?;
+    Ok(hashes)
 }
 
 fn validate_lineage_summary_credential_counts(
@@ -52750,6 +52783,26 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("prefix-hash must contain full SHA-256 digest evidence"));
+
+        let mut zero_issuer_config_hash_drift =
+            valid_lineage_summary_credential_event("evt-bad-summary-zero-issuer-config-hash");
+        zero_issuer_config_hash_drift.event_type = "credentials.summary-only".to_string();
+        zero_issuer_config_hash_drift.payload["event-type"] = json!("credentials.summary-only");
+        zero_issuer_config_hash_drift.payload["payload"]["event-type"] =
+            json!("credentials.summary-only");
+        zero_issuer_config_hash_drift.payload["payload"]["credential-response-evidence"][0]["issuer-config-entry-count"] =
+            json!(0);
+        zero_issuer_config_hash_drift.payload["payload"]["credential-response-evidence"][0]["issuer-config-hash"] =
+            json!(content_hash_bytes(b"not-empty-issuer-config"));
+        let err = lineage_drain_event_summary(&zero_issuer_config_hash_drift, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains(
+                "lineage drain credential-response issuer-config-hash must match catalog evidence"
+            ),
+            "{err}"
+        );
 
         let duplicate_prefix_hash = content_hash_bytes(b"duplicate-credential-prefix");
         let mut duplicate_prefix_hashes =

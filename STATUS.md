@@ -5,6 +5,21 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw lineage-drain summary hardening slice:
+  `Validate credential summary issuer config hash`.
+  Compact credential summary extraction now validates every
+  `credential-response-evidence` entry's `issuer-config-hash` and unsigned
+  `issuer-config-entry-count`. Entries that claim zero issuer config entries
+  must carry LakeCat's canonical empty issuer-config hash before the raw
+  lineage drain can become accepted QGLake summary proof.
+- Local verification for this raw lineage-drain summary slice passed:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_credential_prefix_hashes -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib lineage_drain_summary -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest credential replay hardening slice:
   `Bind empty credential issuer config hash`.
   `credentials.vend-attempted` replay now rejects returned

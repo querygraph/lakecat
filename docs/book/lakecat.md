@@ -9698,8 +9698,10 @@ or duplicated. A malformed credential replay event therefore remains pending
 instead of becoming graph or OpenLineage evidence. The raw service summary
 builder now applies the same fail-closed
 posture before the verifier runs: non-array credential response evidence,
-missing prefix hashes, malformed prefix hashes, or duplicate prefix hashes
-reject the raw lineage-drain summary instead of silently omitting redacted
+missing prefix hashes, malformed prefix hashes, duplicate prefix hashes,
+malformed issuer-config hashes, unsigned issuer-config entry counts, or a zero
+issuer-config entry count paired with a non-canonical empty issuer hash reject
+the raw lineage-drain summary instead of silently omitting redacted
 credential proof.
 Credential replay also rejects a governed `read-restriction` that is missing
 from, or different from, the authorization receipt context, so credential TTL
