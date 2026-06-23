@@ -420,7 +420,7 @@ logs, audit/outbox, replay admission, governed scan/fetch, credential receipt
 proof, management surfaces, view receipt chains, QueryGraph bootstrap,
 OpenLineage replay, and QGLake handoff/import proof.
 The broad local release gate was refreshed on June 23, 2026 from clean head
-`93ee0a20`. `scripts/check-release-readiness.sh --release-candidate` passed
+`0ba1fe1c`. `scripts/check-release-readiness.sh --release-candidate` passed
 locally, including shell-contract checks, dependency-contract checks, manual CI
 trigger contract checks, tracked book artifact validation, formatter checks,
 default and all-features workspace tests, explicit Turso/Sail/TypeSec/Grust
@@ -433,11 +433,13 @@ executable book artifact contract, local QGLake handoff replay verification
 with QueryGraph locked verify/import,
 `graphProjectionProof.backend = grust-turso` and
 `graphProjectionProof.tablePrefix = lakecat_graph`, bundle hash
-`sha256:f6ed584ef44e75eb67f5df2e3af8742df060ef4cf81e3f54d30b033729cced3c`,
+`sha256:0ceb6b4b156f0c86ddd61fb7ce457631592f0a68a6046802e5fe559b3b4535cb`,
+graph hash
+`sha256:2c32eaec43a9043c4a764e749afb851f68a59efcb471790ff9126fef5b8010ed`,
 OpenLineage hash
-`sha256:9682c9a7e87c9e6afce9d8ced68533fc565c5edf906687c09f72b6dc8da7d248`,
+`sha256:34842c47c7cdd55b3d0bceeb10ab211c29f5e1cae3f19436101aaa769c95f041`,
 QueryGraph import hash
-`sha256:cda542a94edddebab4359f2352b6a30850d644c61c119358b8dd3f4cd4e25743`,
+`sha256:ea54ac5580c1475b3e4fdd8bf70504f258e7a03f0407a429b6dfbe17ef02a497`,
 and `git diff --check`.
 This remains local release evidence; automatic cloud CI stays manual/disabled
 until local gates are consistently boring from the final release commit.

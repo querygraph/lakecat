@@ -7,11 +7,28 @@
   fields before graph or lineage delivery, closing a gap where
   credential-bearing metadata pointers could bypass the object-write validator
   through forged replay evidence.
+- Refreshed the full local release-candidate proof from clean head `0ba1fe1c`.
+  `scripts/check-release-readiness.sh --release-candidate` passed locally with
+  the release-proof candidate contract from `93ee0a20` to `0ba1fe1c`, full
+  workspace and feature-gate matrix, out-of-tree book artifact validation,
+  Grust Turso QGLake handoff, QueryGraph locked verify/import, bundle hash
+  `sha256:0ceb6b4b156f0c86ddd61fb7ce457631592f0a68a6046802e5fe559b3b4535cb`,
+  graph hash
+  `sha256:2c32eaec43a9043c4a764e749afb851f68a59efcb471790ff9126fef5b8010ed`,
+  OpenLineage hash
+  `sha256:34842c47c7cdd55b3d0bceeb10ab211c29f5e1cae3f19436101aaa769c95f041`,
+  QueryGraph import hash
+  `sha256:ea54ac5580c1475b3e4fdd8bf70504f258e7a03f0407a429b6dfbe17ef02a497`,
+  `graphProjectionProof.backend = grust-turso`,
+  `graphProjectionProof.tablePrefix = lakecat_graph`, one table, one view,
+  26 delivered lineage/outbox events, 54 graph events in lineage-drain
+  semantics, and `git diff --check`.
 - Clarified the book's release-readiness narrative for manual CI. The book now
   explains that intentionally triggered GitHub Actions runs dependency,
   workflow-trigger, and release-version preflights, while release-proof
   freshness remains owned by the clean local release-candidate gate.
-- Refreshed the full local release-candidate proof from clean head `93ee0a20`.
+- Recorded the previous full local release-candidate run from clean head
+  `93ee0a20`.
   `scripts/check-release-readiness.sh --release-candidate` passed locally with
   the new manual-CI preflight rows, the release-proof contract in clean
   candidate mode, the full workspace and feature-gate matrix, out-of-tree book
