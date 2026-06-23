@@ -861,6 +861,10 @@ evidence cannot disappear from raw commit-history proof.
 Governed scan summary arrays for required/requested/effective projection and
 requested/effective stats fields should likewise reject malformed, blank, or
 duplicate string entries before a raw lineage-drain summary is returned.
+Credential summary extraction must likewise fail closed when
+`credential-response-evidence` is not an array or its returned entries omit,
+malform, or duplicate `prefix-hash` evidence, so redacted credential replay
+cannot lose malformed prefix proof.
 Compact QGLake storage-profile and credential secret-reference proof must
 mirror service replay admission: present secret refs require nonblank providers
 and full SHA-256 hashes, while absent secret refs may omit provider/hash fields

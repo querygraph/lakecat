@@ -8645,7 +8645,11 @@ lineage-drain summary as `credentialPrefixHashes`, and the QGLake verifier
 rejects the drain before compact proof generation if the prefix hashes are
 missing, count-drifted, short, or duplicated. A malformed credential replay
 event therefore remains pending instead of becoming graph or OpenLineage
-evidence.
+evidence. The raw service summary builder now applies the same fail-closed
+posture before the verifier runs: non-array credential response evidence,
+missing prefix hashes, malformed prefix hashes, or duplicate prefix hashes
+reject the raw lineage-drain summary instead of silently omitting redacted
+credential proof.
 Credential replay also rejects a governed `read-restriction` that is missing
 from, or different from, the authorization receipt context, so credential TTL
 and blocked-agent evidence cannot drift away from the receipt that authorized

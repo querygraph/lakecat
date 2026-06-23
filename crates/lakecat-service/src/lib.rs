@@ -7040,15 +7040,8 @@ fn lineage_drain_event_summary(
         .map(str::to_string);
     let credential_prefix_hashes = payload
         .get("credential-response-evidence")
-        .and_then(Value::as_array)
-        .map(|entries| {
-            entries
-                .iter()
-                .filter_map(|entry| entry.get("prefix-hash"))
-                .filter_map(Value::as_str)
-                .map(str::to_string)
-                .collect()
-        })
+        .map(|_| lineage_summary_credential_prefix_hashes(event, payload))
+        .transpose()?
         .unwrap_or_default();
     let policy = payload.get("policy");
     Ok(LineageDrainEventSummary {
@@ -7419,6 +7412,20 @@ fn lineage_summary_full_hash_array_field(
     let hash_refs = hashes.to_vec();
     validate_unique_hash_array(event, &hash_refs, field)?;
     Ok(hashes.into_iter().map(str::to_string).collect())
+}
+
+fn lineage_summary_credential_prefix_hashes(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<Vec<String>, LakeCatError> {
+    let entries = optional_array_field(event, payload, "credential-response-evidence")?
+        .expect("field presence was checked by caller");
+    lineage_summary_required_hashes_from_objects(
+        event,
+        entries,
+        "prefix-hash",
+        "lineage drain credential-response prefix-hashes",
+    )
 }
 
 fn lineage_summary_string_array_field(
@@ -48320,6 +48327,93 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("commit-hashes must contain full SHA-256 digest evidence"));
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_credential_prefix_hashes() {
+        let receipt = OutboxProjectionReceipt::default();
+        let non_array_credential_evidence = OutboxEvent {
+            event_id: "evt-bad-summary-credential-evidence".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "credentials.vend-attempted".to_string(),
+            payload: json!({
+                "payload": {
+                    "credential-response-evidence": {
+                        "prefix-hash": content_hash_bytes(b"credential")
+                    }
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&non_array_credential_evidence, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("credential-response-evidence must be an array when present"));
+
+        let missing_prefix_hash = OutboxEvent {
+            event_id: "evt-missing-summary-prefix-hash".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "credentials.vend-attempted".to_string(),
+            payload: json!({
+                "payload": {
+                    "credential-response-evidence": [{
+                        "credential-mode": "short-lived"
+                    }]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&missing_prefix_hash, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("prefix-hash must contain full SHA-256 digest evidence"));
+
+        let malformed_prefix_hash = OutboxEvent {
+            event_id: "evt-bad-summary-prefix-hash".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "credentials.vend-attempted".to_string(),
+            payload: json!({
+                "payload": {
+                    "credential-response-evidence": [{
+                        "prefix-hash": "sha256:not-full"
+                    }]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&malformed_prefix_hash, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("prefix-hash must contain full SHA-256 digest evidence"));
+
+        let duplicate_prefix_hash = content_hash_bytes(b"duplicate-credential-prefix");
+        let duplicate_prefix_hashes = OutboxEvent {
+            event_id: "evt-duplicate-summary-prefix-hash".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "credentials.vend-attempted".to_string(),
+            payload: json!({
+                "payload": {
+                    "credential-response-evidence": [
+                        {"prefix-hash": duplicate_prefix_hash},
+                        {"prefix-hash": duplicate_prefix_hash}
+                    ]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&duplicate_prefix_hashes, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains(
+                "lineage drain credential-response prefix-hashes must not contain duplicate hashes"
+            ),
+            "{err}"
+        );
     }
 
     #[test]

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened service lineage-drain credential prefix summaries. Raw
+  lineage-drain summary construction now rejects non-array, missing,
+  malformed, or duplicate `credential-response-evidence[].prefix-hash`
+  entries instead of silently dropping them, so credential replay proof cannot
+  omit malformed redacted prefix evidence.
 - Hardened service lineage-drain governed scan summaries. Raw lineage-drain
   summary construction now rejects malformed, blank, or duplicate
   projection/stat field arrays instead of silently dropping invalid entries,
