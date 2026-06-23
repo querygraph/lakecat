@@ -5,12 +5,13 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
-- Latest raw commit-history receipt-shape summary coverage:
-  raw `table.commits-listed` lineage-drain summaries now re-check nonblank
-  authorization receipt engines and RFC3339 `checked_at` timestamps before
-  compact QGLake commit-history proof can inherit pointer-log evidence.
-- Local verification for this raw commit-history receipt-shape slice passed:
-  `cargo fmt -p lakecat-service -- --check`;
+- Latest raw commit-history receipt-admission summary coverage:
+  raw `table.commits-listed` lineage-drain summaries now re-check
+  authorization receipt principal, action, allowed decision, engine, and
+  RFC3339 `checked_at` evidence before compact QGLake commit-history proof can
+  inherit pointer-log evidence.
+- Local verification for this raw commit-history receipt-admission slice
+  passed: `cargo fmt -p lakecat-service -- --check`;
   `cargo test -p lakecat-service lineage_drain_summary_rejects_malformed_commit_history_fields -- --test-threads=1`;
   `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest raw management-list closed-schema summary coverage:

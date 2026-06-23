@@ -8489,8 +8489,7 @@ fn validate_lineage_summary_commit_history_receipt_shape(
     if event.event_type != "table.commits-listed" || authorization_receipt.is_none() {
         return Ok(());
     }
-    validate_authorization_receipt_engine(event, payload, "table commit-history")?;
-    validate_authorization_receipt_checked_at(event, payload, "table commit-history")?;
+    validate_authorization_receipt_principal(event, payload, "table commit-history")?;
     Ok(())
 }
 
@@ -53235,6 +53234,24 @@ mod tests {
         let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
         for (event_id, field, value, expected_message) in [
             (
+                "evt-missing-principal-summary-commit-history",
+                "principal",
+                Value::Null,
+                "table commit-history evidence must contain authorization receipt principal",
+            ),
+            (
+                "evt-action-drift-summary-commit-history",
+                "action",
+                json!("table-commit"),
+                "table commit-history authorization receipt action does not match outbox event type",
+            ),
+            (
+                "evt-denied-summary-commit-history",
+                "allowed",
+                json!(false),
+                "table commit-history authorization receipt must allow replay projection",
+            ),
+            (
                 "evt-blank-summary-commit-history-engine",
                 "engine",
                 json!(" "),
@@ -53275,7 +53292,14 @@ mod tests {
                 created_at: chrono::Utc::now(),
                 delivered_at: None,
             };
-            event.payload["payload"]["authorization-receipt"][field] = value;
+            if field == "principal" && value.is_null() {
+                event.payload["payload"]["authorization-receipt"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove(field);
+            } else {
+                event.payload["payload"]["authorization-receipt"][field] = value;
+            }
             let err = lineage_drain_event_summary(&event, &receipt)
                 .unwrap_err()
                 .to_string();

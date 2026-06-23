@@ -1096,8 +1096,9 @@ principal kind, and action proof before compact handoff proof generation, and
 service replay admission must reject a valid mutation action such as
 `table-commit` on a commit-history read before graph or OpenLineage projection.
 Raw lineage-drain summary construction also re-checks commit-history receipt
-shape when receipt evidence is present, so blank decision engines or malformed
-`checked_at` timestamps cannot become compact pointer-log proof.
+admission when receipt evidence is present, so missing principals, action
+drift, denied decisions, blank decision engines, or malformed `checked_at`
+timestamps cannot become compact pointer-log proof.
 Service replay must also close the top-level `table.commits-listed` payload
 schema over the fields current producers emit, so archived commit-history reads
 cannot append unverified commit, pointer, lineage, graph, QueryGraph, or
