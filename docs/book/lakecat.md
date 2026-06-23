@@ -9737,9 +9737,10 @@ projection, or OpenLineage projection, so a credential decision for one table
 cannot be replayed as another table's credential-root evidence. If the
 top-level `secret-ref-present` field is missing, non-boolean, or different
 from `storage-profile.secret-ref-present`, the replay event is rejected before
-delivery. That duplicate field is small, but it keeps compact credential proof
-from omitting whether the selected credential root depends on an external
-secret reference.
+delivery. Raw lineage-drain summaries enforce the same binding before compact
+QGLake proof is built. That duplicate field is small, but it keeps compact
+credential proof from omitting whether the selected credential root depends on
+an external secret reference.
 Each returned credential entry must also agree with the catalog-derived
 storage-profile id, catalog profile id, storage provider, credential mode,
 authorization principal, receipt principal, governed-read marker, and any

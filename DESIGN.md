@@ -1191,7 +1191,10 @@ returned, so blocked attempts cannot project a weaker credential-root claim
 than storage-profile management would accept. The replay payload must also
 carry top-level `secret-ref-present` evidence that matches the nested storage
 profile, so compact credential proof cannot omit or contradict whether the
-selected credential root depends on an external secret reference.
+selected credential root depends on an external secret reference. Raw
+lineage-drain credential summaries must enforce the same top-level/nested
+binding before compact QGLake proof is built, so summary-only replay cannot
+become a weaker path for external secret-root posture.
 Replay admission for both `storage-profile.upserted` and
 `credentials.vend-attempted` must also re-check nested storage-profile
 `public-config` objects: values must stay string-shaped, secret-like keys or

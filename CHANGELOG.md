@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bound credential summary secret-ref presence to storage-profile evidence.
+  Raw lineage-drain credential summaries now reject missing, non-boolean, or
+  drifted top-level `secret-ref-present` evidence before compact QGLake proof
+  can omit whether the selected credential root depends on an external secret
+  reference.
 - Tightened Turso corrupt pending payload diagnostics coverage. The Turso
   pending-outbox payload drift regression now proves operator-facing errors
   expose only event-id, event-type, and payload hashes, not raw event IDs,

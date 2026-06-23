@@ -5,6 +5,16 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest credential summary secret-ref presence hardening:
+  raw lineage-drain credential summaries now reject missing, non-boolean, or
+  drifted top-level `secret-ref-present` evidence when it no longer matches the
+  nested storage profile. This keeps summary-only credential proof aligned with
+  service admission before compact QGLake proof can omit external secret-root
+  posture.
+- Local verification for this credential summary secret-ref presence slice
+  passed: `cargo fmt -p lakecat-service -- --check`; and
+  `cargo test -p lakecat-service lineage_drain_summary_rejects_malformed_storage_profile_secret_ref_evidence -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest Turso corrupt pending payload diagnostics coverage:
   the Turso pending-outbox payload drift regression now proves corrupt durable
   pending rows expose only hash evidence for event id, event type, payload event

@@ -7411,6 +7411,7 @@ fn lineage_drain_event_summary(
             &view_version_receipt_chains,
         )?;
     let storage_profile = lineage_summary_storage_profile(event, payload.get("storage-profile"))?;
+    validate_lineage_summary_credential_secret_ref_presence(event, payload, &storage_profile)?;
     let authorization_receipt = payload
         .get("authorization-receipt")
         .or_else(|| payload.pointer("/payload/authorization-receipt"));
@@ -8253,6 +8254,29 @@ fn lineage_summary_storage_profile(
         secret_ref_provider,
         secret_ref_hash,
     }))
+}
+
+fn validate_lineage_summary_credential_secret_ref_presence(
+    event: &OutboxEvent,
+    payload: &Value,
+    storage_profile: &Option<LineageSummaryStorageProfile>,
+) -> Result<(), LakeCatError> {
+    if !matches!(
+        event.event_type.as_str(),
+        "credentials.vend-attempted" | "credentials.summary-only"
+    ) {
+        return Ok(());
+    }
+    let Some(storage_profile) = storage_profile else {
+        return Ok(());
+    };
+    validate_required_bool_field_equals(
+        event,
+        payload,
+        "secret-ref-present",
+        storage_profile.secret_ref_present,
+        "lineage drain credential summary",
+    )
 }
 
 fn lineage_summary_string_array_field(
@@ -54297,6 +54321,68 @@ mod tests {
             ),
             "{err}"
         );
+
+        let secret_ref_presence_cases = [
+            (
+                "evt-summary-credential-missing-secret-ref-present",
+                None,
+                "lineage drain credential summary must contain secret-ref-present",
+            ),
+            (
+                "evt-summary-credential-malformed-secret-ref-present",
+                Some(json!("false")),
+                "lineage drain credential summary secret-ref-present must be a boolean",
+            ),
+            (
+                "evt-summary-credential-secret-ref-present-drift",
+                Some(json!(false)),
+                "lineage drain credential summary secret-ref-present must match catalog evidence",
+            ),
+        ];
+        for (event_id, top_level_secret_ref_present, expected_message) in secret_ref_presence_cases
+        {
+            let mut event = valid_lineage_summary_credential_event(event_id);
+            event.event_type = "credentials.summary-only".to_string();
+            event.payload["event-type"] = json!("credentials.summary-only");
+            event.payload["payload"]["event-type"] = json!("credentials.summary-only");
+            event.payload["payload"]["storage-profile"] = json!({
+                "profile-id": "s3-events",
+                "warehouse": "local",
+                "provider": "s3",
+                "issuance-mode": "short-lived-secret-ref",
+                "location-prefix-hash": valid_location_hash,
+                "secret-ref-present": true,
+                "secret-ref-provider": "typesec",
+                "secret-ref-hash": valid_secret_hash
+            });
+            event.payload["payload"]["storage-profile-id"] = json!("s3-events");
+            event.payload["payload"]["mode"] = json!("short-lived-secret-ref");
+            event.payload["payload"]["credential-response-evidence"][0]["storage-profile-id"] =
+                json!("s3-events");
+            event.payload["payload"]["credential-response-evidence"][0]["catalog-profile-id"] =
+                json!("s3-events");
+            event.payload["payload"]["credential-response-evidence"][0]["storage-provider"] =
+                json!("s3");
+            event.payload["payload"]["credential-response-evidence"][0]["credential-mode"] =
+                json!("short-lived-secret-ref");
+            event.payload["payload"]["credential-response-evidence"][0]["secret-ref-provider"] =
+                json!("typesec");
+            event.payload["payload"]["credential-response-evidence"][0]["secret-ref-hash"] =
+                json!(valid_secret_hash);
+            match top_level_secret_ref_present {
+                Some(value) => event.payload["payload"]["secret-ref-present"] = value,
+                None => {
+                    event.payload["payload"]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("secret-ref-present");
+                }
+            }
+            let err = lineage_drain_event_summary(&event, &receipt)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains(expected_message), "{err}");
+        }
     }
 
     #[test]
