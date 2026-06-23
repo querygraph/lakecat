@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Pinned the local QueryGraph handoff Grust path contract. The dependency
+  contract now checks that `/Users/alexy/src/querygraph/qg-rust` uses the local
+  `grust-graph` 0.10.0 path dependency and lockfile state required by live
+  QGLake handoff verification, while LakeCat itself remains on published Grust
+  0.9.1 crates.
 - Hardened live QGLake storage-profile proof hashing. The local handoff script
   now requires storage-profile location, replay, OpenLineage, and optional
   related proof hash fields to be full `sha256:<64 hex>` digests and keeps

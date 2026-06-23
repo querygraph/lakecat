@@ -5,6 +5,19 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest dependency-contract slice:
+  `Pin QueryGraph Grust path contract`.
+  The local dependency contract now checks that
+  `/Users/alexy/src/querygraph/qg-rust` carries the local `grust-graph` 0.10.0
+  path dependency and lockfile state used by live QGLake handoff
+  verification/import, while LakeCat's own `grust-local` feature remains on
+  the published Grust 0.9.1 crate contract until the full companion crate set
+  is published consistently.
+- Local verification for this dependency-contract slice is green:
+  `bash -n scripts/check-local-dependency-contract.sh` passed;
+  `scripts/check-local-dependency-contract.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest implementation/testing slice:
   `Harden QGLake storage-profile proof hashes`.
   The live QGLake handoff helper now requires storage-profile location,

@@ -221,6 +221,12 @@ require_pattern 'record\.receipt_chain_hash\.is_empty' ../querygraph/qg-rust/src
   "local QueryGraph importer must reject missing LakeCat view receipt-chain evidence"
 require_pattern 'receipt-chain hash' ../querygraph/qg-rust/src/lakecat.rs \
   "local QueryGraph importer must expose a clear receipt-chain validation error"
+require_pattern 'grust = \{ package = "grust-graph", version = "0\.10\.0", path = "../../grust/crates/grust", features = \["sail"\] \}' ../querygraph/qg-rust/Cargo.toml \
+  "local QueryGraph handoff verifier must match the current Grust 0.10.0 path dependency"
+require_pattern 'name = "grust-graph"' ../querygraph/qg-rust/Cargo.lock \
+  "local QueryGraph lockfile must include grust-graph for LakeCat handoff verification"
+require_pattern 'version = "0\.10\.0"' ../querygraph/qg-rust/Cargo.lock \
+  "local QueryGraph lockfile must resolve the Grust 0.10.0 path crate used by LakeCat handoff verification"
 
 cargo metadata --format-version 1 --no-deps > /tmp/lakecat-dependency-contract-metadata.json
 require_pattern '"name":"grust-graph".*"source":"registry\+https://github.com/rust-lang/crates.io-index".*"req":"\^0\.9\.1"' /tmp/lakecat-dependency-contract-metadata.json \
