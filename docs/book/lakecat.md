@@ -8071,7 +8071,11 @@ QueryGraph handoff a durable proof that the exported view version came from
 LakeCat's catalog spine. Compact handoff verification also binds those
 bootstrap receipt hashes to `viewReceiptChainProof.views[].acceptedReceiptHash`
 exactly, so a saved summary cannot splice a valid-looking QueryGraph bootstrap
-receipt array from another accepted view proof. The fixture also exercises the
+receipt array from another accepted view proof. Raw lineage-drain summary
+construction now also rejects malformed `table-artifacts` or `view-artifacts`
+fields instead of counting them as zero, so a corrupted bootstrap artifact
+claim cannot vanish from the handoff evidence before QueryGraph import.
+The fixture also exercises the
 deletion side of the same workflow: it creates a transient view, accepts a
 QueryGraph bootstrap that contains that view, drops the view, reads the receipt
 chain through the governed management endpoints by view name and namespace, and
@@ -12511,7 +12515,9 @@ The raw lineage-drain summary follows the same posture for bootstrap standards:
 if `standards` is present, it must be a string-array-shaped claim without
 blank, non-string, or duplicate entries. Malformed standards evidence now
 rejects the summary instead of disappearing from the QGLake proof that
-QueryGraph later compares.
+QueryGraph later compares. The same summary path treats `table-artifacts` and
+`view-artifacts` as evidence arrays: malformed non-array artifact fields are
+rejected rather than summarized as zero artifact counts.
 
 ## What Comes Next
 

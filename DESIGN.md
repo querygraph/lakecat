@@ -648,7 +648,10 @@ proof. Service replay must also close `table-artifacts`, `view-artifacts`, and
 `view-version-receipts` entries over the fields LakeCat verifies before
 acknowledgement, graph projection, OpenLineage projection, or QGLake handoff
 proof, so unverified semantic artifact, standards, graph, or view receipt
-claims cannot ride beside matched bootstrap identities and hashes. Scan replay
+claims cannot ride beside matched bootstrap identities and hashes. Raw
+lineage-drain QueryGraph bootstrap summaries must also treat `table-artifacts`
+and `view-artifacts` as evidence arrays: malformed non-array artifact fields
+are rejected rather than summarized as zero-count proof. Scan replay
 must preserve the
 server-derived purpose and
 policy-derived TTL cap in both captured LakeCat replay text and compact handoff

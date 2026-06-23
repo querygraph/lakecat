@@ -7068,14 +7068,8 @@ fn lineage_drain_event_summary(
             .get("querygraph-import-hash")
             .and_then(Value::as_str)
             .map(str::to_string),
-        table_artifact_count: payload
-            .get("table-artifacts")
-            .and_then(Value::as_array)
-            .map_or(0, Vec::len),
-        view_artifact_count: payload
-            .get("view-artifacts")
-            .and_then(Value::as_array)
-            .map_or(0, Vec::len),
+        table_artifact_count: lineage_summary_array_len_field(event, payload, "table-artifacts")?,
+        view_artifact_count: lineage_summary_array_len_field(event, payload, "view-artifacts")?,
         view_version_receipt_hashes,
         view_version_receipt_chain_hashes,
         view_version_receipt_chain_verified_count,
@@ -7375,6 +7369,14 @@ fn optional_array_field<'a>(
     value.as_array().map(Some).ok_or_else(|| {
         outbox_evidence_error(event, &format!("{field} must be an array when present"))
     })
+}
+
+fn lineage_summary_array_len_field(
+    event: &OutboxEvent,
+    object: &Value,
+    field: &str,
+) -> Result<usize, LakeCatError> {
+    Ok(optional_array_field(event, object, field)?.map_or(0, Vec::len))
 }
 
 fn lineage_summary_required_hashes_from_objects(
@@ -48872,6 +48874,50 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("standards must not contain duplicate values"));
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_querygraph_artifact_arrays() {
+        let receipt = OutboxProjectionReceipt::default();
+        let malformed_table_artifacts = OutboxEvent {
+            event_id: "evt-bad-summary-table-artifacts".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "querygraph.bootstrap".to_string(),
+            payload: json!({
+                "payload": {
+                    "table-artifacts": {
+                        "stable-id": "lakecat:table:local:default.events"
+                    },
+                    "view-artifacts": []
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&malformed_table_artifacts, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("table-artifacts must be an array when present"));
+
+        let malformed_view_artifacts = OutboxEvent {
+            event_id: "evt-bad-summary-view-artifacts".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "querygraph.bootstrap".to_string(),
+            payload: json!({
+                "payload": {
+                    "table-artifacts": [],
+                    "view-artifacts": {
+                        "stable-id": "lakecat:view:local:default.events_view"
+                    }
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&malformed_view_artifacts, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("view-artifacts must be an array when present"));
     }
 
     #[test]

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened service lineage-drain QueryGraph artifact summaries. Raw
+  lineage-drain summary construction now rejects malformed `table-artifacts`
+  and `view-artifacts` evidence instead of silently reporting zero artifact
+  counts for malformed QueryGraph bootstrap proof.
 - Hardened service lineage-drain view receipt-chain object summaries. Raw
   lineage-drain summary construction now rejects malformed
   `view-version-receipt-chains` entries and malformed `chain-verified-count`
