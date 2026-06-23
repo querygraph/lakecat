@@ -3923,7 +3923,11 @@ fn validate_storage_profile_upsert_event_evidence(
         storage_profile,
         "profile-id",
         "storage-profile upsert",
-    )?;
+    )
+    .and_then(|profile_id| {
+        validate_storage_profile_id_evidence(event, profile_id, "storage-profile upsert")?;
+        Ok(profile_id)
+    })?;
     let warehouse_name = required_string_field(
         event,
         storage_profile,
@@ -5355,6 +5359,7 @@ fn validate_credential_vend_event_evidence(
         "profile-id",
         "credential-vend storage-profile",
     )?;
+    validate_storage_profile_id_evidence(event, profile_id, "credential-vend storage-profile")?;
     validate_string_field_equals(
         event,
         storage_profile,
@@ -6812,6 +6817,26 @@ fn required_string_field<'a>(
                 &format!("{label} {field} must be a non-empty string"),
             )
         })
+}
+
+fn validate_storage_profile_id_evidence(
+    event: &OutboxEvent,
+    profile_id: &str,
+    label: &str,
+) -> Result<(), LakeCatError> {
+    if profile_id
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
+    {
+        return Ok(());
+    }
+    Err(outbox_evidence_error(
+        event,
+        &format!(
+            "{label} profile-id contains unsupported characters; storage-profile-id-hash={}",
+            content_hash_bytes(profile_id.as_bytes())
+        ),
+    ))
 }
 
 fn validate_string_content_hash_matches_field(
@@ -26107,6 +26132,81 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_credential_storage_profile_invalid_profile_ids() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:reader".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let invalid_profile_id = "events-local?token=secret";
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-credential-storage-profile-invalid-profile-id".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "credentials.vend-attempted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-credential-storage-profile-invalid-profile-id",
+                    "event-type": "credentials.vend-attempted",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "credentials-vend",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "credential-count": 0,
+                        "credential-response-evidence": [],
+                        "storage-profile-id": invalid_profile_id,
+                        "secret-ref-present": false,
+                        "storage-profile": {
+                            "profile-id": invalid_profile_id,
+                            "warehouse": "local",
+                            "provider": "file",
+                            "issuance-mode": "local-file-no-secret",
+                            "secret-ref-present": false,
+                            "location-prefix-hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                        },
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10).await.expect_err(
+            "credential storage-profile invalid profile-id should fail before delivery",
+        );
+
+        let message = err.to_string();
+        assert!(message.contains("credentials.vend-attempted"));
+        assert!(message.contains("profile-id contains unsupported characters"));
+        assert!(message.contains("storage-profile-id-hash=sha256:"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains(invalid_profile_id));
+        assert!(!message.contains("token=secret"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_extra_credential_storage_profile_fields() {
         let table = TableIdent::new(
             WarehouseName::new("local").unwrap(),
@@ -40089,6 +40189,74 @@ mod tests {
         assert!(message.contains("warehouse must match storage-profile"));
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(!message.contains("evt-storage-profile-warehouse-drift"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_storage_profile_upsert_invalid_profile_ids() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let invalid_profile_id = "s3-events?token=secret";
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-storage-profile-invalid-profile-id".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "storage-profile.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-storage-profile-invalid-profile-id",
+                    "event-type": "storage-profile.upserted",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "storage-profile-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "storage-profile": {
+                            "profile-id": invalid_profile_id,
+                            "warehouse": "local",
+                            "location-prefix-hash": content_hash_json(&json!({
+                                "location-prefix": "s3://lakecat/events"
+                            })).unwrap(),
+                            "provider": "s3",
+                            "issuance-mode": "short-lived-secret-ref",
+                            "secret-ref-present": true,
+                            "secret-ref-provider": "typesec",
+                            "secret-ref-hash": content_hash_json(&json!({
+                                "secret-ref": "typesec://env/LAKECAT_S3_EVENTS"
+                            })).unwrap(),
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("storage-profile invalid profile-id should fail before delivery");
+        let message = err.to_string();
+        assert!(message.contains("storage-profile.upserted"));
+        assert!(message.contains("profile-id contains unsupported characters"));
+        assert!(message.contains("storage-profile-id-hash=sha256:"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains(invalid_profile_id));
+        assert!(!message.contains("token=secret"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());

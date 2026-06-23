@@ -5,6 +5,21 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest storage-profile replay hardening slice:
+  `Reject invalid storage profile ids at service replay`.
+  Service outbox replay now rejects invalid or decorated storage-profile ids in
+  both `storage-profile.upserted` and `credentials.vend-attempted` evidence
+  before delivery, graph projection, OpenLineage projection, or QGLake replay.
+  The regressions assert hash-only `storage-profile-id-hash` diagnostics and
+  keep raw token-bearing profile ids out of errors.
+- Local verification for this storage-profile replay slice is green:
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_storage_profile_upsert_invalid_profile_ids -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_credential_storage_profile_invalid_profile_ids -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service` passed;
+  `scripts/check-release-readiness.sh --quick` passed; `git diff --check`
+  passed.
 - Latest storage-profile row-scope hardening slice:
   `Bind Turso storage profile keys on read`.
   Turso storage-profile reads now verify the durable `profile_key` row value

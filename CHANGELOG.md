@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened storage-profile replay identity admission. Service outbox replay now
+  rejects invalid or decorated storage-profile ids in both
+  `storage-profile.upserted` and `credentials.vend-attempted` evidence with
+  hash-only diagnostics before delivery, graph projection, or lineage
+  projection.
 - Hardened Turso storage-profile row-key binding. Storage-profile reads now
   verify the durable `profile_key` against the selected warehouse/profile id
   before returning credential-root inventory or matching a table, with focused
