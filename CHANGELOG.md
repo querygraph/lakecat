@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Expanded malformed commit-history row coverage. Memory and Turso store tests
+  now reject stored commit records that drop format-version evidence, drop
+  snapshot-id evidence, or carry negative snapshot IDs before those rows can be
+  replayed into downstream proof surfaces.
 - Hardened invalid commit metadata side-effect coverage. Memory and Turso
   invalid table-commit tests now prove malformed expected/new metadata
   pointers, non-object metadata, and missing or non-positive format versions

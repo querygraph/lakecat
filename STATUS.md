@@ -5,6 +5,20 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest commit-history replay hardening slice:
+  `Cover malformed commit history format and snapshot evidence`.
+  Memory and Turso commit-history read tests now reject stored commit records
+  that remove `format_version`, remove `snapshot_id`, or carry a negative
+  snapshot ID before those records can be replayed into graph, OpenLineage,
+  QGLake, or QueryGraph proof surfaces.
+- Local verification for this commit-history replay slice is green:
+  `cargo test -p lakecat-store --lib memory_store_rejects_malformed_commit_history_records -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-store --features turso-local --lib turso_store_rejects_malformed_commit_history_records -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local` passed;
+  `scripts/check-release-readiness.sh --quick` passed; `git diff --check`
+  passed.
 - Latest commit metadata hardening slice:
   `Prove invalid commit metadata has no store side effects`.
   Memory and Turso invalid table-commit tests now prove malformed expected and

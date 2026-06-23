@@ -5653,7 +5653,53 @@ mod memory_tests {
             .await
             .unwrap();
 
-        store.state.write().await.commits[0].response_hash = "sha256:short".to_string();
+        let base_record = store.state.read().await.commits[0].clone();
+
+        let mut missing_format_record = base_record.clone();
+        missing_format_record.format_version = None;
+        store.state.write().await.commits[0] = missing_format_record;
+
+        let err = store
+            .table_commit_records(&ident, 0, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("table commit record format version must be present")
+        ));
+
+        let mut negative_snapshot_record = base_record.clone();
+        negative_snapshot_record.snapshot_id = Some(-1);
+        store.state.write().await.commits[0] = negative_snapshot_record;
+
+        let err = store
+            .table_commit_records(&ident, 0, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("table commit record snapshot id must be non-negative")
+        ));
+
+        let mut missing_snapshot_record = base_record.clone();
+        missing_snapshot_record.snapshot_id = None;
+        store.state.write().await.commits[0] = missing_snapshot_record;
+
+        let err = store
+            .table_commit_records(&ident, 0, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("table commit record snapshot id must be present")
+        ));
+
+        let mut malformed_response_record = base_record.clone();
+        malformed_response_record.response_hash = "sha256:short".to_string();
+        store.state.write().await.commits[0] = malformed_response_record;
 
         let err = store
             .table_commit_records(&ident, 0, None)
@@ -5667,9 +5713,9 @@ mod memory_tests {
                 )
         ));
 
-        store.state.write().await.commits[0].response_hash =
-            content_hash_bytes("response".as_bytes());
-        store.state.write().await.commits[0].policy_hash = Some("sha256:short".to_string());
+        let mut malformed_policy_record = base_record;
+        malformed_policy_record.policy_hash = Some("sha256:short".to_string());
+        store.state.write().await.commits[0] = malformed_policy_record;
 
         let err = store
             .table_commit_records(&ident, 0, None)
@@ -9847,10 +9893,77 @@ pub mod turso_store {
             let mut records = store.table_commit_records(&ident, 1, None).await.unwrap();
             assert_eq!(records.len(), 1);
             let base_record = records.remove(0);
+            let conn = store.connect().unwrap();
+
+            let mut missing_format_record = base_record.clone();
+            missing_format_record.format_version = None;
+            conn.execute(
+                "update metadata_pointer_log set record_json = ?2 where table_key = ?1",
+                (
+                    table_key(&ident),
+                    encode_json(&missing_format_record).unwrap(),
+                ),
+            )
+            .await
+            .unwrap();
+
+            let err = store
+                .table_commit_records(&ident, 0, None)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("table commit record format version must be present")
+            ));
+
+            let mut negative_snapshot_record = base_record.clone();
+            negative_snapshot_record.snapshot_id = Some(-1);
+            conn.execute(
+                "update metadata_pointer_log set record_json = ?2 where table_key = ?1",
+                (
+                    table_key(&ident),
+                    encode_json(&negative_snapshot_record).unwrap(),
+                ),
+            )
+            .await
+            .unwrap();
+
+            let err = store
+                .table_commit_records(&ident, 0, None)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("table commit record snapshot id must be non-negative")
+            ));
+
+            let mut missing_snapshot_record = base_record.clone();
+            missing_snapshot_record.snapshot_id = None;
+            conn.execute(
+                "update metadata_pointer_log set record_json = ?2 where table_key = ?1",
+                (
+                    table_key(&ident),
+                    encode_json(&missing_snapshot_record).unwrap(),
+                ),
+            )
+            .await
+            .unwrap();
+
+            let err = store
+                .table_commit_records(&ident, 0, None)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("table commit record snapshot id must be present")
+            ));
+
             let mut malformed_idempotency_record = base_record.clone();
             malformed_idempotency_record.idempotency_key_sha256 = Some("sha256:short".to_string());
 
-            let conn = store.connect().unwrap();
             conn.execute(
                 "update metadata_pointer_log set record_json = ?2 where table_key = ?1",
                 (
@@ -9876,7 +9989,6 @@ pub mod turso_store {
             let mut malformed_policy_record = base_record;
             malformed_policy_record.policy_hash = Some("sha256:short".to_string());
 
-            let conn = store.connect().unwrap();
             conn.execute(
                 "update metadata_pointer_log set record_json = ?2 where table_key = ?1",
                 (
