@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added a release version contract check. The new script verifies that the
+  workspace package version, `RELEASE.md` tag command, book `VERSION.md`
+  Kindle name/link, and versioned EPUB symlink all agree before the release
+  gate can pass.
 - Added an executable PDF layout check to the LakeCat book build. The build now
   validates that the generated PDF starts with an unnumbered cover page and
   that page 2 is the contents/body page with numbering started, moving the

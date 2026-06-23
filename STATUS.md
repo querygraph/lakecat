@@ -5,6 +5,12 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-contract slice:
+  `Check release version contract`.
+  The local release gate now runs `scripts/check-release-version-contract.sh`.
+  The script verifies that `[workspace.package].version`, the release tag in
+  `RELEASE.md`, the book `VERSION.md` Kindle name/link, and the versioned EPUB
+  symlink all agree before release evidence can pass.
 - Latest release-artifact slice:
   `Validate book PDF layout in build`.
   The LakeCat book build now runs `docs/book/check_pdf_layout.sh` after merging

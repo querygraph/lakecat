@@ -98,6 +98,7 @@ fi
 require_file Cargo.toml
 require_file .github/workflows/ci.yml
 require_file scripts/check-release-readiness.sh
+require_file scripts/check-release-version-contract.sh
 require_file DESIGN.md
 require_file README.md
 require_file RELEASE.md
@@ -111,6 +112,8 @@ require_pattern 'scripts/check-local-dependency-contract.sh' scripts/check-relea
   "release-readiness gate must run the dependency contract"
 require_pattern 'scripts/check-workflow-trigger-contract.sh' scripts/check-release-readiness.sh \
   "release-readiness gate must run the workflow trigger self-test"
+require_pattern 'scripts/check-release-version-contract.sh' scripts/check-release-readiness.sh \
+  "release-readiness gate must run the release version contract"
 require_pattern 'run cargo test --workspace --all-features$' scripts/check-release-readiness.sh \
   "release-readiness gate must run the complete all-features workspace test"
 require_pattern 'cargo test -p lakecat-api --lib' scripts/check-release-readiness.sh \

@@ -153,10 +153,15 @@ generate an extra empty `EPUB/text/title_page.xhtml` before the custom cover.
 After every build, run:
 
 ```sh
+scripts/check-release-version-contract.sh
 expected_title=$(awk -F': ' '/^kindle_name:/ { print $2 }' docs/book/dist/VERSION.md)
 docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "$expected_title"
 docs/book/check_pdf_layout.sh docs/book/dist/lakecat.pdf
 ```
+
+The release version contract rejects drift between `[workspace.package].version`
+in `Cargo.toml`, the `RELEASE.md` tag command, `docs/book/dist/VERSION.md`, and
+the versioned Kindle EPUB symlink.
 
 The validator rejects:
 
