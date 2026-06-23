@@ -11679,11 +11679,21 @@ the final release commit. The temporary Sail helper bridge is release-explicit:
 LakeCat depends on local Sail paths plus checked-in helper patches until the
 required Sail APIs are published. The Grust contract is likewise explicit:
 LakeCat should stay on the published 0.9.1 crate set until the companion crates
-needed by `grust-local` publish consistently for a newer Grust release. README,
-status, changelog, book artifacts, and version notes must be refreshed from the
-same clean commit, and the release should be tagged only after the broad local
-gate, QGLake handoff, QueryGraph locked verify/import, dependency-contract
-check, and book build all pass together.
+needed by `grust-local` publish consistently for a newer Grust release.
+
+QueryGraph's local handoff verifier is a different contract. The QueryGraph
+`qg-rust` checkout follows the active local Grust path, currently
+`grust-graph` 0.10.0, because `lakecat-verify` and `lakecat-import` exercise
+the end-to-end graph import path rather than LakeCat's published-crate release
+surface. The local dependency contract checks both sides: LakeCat remains
+release-pinned to published Grust 0.9.1 crates, while QueryGraph stays aligned
+with the local Grust graph implementation used by the live QGLake acceptance
+harness.
+
+README, status, changelog, book artifacts, and version notes must be refreshed
+from the same clean commit, and the release should be tagged only after the
+broad local gate, QGLake handoff, QueryGraph locked verify/import,
+dependency-contract check, and book build all pass together.
 
 That leaves important work after the first release, but it should stay out of
 the first-release blocker list unless the scope changes. Typed Iceberg v4

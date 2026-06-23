@@ -5,6 +5,19 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest docs/book slice:
+  `Align split Grust dependency boundary docs`.
+  README, DESIGN, and the LakeCat book now explain the split dependency
+  posture: LakeCat's release-facing `grust-local` feature remains on published
+  Grust 0.9.1 crates, while QueryGraph's local QGLake handoff verifier follows
+  the active local `grust-graph` 0.10.0 path checkout for `lakecat-verify` and
+  `lakecat-import`.
+- Local verification for this docs/book slice is green:
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"` passed;
+  `scripts/check-local-dependency-contract.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest dependency-contract slice:
   `Pin QueryGraph Grust path contract`.
   The local dependency contract now checks that

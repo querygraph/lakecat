@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Aligned the release docs and book with the split Grust dependency boundary.
+  README, DESIGN, and the book now explain that LakeCat remains on published
+  Grust 0.9.1 crates while QueryGraph's local handoff verifier follows the
+  active Grust 0.10.0 path checkout for `lakecat-verify` and `lakecat-import`.
 - Pinned the local QueryGraph handoff Grust path contract. The dependency
   contract now checks that `/Users/alexy/src/querygraph/qg-rust` uses the local
   `grust-graph` 0.10.0 path dependency and lockfile state required by live

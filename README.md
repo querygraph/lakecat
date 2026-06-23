@@ -51,6 +51,13 @@ current LakeCat feature set still relies on published `grust-cypher`,
 still uses local Sail paths plus the checked-in helper patch bridge until the
 required Sail APIs are published.
 
+The local QueryGraph handoff path has a separate compatibility contract:
+`/Users/alexy/src/querygraph/qg-rust` follows the local Grust 0.10.0 path
+checkout for `lakecat-verify` and `lakecat-import`. The dependency contract
+checks both sides so LakeCat can keep its published-crate release posture while
+the end-to-end QueryGraph acceptance harness stays aligned with the active
+local Grust graph implementation.
+
 Useful local checks:
 
 ```bash

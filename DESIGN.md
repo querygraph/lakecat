@@ -352,6 +352,10 @@ boundary cleanup rather than new architecture:
   release. As of this ledger update, `grust-graph` 0.9.2 is visible, but the
   LakeCat feature set still resolves through published `grust-cypher`,
   `grust-core`, `grust-memory`, and `grust-sail` 0.9.1 crates.
+- Keep the QueryGraph handoff verifier aligned with the active local Grust path
+  checkout. QueryGraph `qg-rust` now uses local `grust-graph` 0.10.0 for
+  `lakecat-verify` and `lakecat-import`; this is an end-to-end acceptance
+  contract and does not change LakeCat's published-crate release posture.
 - Refresh README, book artifacts, `STATUS.md`, and version/release notes from
   the same commit that passes the full gate.
 - Cut a release tag only after the broad local gate, QGLake handoff,
