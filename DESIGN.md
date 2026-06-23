@@ -1033,8 +1033,9 @@ Raw lineage-drain management ID summary arrays must match that posture:
 `project-ids`, `server-ids`, `warehouse-names`, `policy-ids`, and
 `storage-profile-ids` are malformed when they are not string arrays, carry blank
 entries, or repeat identities. Raw management-list summaries must also reuse
-the service replay authorization action check, so a list event cannot enter
-compact QGLake proof under an unrelated table or mutation action.
+the service replay authorization action and allowed-decision checks, so a list
+event cannot enter compact QGLake proof under an unrelated table or mutation
+action, or with a missing or denied authorization decision.
 Service replay admission now closes the wrapped payload schema for
 `namespace.listed`, `view.listed`, and management list events, so an archived
 inventory read cannot append unverified namespace, view, management,

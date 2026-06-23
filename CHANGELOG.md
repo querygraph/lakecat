@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added raw management-list summary receipt-decision coverage. Raw
+  `server.listed` summaries now explicitly prove missing or denied
+  authorization `allowed` decisions are rejected with hash-only event identity
+  before compact QGLake management proof can inherit tenant inventory.
 - Added raw management-list summary action-drift coverage. Raw
   `server.listed` summaries now explicitly prove mutation/read action drift is
   rejected with hash-only event identity before compact QGLake management proof

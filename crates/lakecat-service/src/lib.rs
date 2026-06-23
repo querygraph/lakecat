@@ -54755,6 +54755,44 @@ mod tests {
             !err.contains("evt-action-drift-summary-server-list"),
             "{err}"
         );
+
+        let mut missing_allowed = valid_lineage_summary_management_list_event(
+            "evt-missing-allowed-summary-server-list",
+            "server.listed",
+        );
+        missing_allowed.payload["payload"]["authorization-receipt"]
+            .as_object_mut()
+            .unwrap()
+            .remove("allowed");
+        let err = lineage_drain_event_summary(&missing_allowed, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains(
+                "management-list evidence must contain authorization receipt allowed decision"
+            ),
+            "{err}"
+        );
+        assert!(err.contains("event-id-hash=sha256:"), "{err}");
+        assert!(
+            !err.contains("evt-missing-allowed-summary-server-list"),
+            "{err}"
+        );
+
+        let mut denied = valid_lineage_summary_management_list_event(
+            "evt-denied-summary-server-list",
+            "server.listed",
+        );
+        denied.payload["payload"]["authorization-receipt"]["allowed"] = json!(false);
+        let err = lineage_drain_event_summary(&denied, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("management-list authorization receipt must allow replay projection"),
+            "{err}"
+        );
+        assert!(err.contains("event-id-hash=sha256:"), "{err}");
+        assert!(!err.contains("evt-denied-summary-server-list"), "{err}");
     }
 
     #[test]

@@ -8387,8 +8387,9 @@ action, valid authorization receipt, closed wrapper schema, valid warehouse or
 project scope where applicable, count-aligned IDs, and duplicate-free
 identifiers before QueryGraph can treat server, project, warehouse,
 policy-binding, or storage-profile inventory as accepted proof.
-Raw summaries enforce the same action match before compact proof is built, so a
-`server.listed` replay cannot be accepted under an unrelated table action.
+Raw summaries enforce the same action match and allowed decision before compact
+proof is built, so a `server.listed` replay cannot be accepted under an
+unrelated table action or with missing or denied authorization.
 View replay is checked at the same boundary: view list events must carry valid
 warehouse, namespace, and count evidence, and the count must match the listed
 view names before graph or OpenLineage projection. View create/load/drop
