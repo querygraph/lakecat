@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Required governed planned-scan replay to preserve required-filter evidence.
+  Service outbox admission and lineage-drain summaries now reject governed
+  `table.scan-planned` replay that omits `required-filters`, matching the
+  existing drift checks before graph, OpenLineage, or QGLake proof can inherit
+  a row predicate without its mandatory filter.
 - Hardened memory idempotency replay responses. The default memory store now
   validates stored replay responses against the requested table identity before
   returning them from direct replay or idempotent commit retry, matching the

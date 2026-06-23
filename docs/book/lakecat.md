@@ -10007,10 +10007,11 @@ arrays; fetched-task events must carry matching table identity, fetched
 file/delete/child-plan counts, required filters, and required/effective
 projection arrays. Those scan proof arrays must be non-empty, non-blank, and
 duplicate-free; present-but-empty projection or stats evidence is malformed,
-not an implicit unrestricted read. Fetched-task `required-filters` must also
-exactly preserve the governed row predicate at service admission, so an event
-with empty or drifted fetched filter proof is rejected before graph or
-OpenLineage projection. When a governed read restriction is present, the
+not an implicit unrestricted read. Planned and fetched governed
+`required-filters` evidence must be present and must exactly preserve the
+governed row predicate at service admission, so an event with missing, empty, or
+drifted filter proof is rejected before graph or OpenLineage projection. When a
+governed read restriction is present, the
 effective projection and effective stats fields must remain inside the allowed
 columns, empty allowed-column arrays fail closed for both planned and fetched
 replay, and explicit effective projection or stats evidence cannot widen beyond
@@ -10441,11 +10442,11 @@ proof or inflate compact pointer-history evidence. Governed scan summary arrays
 for required/requested/effective projection and requested/effective stats
 fields also reject malformed, blank, or duplicate strings before raw replay
 proof is returned, so a malformed Sail-planned read summary cannot hide missing
-projection or stats evidence. Fetched scan summary construction applies the
-same second-line check to `required-filters`: the field must remain array-shaped
-and, when row-predicate evidence is present, it must exactly preserve that
-server-derived predicate rather than widening or omitting the mandatory filter
-inside raw QGLake proof.
+projection or stats evidence. Planned and fetched scan summary construction
+applies the same second-line check to `required-filters`: when row-predicate
+evidence is present, the field must remain array-shaped and exactly preserve
+that server-derived predicate rather than widening or omitting the mandatory
+filter inside raw QGLake proof.
 The verifier
 also compares those QueryGraph import-plan graph node and edge counts with the
 verified bootstrap bundle graph counts, so an import plan cannot keep the
@@ -13949,6 +13950,9 @@ than disappearing from a compact proof summary. Governed scan replay also
 closes the wrapped `table.scan-planned` and `table.scan-tasks-fetched` payload
 schemas, so an archived scan event cannot attach unverified lineage, graph,
 QueryGraph, or application claims beside otherwise valid Sail-planned proof.
+Governed planned-scan replay must also retain the `required-filters` array that
+corresponds to the server-derived row predicate, so compact proof cannot keep
+the predicate while losing the mandatory filter evidence.
 Raw lineage-drain summaries reuse those scan replay validators before compact
 proof is returned, which keeps governed scan proof tied to the same
 Sail-planned evidence that would be accepted for delivery.

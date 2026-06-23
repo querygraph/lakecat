@@ -5,6 +5,21 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest planned-scan required-filter replay hardening:
+  governed `table.scan-planned` replay must now carry `required-filters` when
+  read-restriction evidence is present. Service outbox admission and raw
+  lineage-drain summaries reject missing planned required-filter proof before
+  acknowledgement, graph projection, OpenLineage projection, or compact QGLake
+  proof can inherit a row predicate without its mandatory filter.
+- Local verification for this planned-scan required-filter slice passed:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_scan_planned_missing_required_filters -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_scan_required_filters -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib required_filters -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local --lib -- --test-threads=1`;
+  `docs/book/build.sh`; `scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`; `git diff --check`.
 - Latest memory idempotency response-scope parity:
   the default memory store now validates stored idempotency replay responses
   against the requested table identity before returning them from direct replay

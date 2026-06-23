@@ -3231,9 +3231,6 @@ fn validate_scan_planned_event_evidence(
     )?;
     validate_read_restriction_receipt_match(event, payload, "scan-planned")?;
     validate_scan_read_restriction_row_predicate(event, payload, "scan-planned")?;
-    if payload.get("required-filters").is_some() {
-        validate_scan_required_filters_match_row_predicate(event, payload, "scan-planned")?;
-    }
 
     let requested_stats = validate_required_non_empty_string_array_field(
         event,
@@ -3262,6 +3259,11 @@ fn validate_scan_planned_event_evidence(
         &effective_stats,
     )?;
     validate_read_restriction_purpose_and_ttl(event, payload, "scan-planned")?;
+    if payload.get("read-restriction").is_some() {
+        validate_scan_required_filters_match_row_predicate(event, payload, "scan-planned")?;
+    } else if payload.get("required-filters").is_some() {
+        validate_scan_required_filters_match_row_predicate(event, payload, "scan-planned")?;
+    }
     Ok(())
 }
 
@@ -8122,6 +8124,19 @@ fn lineage_summary_required_filters(
     payload: &Value,
 ) -> Result<Vec<Value>, LakeCatError> {
     let Some(filters) = optional_array_field(event, payload, "required-filters")? else {
+        if matches!(
+            event.event_type.as_str(),
+            "table.scan-planned" | "table.scan-tasks-fetched"
+        ) && payload.get("read-restriction").is_some()
+        {
+            return Err(outbox_evidence_error(
+                event,
+                &format!(
+                    "lineage drain {} required-filters must be an array",
+                    event.event_type
+                ),
+            ));
+        }
         return Ok(Vec::new());
     };
     if matches!(
@@ -36659,6 +36674,96 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_scan_planned_missing_required_filters() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let ident = table_ident("local", "default", "events").unwrap();
+        let read_restriction = json!({
+            "allowed-columns": ["event_id"],
+            "row-predicate": {
+                "type": "not-eq",
+                "term": "severity",
+                "value": "debug"
+            },
+            "purpose": "qglake-agent-demo",
+            "max-credential-ttl-seconds": 300,
+            "policy-hashes": [
+                content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                    .unwrap()
+            ]
+        });
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-scan-plan-missing-required-filters".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.scan-planned".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-scan-plan-missing-required-filters",
+                    "event-type": "table.scan-planned",
+                    "table": ident,
+                    "payload": {
+                        "table": ident,
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-plan-scan",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": "sha256:policy",
+                            "context": {
+                                "read-restriction": read_restriction
+                            },
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "read-restriction": read_restriction,
+                        "requested-projection": ["event_id"],
+                        "effective-projection": ["event_id"],
+                        "requested-stats-fields": ["event_id"],
+                        "effective-stats-fields": ["event_id"],
+                        "scan-task-count": 1
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("governed scan-plan required filters should be mandatory");
+
+        let message = err.to_string();
+        assert!(
+            message.contains(
+                "outbox event table.scan-planned (lakecat.lineage-and-graph) has invalid"
+            )
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(message.contains("scan-planned required-filters must be an array"));
+        assert!(!message.contains("evt-scan-plan-missing-required-filters"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "missing planned required-filters replay must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "missing planned required-filters replay must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "missing planned required-filters replay must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_scan_planned_drifted_required_filters() {
         let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
         let ident = table_ident("local", "default", "events").unwrap();
@@ -51541,6 +51646,11 @@ mod tests {
                     "effective-projection": ["event_id"],
                     "requested-stats-fields": ["event_id", "payload"],
                     "effective-stats-fields": ["event_id"],
+                    "required-filters": [{
+                        "type": "eq",
+                        "term": "event_id",
+                        "value": "evt-1"
+                    }],
                     "scan-task-count": 1
                 }
             }),
@@ -51989,6 +52099,31 @@ mod tests {
     #[test]
     fn lineage_drain_summary_rejects_malformed_scan_required_filters() {
         let receipt = OutboxProjectionReceipt::default();
+        let missing_required_filters = OutboxEvent {
+            event_id: "evt-missing-summary-required-filters".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.scan-planned".to_string(),
+            payload: json!({
+                "payload": {
+                    "read-restriction": {
+                        "allowed-columns": ["event_id"],
+                        "row-predicate": {
+                            "type": "eq",
+                            "term": "event_id",
+                            "value": "evt-1"
+                        },
+                        "policy-hashes": [content_hash_bytes(b"policy")]
+                    }
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&missing_required_filters, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("lineage drain table.scan-planned required-filters must be an array"));
+
         let row_predicate = json!({
             "type": "eq",
             "term": "event_id",
@@ -52770,6 +52905,11 @@ mod tests {
                     "effective-projection": ["event_id"],
                     "requested-stats-fields": ["event_id"],
                     "effective-stats-fields": ["event_id"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }],
                     "unverified-scan-plan-claim": true,
                 }),
             ),
