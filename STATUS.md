@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest captured handoff omitted secret-ref proof coverage:
+  QGLake handoff verification now explicitly proves compact storage-profile and
+  credential storage-profile proof can omit absent secret-ref provider/hash
+  fields only when the saved LakeCat replay omits them the same way under
+  `secretRefPresent=false`.
+- Local verification for this captured handoff omitted secret-ref proof slice
+  passed: `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics_accepts_omitted_absent_secret_ref_fields -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest raw credential public-config summary coverage:
   raw lineage-drain `credentials.vend-attempted` summaries now explicitly prove
   secret-like public-config keys and non-string public-config values are

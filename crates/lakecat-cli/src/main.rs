@@ -14811,6 +14811,53 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_captured_output_semantics_accepts_omitted_absent_secret_ref_fields() {
+        let temp = qglake_temp_dir("handoff-captured-omitted-absent-secret-ref-fields");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let storage_profile = summary["lakecatReplayVerification"]["storageProfileUpsertProof"]
+            .as_object_mut()
+            .unwrap();
+        storage_profile.remove("secretRefProvider");
+        storage_profile.remove("secretRefHash");
+        for proof in ["restricted", "trustedHuman"] {
+            let storage_profile = summary["lakecatReplayVerification"]["credentialVendingProof"]
+                [proof]["storageProfile"]
+                .as_object_mut()
+                .unwrap();
+            storage_profile.remove("secretRefProvider");
+            storage_profile.remove("secretRefHash");
+        }
+
+        let mut replay =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        let storage_profile = replay["replay-evidence"]["management"]["storageProfileUpsert"]
+            .as_object_mut()
+            .unwrap();
+        storage_profile.remove("secretRefProvider");
+        storage_profile.remove("secretRefHash");
+        for proof in ["restricted", "trustedHuman"] {
+            let storage_profile = replay["replay-evidence"]["credentials"][proof]["storageProfile"]
+                .as_object_mut()
+                .unwrap();
+            storage_profile.remove("secretRefProvider");
+            storage_profile.remove("secretRefHash");
+        }
+        let replay_bytes = serde_json::to_vec_pretty(&replay).expect("replay JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &replay_bytes)
+            .expect("write normalized LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&replay_bytes));
+
+        verify_qglake_handoff_summary_value(&summary).expect(
+            "handoff summary should accept omitted secret-ref proof fields when secretRefPresent is false",
+        );
+        verify_qglake_handoff_captured_output_semantics(&summary_path, &summary).expect(
+            "captured replay semantics should accept matching omitted secret-ref proof fields when secretRefPresent is false",
+        );
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_requires_governed_scan_read_restriction() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["governedScanProof"]

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added captured handoff omitted secret-ref proof coverage. QGLake handoff
+  verification now explicitly proves compact storage-profile and credential
+  storage-profile proof can omit absent secret-ref provider/hash fields only
+  when the saved LakeCat replay omits them the same way under
+  `secretRefPresent=false`.
 - Expanded raw credential public-config summary coverage. Raw
   `credentials.vend-attempted` summaries now explicitly prove secret-like
   public-config keys and non-string public-config values are rejected with
