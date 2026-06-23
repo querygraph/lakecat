@@ -714,7 +714,11 @@ View receipt-chain replay must likewise carry valid warehouse, namespace,
 authorization receipt principal, the read-side `view-load` action, and
 count-aligned chain, receipt, and tombstone totals before projection, so
 namespace-level view-history evidence cannot inflate chains, shed chains, or
-reuse a mutation receipt by drifting the summary counts or action.
+reuse a mutation receipt by drifting the summary counts or action. Every nested
+receipt-chain and receipt object must also bind back to the top-level
+warehouse and namespace before acknowledgement, graph projection, or
+OpenLineage projection, so raw view-history replay cannot splice structural
+chains or receipts across namespaces while preserving hash-shaped fields.
 Service replay must close the top-level view receipt-list and receipt-chain
 payloads over the fields current producers emit, so archived view-history reads
 cannot append unverified view-history, lineage, graph, QueryGraph, or

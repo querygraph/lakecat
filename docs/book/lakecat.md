@@ -8416,9 +8416,13 @@ receipt-chain summary, and every receipt's stable ID, warehouse, namespace, and
 view name must match the chain identity. Each structural chain stable ID is
 also checked against its own warehouse, namespace, and view-name components, so
 compact evidence cannot splice receipts across views or namespaces while
-preserving hash-shaped fields. Structural chain bodies cannot repeat a
-`chainHash`. The enclosing namespace `chainHashes` and `receiptHashes` arrays
-are duplicate-free summaries of those same structural chains, and
+preserving hash-shaped fields. LakeCat now applies the same scope rule at raw
+service replay time: a `view.version-receipt-chains-listed` outbox event is
+rejected if any nested chain or receipt warehouse/namespace drifts from the
+top-level payload before acknowledgement, graph projection, or OpenLineage
+projection. Structural chain bodies cannot repeat a `chainHash`. The enclosing
+namespace `chainHashes` and `receiptHashes` arrays are duplicate-free summaries
+of those same structural chains, and
 `receiptHashes` must match the structural per-receipt hashes exactly, so a
 compact proof cannot hide extra receipt hashes or omit receipts from the
 ordered chain bodies. Each structural `chainHash` is also recomputed from the

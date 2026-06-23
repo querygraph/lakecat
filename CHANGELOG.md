@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened service view receipt-chain replay scope admission. Raw
+  `view.version-receipt-chains-listed` replay now rejects nested chain or
+  receipt warehouse/namespace evidence that drifts from the top-level payload
+  before acknowledgement, graph projection, or OpenLineage projection.
 - Hardened service view-lifecycle replay scope admission. `view.upserted`,
   `view.loaded`, and `view.dropped` replay now reject payloads whose top-level
   warehouse or namespace evidence drifts from the nested view object before

@@ -5644,14 +5644,14 @@ fn validate_view_receipt_chain_event_evidence(
         "view receipt-chain",
         VIEW_RECEIPT_CHAIN_LIST_EVIDENCE_FIELDS,
     )?;
-    validate_required_warehouse_field(event, payload, "view receipt-chain")?;
+    let warehouse = validate_required_warehouse_field(event, payload, "view receipt-chain")?;
     let Some(namespace) = payload.get("namespace") else {
         return Err(outbox_evidence_error(
             event,
             "view receipt-chain evidence must contain namespace",
         ));
     };
-    validate_namespace_value(event, namespace, "view receipt-chain")?;
+    let namespace = decode_namespace_value(event, namespace, "view receipt-chain")?;
     validate_authorization_receipt_principal(event, payload, "view receipt-chain")?;
 
     let Some(chains) = payload
@@ -5709,6 +5709,13 @@ fn validate_view_receipt_chain_event_evidence(
             "view receipt-chain chain",
             VIEW_RECEIPT_CHAIN_EVIDENCE_FIELDS,
         )?;
+        validate_view_receipt_chain_scope_evidence(
+            event,
+            chain,
+            &warehouse,
+            &namespace,
+            "view receipt-chain chain",
+        )?;
         if let Some(receipts) = chain.get("receipts") {
             let Some(receipts) = receipts.as_array() else {
                 return Err(outbox_evidence_error(
@@ -5722,6 +5729,13 @@ fn validate_view_receipt_chain_event_evidence(
                     receipt,
                     "view receipt-chain receipt",
                     VIEW_RECEIPT_CHAIN_RECEIPT_EVIDENCE_FIELDS,
+                )?;
+                validate_view_receipt_chain_scope_evidence(
+                    event,
+                    receipt,
+                    &warehouse,
+                    &namespace,
+                    "view receipt-chain receipt",
                 )?;
             }
         }
@@ -5816,6 +5830,38 @@ fn validate_view_receipt_chain_event_evidence(
         &drop_receipt_hashes,
         &structural_drop_receipt_hashes,
     )?;
+    Ok(())
+}
+
+fn validate_view_receipt_chain_scope_evidence(
+    event: &OutboxEvent,
+    object: &Value,
+    expected_warehouse: &WarehouseName,
+    expected_namespace: &Namespace,
+    label: &str,
+) -> Result<(), LakeCatError> {
+    let warehouse_name = required_string_field(event, object, "warehouse", label)?;
+    let warehouse = WarehouseName::new(warehouse_name)
+        .map_err(|_| outbox_evidence_error(event, &format!("{label} has invalid warehouse")))?;
+    if &warehouse != expected_warehouse {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} warehouse must match payload warehouse"),
+        ));
+    }
+    let Some(namespace) = object.get("namespace") else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} evidence must contain namespace"),
+        ));
+    };
+    let namespace = decode_namespace_value(event, namespace, label)?;
+    if &namespace != expected_namespace {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} namespace must match payload namespace"),
+        ));
+    }
     Ok(())
 }
 
@@ -39074,6 +39120,40 @@ mod tests {
             "evt-view-chain-missing-principal",
             "view receipt-chain evidence must contain authorization receipt principal",
             missing_principal,
+        ));
+
+        let mut chain_warehouse_drift = base_payload.clone();
+        chain_warehouse_drift["view-version-receipt-chains"][0]["warehouse"] = json!("shadow");
+        cases.push((
+            "evt-view-chain-warehouse-drift",
+            "view receipt-chain chain warehouse must match payload warehouse",
+            chain_warehouse_drift,
+        ));
+
+        let mut chain_namespace_drift = base_payload.clone();
+        chain_namespace_drift["view-version-receipt-chains"][0]["namespace"] = json!(["shadow"]);
+        cases.push((
+            "evt-view-chain-namespace-drift",
+            "view receipt-chain chain namespace must match payload namespace",
+            chain_namespace_drift,
+        ));
+
+        let mut receipt_warehouse_drift = base_payload.clone();
+        receipt_warehouse_drift["view-version-receipt-chains"][0]["receipts"][0]["warehouse"] =
+            json!("shadow");
+        cases.push((
+            "evt-view-chain-receipt-warehouse-drift",
+            "view receipt-chain receipt warehouse must match payload warehouse",
+            receipt_warehouse_drift,
+        ));
+
+        let mut receipt_namespace_drift = base_payload.clone();
+        receipt_namespace_drift["view-version-receipt-chains"][0]["receipts"][0]["namespace"] =
+            json!(["shadow"]);
+        cases.push((
+            "evt-view-chain-receipt-namespace-drift",
+            "view receipt-chain receipt namespace must match payload namespace",
+            receipt_namespace_drift,
         ));
 
         let mut chain_count_drift = base_payload.clone();
