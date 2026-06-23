@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Closed raw credential exception summaries. Raw lineage-drain credential
+  summaries now reject unknown fields inside `lakecat:raw-credential-exception`,
+  matching service outbox admission before QGLake proof can inherit unverified
+  raw-credential posture claims.
 - Added lineage-drain coverage for closed credential-response summaries. Raw
   credential replay summaries now have an explicit regression proving extra
   fields inside `credential-response-evidence` are rejected before QGLake proof

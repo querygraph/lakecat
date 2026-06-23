@@ -8381,6 +8381,14 @@ fn lineage_summary_credential_exception_fields(
             "lakecat:raw-credential-exception must be an object when present",
         ));
     };
+    for field in raw_exception.keys() {
+        if !RAW_CREDENTIAL_EXCEPTION_EVIDENCE_FIELDS.contains(&field.as_str()) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("lakecat:raw-credential-exception contains unexpected field {field}"),
+            ));
+        }
+    }
     let Some(allowed) = raw_exception.get("allowed") else {
         return Err(outbox_evidence_error(
             event,
@@ -53866,6 +53874,19 @@ mod tests {
                 "raw-credential exception allowed must be boolean",
             ),
             (
+                "evt-extra-summary-raw-exception-field",
+                json!({
+                    "credential-count": 0,
+                    "lakecat:credential-block-reason": "fine-grained read restriction requires Sail-planned reads",
+                    "lakecat:raw-credential-exception": {
+                        "allowed": false,
+                        "reason": "fine-grained read restriction requires Sail-planned reads",
+                        "unverified-raw-credential-claim": "credential-safe"
+                    }
+                }),
+                "lakecat:raw-credential-exception contains unexpected field unverified-raw-credential-claim",
+            ),
+            (
                 "evt-bad-summary-raw-exception-missing-reason",
                 json!({
                     "credential-count": 0,
@@ -53949,6 +53970,11 @@ mod tests {
             if let Some(raw_exception) = payload.get("lakecat:raw-credential-exception") {
                 event.payload["payload"]["authorization-receipt"]["context"]["lakecat:raw-credential-exception"] =
                     raw_exception.clone();
+            }
+            if event_id == "evt-extra-summary-raw-exception-field" {
+                event.event_type = "credentials.summary-only".to_string();
+                event.payload["event-type"] = json!("credentials.summary-only");
+                event.payload["payload"]["event-type"] = json!("credentials.summary-only");
             }
             let err = lineage_drain_event_summary(&event, &receipt)
                 .unwrap_err()

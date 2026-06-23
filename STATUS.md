@@ -5,6 +5,14 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw credential exception summary closure:
+  raw lineage-drain credential summaries now reject unknown fields inside
+  `lakecat:raw-credential-exception`, matching service outbox admission before
+  QGLake proof can inherit unverified raw-credential posture claims.
+- Local verification for this raw credential exception summary slice passed:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service lineage_drain_summary_rejects_malformed_raw_credential_exception -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest lineage-drain credential-response closure coverage:
   raw credential replay summaries now explicitly reject unexpected fields
   inside `credential-response-evidence` entries before QGLake proof can inherit
