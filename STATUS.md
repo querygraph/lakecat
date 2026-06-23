@@ -5,6 +5,14 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/testing slice:
+  `Close view receipt-read replay wrappers`.
+  Service outbox admission now closes wrapped `view.version-receipts-listed`
+  and `view.version-receipt-chains-listed` replay payloads over the wrapper
+  fields current producers emit, rejecting extra unverified view-history,
+  lineage, graph, QGLake, QueryGraph, or application claims before
+  acknowledgement, graph projection, or OpenLineage projection. A focused
+  regression covers both receipt-list and receipt-chain wrapper shapes.
 - Latest documentation slice:
   `Expand book catalog concept taxonomy`.
   The book now opens the catalog-concepts discussion with a current-state

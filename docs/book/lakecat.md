@@ -9613,7 +9613,10 @@ SHA-256 receipt hashes, and every drop receipt hash is included in the listed
 receipts. The receipt-list payload is also closed over the fields current
 producers emit, so an archived read cannot attach unverified view-history,
 lineage, graph, QueryGraph, or application claims beside checked receipt hashes
-and authorization evidence. A verified
+and authorization evidence. LakeCat also closes the wrapped receipt-read
+outbox envelope for `view.version-receipts-listed` and
+`view.version-receipt-chains-listed`, so those claims cannot ride beside an
+otherwise valid checked receipt-list or receipt-chain payload. A verified
 `view.version-receipt-chains-listed` event is not acknowledged unless its
 warehouse, namespace, authorization receipt principal, read-side `view-load`
 authorization action, chain count, receipt count, and tombstone count are valid

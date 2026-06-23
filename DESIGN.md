@@ -762,7 +762,10 @@ Service replay must close the top-level view receipt-list and receipt-chain
 payloads over the fields current producers emit, so archived view-history reads
 cannot append unverified view-history, lineage, graph, QueryGraph, or
 application claims beside otherwise valid warehouse, namespace, receipt-hash,
-chain-hash, tombstone, and authorization evidence.
+chain-hash, tombstone, and authorization evidence. Service replay now also
+closes the wrapped receipt-read envelopes over the producer wrapper fields, so
+those claims cannot ride beside an otherwise valid checked receipt-list or
+receipt-chain payload.
 Service replay must close nested receipt-chain and receipt objects over the
 fields LakeCat verifies before acknowledgement, graph projection, OpenLineage
 projection, or QGLake proof, so unverified view-history, principal, lifecycle,

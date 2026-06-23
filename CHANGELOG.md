@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed service outbox admission over wrapped view receipt-read replay
+  payloads. `view.version-receipts-listed` and
+  `view.version-receipt-chains-listed` wrappers now reject extra unverified
+  view-history, lineage, graph, QGLake, QueryGraph, or application claims
+  before acknowledgement, graph projection, or OpenLineage projection.
 - Expanded the LakeCat book's catalog-concepts chapter with a current-state
   reading guide that separates standard Iceberg parlance, LakeCat
   implementation choices, LakeCat extensions, TypeSec/Sail governed-access
