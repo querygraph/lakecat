@@ -9675,7 +9675,10 @@ the `table-load` action. Service replay closes the top-level
 `table.commits-listed` payload over the fields LakeCat producers emit, so an
 archived commit-history read cannot attach unverified commit, pointer, lineage,
 graph, QueryGraph, or application claims beside checked table scope, count,
-sequence, commit hash, principal, and authorization evidence. The compact
+sequence, commit hash, principal, and authorization evidence. It also closes
+the wrapped `table.commits-listed` outbox envelope over the producer fields,
+so those unverified commit-history claims cannot be placed beside an otherwise
+valid checked inner pointer-log proof. The compact
 `tableCommitHistoryProof` object and the
 captured LakeCat replay `tableCommitHistory` object are closed over those
 compared fields, so a saved summary or captured replay sidecar cannot append an

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Closed service outbox admission over wrapped table commit-history replay
+  payloads. `table.commits-listed` wrappers now reject extra unverified
+  commit, pointer, lineage, graph, QueryGraph, or application claims before
+  acknowledgement, graph projection, or OpenLineage projection.
 - Closed service outbox admission over wrapped management-upsert replay
   payloads. `policy-binding.upserted`, `project.upserted`,
   `server.upserted`, and `warehouse.upserted` wrappers now reject extra

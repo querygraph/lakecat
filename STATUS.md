@@ -6,6 +6,13 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Close commit-history replay wrappers`.
+  Service outbox admission now closes wrapped `table.commits-listed` replay
+  payloads over the wrapper fields current producers emit, rejecting extra
+  unverified commit, pointer, lineage, graph, QueryGraph, or application claims
+  before acknowledgement, graph projection, or OpenLineage projection. A
+  focused regression covers commit-history wrapper drift.
+- Latest implementation/testing slice:
   `Close management-upsert replay wrappers`.
   Service outbox admission now closes wrapped `policy-binding.upserted`,
   `project.upserted`, `server.upserted`, and `warehouse.upserted` replay

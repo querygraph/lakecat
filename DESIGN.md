@@ -995,7 +995,10 @@ Service replay must also close the top-level `table.commits-listed` payload
 schema over the fields current producers emit, so archived commit-history reads
 cannot append unverified commit, pointer, lineage, graph, QueryGraph, or
 application claims beside otherwise valid table scope, count, sequence, commit
-hash, principal, and authorization evidence.
+hash, principal, and authorization evidence. Service replay now also closes the
+wrapped `table.commits-listed` envelope over the producer wrapper fields, so
+unverified commit-history claims cannot ride beside an otherwise valid checked
+inner pointer-log proof.
 Pending outbox replay should stay deterministic across embedded and Turso
 stores, ordered by `created_at,event_id`, with batch limits applied after that
 order and with duplicate-safe delivery accounting. Draining should acknowledge
