@@ -7794,6 +7794,24 @@ fn validate_lineage_summary_commit_history_counts(
     sequence_numbers: &[u64],
     commit_hashes: &[String],
 ) -> Result<(), LakeCatError> {
+    let mut previous_sequence = None;
+    for sequence_number in sequence_numbers {
+        if *sequence_number == 0 {
+            return Err(outbox_evidence_error(
+                event,
+                "sequence-numbers must be positive in lineage drain summary",
+            ));
+        }
+        if let Some(previous_sequence) = previous_sequence {
+            if *sequence_number <= previous_sequence {
+                return Err(outbox_evidence_error(
+                    event,
+                    "sequence-numbers must be strictly increasing in lineage drain summary",
+                ));
+            }
+        }
+        previous_sequence = Some(*sequence_number);
+    }
     if let Some(commit_count) = commit_count {
         if commit_count != sequence_numbers.len() {
             return Err(outbox_evidence_error(
@@ -52029,6 +52047,49 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("sequence-numbers must match commit-hashes in lineage drain summary"));
+
+        let zero_sequence_number = OutboxEvent {
+            event_id: "evt-zero-summary-commit-sequence".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.commits-listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "commit-count": 1,
+                    "sequence-numbers": [0],
+                    "commit-hashes": [content_hash_bytes(b"commit-one")]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&zero_sequence_number, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("sequence-numbers must be positive in lineage drain summary"));
+
+        let repeated_sequence_number = OutboxEvent {
+            event_id: "evt-repeated-summary-commit-sequence".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.commits-listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "commit-count": 2,
+                    "sequence-numbers": [1, 1],
+                    "commit-hashes": [
+                        content_hash_bytes(b"commit-one"),
+                        content_hash_bytes(b"commit-two")
+                    ]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&repeated_sequence_number, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("sequence-numbers must be strictly increasing in lineage drain summary")
+        );
     }
 
     #[test]

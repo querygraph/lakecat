@@ -5,6 +5,17 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw commit-history summary hardening slice:
+  `Validate commit sequence ordering in summaries`.
+  Raw lineage-drain summary construction now rejects zero or non-increasing
+  `table.commits-listed` `sequence-numbers` evidence before compact QGLake
+  pointer-history proof can inherit malformed commit ordering.
+- Local verification for this raw commit-history summary slice passed:
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_commit_history_fields -- --test-threads=1`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest raw credential summary hardening slice:
   `Bind credential counts to prefix hashes`.
   Raw lineage-drain summary construction now rejects `credential-count`

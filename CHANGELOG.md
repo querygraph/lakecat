@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened commit-history sequence summary extraction. Raw lineage-drain
+  summary construction now rejects zero or non-increasing
+  `sequence-numbers` evidence before compact QGLake pointer-history proof can
+  inherit malformed commit ordering.
 - Hardened credential-count summary extraction. Raw lineage-drain summary
   construction now rejects `credential-count` evidence that drifts from the
   number of redacted `credential-response-evidence[].prefix-hash` entries, so
