@@ -5,6 +5,18 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw lineage summary hardening slice:
+  `Validate planned required filters in summaries`.
+  Raw lineage-drain summary construction now validates present
+  `table.scan-planned` `required-filters` against the governed
+  read-restriction row predicate before returning compact QGLake proof,
+  matching service replay admission and the existing fetched-scan summary
+  rule.
+- Local verification for this planned-scan summary slice is green:
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_scan_required_filters -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service` passed;
+  `scripts/check-release-readiness.sh --quick` passed.
 - Latest release-doc alignment slice:
   `Name Grust Turso matched-node proof in release docs`.
   `README.md` and `RELEASE.md` now explicitly describe the

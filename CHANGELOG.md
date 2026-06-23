@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened planned-scan required-filter summary extraction. Raw lineage-drain
+  summary construction now validates `table.scan-planned` `required-filters`
+  against the governed read-restriction row predicate, matching service replay
+  admission and the fetched-scan summary rule before QGLake proof can inherit
+  planned filter evidence.
 - Aligned release-facing docs with the Grust Turso matched-node boundary. The
   README and release checklist now call out that `grust-turso-local` proves
   Grust-owned matched-node mutation plans over projected LakeCat table nodes,

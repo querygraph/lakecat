@@ -7917,11 +7917,15 @@ fn lineage_summary_required_filters(
     let Some(filters) = optional_array_field(event, payload, "required-filters")? else {
         return Ok(Vec::new());
     };
-    if event.event_type == "table.scan-tasks-fetched" && payload.get("read-restriction").is_some() {
+    if matches!(
+        event.event_type.as_str(),
+        "table.scan-planned" | "table.scan-tasks-fetched"
+    ) && payload.get("read-restriction").is_some()
+    {
         validate_scan_required_filters_match_row_predicate(
             event,
             payload,
-            "lineage drain scan-tasks-fetched",
+            &format!("lineage drain {}", event.event_type),
         )?;
     }
     Ok(filters.clone())
@@ -51347,7 +51351,43 @@ mod tests {
             .to_string();
         assert!(
             err.contains(
-                "lineage drain scan-tasks-fetched required-filters must exactly preserve read-restriction row-predicate"
+                "lineage drain table.scan-tasks-fetched required-filters must exactly preserve read-restriction row-predicate"
+            ),
+            "{err}"
+        );
+
+        let expected_row_predicate = json!({
+            "type": "eq",
+            "term": "event_id",
+            "value": "evt-1"
+        });
+        let drifted_planned_required_filters = OutboxEvent {
+            event_id: "evt-drifted-summary-planned-required-filters".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.scan-planned".to_string(),
+            payload: json!({
+                "payload": {
+                    "read-restriction": {
+                        "allowed-columns": ["event_id"],
+                        "row-predicate": expected_row_predicate,
+                        "policy-hashes": [content_hash_bytes(b"policy")]
+                    },
+                    "required-filters": [{
+                        "type": "eq",
+                        "term": "event_id",
+                        "value": "evt-2"
+                    }]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&drifted_planned_required_filters, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains(
+                "lineage drain table.scan-planned required-filters must exactly preserve read-restriction row-predicate"
             ),
             "{err}"
         );
