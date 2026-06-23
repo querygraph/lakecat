@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened pending outbox row validation in the memory and Turso stores.
+  Hash-consistent but blank outbox event types now fail before graph or lineage
+  projection with hash-only diagnostics, and focused regressions cover the
+  durable corruption shape for both stores.
 - Hardened the post-`v0.1.0` tag contract. `RELEASE.md` no longer shows a
   literal `git tag -a v0.1.0` command after the tag has already been published,
   and `scripts/check-release-version-contract.sh` now rejects release docs that

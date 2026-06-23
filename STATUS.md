@@ -5,6 +5,18 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest store/outbox hardening slice:
+  `Reject blank pending outbox event types`.
+  Memory and Turso pending outbox reads now reject hash-consistent durable rows
+  whose row and payload event types are blank, before graph or lineage
+  projection can observe the event. The rejection reports event-id,
+  event-type, and payload hashes without echoing raw corrupt payload values.
+- Local verification for this store/outbox slice is green:
+  `cargo test -p lakecat-store --lib memory_store_rejects_blank_pending_outbox_event_types -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-store --features turso-local --lib turso_store_rejects_blank_pending_outbox_event_types -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local` passed.
 - Latest release-contract slice:
   `Reject published tag retag instructions`.
   `RELEASE.md` now treats `v0.1.0` as an already-published baseline and uses a
