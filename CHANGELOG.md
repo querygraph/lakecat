@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened scan required-filter provenance at replay admission. Live outbox
+  drain and lineage-drain summary construction now reject non-empty
+  `required-filters` evidence when no read-restriction row predicate is present,
+  so unsourced filter claims cannot reach graph, OpenLineage, or QGLake proof.
 - Clarified the in-progress book workflow. During ordinary development slices,
   edit `docs/book/lakecat.md` as the source of truth and defer checked-in
   `docs/book/dist` artifact regeneration until an explicit finishing or

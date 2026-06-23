@@ -673,7 +673,9 @@ Scan-planned and scan-tasks-fetched outbox admission must also reject missing
 or malformed `row-predicate` proof whenever governed read-restriction evidence
 is present. Governed planned and fetched `required-filters` proof must be
 present, array-shaped, and must exactly preserve that row predicate before the
-event is acknowledged.
+event is acknowledged. When no read-restriction row predicate is present,
+`required-filters` must be empty, not a place to smuggle unsourced filter
+claims into graph, OpenLineage, lineage-drain summaries, or QGLake proof.
 Planned and fetched scan outbox admission now also rejects governed
 read-restriction evidence whose purpose is missing/blank or whose
 `max-credential-ttl-seconds` cap is missing or non-positive, so the service

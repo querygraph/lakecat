@@ -10026,12 +10026,15 @@ duplicate-free; present-but-empty projection or stats evidence is malformed,
 not an implicit unrestricted read. Planned and fetched governed
 `required-filters` evidence must be present and must exactly preserve the
 governed row predicate at service admission, so an event with missing, empty, or
-drifted filter proof is rejected before graph or OpenLineage projection. When a
-governed read restriction is present, the
-effective projection and effective stats fields must remain inside the allowed
-columns, empty allowed-column arrays fail closed for both planned and fetched
-replay, and explicit effective projection or stats evidence cannot widen beyond
-the caller-requested or server-required evidence it claims to preserve.
+drifted filter proof is rejected before graph or OpenLineage projection. When
+there is no read-restriction row predicate, replay must keep
+`required-filters` empty; a non-empty array without that governing predicate is
+an unsourced filter claim, not evidence. When a governed read restriction is
+present, the effective projection and effective stats fields must remain inside
+the allowed columns, empty allowed-column arrays fail closed for both planned
+and fetched replay, and explicit effective projection or stats evidence cannot
+widen beyond the caller-requested or server-required evidence it claims to
+preserve.
 QueryGraph bootstrap replay is
 also checked at the drain boundary before it becomes accepted handoff material:
 the event must carry a valid warehouse, table/view counts matching the verified

@@ -5,6 +5,17 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest governed scan required-filter provenance hardening:
+  live outbox drain and lineage-drain summary construction now reject
+  non-empty `required-filters` evidence when no read-restriction row predicate
+  is present. Governed filters must exactly preserve the server-derived row
+  predicate, and ungoverned replay must carry an empty filter set, so unsourced
+  filter claims cannot reach graph, OpenLineage, or QGLake proof.
+- Local verification for this required-filter provenance slice passed:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_scan_planned_unsourced_required_filters -- --test-threads=1`;
+  `cargo test -p lakecat-service lineage_drain_summary_rejects_malformed_scan_required_filters -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest book workflow guidance:
   for in-progress development slices, keep editing the book source
   `docs/book/lakecat.md` but do not regenerate or stage checked-in

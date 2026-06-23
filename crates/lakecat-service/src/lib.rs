@@ -3521,6 +3521,14 @@ fn validate_scan_required_filters_match_row_predicate(
         }
     };
     let Some(read_restriction) = payload.get("read-restriction") else {
+        if !required_filters.is_empty() {
+            return Err(outbox_evidence_error(
+                event,
+                &format!(
+                    "{label} required-filters must be empty without read-restriction row-predicate"
+                ),
+            ));
+        }
         return Ok(());
     };
     let Some(row_predicate) = read_restriction.get("row-predicate") else {
@@ -8142,8 +8150,7 @@ fn lineage_summary_required_filters(
     if matches!(
         event.event_type.as_str(),
         "table.scan-planned" | "table.scan-tasks-fetched"
-    ) && payload.get("read-restriction").is_some()
-    {
+    ) {
         validate_scan_required_filters_match_row_predicate(
             event,
             payload,
@@ -36934,6 +36941,85 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_scan_planned_unsourced_required_filters() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let ident = table_ident("local", "default", "events").unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-scan-plan-unsourced-required-filters".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.scan-planned".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-scan-plan-unsourced-required-filters",
+                    "event-type": "table.scan-planned",
+                    "table": ident,
+                    "payload": {
+                        "table": ident,
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-plan-scan",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": "sha256:policy",
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "requested-projection": ["event_id"],
+                        "effective-projection": ["event_id"],
+                        "requested-stats-fields": ["event_id"],
+                        "effective-stats-fields": ["event_id"],
+                        "required-filters": [{
+                            "type": "eq",
+                            "term": "event_id",
+                            "value": "evt-1"
+                        }],
+                        "scan-task-count": 1
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("ungoverned scan-plan replay must not carry unsourced filters");
+
+        let message = err.to_string();
+        assert!(
+            message.contains(
+                "outbox event table.scan-planned (lakecat.lineage-and-graph) has invalid"
+            )
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(message.contains(
+            "scan-planned required-filters must be empty without read-restriction row-predicate"
+        ));
+        assert!(!message.contains("evt-scan-plan-unsourced-required-filters"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "unsourced required-filters replay must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "unsourced required-filters replay must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "unsourced required-filters replay must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_scan_fetch_empty_required_filters() {
         let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
         let ident = table_ident("local", "default", "events").unwrap();
@@ -52179,6 +52265,32 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("required-filters must be an array when present"));
+
+        let unsourced_required_filters = OutboxEvent {
+            event_id: "evt-unsourced-summary-required-filters".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.scan-planned".to_string(),
+            payload: json!({
+                "payload": {
+                    "required-filters": [{
+                        "type": "eq",
+                        "term": "event_id",
+                        "value": "evt-1"
+                    }]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&unsourced_required_filters, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains(
+                "lineage drain table.scan-planned required-filters must be empty without read-restriction row-predicate"
+            ),
+            "{err}"
+        );
 
         let expected_row_predicate = json!({
             "type": "eq",
