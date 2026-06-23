@@ -244,9 +244,10 @@ The current working plan is:
    namespace, and table-name columns before returning or mutating REST-visible
    table state. Turso commit-history reads must bind decoded commit records
    back to durable `metadata_pointer_log` table-key and principal row evidence
-   before returning pointer-history proof. Turso restore must also carry the
-   durable `soft_deletes.table_key` row column through tombstone validation so
-   a remapped soft-delete row cannot restore the wrong table.
+   before returning pointer-history proof. Memory/Turso restore must also carry
+   the soft-delete map key or durable `soft_deletes.table_key` row column
+   through tombstone validation so a remapped soft-delete row cannot restore the
+   wrong table.
 4. Keep the graph bounded. LakeCat should emit stable catalog-domain facts for
    Server, Project, Warehouse, Namespace, Table, View, Column, Snapshot, Policy,
    StorageProfile, Principal, ScanPlan, Commit, and lineage runs. Traversal,

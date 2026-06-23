@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Hardened memory soft-delete tombstone scope binding. Memory restore now
+  validates soft-delete tombstones against their map keys before removing a
+  marker, matching Turso's soft-delete row-scope drift rejection.
 - Hardened memory table-record scope binding. Memory store table reads and
   mutation paths now validate stored `TableRecord` values against their map
   keys before listing, loading, committing, soft-deleting, or restoring tables,

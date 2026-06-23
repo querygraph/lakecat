@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest memory soft-delete tombstone scope binding:
+  memory restore now validates soft-delete tombstones against their map keys
+  before removing a marker, matching Turso's soft-delete row-scope drift
+  rejection.
+- Local verification for this memory soft-delete tombstone scope slice passed:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_rejects_soft_delete_map_scope_drift_on_restore -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_soft_delete_row_scope_drift_on_restore -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest memory table-record scope binding:
   memory store table reads and mutation paths now validate stored
   `TableRecord` values against their map keys before listing, loading,

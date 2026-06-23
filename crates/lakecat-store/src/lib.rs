@@ -2236,6 +2236,7 @@ impl CatalogStore for MemoryCatalogStore {
                 name: ident.stable_id(),
             });
         };
+        validate_soft_delete_record_map_scope(record, &key)?;
         let table = state
             .tables
             .get(&key)
@@ -2680,6 +2681,18 @@ fn validate_table_record_map_scope(record: &TableRecord, record_key: &str) -> La
     if table_key(&record.ident) != record_key {
         return Err(LakeCatError::Internal(
             "table record row scope does not match requested table".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_soft_delete_record_map_scope(
+    record: &SoftDeleteRecord,
+    record_key: &str,
+) -> LakeCatResult<()> {
+    if table_key(&record.table) != record_key {
+        return Err(LakeCatError::Internal(
+            "soft-delete row scope does not match record identity".to_string(),
         ));
     }
     Ok(())
@@ -4928,6 +4941,70 @@ mod memory_tests {
             store.load_table(&ident).await,
             Err(LakeCatError::NotFound { .. })
         ));
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_soft_delete_map_scope_drift_on_restore() {
+        let store = MemoryCatalogStore::new();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let namespace = "default".parse::<Namespace>().unwrap();
+        let ident = TableIdent::new(
+            warehouse.clone(),
+            namespace.clone(),
+            TableName::new("events").unwrap(),
+        );
+        let other_ident = TableIdent::new(
+            warehouse,
+            namespace,
+            TableName::new("other_events").unwrap(),
+        );
+        for table_ident in [&ident, &other_ident] {
+            store
+                .create_table(TableRecord::new(
+                    table_ident.clone(),
+                    format!("file:///tmp/{}", table_ident.name),
+                    Some(format!(
+                        "file:///tmp/{}/metadata/00000.json",
+                        table_ident.name
+                    )),
+                    serde_json::json!({"format-version": 3}),
+                    Principal::anonymous(),
+                ))
+                .await
+                .unwrap();
+        }
+        store
+            .soft_delete_table(&ident, Principal::anonymous(), None)
+            .await
+            .unwrap();
+
+        let key = table_key(&ident);
+        let other_key = table_key(&other_ident);
+        let record = store.state.write().await.soft_deletes.remove(&key).unwrap();
+        store
+            .state
+            .write()
+            .await
+            .soft_deletes
+            .insert(other_key, record);
+
+        assert!(matches!(
+            store
+                .restore_table(&ident, Principal::anonymous(), None)
+                .await,
+            Err(LakeCatError::NotFound { object, name })
+                if object == "soft-deleted table" && name == ident.stable_id()
+        ));
+        let err = store
+            .restore_table(&other_ident, Principal::anonymous(), None)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("soft-delete row scope does not match")
+        ));
+        assert_eq!(store.state.read().await.soft_deletes.len(), 1);
     }
 
     #[tokio::test]
