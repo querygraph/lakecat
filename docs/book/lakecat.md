@@ -3791,7 +3791,9 @@ are rejected before any commit mutation or replay probe can observe catalog
 state. Both the default memory store and Turso-backed path also treat stored
 idempotency replay state as evidence: a stored `request_hash` must be a full
 SHA-256 digest before LakeCat compares it to the caller's hash or returns the
-stored commit response.
+stored commit response, and the stored response must still describe the
+requested table identity before either direct replay or a commit retry can
+observe it.
 
 Governed scan and credential paths carry substantial TypeSec-style receipt
 evidence. Standard Iceberg gives engines the metadata required to plan reads:
@@ -7344,7 +7346,8 @@ row, soft-deleting it, or restoring it. That is not an Iceberg extension; it is
 durable-store hygiene around standard Iceberg table access.
 The idempotency row is part of that hygiene, and the embedded memory store
 follows the same invariant: the stored request hash must still be full SHA-256
-evidence before an exact retry can observe the stored response.
+evidence and the stored response must still bind to the requested table before
+an exact retry can observe the stored response.
 
 The cleanup path is deliberately secondary to the commit result. If metadata
 cleanup fails after the store rejects a commit, LakeCat preserves the original

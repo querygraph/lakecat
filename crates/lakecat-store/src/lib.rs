@@ -1882,6 +1882,7 @@ impl CatalogStore for MemoryCatalogStore {
             if let Some(replay) = state.idempotency.get(&idem_key) {
                 validate_idempotency_record_request_hash(&replay.request_hash)?;
                 if replay.request_hash == idempotency_request_hash {
+                    validate_table_record_identity(&replay.response, ident)?;
                     return Ok(replay.response.clone());
                 }
                 return Err(LakeCatError::Conflict(format!(
@@ -2008,6 +2009,7 @@ impl CatalogStore for MemoryCatalogStore {
                 ident.stable_id()
             )));
         }
+        validate_table_record_identity(&replay.response, ident)?;
         Ok(Some(replay.response.clone()))
     }
 
@@ -2590,7 +2592,6 @@ fn optional_location_hash(location: Option<&str>) -> String {
         .unwrap_or_else(|| "null".to_string())
 }
 
-#[cfg(feature = "turso-local")]
 fn validate_table_record_identity(record: &TableRecord, ident: &TableIdent) -> LakeCatResult<()> {
     record.validate()?;
     if record.ident != *ident {
@@ -5715,6 +5716,78 @@ mod memory_tests {
                     if message.contains(
                         "idempotency record request hash must be full SHA-256 evidence"
                     )
+            ));
+        }
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_table_idempotency_response_scope_drift() {
+        let store = MemoryCatalogStore::new();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let namespace = "default".parse::<Namespace>().unwrap();
+        let ident = TableIdent::new(
+            warehouse.clone(),
+            namespace.clone(),
+            TableName::new("events").unwrap(),
+        );
+        store
+            .create_namespace(&warehouse, namespace.clone())
+            .await
+            .unwrap();
+        store
+            .create_table(TableRecord::new(
+                ident.clone(),
+                "file:///tmp/events".to_string(),
+                Some("file:///tmp/events/metadata/00000.json".to_string()),
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            ))
+            .await
+            .unwrap();
+        let commit = TableCommit {
+            requirements: vec![],
+            updates: vec![serde_json::json!({"action": "noop"})],
+            expected_previous_metadata_location: Some(
+                "file:///tmp/events/metadata/00000.json".to_string(),
+            ),
+            new_metadata_location: Some("file:///tmp/events/metadata/00001.json".to_string()),
+            new_metadata: Some(serde_json::json!({"format-version": 3})),
+            idempotency_key: Some("commit-1".to_string()),
+            idempotency_request_hash: None,
+            principal: Principal::anonymous(),
+            authorization_receipt: None,
+        };
+        store.commit_table(&ident, commit.clone()).await.unwrap();
+        let record = store
+            .table_commit_records(&ident, 1, Some(1))
+            .await
+            .unwrap()
+            .pop()
+            .unwrap();
+        {
+            let mut state = store.state.write().await;
+            let replay = state
+                .idempotency
+                .get_mut(&format!("{}:commit-1", ident.stable_id()))
+                .expect("idempotency replay state");
+            replay.response.ident = TableIdent::new(
+                warehouse.clone(),
+                namespace.clone(),
+                TableName::new("other_events").unwrap(),
+            );
+        }
+
+        for err in [
+            store
+                .replay_table_commit(&ident, "commit-1", &record.request_hash)
+                .await
+                .unwrap_err(),
+            store.commit_table(&ident, commit).await.unwrap_err(),
+        ] {
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("table record row scope does not match")
             ));
         }
     }

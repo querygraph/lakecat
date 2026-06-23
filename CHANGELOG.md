@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened memory idempotency replay responses. The default memory store now
+  validates stored replay responses against the requested table identity before
+  returning them from direct replay or idempotent commit retry, matching the
+  Turso-backed durable response-scope guard.
 - Refreshed the full local release-candidate proof from clean head `c72f8dfd`.
   `scripts/check-release-readiness.sh --release-candidate` passed locally,
   covering dependency and workflow contracts, release-version checks,

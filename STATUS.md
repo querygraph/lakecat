@@ -5,6 +5,19 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest memory idempotency response-scope parity:
+  the default memory store now validates stored idempotency replay responses
+  against the requested table identity before returning them from direct replay
+  or idempotent commit retry. This matches the Turso-backed response JSON scope
+  guard and keeps corrupted replay state from returning another table's record.
+- Local verification for this memory idempotency response-scope slice passed:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --lib memory_store_rejects_table_idempotency_response_scope_drift -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local --lib turso_store_rejects_table_idempotency_response_scope_drift -- --test-threads=1`;
+  `cargo test -p lakecat-store --lib -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local --lib -- --test-threads=1`;
+  `docs/book/build.sh`; `scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`; `git diff --check`.
 - Latest Grust Turso graph operation check:
   LakeCat's graph-over-Turso route is already using Grust's dedicated
   `grust-turso` crate. The inverse dependency tree resolves as
