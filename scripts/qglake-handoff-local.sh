@@ -835,6 +835,24 @@ function requireHashArray(value, label) {
     seen.add(item);
   }
 }
+function requireStringArray(value, label) {
+  if (!Array.isArray(value) || value.length === 0) {
+    console.error(`LakeCat scan replay evidence is missing ${label}`);
+    process.exit(1);
+  }
+  const seen = new Set();
+  for (const item of value) {
+    if (typeof item !== "string" || item.length === 0) {
+      console.error(`LakeCat scan replay evidence has invalid ${label}`);
+      process.exit(1);
+    }
+    if (seen.has(item)) {
+      console.error(`LakeCat scan replay evidence ${label} must be duplicate-free`);
+      process.exit(1);
+    }
+    seen.add(item);
+  }
+}
 requirePositiveInteger(evidence.planTaskCount, "planTaskCount");
 requirePositiveInteger(evidence.planGraphEvents, "planGraphEvents");
 requirePositiveInteger(evidence.fileTaskCount, "fileTaskCount");
@@ -844,70 +862,22 @@ requireHashArray(evidence.plannedReplayEventHashes, "plannedReplayEventHashes");
 requireHashArray(evidence.fetchedReplayEventHashes, "fetchedReplayEventHashes");
 requireHashArray(evidence.plannedOpenLineageHashes, "plannedOpenLineageHashes");
 requireHashArray(evidence.fetchedOpenLineageHashes, "fetchedOpenLineageHashes");
-if (!Array.isArray(evidence.fetchedRequiredProjection) || evidence.fetchedRequiredProjection.length === 0) {
-  console.error("LakeCat scan replay evidence is missing fetchedRequiredProjection");
-  process.exit(1);
-}
-if (!Array.isArray(evidence.fetchedEffectiveProjection) || evidence.fetchedEffectiveProjection.length === 0) {
-  console.error("LakeCat scan replay evidence is missing fetchedEffectiveProjection");
-  process.exit(1);
-}
-if (!Array.isArray(evidence.plannedRequestedProjection) || evidence.plannedRequestedProjection.length === 0) {
-  console.error("LakeCat scan replay evidence is missing plannedRequestedProjection");
-  process.exit(1);
-}
-if (!Array.isArray(evidence.plannedEffectiveProjection) || evidence.plannedEffectiveProjection.length === 0) {
-  console.error("LakeCat scan replay evidence is missing plannedEffectiveProjection");
-  process.exit(1);
-}
-if (evidence.plannedRequestedProjection.some((item) => typeof item !== "string" || item.length === 0)) {
-  console.error("LakeCat scan replay evidence has invalid plannedRequestedProjection");
-  process.exit(1);
-}
-if (evidence.plannedEffectiveProjection.some((item) => typeof item !== "string" || item.length === 0)) {
-  console.error("LakeCat scan replay evidence has invalid plannedEffectiveProjection");
-  process.exit(1);
-}
+requireStringArray(evidence.fetchedRequiredProjection, "fetchedRequiredProjection");
+requireStringArray(evidence.fetchedEffectiveProjection, "fetchedEffectiveProjection");
+requireStringArray(evidence.plannedRequestedProjection, "plannedRequestedProjection");
+requireStringArray(evidence.plannedEffectiveProjection, "plannedEffectiveProjection");
 if (evidence.plannedRequestedProjection.length <= evidence.plannedEffectiveProjection.length) {
   console.error("LakeCat scan replay evidence does not prove projection narrowing");
   process.exit(1);
 }
-if (!Array.isArray(evidence.plannedRequestedStatsFields) || evidence.plannedRequestedStatsFields.length === 0) {
-  console.error("LakeCat scan replay evidence is missing plannedRequestedStatsFields");
-  process.exit(1);
-}
-if (!Array.isArray(evidence.plannedEffectiveStatsFields) || evidence.plannedEffectiveStatsFields.length === 0) {
-  console.error("LakeCat scan replay evidence is missing plannedEffectiveStatsFields");
-  process.exit(1);
-}
-if (evidence.plannedRequestedStatsFields.some((item) => typeof item !== "string" || item.length === 0)) {
-  console.error("LakeCat scan replay evidence has invalid plannedRequestedStatsFields");
-  process.exit(1);
-}
-if (evidence.plannedEffectiveStatsFields.some((item) => typeof item !== "string" || item.length === 0)) {
-  console.error("LakeCat scan replay evidence has invalid plannedEffectiveStatsFields");
-  process.exit(1);
-}
+requireStringArray(evidence.plannedRequestedStatsFields, "plannedRequestedStatsFields");
+requireStringArray(evidence.plannedEffectiveStatsFields, "plannedEffectiveStatsFields");
 if (evidence.plannedRequestedStatsFields.length <= evidence.plannedEffectiveStatsFields.length) {
   console.error("LakeCat scan replay evidence does not prove stats-field narrowing");
   process.exit(1);
 }
-if (!Array.isArray(evidence.fetchedRequestedStatsFields) || evidence.fetchedRequestedStatsFields.length === 0) {
-  console.error("LakeCat scan replay evidence is missing fetchedRequestedStatsFields");
-  process.exit(1);
-}
-if (!Array.isArray(evidence.fetchedEffectiveStatsFields) || evidence.fetchedEffectiveStatsFields.length === 0) {
-  console.error("LakeCat scan replay evidence is missing fetchedEffectiveStatsFields");
-  process.exit(1);
-}
-if (evidence.fetchedRequestedStatsFields.some((item) => typeof item !== "string" || item.length === 0)) {
-  console.error("LakeCat scan replay evidence has invalid fetchedRequestedStatsFields");
-  process.exit(1);
-}
-if (evidence.fetchedEffectiveStatsFields.some((item) => typeof item !== "string" || item.length === 0)) {
-  console.error("LakeCat scan replay evidence has invalid fetchedEffectiveStatsFields");
-  process.exit(1);
-}
+requireStringArray(evidence.fetchedRequestedStatsFields, "fetchedRequestedStatsFields");
+requireStringArray(evidence.fetchedEffectiveStatsFields, "fetchedEffectiveStatsFields");
 if (!Array.isArray(evidence.fetchedRequiredFilters) || evidence.fetchedRequiredFilters.length === 0) {
   console.error("LakeCat scan replay evidence is missing fetchedRequiredFilters");
   process.exit(1);

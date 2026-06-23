@@ -5,6 +5,12 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest handoff-script hardening slice:
+  `Reject duplicate scan proof arrays locally`.
+  The local QGLake handoff script now applies the same duplicate-free
+  string-array contract as the Rust verifier to planned/fetched projection and
+  stats-field evidence before compact governed scan proof is written into the
+  handoff summary.
 - Latest implementation/testing slice:
   `Preserve fetched scan stats proof`.
   QGLake governed scan replay evidence now carries

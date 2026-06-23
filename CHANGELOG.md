@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Aligned local QGLake scan-proof extraction with the Rust verifier for
+  projection and stats arrays. `scripts/qglake-handoff-local.sh` now rejects
+  duplicate planned/fetched projection and stats-field arrays before writing
+  compact governed scan evidence into the handoff summary.
 - Hardened QGLake governed scan proof for fetched stats fields. The compact
   LakeCat replay evidence now preserves `fetchedRequestedStatsFields` and
   `fetchedEffectiveStatsFields`, the Rust verifier and local QGLake handoff
