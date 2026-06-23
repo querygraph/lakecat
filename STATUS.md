@@ -5,6 +5,20 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest catalog graph projection admission hardening:
+  LakeCat graph sinks now validate nonblank projection identity, object-shaped
+  properties, and table identity for table-scoped labels before no-op or
+  Grust-backed sinks accept a catalog graph event. Graph persistence, traversal,
+  and Cypher behavior remain Grust-owned.
+- Local verification for this graph projection admission slice passed:
+  `cargo fmt -p lakecat-graph -- --check`;
+  `cargo test -p lakecat-graph graph_event_validation -- --test-threads=1`;
+  `cargo test -p lakecat-graph --features grust-local grust_sink_rejects_malformed_catalog_projection_event -- --test-threads=1`;
+  `cargo test -p lakecat-graph --features grust-local --lib -- --test-threads=1`;
+  `cargo test -p lakecat-graph --features grust-turso-local grust_turso_store -- --test-threads=1`;
+  `cargo test -p lakecat-graph --features grust-turso-local grust_turso_sink_emits_lakecat_catalog_projection_boundary -- --test-threads=1`;
+  `cargo test -p lakecat-service --features grust-local outbox_drain_projects_table_events_to_sinks -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest tenant-parent upsert admission hardening:
   memory and Turso stores now validate parent server records before project
   upserts and parent project records before warehouse upserts, so corrupted

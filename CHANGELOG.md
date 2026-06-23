@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened catalog graph projection admission. LakeCat graph sinks now validate
+  nonblank projection identity, object-shaped properties, and table identity
+  for table-scoped labels before no-op or Grust-backed sinks accept a catalog
+  graph event.
 - Hardened tenant-parent upsert admission. Memory and Turso stores now validate
   parent server records before project upserts and parent project records
   before warehouse upserts, so corrupted tenant-root parents cannot be used as

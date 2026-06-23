@@ -255,7 +255,10 @@ The current working plan is:
    Server, Project, Warehouse, Namespace, Table, View, Column, Snapshot, Policy,
    StorageProfile, Principal, ScanPlan, Commit, and lineage runs. Traversal,
    graph query, taxonomy evolution, backend storage, Cypher, and algorithms go
-   to Grust.
+   to Grust. LakeCat graph sinks must validate the projection envelope before
+   handoff: nonblank projection identity, object-shaped properties, and table
+   identity for table-scoped labels such as Table, Column, Snapshot, Manifest,
+   DataFile, DeleteFile, and Commit.
 5. Keep tenancy and credentials replayable. Durable server/project/warehouse,
    namespace, view, policy, storage-profile, and credential-root changes should
    create transactionally paired audit/outbox evidence. Standalone audit writes

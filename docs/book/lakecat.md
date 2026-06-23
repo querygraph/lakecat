@@ -13766,7 +13766,11 @@ crate. `grust-local` keeps fast memory-backed projection tests, while
 `grust-turso-local` proves durable graph projection through a bootstrapped
 `grust_turso::TursoGraphStore`. QueryGraph's `qg-rust` checkout uses the same
 local Grust path for `lakecat-verify` and `lakecat-import`, keeping the
-end-to-end graph import path aligned with the catalog graph sink. The service
+end-to-end graph import path aligned with the catalog graph sink. LakeCat's
+own graph responsibility stops at the catalog-facing envelope: graph sinks
+reject blank projection identity, non-object properties, and table-scoped
+labels without table identity before handing anything to Grust. Persistence,
+traversal, Cypher, and graph mutation semantics stay in Grust. The service
 also redacts Grust Turso graph-sink connect/bootstrap failures to
 `graph-store-path-hash` and `backend-error-hash` evidence so release logs do not
 capture raw graph database paths.

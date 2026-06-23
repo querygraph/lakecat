@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use lakecat_core::{LakeCatResult, Namespace, Principal, TableIdent, WarehouseName};
+use lakecat_core::{LakeCatError, LakeCatResult, Namespace, Principal, TableIdent, WarehouseName};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -227,6 +227,33 @@ impl GraphEvent {
         self.event_id = Some(event_id.into());
         self
     }
+
+    pub fn validate(&self) -> LakeCatResult<()> {
+        if self.subject.trim().is_empty() {
+            return Err(LakeCatError::InvalidArgument(
+                "catalog graph event subject must not be blank".to_string(),
+            ));
+        }
+        if let Some(event_id) = self.event_id.as_deref()
+            && event_id.trim().is_empty()
+        {
+            return Err(LakeCatError::InvalidArgument(
+                "catalog graph event id must not be blank".to_string(),
+            ));
+        }
+        if !self.properties.is_object() {
+            return Err(LakeCatError::InvalidArgument(
+                "catalog graph event properties must be a JSON object".to_string(),
+            ));
+        }
+        if self.label.requires_table() && self.table.is_none() {
+            return Err(LakeCatError::InvalidArgument(format!(
+                "catalog graph event label {} requires table identity",
+                self.label.as_str()
+            )));
+        }
+        Ok(())
+    }
 }
 
 pub fn server_stable_id(server_id: &str) -> String {
@@ -315,6 +342,44 @@ pub enum GraphNodeLabel {
     QueryGraphModel,
 }
 
+impl GraphNodeLabel {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            GraphNodeLabel::Server => "Server",
+            GraphNodeLabel::Project => "Project",
+            GraphNodeLabel::Warehouse => "Warehouse",
+            GraphNodeLabel::Namespace => "Namespace",
+            GraphNodeLabel::Table => "Table",
+            GraphNodeLabel::View => "View",
+            GraphNodeLabel::Column => "Column",
+            GraphNodeLabel::Snapshot => "Snapshot",
+            GraphNodeLabel::Manifest => "Manifest",
+            GraphNodeLabel::DataFile => "DataFile",
+            GraphNodeLabel::DeleteFile => "DeleteFile",
+            GraphNodeLabel::Policy => "Policy",
+            GraphNodeLabel::StorageProfile => "StorageProfile",
+            GraphNodeLabel::Principal => "Principal",
+            GraphNodeLabel::ScanPlan => "ScanPlan",
+            GraphNodeLabel::Commit => "Commit",
+            GraphNodeLabel::LineageRun => "LineageRun",
+            GraphNodeLabel::QueryGraphModel => "QueryGraphModel",
+        }
+    }
+
+    fn requires_table(&self) -> bool {
+        matches!(
+            self,
+            GraphNodeLabel::Table
+                | GraphNodeLabel::Column
+                | GraphNodeLabel::Snapshot
+                | GraphNodeLabel::Manifest
+                | GraphNodeLabel::DataFile
+                | GraphNodeLabel::DeleteFile
+                | GraphNodeLabel::Commit
+        )
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum GraphAction {
@@ -337,7 +402,8 @@ impl NoopCatalogGraphSink {
 
 #[async_trait]
 impl CatalogGraphSink for NoopCatalogGraphSink {
-    async fn emit(&self, _event: GraphEvent) -> LakeCatResult<()> {
+    async fn emit(&self, event: GraphEvent) -> LakeCatResult<()> {
+        event.validate()?;
         Ok(())
     }
 }
@@ -548,6 +614,68 @@ mod tests {
         );
         assert_eq!(event.table.as_ref(), Some(&table));
     }
+
+    #[test]
+    fn graph_event_validation_rejects_blank_projection_identity() {
+        let mut event = GraphEvent::server(
+            GraphAction::Upserted,
+            "prod",
+            serde_json::json!({"kind": "test"}),
+        )
+        .with_event_id(" ");
+        let err = event.validate().unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("catalog graph event id must not be blank")
+        ));
+
+        event.event_id = Some("lakecat:outbox:evt-valid".to_string());
+        event.subject = " ".to_string();
+        let err = event.validate().unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("catalog graph event subject must not be blank")
+        ));
+    }
+
+    #[test]
+    fn graph_event_validation_rejects_non_object_properties() {
+        let mut event = GraphEvent::server(
+            GraphAction::Upserted,
+            "prod",
+            serde_json::json!({"kind": "test"}),
+        );
+        event.properties = serde_json::json!("not-an-object");
+
+        let err = event.validate().unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("catalog graph event properties must be a JSON object")
+        ));
+    }
+
+    #[test]
+    fn graph_event_validation_requires_table_identity_for_table_scoped_labels() {
+        let event = GraphEvent {
+            event_id: Some("lakecat:outbox:evt-tableless-commit".to_string()),
+            subject: "lakecat:commit:missing-table:7".to_string(),
+            label: GraphNodeLabel::Commit,
+            action: GraphAction::Committed,
+            table: None,
+            properties: serde_json::json!({"kind": "test"}),
+            emitted_at: Utc::now(),
+        };
+
+        let err = event.validate().unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("catalog graph event label Commit requires table identity")
+        ));
+    }
 }
 
 #[cfg(feature = "grust-local")]
@@ -558,7 +686,9 @@ pub mod grust_integration {
     use grust_graph::prelude::*;
     use lakecat_core::{LakeCatError, LakeCatResult};
 
-    use crate::{CatalogGraphSink, GraphAction, GraphEvent, GraphNodeLabel};
+    #[cfg(test)]
+    use crate::GraphNodeLabel;
+    use crate::{CatalogGraphSink, GraphAction, GraphEvent};
 
     pub struct GrustCatalogGraphSink<S>
     where
@@ -582,6 +712,7 @@ pub mod grust_integration {
         S: GraphStore + 'static,
     {
         async fn emit(&self, event: GraphEvent) -> LakeCatResult<()> {
+            event.validate()?;
             let graph = graph_event_to_grust(&event);
             self.store.put_graph(&graph).await.map_err(|err| {
                 LakeCatError::Internal(format!("Grust graph write failed: {err}"))
@@ -594,7 +725,7 @@ pub mod grust_integration {
         grust_graph::lakecat_catalog_event_graph(&LakeCatCatalogEvent {
             event_id: event.event_id.clone(),
             subject: event.subject.clone(),
-            label: graph_label_name(&event.label).to_string(),
+            label: event.label.as_str().to_string(),
             action: graph_action_name(&event.action).to_string(),
             emitted_at: event.emitted_at.to_rfc3339(),
             properties: event.properties.clone(),
@@ -605,29 +736,6 @@ pub mod grust_integration {
                 name: table.name.as_str().to_string(),
             }),
         })
-    }
-
-    fn graph_label_name(label: &GraphNodeLabel) -> &'static str {
-        match label {
-            GraphNodeLabel::Server => "Server",
-            GraphNodeLabel::Project => "Project",
-            GraphNodeLabel::Warehouse => "Warehouse",
-            GraphNodeLabel::Namespace => "Namespace",
-            GraphNodeLabel::Table => "Table",
-            GraphNodeLabel::View => "View",
-            GraphNodeLabel::Column => "Column",
-            GraphNodeLabel::Snapshot => "Snapshot",
-            GraphNodeLabel::Manifest => "Manifest",
-            GraphNodeLabel::DataFile => "DataFile",
-            GraphNodeLabel::DeleteFile => "DeleteFile",
-            GraphNodeLabel::Policy => "Policy",
-            GraphNodeLabel::StorageProfile => "StorageProfile",
-            GraphNodeLabel::Principal => "Principal",
-            GraphNodeLabel::ScanPlan => "ScanPlan",
-            GraphNodeLabel::Commit => "Commit",
-            GraphNodeLabel::LineageRun => "LineageRun",
-            GraphNodeLabel::QueryGraphModel => "QueryGraphModel",
-        }
     }
 
     fn graph_action_name(action: &GraphAction) -> &'static str {
@@ -644,6 +752,7 @@ pub mod grust_integration {
     #[cfg(test)]
     mod tests {
         use super::*;
+        use chrono::Utc;
         #[cfg(feature = "grust-turso-local")]
         use grust_graph::{
             CypherMutationExecutor, GraphAdminStore, GraphMutationCardinality, GraphMutationPlan,
@@ -654,7 +763,6 @@ pub mod grust_integration {
             execute_cypher_mutation_returning_with_options_on_store,
         };
         use lakecat_core::{Namespace, TableIdent, TableName, WarehouseName};
-        #[cfg(feature = "grust-turso-local")]
         use std::sync::Arc;
 
         #[test]
@@ -996,6 +1104,30 @@ pub mod grust_integration {
                 result.table.rows,
                 vec![vec![Value::String(table_id), Value::Bool(true)]]
             );
+        }
+
+        #[tokio::test]
+        async fn grust_sink_rejects_malformed_catalog_projection_event() {
+            let store = Arc::new(MemoryGraphStore::new());
+            let sink = GrustCatalogGraphSink::new(store.clone());
+            let event = GraphEvent {
+                event_id: Some("lakecat:outbox:evt-bad-graph".to_string()),
+                subject: "lakecat:commit:missing-table:7".to_string(),
+                label: GraphNodeLabel::Commit,
+                action: GraphAction::Committed,
+                table: None,
+                properties: serde_json::json!({"kind": "test"}),
+                emitted_at: Utc::now(),
+            };
+
+            let err = crate::CatalogGraphSink::emit(sink.as_ref(), event)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("catalog graph event label Commit requires table identity")
+            ));
         }
 
         #[cfg(feature = "grust-turso-local")]
