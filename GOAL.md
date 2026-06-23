@@ -82,6 +82,11 @@ metadata-pointer state, policy gates, and integration events belong here.
   agents, and authorization semantics into TypeSec
   (`/Users/alexy/src/typesec`). LakeCat should ask TypeSec for decisions/proofs
   and persist receipts.
+- Use "proof" precisely. In LakeCat, a proof is structured, replay-checkable
+  receipt evidence for a catalog action: principal, capability or policy
+  decision, object identity, pointer or graph state, redacted hashes, and
+  emitted audit/outbox facts. It is not a claim of mathematical or
+  zero-knowledge proof unless TypeSec supplies that stronger attestation.
 - Treat QueryGraph (`/Users/alexy/src/querygraph`) as the end-to-end
   integration target. LakeCat changes should naturally support QueryGraph
   bootstrap, Croissant/CDIF/OSI/ODRL/OpenLineage projection, and the QGLake

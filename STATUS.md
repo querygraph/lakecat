@@ -5,6 +5,19 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest proof vocabulary documentation slice:
+  GOAL, design, and book source now define LakeCat "proof" as structured,
+  replay-checkable receipt evidence for catalog actions, distinct from
+  mathematical or zero-knowledge proof unless TypeSec supplies stronger signed
+  or cryptographic attestations. The release-proof contract now also treats
+  `GOAL.md` as active documentation for post-proof doc refreshes.
+- Local verification for this proof vocabulary documentation slice passed:
+  `bash -n scripts/check-release-proof-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`. A dirty
+  release-proof-contract self-test now accepts `GOAL.md` as documentation, but
+  still reports the already-existing post-proof Rust commits after
+  release-candidate proof `50451be5`; a fresh full release-candidate gate is
+  still required before final release proof refresh.
 - Latest compact QGLake standards proof closure:
   handoff verification now rejects non-string, blank, duplicate, or unsupported
   standards entries and requires the exact expected standards set, so saved

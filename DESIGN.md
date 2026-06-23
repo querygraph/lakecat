@@ -141,6 +141,12 @@ The durable OPUS guidance now collapses to these operating rules:
 - Keep the catalog spine durable and auditable: pointer CAS, idempotency,
   metadata-object handling, audit, transactional outbox, redaction, and replay
   proof are LakeCat-owned responsibilities.
+- Use the word "proof" as a compact engineering term for structured,
+  replay-checkable receipt evidence. A LakeCat proof records the principal,
+  policy/capability decision, catalog object identity, pointer or projection
+  state, redacted hashes, and audit/outbox facts needed to accept or reject a
+  later replay. It is not a mathematical or zero-knowledge proof unless TypeSec
+  contributes a signed or cryptographic attestation.
 - Keep the repo boundaries active. Reusable Iceberg/planning work goes to Sail;
   reusable graph taxonomy/query/storage work goes to Grust; reusable governance,
   TypeDID, capability, and secure-agent semantics go to TypeSec.

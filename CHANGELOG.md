@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Defined LakeCat proof vocabulary in the active goal, design, and book source.
+  The docs now state that LakeCat proofs are structured, replay-checkable
+  receipt evidence for catalog actions, distinct from mathematical or
+  zero-knowledge proof unless TypeSec supplies stronger attestations. The
+  release-proof contract now treats `GOAL.md` as an allowed active
+  documentation refresh after a clean release-candidate proof.
 - Closed compact QGLake standards proof. Handoff verification now rejects
   non-string, blank, duplicate, or unsupported standards entries and requires
   the exact expected standards set, so saved handoffs cannot append

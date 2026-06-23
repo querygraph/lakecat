@@ -94,9 +94,10 @@ manifest, then persist both outputs in the saved handoff summary.
 
 After a full release-candidate proof has passed, a post-proof
 documentation/book artifact refresh is allowed so the proof is recorded in
-`README.md`, `DESIGN.md`, `STATUS.md`, `CHANGELOG.md`, and the book without
-rerunning the heavy gate only to update the hash again. That refresh must stay
-limited to documentation and checked-in book artifacts. Prove that shape with:
+`README.md`, `DESIGN.md`, `GOAL.md`, `STATUS.md`, `CHANGELOG.md`, and the book
+without rerunning the heavy gate only to update the hash again. That refresh
+must stay limited to documentation and checked-in book artifacts. Prove that
+shape with:
 
 ```sh
 scripts/check-release-proof-contract.sh

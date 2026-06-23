@@ -2092,6 +2092,30 @@ TypeSec should own policy composition, capabilities, TypeDID envelopes,
 secure-agent posture, and authorization semantics. LakeCat should not turn any
 of that into required Iceberg table metadata.
 
+In this book, "proof" has a specific LakeCat meaning. It is structured,
+machine-checkable receipt evidence that makes a catalog action replayable and
+falsifiable. It is not automatically a mathematical proof, a zero-knowledge
+proof, or a blockchain-style attestation. A LakeCat proof usually says who or
+what requested the action, which capability or policy decision allowed it, which
+catalog object was affected, which metadata pointer or projection state was
+observed, which sensitive facts were represented only by full hashes, and which
+audit or outbox event was emitted. A verifier can then reject missing,
+duplicated, drifted, malformed, or over-wide evidence before QueryGraph,
+OpenLineage, Grust projection, or an agent workflow depends on it.
+
+That vocabulary keeps the extension boundary clean. A commit proof is a
+replay-checkable CAS and idempotency receipt around an Iceberg metadata pointer
+transition. A credential proof is a redacted receipt showing that access went
+through the governed TypeSec-style path or an audited raw-credential exception.
+A management proof is inventory evidence for servers, projects, warehouses,
+policies, and storage profiles, with duplicate-free identifiers and redacted
+root hashes. A QGLake handoff proof is the compact bundle of verified catalog,
+graph, OpenLineage, and QueryGraph import evidence. TypeSec may later make some
+of these proofs cryptographically stronger with signed TypeDID envelopes,
+capability leases, policy-decision attestations, or secure-agent receipts.
+LakeCat should persist and validate those receipts, while TypeSec owns their
+security semantics.
+
 This is also where the "extension or future proposal" question gets precise.
 LakeCat has local extensions, but not every extension is a standards proposal.
 Rust, Turso, QueryGraph, QGLake, Grust, and TypeSec are not things to standardize

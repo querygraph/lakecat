@@ -13,7 +13,7 @@ require_file() {
   [[ -f "$1" ]] || fail "missing required file: $1"
 }
 
-for file in README.md DESIGN.md STATUS.md CHANGELOG.md RELEASE.md docs/book/lakecat.md; do
+for file in README.md DESIGN.md GOAL.md STATUS.md CHANGELOG.md RELEASE.md docs/book/lakecat.md; do
   require_file "$file"
 done
 
@@ -69,7 +69,7 @@ if [[ "$(git rev-parse "$proof_ref")" != "$(git rev-parse HEAD)" && "$candidate_
   } | sort -u | while IFS= read -r changed_file; do
     [[ -n "$changed_file" ]] || continue
     case "$changed_file" in
-      CHANGELOG.md|DESIGN.md|README.md|RELEASE.md|STATUS.md|docs/book/lakecat.md|docs/book/dist/*|scripts/check-release-proof-contract.sh)
+      CHANGELOG.md|DESIGN.md|GOAL.md|README.md|RELEASE.md|STATUS.md|docs/book/lakecat.md|docs/book/dist/*|scripts/check-release-proof-contract.sh)
         ;;
       *)
         fail "non-documentation file changed after release-candidate proof $proof_ref: $changed_file"
