@@ -6,6 +6,12 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest release-contract slice:
+  `Align release-readiness help`.
+  `scripts/check-release-readiness.sh --help` now describes the current quick
+  gate surface, including workflow and release-version contracts, and documents
+  that skipped book or handoff rows produce partial evidence rather than
+  release-candidate success.
+- Latest release-contract slice:
   `Label skipped release gates as partial`.
   `scripts/check-release-readiness.sh` now reports full-mode runs with
   `--skip-book` or `--skip-handoff` as partial release-readiness evidence

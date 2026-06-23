@@ -17,9 +17,12 @@ than a per-slice check and is meant to replace cloud CI as the release proof
 while CI remains manual-only.
 
 Options:
-  --quick         Run script syntax, dependency contract, formatting, and diff checks.
-  --skip-handoff Skip scripts/qglake-handoff-local.sh in full mode.
-  --skip-book    Skip docs/book/build.sh in full mode.
+  --quick         Run syntax, dependency, workflow, release-version, formatting,
+                  and diff checks. This is not release evidence by itself.
+  --skip-handoff Skip scripts/qglake-handoff-local.sh in full mode and report
+                  partial evidence instead of release-candidate success.
+  --skip-book    Skip docs/book/build.sh in full mode and report partial
+                  evidence instead of release-candidate success.
 USAGE
 }
 

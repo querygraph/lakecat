@@ -149,6 +149,10 @@ require_pattern 'without `--skip-book` or `--skip-handoff`' RELEASE.md \
   "RELEASE.md must forbid skipped book/handoff checks for release candidates"
 require_pattern 'partial release-readiness checks passed with skipped release-candidate evidence' scripts/check-release-readiness.sh \
   "release-readiness gate must label skipped full runs as partial evidence"
+require_pattern 'workflow, release-version, formatting' scripts/check-release-readiness.sh \
+  "release-readiness help must describe the current quick-gate contract surface"
+require_pattern 'partial[[:space:]]+evidence instead of release-candidate success' scripts/check-release-readiness.sh \
+  "release-readiness help must describe skipped full runs as partial evidence"
 require_pattern 'docs/book/check_pdf_layout\.sh' RELEASE.md \
   "RELEASE.md must include the PDF layout artifact check"
 require_pattern 'git tag -a v0\.1\.0' RELEASE.md \

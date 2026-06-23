@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Aligned the release-readiness CLI help with the current quick-gate behavior.
+  The usage text now names workflow and release-version contracts, and explains
+  that skipped book or handoff rows produce partial evidence.
 - Made skipped full release-readiness runs report as partial evidence. A full
   run using `--skip-book` or `--skip-handoff` no longer prints the same final
   success message as a complete release-candidate gate.
