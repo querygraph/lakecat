@@ -21,10 +21,11 @@ Updated: 2026-06-23
   `scripts/check-local-dependency-contract.sh`; and
   `scripts/check-release-readiness.sh --quick` (which correctly reported that
   executable workflow/script changes after `4f7ac153` require a fresh
-  release-candidate proof before final release refresh).
+  release-candidate proof before final release refresh). A later full
+  release-candidate proof refresh is now recorded at clean head `93ee0a20`.
 - Latest release-candidate proof refresh:
   `scripts/check-release-readiness.sh --release-candidate` passed locally on
-  June 23, 2026 from clean head `4f7ac153`. The gate covered shell syntax and
+  June 23, 2026 from clean head `93ee0a20`. The gate covered shell syntax and
   dependency contracts, manual workflow trigger contract checks, release
   version and release-proof contracts, formatter checks, default and
   all-features workspace tests, explicit Turso/Sail/TypeSec/Grust feature
@@ -34,11 +35,11 @@ Updated: 2026-06-23
   verification through QueryGraph locked verify/import,
   `graphProjectionProof.backend = grust-turso`,
   `graphProjectionProof.tablePrefix = lakecat_graph`, bundle hash
-  `sha256:d0f6c4217dd2b47158f7616656794d3eeda413fc2158704392d3f0524dd03ef3`,
+  `sha256:f6ed584ef44e75eb67f5df2e3af8742df060ef4cf81e3f54d30b033729cced3c`,
   OpenLineage hash
-  `sha256:f67297a40fe04623dbfac97078b6fcb0398c8d9a1d7c2a734b45a88f86ca7922`,
+  `sha256:9682c9a7e87c9e6afce9d8ced68533fc565c5edf906687c09f72b6dc8da7d248`,
   QueryGraph import hash
-  `sha256:48d2cad226546186b18408bc90d58b0d5970889b9f276484514ef3de0596da40`,
+  `sha256:cda542a94edddebab4359f2352b6a30850d644c61c119358b8dd3f4cd4e25743`,
   and `git diff --check`.
 - Latest REST commit idempotency compatibility slice:
   table commit retry now accepts the conventional `Idempotency-Key` header
@@ -84,7 +85,7 @@ Updated: 2026-06-23
   `scripts/check-release-readiness.sh --quick` (which correctly reported that
   executable changes after the prior release proof required a fresh
   release-candidate run); and `git diff --check`. A later full
-  release-candidate proof refresh is now recorded at clean head `4f7ac153`.
+  release-candidate proof refresh is now recorded at clean head `93ee0a20`.
 - Latest compact QGLake handoff summary root closure:
   handoff summary verification now rejects unexpected top-level fields before
   archived artifacts can attach unverified root proof claims beside otherwise
@@ -413,7 +414,7 @@ Updated: 2026-06-23
   `scripts/check-release-readiness.sh --quick`; and `git diff --check`. A dirty
   release-proof-contract self-test now accepts `GOAL.md` as documentation; the
   later full release-candidate proof refresh is recorded at clean head
-  `4f7ac153`.
+  `93ee0a20`.
 - Latest compact QGLake standards proof closure:
   handoff verification now rejects non-string, blank, duplicate, or unsupported
   standards entries and requires the exact expected standards set, so saved
@@ -800,7 +801,7 @@ Updated: 2026-06-23
   now executable local evidence.
 - Latest release-candidate proof:
   `scripts/check-release-readiness.sh --release-candidate` passed locally on
-  June 23, 2026 from clean head `4f7ac153`. The gate covered shell syntax
+  June 23, 2026 from clean head `93ee0a20`. The gate covered shell syntax
   checks, dependency and workflow trigger contracts, release-version checks,
   tracked book artifact validation, formatting, default and all-features
   workspace tests, Turso/Sail/TypeSec/Grust and Grust Turso feature rows,
@@ -812,11 +813,11 @@ Updated: 2026-06-23
   QueryGraph locked verify/import with
   `graphProjectionProof.backend = grust-turso` and
   `graphProjectionProof.tablePrefix = lakecat_graph`, bundle hash
-  `sha256:d0f6c4217dd2b47158f7616656794d3eeda413fc2158704392d3f0524dd03ef3`,
+  `sha256:f6ed584ef44e75eb67f5df2e3af8742df060ef4cf81e3f54d30b033729cced3c`,
   OpenLineage hash
-  `sha256:f67297a40fe04623dbfac97078b6fcb0398c8d9a1d7c2a734b45a88f86ca7922`,
+  `sha256:9682c9a7e87c9e6afce9d8ced68533fc565c5edf906687c09f72b6dc8da7d248`,
   QueryGraph import hash
-  `sha256:48d2cad226546186b18408bc90d58b0d5970889b9f276484514ef3de0596da40`,
+  `sha256:cda542a94edddebab4359f2352b6a30850d644c61c119358b8dd3f4cd4e25743`,
   and `git diff --check`.
   This is the current first-release evidence; cloud CI remains manual/disabled
   until local gates are boring from the final release commit.

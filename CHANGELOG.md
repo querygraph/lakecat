@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Refreshed the full local release-candidate proof from clean head `93ee0a20`.
+  `scripts/check-release-readiness.sh --release-candidate` passed locally with
+  the new manual-CI preflight rows, the release-proof contract in clean
+  candidate mode, the full workspace and feature-gate matrix, out-of-tree book
+  artifact validation, Grust Turso QGLake handoff, QueryGraph locked
+  verify/import, bundle hash
+  `sha256:f6ed584ef44e75eb67f5df2e3af8742df060ef4cf81e3f54d30b033729cced3c`,
+  OpenLineage hash
+  `sha256:9682c9a7e87c9e6afce9d8ced68533fc565c5edf906687c09f72b6dc8da7d248`,
+  QueryGraph import hash
+  `sha256:cda542a94edddebab4359f2352b6a30850d644c61c119358b8dd3f4cd4e25743`,
+  and `git diff --check`.
 - Aligned manual CI preflight with the local release contracts without
   re-enabling automatic cloud runs. The manual GitHub Actions workflow now runs
   the workflow-trigger self-test and release-version contract as explicit
