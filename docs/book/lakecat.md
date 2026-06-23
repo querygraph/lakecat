@@ -10001,8 +10001,9 @@ first version of that rule before a drain summary is returned at all:
 projection receipt hash arrays must match the lineage-event count and must not
 contain malformed or repeated replay or OpenLineage hashes. Commit-history
 summary construction now applies the same fail-closed posture to
-`sequence-numbers` and `commit-hashes`, so malformed commit-history entries
-cannot disappear from raw QGLake replay proof. Governed scan summary arrays
+`commit-count`, `sequence-numbers`, and `commit-hashes`, so malformed or
+count-drifted commit-history entries cannot disappear from raw QGLake replay
+proof or inflate compact pointer-history evidence. Governed scan summary arrays
 for required/requested/effective projection and requested/effective stats
 fields also reject malformed, blank, or duplicate strings before raw replay
 proof is returned, so a malformed Sail-planned read summary cannot hide missing

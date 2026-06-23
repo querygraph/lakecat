@@ -6,6 +6,12 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Bind commit-history summary counts`.
+  Raw lineage-drain summary construction now requires `commit-count`,
+  `sequence-numbers`, and `commit-hashes` evidence to stay count-aligned before
+  returning archived QGLake table commit-history proof, rejecting compact
+  pointer-history summaries that would inflate or shed accepted commits.
+- Latest implementation/testing slice:
   `Bind view receipt-chain verified summary counts`.
   Raw lineage-drain summary construction now decodes every
   `view-version-receipt-chains` entry and requires present

@@ -7270,6 +7270,24 @@ fn lineage_drain_event_summary(
     let (principal_subject, principal_kind) =
         lineage_summary_authorization_principal_fields(event, authorization_receipt)?;
     let policy = payload.get("policy");
+    let table_commit_count =
+        lineage_summary_optional_count_alias_field(event, payload, &["commit-count"])?;
+    let table_commit_sequence_numbers = payload
+        .get("sequence-numbers")
+        .map(|_| lineage_summary_u64_array_field(event, payload, "sequence-numbers"))
+        .transpose()?
+        .unwrap_or_default();
+    let table_commit_hashes = payload
+        .get("commit-hashes")
+        .map(|_| lineage_summary_full_hash_array_field(event, payload, "commit-hashes"))
+        .transpose()?
+        .unwrap_or_default();
+    validate_lineage_summary_commit_history_counts(
+        event,
+        table_commit_count,
+        &table_commit_sequence_numbers,
+        &table_commit_hashes,
+    )?;
     Ok(LineageDrainEventSummary {
         event_id: event.event_id.clone(),
         event_type: event.event_type.clone(),
@@ -7482,21 +7500,9 @@ fn lineage_drain_event_summary(
             })
             .transpose()?
             .unwrap_or_default(),
-        table_commit_count: lineage_summary_optional_count_alias_field(
-            event,
-            payload,
-            &["commit-count"],
-        )?,
-        table_commit_sequence_numbers: payload
-            .get("sequence-numbers")
-            .map(|_| lineage_summary_u64_array_field(event, payload, "sequence-numbers"))
-            .transpose()?
-            .unwrap_or_default(),
-        table_commit_hashes: payload
-            .get("commit-hashes")
-            .map(|_| lineage_summary_full_hash_array_field(event, payload, "commit-hashes"))
-            .transpose()?
-            .unwrap_or_default(),
+        table_commit_count,
+        table_commit_sequence_numbers,
+        table_commit_hashes,
         scan_task_count: lineage_summary_optional_count_alias_field(
             event,
             payload,
@@ -7691,6 +7697,35 @@ fn lineage_summary_view_receipt_chain_verified_count(
         return Ok(count);
     }
     Ok(verified_count)
+}
+
+fn validate_lineage_summary_commit_history_counts(
+    event: &OutboxEvent,
+    commit_count: Option<usize>,
+    sequence_numbers: &[u64],
+    commit_hashes: &[String],
+) -> Result<(), LakeCatError> {
+    if let Some(commit_count) = commit_count {
+        if commit_count != sequence_numbers.len() {
+            return Err(outbox_evidence_error(
+                event,
+                "commit-count must match sequence-numbers in lineage drain summary",
+            ));
+        }
+        if commit_count != commit_hashes.len() {
+            return Err(outbox_evidence_error(
+                event,
+                "commit-count must match commit-hashes in lineage drain summary",
+            ));
+        }
+    }
+    if !sequence_numbers.is_empty() && sequence_numbers.len() != commit_hashes.len() {
+        return Err(outbox_evidence_error(
+            event,
+            "sequence-numbers must match commit-hashes in lineage drain summary",
+        ));
+    }
+    Ok(())
 }
 
 fn optional_array_field<'a>(
@@ -51028,6 +51063,43 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("commit-hashes must contain full SHA-256 digest evidence"));
+
+        let count_hash_drift = OutboxEvent {
+            event_id: "evt-drifted-summary-commit-count-hashes".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.commits-listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "commit-count": 2,
+                    "sequence-numbers": [1, 2],
+                    "commit-hashes": [content_hash_bytes(b"commit-one")]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&count_hash_drift, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("commit-count must match commit-hashes in lineage drain summary"));
+
+        let sequence_hash_drift = OutboxEvent {
+            event_id: "evt-drifted-summary-sequence-hashes".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.commits-listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "sequence-numbers": [1, 2],
+                    "commit-hashes": [content_hash_bytes(b"commit-one")]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&sequence_hash_drift, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("sequence-numbers must match commit-hashes in lineage drain summary"));
     }
 
     #[test]

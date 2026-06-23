@@ -904,8 +904,9 @@ Raw view receipt-chain summary construction must also decode every
 or drifted `chain-verified-count` evidence rather than recomputing around
 corrupted structural chain objects or inflating compact verified-chain proof.
 The same fail-closed summary rule applies to table commit-history
-`sequence-numbers` and `commit-hashes`, so malformed sequence or commit hash
-evidence cannot disappear from raw commit-history proof.
+`commit-count`, `sequence-numbers`, and `commit-hashes`, so malformed or
+count-drifted sequence/hash evidence cannot disappear from raw commit-history
+proof or inflate compact pointer-history proof.
 Governed scan summary arrays for required/requested/effective projection and
 requested/effective stats fields should likewise reject malformed, blank, or
 duplicate string entries before a raw lineage-drain summary is returned.

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound raw lineage-drain table commit-history counts to sequence/hash arrays.
+  Archived QGLake summaries now reject drifted `commit-count`,
+  `sequence-numbers`, and `commit-hashes` evidence before compact
+  pointer-history proof can inflate or shed accepted commits.
 - Bound raw lineage-drain view receipt-chain verified counts to decoded chain
   objects. Archived QGLake summaries now reject drifted
   `chain-verified-count` evidence instead of accepting a valid integer that
