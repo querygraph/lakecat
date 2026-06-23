@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed archived QueryGraph import-plan artifact semantics. The QGLake handoff
+  verifier now rejects unverified extra fields at the saved
+  `querygraph-import-plan.json` root, its nested `verification` object, and
+  individual table/view import entries before accepting the artifact's hashes,
+  stable ids, standards, or graph counts as handoff proof.
 - Tightened the Grust Turso graph boundary contract. The local dependency
   contract now forbids direct `turso::` graph-store wiring in both
   `lakecat-graph` and `lakecat-service/src/main.rs`, while keeping Turso catalog

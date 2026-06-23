@@ -142,6 +142,8 @@ require_pattern 'encodes_null_and_nested_partition_literals_for_iceberg_rest' sc
   "release-readiness gate must prove v4 bridge partition literal encoding"
 require_pattern 'cargo test -p lakecat-cli qglake_handoff' scripts/check-release-readiness.sh \
   "release-readiness gate must explicitly exercise the Rust QGLake handoff verifier"
+require_pattern 'qglake_handoff_querygraph_import_plan_semantics_rejects_extra_verification_fields' crates/lakecat-cli/src/main.rs \
+  "QGLake handoff verifier must reject extra QueryGraph import-plan verification fields"
 require_pattern 'cargo test -p lakecat-service --features grust-local --lib' scripts/check-release-readiness.sh \
   "release-readiness gate must prove service outbox projection through the Grust feature"
 require_pattern 'cargo test -p lakecat-service --features grust-turso-local --bin lakecat-service' scripts/check-release-readiness.sh \

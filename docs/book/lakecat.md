@@ -10390,11 +10390,16 @@ anchors before the byte comparison runs. It parses the saved
 bootstrap bundle and reruns the tenant graph and semantic hash verifier. It
 also parses the saved QueryGraph import plan and requires its embedded
 verification, table/view stable ids, semantic hashes, standards, and graph
-node/edge evidence to match the compact QueryGraph import proof. The verifier
-requires the compact `verifiedTables` and `verifiedViews` manifests to be
-duplicate-free as well as count-aligned, matching service-side outbox admission,
-so a saved handoff cannot inflate the number of accepted tables or views by
-repeating an already accepted stable id.
+node/edge evidence to match the compact QueryGraph import proof. The saved
+import-plan artifact is schema-closed before those values become proof: the
+root object, nested `verification` object, table import entries, and view import
+entries may carry only the fields QueryGraph's current `lakecat-import` plan
+emits and LakeCat verifies. Extra import-plan claims are rejected even when the
+declared artifact hash matches the bytes on disk. The verifier requires the
+compact `verifiedTables` and `verifiedViews` manifests to be duplicate-free as
+well as count-aligned, matching service-side outbox admission, so a saved
+handoff cannot inflate the number of accepted tables or views by repeating an
+already accepted stable id.
 Raw lineage-drain replay summaries and compact handoff proof sections both
 keep replay, OpenLineage, credential prefix, view receipt, and view
 receipt-chain hash arrays duplicate-free, not only `sha256:` shaped. That
@@ -10609,6 +10614,10 @@ verifier output should not append proof sections that no verifier compares. The
 individual LakeCat, QueryGraph, bundle, import-plan, and lineage-drain semantic
 sections are closed the same way; a saved `querygraphImportPlanSemantics` block
 cannot append an extra import-plan proof beside matched graph counts and hashes.
+The import-plan artifact itself now follows the same rule: extra root fields,
+verification fields, table-entry fields, or view-entry fields fail before the
+artifact's semantic hashes, standards, stable ids, and graph counts can be
+accepted.
 It is small, but it is not decorative. It is
 the acceptance story for a catalog that participates in the user workflow from
 notebook to agent. The summary file gives automation a single stable place to

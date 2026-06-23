@@ -5,6 +5,20 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest QGLake import-plan artifact closure slice:
+  the saved `querygraph-import-plan.json` semantic verifier now closes the
+  artifact root, nested `verification` object, table import entries, and view
+  import entries before accepting stable ids, semantic hashes, standards, or
+  graph node/edge counts as archived handoff proof.
+- Local verification for this QGLake import-plan artifact closure slice passed:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_querygraph_import_plan_semantics -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff -- --test-threads=1`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `cargo test lakecat --lib -- --test-threads=1` in
+  `/Users/alexy/src/querygraph/qg-rust`.
 - Latest Grust Turso boundary tightening:
   the local dependency contract now forbids direct `turso::` graph-store wiring
   in both `lakecat-graph` and `lakecat-service/src/main.rs`. LakeCat still uses
