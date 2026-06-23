@@ -55054,6 +55054,18 @@ mod tests {
                 "endpoint-url-hash must contain full SHA-256 digest evidence",
             ),
             (
+                "evt-bad-summary-server-endpoint-hash-drift",
+                "server.upserted",
+                json!({
+                    "server-record": {
+                        "endpoint-url-hash": content_hash_json(&json!({
+                            "endpoint-url": "https://shadow.example.com"
+                        })).unwrap()
+                    }
+                }),
+                "server upsert endpoint-url-hash must match endpoint-url",
+            ),
+            (
                 "evt-bad-summary-warehouse-root-hash",
                 "warehouse.upserted",
                 json!({

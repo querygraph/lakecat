@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added raw management summary coverage for server endpoint hash drift. Raw
+  lineage-drain management-upsert summaries now explicitly prove
+  `server.upserted` endpoint URL evidence must recompute to
+  `endpoint-url-hash` before compact QGLake proof can accept it.
 - Bound credential summary secret-ref presence to storage-profile evidence.
   Raw lineage-drain credential summaries now reject missing, non-boolean, or
   drifted top-level `secret-ref-present` evidence before compact QGLake proof

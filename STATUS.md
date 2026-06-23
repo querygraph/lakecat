@@ -5,6 +5,16 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw management server endpoint hash coverage:
+  raw lineage-drain management-upsert summaries now explicitly prove
+  `server.upserted` endpoint URL evidence must recompute to
+  `endpoint-url-hash` before compact QGLake proof can accept it. This matches
+  the existing warehouse storage-root hash-drift summary coverage and service
+  replay admission path.
+- Local verification for this raw management endpoint-hash slice passed:
+  `cargo fmt -p lakecat-service -- --check`; and
+  `cargo test -p lakecat-service lineage_drain_summary_rejects_malformed_management_upserts -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest credential summary secret-ref presence hardening:
   raw lineage-drain credential summaries now reject missing, non-boolean, or
   drifted top-level `secret-ref-present` evidence when it no longer matches the

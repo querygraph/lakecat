@@ -9982,7 +9982,10 @@ that value before projection. When a warehouse replay event carries a
 projection. This is not an Iceberg table-access rule; it is LakeCat/QGLake
 management proof. It keeps a replay event from pairing one raw endpoint or
 storage root with a valid-looking hash for another value, then asking Grust,
-OpenLineage, or QueryGraph to trust the mismatched tenant-root evidence.
+OpenLineage, or QueryGraph to trust the mismatched tenant-root evidence. Raw
+lineage-drain summaries apply the same redaction-hash check before compact
+handoff proof is built, so the archived summary path cannot become weaker than
+delivery replay.
 The QGLake acceptance workflow now
 establishes its server/project/warehouse tenant spine, performs governed
 server, project, warehouse, policy-list, policy-upsert, storage-profile-list,
