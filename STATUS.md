@@ -5,6 +5,18 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest policy-binding upsert admission hardening:
+  memory and Turso stores now validate an existing policy-binding row before
+  replacing it, so governance scope drift cannot be hidden by a same-key
+  upsert.
+- Local verification for this policy-binding upsert admission slice passed:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_rejects_policy_binding_scope_drift_before_upsert -- --test-threads=1`;
+  `cargo test -p lakecat-store memory_store_rejects_policy_binding_map_scope_drift -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_policy_binding_scope_drift_before_upsert -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_policy_binding_json_scope_drift -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_policy_binding_row_column_scope_drift -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest storage-profile upsert admission hardening:
   memory and Turso stores now validate an existing storage-profile row before
   replacing it, so credential-root scope drift cannot be hidden by a same-key

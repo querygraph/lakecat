@@ -293,7 +293,9 @@ The current working plan is:
    list, load, and drop paths. Policy-binding reads must bind decoded JSON
    back to the memory map key or Turso row/query warehouse and policy id,
    namespace path, table name, and enforced flag before matching policies for
-   tables. Storage-profile reads must likewise bind decoded JSON back to the
+   tables; memory/Turso policy-binding upserts must also validate any existing
+   row before replacing it so same-key management writes cannot erase governance
+   scope drift. Storage-profile reads must likewise bind decoded JSON back to the
    memory map key or Turso row/query warehouse, profile id, location prefix,
    provider, and issuance mode before credential-root matching; memory/Turso
    storage-profile upserts must also validate any existing row before replacing

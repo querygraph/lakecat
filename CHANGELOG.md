@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Hardened policy-binding upsert admission. Memory and Turso stores now
+  validate an existing policy-binding row before replacing it, so governance
+  scope drift cannot be hidden by a same-key upsert.
 - Hardened storage-profile upsert admission. Memory and Turso stores now
   validate an existing storage-profile row before replacing it, so credential
   root scope drift cannot be hidden by a same-key upsert.
