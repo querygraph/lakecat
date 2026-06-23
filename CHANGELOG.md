@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added saved QGLake self-verifier import-plan semantics closure coverage. A
+  saved `lakecatHandoffVerifyOutput` sidecar that appends unverified
+  `querygraphImportPlanSemantics` proof claims now has focused regression
+  coverage, keeping the archived QueryGraph import-plan proof limited to the
+  fields LakeCat compares against the compact handoff summary.
 - Re-verified the Grust Turso graph boundary against current Grust head
   `107bbf9`. LakeCat graph tests still exercise `grust_turso::TursoGraphStore`
   for persistence, traversal, Cypher-over-Turso, and matched-node patches; the

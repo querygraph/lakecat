@@ -18035,6 +18035,38 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_extra_import_plan_semantics()
+    {
+        let temp = qglake_temp_dir("handoff-artifacts-self-verify-extra-import-plan-semantics");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        output["querygraphImportPlanSemantics"]["unverifiedImportPlanProof"] = json!({
+            "sha256": qglake_fixture_hash("unverified-import-plan-proof")
+        });
+        let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+        fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+            .expect("write drifted handoff verify output");
+        summary["artifacts"]["lakecatHandoffVerifyOutputHash"] = json!(content_hash_bytes(&bytes));
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject extra import-plan semantic proof claims");
+        let err = err.to_string();
+
+        assert!(err.contains("lakecatHandoffVerifyOutput"), "{err}");
+        assert!(err.contains("querygraphImportPlanSemantics"), "{err}");
+        assert!(
+            err.contains("unexpected field unverifiedImportPlanProof"),
+            "{err}"
+        );
+    }
+
+    #[test]
     fn qglake_handoff_artifact_verifier_rejects_drifted_path_alias() {
         let temp = qglake_temp_dir("handoff-artifacts-alias-drift");
         let summary_path = temp.join("handoff-summary.json");

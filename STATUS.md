@@ -5,6 +5,19 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest QGLake self-verifier closure slice:
+  `qglake_handoff_artifact_verifier_rejects_handoff_verify_output_extra_import_plan_semantics`
+  now proves a saved `lakecatHandoffVerifyOutput` sidecar cannot append
+  unverified `querygraphImportPlanSemantics` claims beside an otherwise valid
+  QueryGraph import-plan proof.
+- Local verification for this QGLake self-verifier slice passed:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_extra_import_plan_semantics -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff -- --test-threads=1`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest Grust Turso boundary verification:
   current Grust head `107bbf9 Add Turso Cypher matched-node patches` keeps
   `grust-turso` as the owner of Turso graph persistence, traversal,

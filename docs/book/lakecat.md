@@ -10605,7 +10605,9 @@ unverified hash claim beside it. The sidecar root and `capturedOutputSemantics`
 object are closed over their known schema keys for the same reason: a saved
 verifier output should not append proof sections that no verifier compares. The
 individual LakeCat, QueryGraph, bundle, import-plan, and lineage-drain semantic
-sections are closed the same way. It is small, but it is not decorative. It is
+sections are closed the same way; a saved `querygraphImportPlanSemantics` block
+cannot append an extra import-plan proof beside matched graph counts and hashes.
+It is small, but it is not decorative. It is
 the acceptance story for a catalog that participates in the user workflow from
 notebook to agent. The summary file gives automation a single stable place to
 find the accepted table/view counts, semantic hashes, bundle, lineage drain,
