@@ -265,10 +265,11 @@ The current working plan is:
    drifted audit request hashes before writing either audit or outbox rows, so
    standalone audit proof cannot point at a different payload than the event it
    will later replay. Memory/Turso stores must validate pending outbox rows
-   before marking them delivered, so malformed graph/lineage replay evidence
-   cannot be hidden from drains by delivery acknowledgement. Secret references
-   and storage roots must stay redacted in replay, represented by provider
-   labels, presence flags, and
+   before marking them delivered, and batch delivery must fail before marking
+   any selected event when one pending row is malformed, so graph/lineage replay
+   evidence cannot be hidden from drains by delivery acknowledgement. Secret
+   references and storage roots must stay redacted in replay, represented by
+   provider labels, presence flags, and
    content hashes such as `location-prefix-hash`; validation failures should
    follow the same hash-only rule for storage roots, secret references,
    public-config keys, and production resolver parse failures. Management

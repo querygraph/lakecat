@@ -2653,10 +2653,14 @@ impl CatalogStore for MemoryCatalogStore {
         let event_ids = event_ids.iter().collect::<BTreeSet<_>>();
         let mut state = self.state.write().await;
         let delivered_at = Utc::now();
+        for event in &state.outbox_events {
+            if event.delivered_at.is_none() && event_ids.contains(&event.event_id) {
+                event.validate_pending()?;
+            }
+        }
         let mut delivered = 0usize;
         for event in &mut state.outbox_events {
             if event.delivered_at.is_none() && event_ids.contains(&event.event_id) {
-                event.validate_pending()?;
                 event.delivered_at = Some(delivered_at);
                 delivered += 1;
             }
@@ -5453,6 +5457,60 @@ mod memory_tests {
             store.state.read().await.outbox_events[0]
                 .delivered_at
                 .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_partial_outbox_delivery_on_batch_drift() {
+        let store = MemoryCatalogStore::new();
+        let ident = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        for event_type in ["querygraph.bootstrap.first", "querygraph.bootstrap.second"] {
+            store
+                .record_audit_event(
+                    CatalogAuditEvent::new(
+                        event_type,
+                        Some(ident.clone()),
+                        Principal::anonymous(),
+                        serde_json::json!({
+                            "event-type": event_type,
+                            "table": ident.clone(),
+                            "manifest-hash": event_type
+                        }),
+                    )
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+        }
+        let event_ids = store
+            .state
+            .read()
+            .await
+            .outbox_events
+            .iter()
+            .map(|event| event.event_id.clone())
+            .collect::<Vec<_>>();
+        store.state.write().await.outbox_events[1].payload["event-type"] =
+            serde_json::json!("querygraph.bootstrap.drifted");
+
+        let err = store.mark_outbox_delivered(&event_ids).await.unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("pending outbox event type does not match payload")
+        ));
+        assert!(
+            store
+                .state
+                .read()
+                .await
+                .outbox_events
+                .iter()
+                .all(|event| event.delivered_at.is_none())
         );
     }
 
@@ -8639,7 +8697,7 @@ pub mod turso_store {
             let mut conn = self.connect()?;
             let tx = conn.transaction().await.map_err(turso_error)?;
             let delivered_at = Utc::now().to_rfc3339();
-            let mut delivered = 0usize;
+            let mut validated_event_ids = Vec::new();
             for event_id in event_ids {
                 let mut rows = tx
                     .query(
@@ -8655,6 +8713,10 @@ pub mod turso_store {
                 };
                 let event = outbox_event_from_row(&row)?;
                 event.validate_pending()?;
+                validated_event_ids.push(event_id);
+            }
+            let mut delivered = 0usize;
+            for event_id in validated_event_ids {
                 let changed = tx
                     .execute(
                         "update outbox_events
@@ -12496,6 +12558,71 @@ pub mod turso_store {
                 LakeCatError::Internal(message)
                     if message.contains("pending outbox event type does not match payload")
             ));
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_partial_outbox_delivery_on_batch_drift() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let ident = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            for event_type in ["querygraph.bootstrap.first", "querygraph.bootstrap.second"] {
+                store
+                    .record_audit_event(
+                        CatalogAuditEvent::new(
+                            event_type,
+                            Some(ident.clone()),
+                            Principal::anonymous(),
+                            serde_json::json!({
+                                "event-type": event_type,
+                                "table": ident.clone(),
+                                "manifest-hash": event_type
+                            }),
+                        )
+                        .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+            }
+            let event_ids = store
+                .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|event| event.event_id)
+                .collect::<Vec<_>>();
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update outbox_events set payload_json = ?2 where event_id = ?1",
+                (
+                    event_ids[1].as_str(),
+                    encode_json(&serde_json::json!({
+                        "event-type": "querygraph.bootstrap.drifted",
+                        "manifest-hash": "lakecat:test"
+                    }))
+                    .unwrap(),
+                ),
+            )
+            .await
+            .unwrap();
+
+            let err = store.mark_outbox_delivered(&event_ids).await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("pending outbox event type does not match payload")
+            ));
+            let mut rows = conn
+                .query(
+                    "select count(*) from outbox_events where delivered_at is not null",
+                    (),
+                )
+                .await
+                .unwrap();
+            let row = rows.next().await.unwrap().unwrap();
+            assert_eq!(row_i64(&row, 0).unwrap(), 0);
         }
 
         #[tokio::test]

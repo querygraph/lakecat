@@ -3132,8 +3132,9 @@ same table-key anchor that Turso persists in durable idempotency rows, memory
 pointer-log records must carry the same private table-key anchor before
 commit-history reads return them, outbox records must be fit for graph and
 lineage projection, and delivery acknowledgements must validate pending outbox
-rows before hiding them from drains. Those are LakeCat reliability properties.
-The
+rows before hiding them from drains, with batch delivery failing before any
+selected event is marked delivered if one pending row is malformed. Those are
+LakeCat reliability properties. The
 Iceberg-adjacent candidates are much smaller: atomic pointer CAS, exact retry
 semantics, pointer-history inspection, redacted conflict proof, and durable
 catalog event identity.
