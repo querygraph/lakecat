@@ -5,6 +5,18 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Current Grust Turso graph-route recheck:
+  LakeCat already routes graph operations over Turso through Grust's dedicated
+  `grust-turso` crate rather than a LakeCat-owned Turso graph store. The
+  dependency tree resolves as `turso -> grust-turso -> lakecat-graph`; the graph
+  crate's focused tests prove persistence, traversal, Cypher mutation, and
+  matched-node mutation over `grust_turso::TursoGraphStore`; and the service
+  tests prove runtime configuration of `GrustCatalogGraphSink<TursoGraphStore>`.
+- Local verification for this Grust Turso route recheck passed:
+  `rg -n "turso::|TursoGraphStore|grust_turso::|GraphStore::|\\.put_graph\\(|execute_cypher|traverse\\(" crates/lakecat-graph crates/lakecat-service/src/main.rs crates/lakecat-service/src/lib.rs`;
+  `cargo tree -p lakecat-graph --features grust-turso-local -i turso`;
+  `cargo test -p lakecat-graph --features grust-turso-local --lib grust_turso_store -- --test-threads=1`;
+  `cargo test -p lakecat-service --features grust-turso-local --bin lakecat-service configured_grust_turso_graph_sink -- --test-threads=1`.
 - Latest saved handoff verifier service-log hash shape coverage:
   the CLI artifact verifier now explicitly proves saved
   `lakecat-handoff-verify.json` output cannot omit or null out its internal

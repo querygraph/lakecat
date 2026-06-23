@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Rechecked the Grust Turso graph route after the new `grust-turso` crate
+  update. LakeCat graph operations over Turso still run through
+  `grust_turso::TursoGraphStore`: the dependency tree resolves
+  `turso -> grust-turso -> lakecat-graph`, the graph crate exercises
+  persistence, traversal, Cypher, and matched-node mutation over that backend,
+  and the service sink configures the same Grust-owned Turso store.
 - Added saved handoff verifier service-log hash shape coverage. The
   `lakecat-handoff-verify.json` self-verification artifact now explicitly
   rejects missing or null `artifactFiles.serviceLogHash` values before archived
