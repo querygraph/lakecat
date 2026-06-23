@@ -160,6 +160,8 @@ require_pattern 'require_file CHANGELOG\.md' scripts/check-release-version-contr
   "release version contract must verify the changelog release heading"
 require_pattern 'published release tag \$local_tag must be an ancestor of HEAD' scripts/check-release-version-contract.sh \
   "release version contract must guard the published release tag ancestry"
+require_pattern 'creatordate:short' scripts/check-release-version-contract.sh \
+  "release version contract must derive existing release-heading dates from published tags"
 require_pattern 'post-\$local_tag hardening must remain under CHANGELOG\.md Unreleased' scripts/check-release-version-contract.sh \
   "release version contract must keep post-tag hardening under Unreleased until the workspace version moves forward"
 require_pattern 'run cargo test --workspace --all-features$' scripts/check-release-readiness.sh \

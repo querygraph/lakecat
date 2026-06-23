@@ -56,12 +56,18 @@ if [[ -n "$metadata_mismatches" ]]; then
 fi
 
 local_tag="v$workspace_version"
+expected_release_date="$(date -u +%F)"
 if git rev-parse -q --verify "refs/tags/$local_tag" >/dev/null; then
   git merge-base --is-ancestor "$local_tag^{}" HEAD || \
     fail "published release tag $local_tag must be an ancestor of HEAD"
   if rg -q "git tag -a $local_tag\\b" RELEASE.md; then
     fail "RELEASE.md must not instruct retagging already-published $local_tag"
   fi
+  expected_release_date="$(
+    git for-each-ref "refs/tags/$local_tag" --format='%(creatordate:short)'
+  )"
+  [[ -n "$expected_release_date" ]] || \
+    fail "could not derive release date from published tag $local_tag"
   tag_commit="$(git rev-parse "$local_tag^{}")"
   head_commit="$(git rev-parse HEAD)"
   if [[ "$tag_commit" != "$head_commit" ]]; then
@@ -72,9 +78,8 @@ else
   rg -q 'git tag -a "v\$version"' RELEASE.md || \
     fail "RELEASE.md must derive future unpublished tags from the workspace version"
 fi
-release_date="$(date -u +%F)"
-rg -q "^## $workspace_version - $release_date$" CHANGELOG.md || \
-  fail "CHANGELOG.md must contain release heading '$workspace_version - $release_date'"
+rg -q "^## $workspace_version - $expected_release_date$" CHANGELOG.md || \
+  fail "CHANGELOG.md must contain release heading '$workspace_version - $expected_release_date'"
 
 kindle_name="$(awk -F': ' '/^kindle_name:/ { print $2; exit }' docs/book/dist/VERSION.md)"
 epub_file="$(awk -F': ' '/^epub_file:/ { print $2; exit }' docs/book/dist/VERSION.md)"

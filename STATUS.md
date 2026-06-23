@@ -10,7 +10,10 @@ Updated: 2026-06-23
   when the workspace-version tag already exists and `HEAD` is past that tag.
   In that state, it requires `CHANGELOG.md` to retain an `Unreleased` section
   until the workspace version moves forward, so post-`v0.1.0` hardening cannot
-  be mistaken for a second same-version release.
+  be mistaken for a second same-version release. The contract also derives an
+  existing release heading date from the published tag instead of today's date,
+  so post-tag hardening remains valid after the original release day without
+  rewriting `CHANGELOG.md`.
 - Latest quick-gate hardening:
   `scripts/check-release-readiness.sh --quick` now runs the tracked
   `docs/book/dist` artifact contract, so narrow release-slice checks verify the

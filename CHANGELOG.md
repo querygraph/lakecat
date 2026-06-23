@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Made the release-version contract date-stable for post-tag hardening. When a
+  workspace-version tag already exists, the contract now derives the expected
+  `CHANGELOG.md` release heading date from that tag instead of today's date, so
+  `v0.1.0` follow-up hardening stays valid after June 23, 2026 without
+  rewriting the published release heading.
 - Hardened the post-tag release-version contract. When the workspace version's
   tag already exists and `HEAD` is past that tag, the local release gate now
   requires `CHANGELOG.md` to keep an `Unreleased` section until the workspace
