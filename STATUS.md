@@ -5,6 +5,22 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/testing slice:
+  `Harden view receipt-chain replay identity`.
+  Raw `view.version-receipt-chains-listed` replay now rejects nested chain or
+  receipt `stable-id`/view-name evidence that does not match the
+  warehouse/namespace/view identity before acknowledgement, graph projection,
+  or OpenLineage projection.
+- Local verification for this view receipt-chain replay-identity slice is
+  green:
+  `cargo test -p lakecat-service view_receipt_chain_scope_and_counts -- --test-threads=1`
+  passed;
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest docs/book slice:
   `Expand release catalog concept guidance`.
   The LakeCat book now includes a readiness and standards matrix for the Rust

@@ -5716,6 +5716,13 @@ fn validate_view_receipt_chain_event_evidence(
             &namespace,
             "view receipt-chain chain",
         )?;
+        let chain_stable_id = validate_view_receipt_chain_identity_evidence(
+            event,
+            chain,
+            &warehouse,
+            &namespace,
+            "view receipt-chain chain",
+        )?;
         if let Some(receipts) = chain.get("receipts") {
             let Some(receipts) = receipts.as_array() else {
                 return Err(outbox_evidence_error(
@@ -5737,6 +5744,19 @@ fn validate_view_receipt_chain_event_evidence(
                     &namespace,
                     "view receipt-chain receipt",
                 )?;
+                let receipt_stable_id = validate_view_receipt_chain_identity_evidence(
+                    event,
+                    receipt,
+                    &warehouse,
+                    &namespace,
+                    "view receipt-chain receipt",
+                )?;
+                if receipt_stable_id != chain_stable_id {
+                    return Err(outbox_evidence_error(
+                        event,
+                        "view receipt-chain receipt stable-id must match chain stable-id",
+                    ));
+                }
             }
         }
         let Some(chain_receipt_count) = chain.get("receipt-count").and_then(Value::as_u64) else {
@@ -5863,6 +5883,30 @@ fn validate_view_receipt_chain_scope_evidence(
         ));
     }
     Ok(())
+}
+
+fn validate_view_receipt_chain_identity_evidence(
+    event: &OutboxEvent,
+    object: &Value,
+    expected_warehouse: &WarehouseName,
+    expected_namespace: &Namespace,
+    label: &str,
+) -> Result<String, LakeCatError> {
+    let name = required_string_field(event, object, "name", label)?;
+    let name = TableName::new(name)
+        .map_err(|_| outbox_evidence_error(event, &format!("{label} has invalid name")))?;
+    let expected_stable_id = format!(
+        "lakecat:view:{}:{}:{}",
+        expected_warehouse, expected_namespace, name
+    );
+    let stable_id = required_string_field(event, object, "stable-id", label)?;
+    if stable_id != expected_stable_id {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} stable-id must match warehouse, namespace, and name"),
+        ));
+    }
+    Ok(expected_stable_id)
 }
 
 fn validate_hash_array_covers_structure(
@@ -39138,6 +39182,23 @@ mod tests {
             chain_namespace_drift,
         ));
 
+        let mut chain_name_drift = base_payload.clone();
+        chain_name_drift["view-version-receipt-chains"][0]["name"] = json!("other_view");
+        cases.push((
+            "evt-view-chain-name-drift",
+            "view receipt-chain chain stable-id must match warehouse, namespace, and name",
+            chain_name_drift,
+        ));
+
+        let mut chain_stable_id_drift = base_payload.clone();
+        chain_stable_id_drift["view-version-receipt-chains"][0]["stable-id"] =
+            json!("lakecat:view:local:default:other_view");
+        cases.push((
+            "evt-view-chain-stable-id-drift",
+            "view receipt-chain chain stable-id must match warehouse, namespace, and name",
+            chain_stable_id_drift,
+        ));
+
         let mut receipt_warehouse_drift = base_payload.clone();
         receipt_warehouse_drift["view-version-receipt-chains"][0]["receipts"][0]["warehouse"] =
             json!("shadow");
@@ -39154,6 +39215,24 @@ mod tests {
             "evt-view-chain-receipt-namespace-drift",
             "view receipt-chain receipt namespace must match payload namespace",
             receipt_namespace_drift,
+        ));
+
+        let mut receipt_name_drift = base_payload.clone();
+        receipt_name_drift["view-version-receipt-chains"][0]["receipts"][0]["name"] =
+            json!("other_view");
+        cases.push((
+            "evt-view-chain-receipt-name-drift",
+            "view receipt-chain receipt stable-id must match warehouse, namespace, and name",
+            receipt_name_drift,
+        ));
+
+        let mut receipt_stable_id_drift = base_payload.clone();
+        receipt_stable_id_drift["view-version-receipt-chains"][0]["receipts"][0]["stable-id"] =
+            json!("lakecat:view:local:default:other_view");
+        cases.push((
+            "evt-view-chain-receipt-stable-id-drift",
+            "view receipt-chain receipt stable-id must match warehouse, namespace, and name",
+            receipt_stable_id_drift,
         ));
 
         let mut chain_count_drift = base_payload.clone();

@@ -718,7 +718,11 @@ reuse a mutation receipt by drifting the summary counts or action. Every nested
 receipt-chain and receipt object must also bind back to the top-level
 warehouse and namespace before acknowledgement, graph projection, or
 OpenLineage projection, so raw view-history replay cannot splice structural
-chains or receipts across namespaces while preserving hash-shaped fields.
+chains or receipts across namespaces while preserving hash-shaped fields. Raw
+service replay must also derive each structural chain stable ID from its
+warehouse, namespace, and view-name components and require every receipt stable
+ID and view name to match the chain identity, so archived receipt-chain replay
+cannot splice receipts across views while preserving hash-shaped fields.
 Service replay must close the top-level view receipt-list and receipt-chain
 payloads over the fields current producers emit, so archived view-history reads
 cannot append unverified view-history, lineage, graph, QueryGraph, or

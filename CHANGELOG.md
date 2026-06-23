@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened service view receipt-chain replay identity admission. Raw
+  `view.version-receipt-chains-listed` replay now rejects nested chain or
+  receipt `stable-id`/view-name evidence that does not match the
+  warehouse/namespace/view identity before acknowledgement, graph projection,
+  or OpenLineage projection.
 - Expanded the LakeCat book's release concept guidance with a readiness and
   standards matrix for the Rust service spine, Turso local store, Iceberg REST
   paths, commit CAS, idempotency/pointer-log/audit/outbox replay hardening,
