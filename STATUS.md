@@ -5,6 +5,21 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest saved handoff artifact proof slice:
+  `Cover handoff graph table-prefix artifact drift`.
+  The QGLake artifact verifier now has explicit regression coverage proving a
+  saved `lakecat-handoff-verify.json` cannot drift
+  `graphProjectionProof.tablePrefix` away from the handoff summary while still
+  passing artifact verification. The local dependency contract guards that
+  artifact-level regression so the newly bound Grust Turso table-prefix proof
+  remains covered in saved handoff bundles.
+- Local verification for this saved handoff artifact proof slice passed:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_graph_projection_table_prefix_drift -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff -- --test-threads=1`;
+  `scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest QGLake graph projection proof slice:
   `Bind graph projection table prefix`.
   QGLake handoff summaries now carry

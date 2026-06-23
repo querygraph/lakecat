@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added saved handoff verifier artifact coverage for Grust Turso table-prefix
+  drift. The QGLake artifact verifier now has explicit regression coverage for
+  `lakecat-handoff-verify.json` changing `graphProjectionProof.tablePrefix`,
+  and the local dependency contract guards that artifact-level check.
 - Bound QGLake graph projection proof to the configured Grust Turso table
   prefix. Handoff summaries and saved verifier fixtures now include
   `graphProjectionProof.tablePrefix = lakecat_graph`, the Rust verifier rejects
