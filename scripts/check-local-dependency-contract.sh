@@ -147,6 +147,8 @@ require_pattern 'scripts/check-local-dependency-contract\.sh' RELEASE.md \
   "RELEASE.md must name the dependency contract preflight"
 require_pattern 'without `--skip-book` or `--skip-handoff`' RELEASE.md \
   "RELEASE.md must forbid skipped book/handoff checks for release candidates"
+require_pattern 'partial release-readiness checks passed with skipped release-candidate evidence' scripts/check-release-readiness.sh \
+  "release-readiness gate must label skipped full runs as partial evidence"
 require_pattern 'docs/book/check_pdf_layout\.sh' RELEASE.md \
   "RELEASE.md must include the PDF layout artifact check"
 require_pattern 'git tag -a v0\.1\.0' RELEASE.md \

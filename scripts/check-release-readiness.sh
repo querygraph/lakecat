@@ -112,6 +112,14 @@ run git diff --check
 echo
 if [[ "$mode" == "quick" ]]; then
   echo "LakeCat quick release-readiness checks passed."
+elif [[ "$skip_book" -ne 0 || "$skip_handoff" -ne 0 ]]; then
+  echo "LakeCat partial release-readiness checks passed with skipped release-candidate evidence."
+  if [[ "$skip_book" -ne 0 ]]; then
+    echo "Skipped book artifact validation."
+  fi
+  if [[ "$skip_handoff" -ne 0 ]]; then
+    echo "Skipped QGLake handoff proof."
+  fi
 else
   echo "LakeCat full release-readiness checks passed."
 fi

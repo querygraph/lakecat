@@ -5,6 +5,11 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-contract slice:
+  `Label skipped release gates as partial`.
+  `scripts/check-release-readiness.sh` now reports full-mode runs with
+  `--skip-book` or `--skip-handoff` as partial release-readiness evidence
+  instead of printing the complete release-candidate success message.
 - Latest release-docs slice:
   `Align README release gate summary`.
   `README.md` now names the release version contract and EPUB/PDF artifact

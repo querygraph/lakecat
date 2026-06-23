@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Made skipped full release-readiness runs report as partial evidence. A full
+  run using `--skip-book` or `--skip-handoff` no longer prints the same final
+  success message as a complete release-candidate gate.
 - Updated and guarded the README release-gate summary. The public operator
   checklist now names the release version contract and EPUB/PDF artifact
   validators, and the local dependency contract requires those README claims.

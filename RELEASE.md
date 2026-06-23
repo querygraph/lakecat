@@ -77,6 +77,9 @@ scripts/check-release-readiness.sh --quick
 ```
 
 The quick gate is not release evidence by itself.
+Full runs that use `--skip-book` or `--skip-handoff` are also partial evidence;
+the script labels them that way and they must not be used for a release
+candidate.
 
 ## Book Artifacts
 
