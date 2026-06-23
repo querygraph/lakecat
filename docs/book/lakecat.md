@@ -3122,9 +3122,10 @@ without leaving the Rust stack. The important behavior is not "Turso as a
 standard." The important behavior is that durable rows are scoped and checked:
 project rows must match project identity, warehouse rows must match warehouse
 identity, namespace and table records must match their selected rows, policy
-and storage-profile records must match their anchors, idempotency responses
-must match the route and table they replay, and outbox records must be fit for
-graph and lineage projection. Those are LakeCat reliability properties. The
+bindings and storage-profile records must match their durable keys and row
+anchors, idempotency responses must match the route and table they replay, and
+outbox records must be fit for graph and lineage projection. Those are LakeCat
+reliability properties. The
 Iceberg-adjacent candidates are much smaller: atomic pointer CAS, exact retry
 semantics, pointer-history inspection, redacted conflict proof, and durable
 catalog event identity.

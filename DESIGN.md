@@ -275,13 +275,12 @@ The current working plan is:
    back to the selected warehouse row and namespace path before returning or
    dropping standard namespace state; the Turso namespace regression suite now
    covers both decoded JSON drift and durable `namespaces` row-column drift for
-   list, load, and drop paths. Turso
-   policy-binding reads must bind decoded JSON back to the row/query warehouse
-   and policy id, namespace path, table name, and enforced flag before matching
-   policies for tables. Storage-profile reads must likewise bind decoded JSON
-   back to the memory map key or Turso row/query warehouse, profile id,
-   location prefix, provider, and issuance mode before credential-root
-   matching. Guarded view mutations
+   list, load, and drop paths. Policy-binding reads must bind decoded JSON
+   back to the memory map key or Turso row/query warehouse and policy id,
+   namespace path, table name, and enforced flag before matching policies for
+   tables. Storage-profile reads must likewise bind decoded JSON back to the
+   memory map key or Turso row/query warehouse, profile id, location prefix,
+   provider, and issuance mode before credential-root matching. Guarded view mutations
    must reject invalid expected-version values before changing active view state
    or appending view-version receipts, and memory/Turso mutation paths must
    validate the existing receipt chain before appending a new view receipt so

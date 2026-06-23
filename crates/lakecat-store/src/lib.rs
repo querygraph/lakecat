@@ -2472,14 +2472,17 @@ impl CatalogStore for MemoryCatalogStore {
         let state = self.state.read().await;
         let mut bindings = state
             .policy_bindings
-            .values()
+            .iter()
+            .map(|(binding_key, binding)| {
+                validate_policy_binding_map_scope(binding, binding_key)?;
+                Ok(binding)
+            })
+            .collect::<LakeCatResult<Vec<_>>>()?
+            .into_iter()
             .filter(|binding| binding.warehouse == *warehouse)
             .cloned()
             .collect::<Vec<_>>();
         bindings.sort_by(|left, right| left.policy_id.cmp(&right.policy_id));
-        for binding in &bindings {
-            binding.validate()?;
-        }
         Ok(bindings)
     }
 
@@ -2488,10 +2491,14 @@ impl CatalogStore for MemoryCatalogStore {
         table: &TableIdent,
     ) -> LakeCatResult<Vec<PolicyBinding>> {
         let state = self.state.read().await;
-        let bindings = state.policy_bindings.values().collect::<Vec<_>>();
-        for binding in &bindings {
-            binding.validate()?;
-        }
+        let bindings = state
+            .policy_bindings
+            .iter()
+            .map(|(binding_key, binding)| {
+                validate_policy_binding_map_scope(binding, binding_key)?;
+                Ok(binding)
+            })
+            .collect::<LakeCatResult<Vec<_>>>()?;
         Ok(policy_bindings_for_table(bindings.into_iter(), table))
     }
 
@@ -2685,6 +2692,19 @@ fn validate_policy_binding_scope(
         || binding_table_name != row_table_name
         || binding.enforced != row_enforced
     {
+        return Err(LakeCatError::Internal(
+            "policy binding row scope does not match binding identity".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_policy_binding_map_scope(
+    binding: &PolicyBinding,
+    binding_key: &str,
+) -> LakeCatResult<()> {
+    binding.validate()?;
+    if policy_binding_key(&binding.warehouse, &binding.policy_id) != binding_key {
         return Err(LakeCatError::Internal(
             "policy binding row scope does not match binding identity".to_string(),
         ));
@@ -4034,6 +4054,52 @@ mod memory_tests {
             err,
             LakeCatError::InvalidArgument(message)
                 if message.contains("table-scoped policy binding requires namespace")
+        ));
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_policy_binding_map_scope_drift() {
+        let store = MemoryCatalogStore::new();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let namespace = "default".parse::<Namespace>().unwrap();
+        let table = TableIdent::new(
+            warehouse.clone(),
+            namespace.clone(),
+            TableName::new("events").unwrap(),
+        );
+        let binding = PolicyBinding::new(
+            "table-policy",
+            warehouse.clone(),
+            Some(namespace),
+            Some(TableName::new("events").unwrap()),
+            true,
+            serde_json::json!({"uid": "policy:table-policy"}),
+        )
+        .unwrap();
+        store.upsert_policy_binding(binding).await.unwrap();
+
+        let key = policy_binding_key(&warehouse, "table-policy");
+        store
+            .state
+            .write()
+            .await
+            .policy_bindings
+            .get_mut(&key)
+            .unwrap()
+            .policy_id = "other-policy".to_string();
+
+        let err = store.list_policy_bindings(&warehouse).await.unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("policy binding row scope does not match")
+        ));
+
+        let err = store.policy_bindings_for_table(&table).await.unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("policy binding row scope does not match")
         ));
     }
 

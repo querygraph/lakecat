@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Hardened memory policy-binding scope binding. Memory store reads now validate
+  stored policy-binding values against their map keys before listing or table
+  policy matching, matching Turso's decoded row-scope drift rejection.
 - Hardened memory storage-profile scope binding. Memory store reads now validate
   stored storage-profile values against their map keys before list or
   credential-root matching, matching Turso's decoded row-scope drift rejection.
