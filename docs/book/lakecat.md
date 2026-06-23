@@ -13819,6 +13819,15 @@ release-candidate gate validates a fresh EPUB/PDF/MOBI build in a temporary
 `LAKECAT_BOOK_DIST_DIR` so binary artifact metadata cannot dirty the candidate
 commit by itself.
 
+Manual GitHub Actions is deliberately narrower than the local release proof.
+When an operator triggers it, the workflow runs the local dependency contract,
+the workflow-trigger self-test, and the release-version contract before the
+Rust matrix. It does not own release-proof freshness. That check belongs to the
+clean local release-candidate gate, because ordinary post-proof code hardening
+should report "the old proof is stale" locally rather than create a surprising
+failing cloud run. In practice: use manual CI as a second environment after the
+local gates are green, not as the source of release truth.
+
 That leaves important work after the first release, but it should stay out of
 the first-release blocker list unless the scope changes. Typed Iceberg v4
 semantics belong in Sail. Cloud SDK-backed secret resolvers belong behind the

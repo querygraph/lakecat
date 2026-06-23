@@ -5,6 +5,12 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book release-readiness clarification:
+  the book source now explains the manual CI vs. local release-proof split:
+  intentionally triggered GitHub Actions runs dependency, workflow-trigger, and
+  release-version preflights, but release-proof freshness remains owned by the
+  clean local release-candidate gate so stale proof evidence is reported
+  locally instead of as a surprising cloud failure.
 - Latest manual CI preflight alignment:
   the manual GitHub Actions workflow still uses only `workflow_dispatch`, but
   now runs `scripts/check-workflow-trigger-contract.sh` and

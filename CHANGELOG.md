@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Clarified the book's release-readiness narrative for manual CI. The book now
+  explains that intentionally triggered GitHub Actions runs dependency,
+  workflow-trigger, and release-version preflights, while release-proof
+  freshness remains owned by the clean local release-candidate gate.
 - Refreshed the full local release-candidate proof from clean head `93ee0a20`.
   `scripts/check-release-readiness.sh --release-candidate` passed locally with
   the new manual-CI preflight rows, the release-proof contract in clean
