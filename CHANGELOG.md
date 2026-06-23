@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened planned scan plan-task replay admission. `table.scan-planned`
+  outbox evidence now allows `plan-task` only as validated replay evidence:
+  when present it must be non-empty, LakeCat-issued, and free of decorated
+  location/query/fragment or credential material before acknowledgement,
+  graph projection, or OpenLineage projection.
 - Bound Turso-backed graph projection to Grust's dedicated `grust-turso`
   crate. The `grust-turso-local` feature now depends on `grust-turso`
   directly, service startup constructs `grust_turso::TursoGraphStore`, graph

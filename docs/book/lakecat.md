@@ -7267,16 +7267,19 @@ narrowing that the durable receipt did not capture. The same admission boundary
 requires governed scan replay to keep a nonblank `purpose` and a positive
 `max-credential-ttl-seconds` value before graph or OpenLineage projection, so a
 QGLake handoff cannot learn task evidence whose purpose or credential TTL cap
-was lost before replay. The service now also rejects unexpected fields inside
-top-level and receipt `read-restriction` objects, and inside nested
-`row-predicate` objects, before outbox acknowledgement. That keeps graph,
-OpenLineage, and QGLake evidence from inheriting extra unverified claims beside
-the known governed restriction fields. The scan replay payloads themselves are
-closed over the fields LakeCat producers emit for `table.scan-planned` and
-`table.scan-tasks-fetched`, so an archived governed read cannot attach
-unverified scan, lineage, graph, QueryGraph, or application claims beside the
-checked restriction, projection, stats, filter, task-count, and authorization
-evidence.
+was lost before replay. Optional `plan-task` values in planned and fetched scan
+replay are treated as evidence too: they must be non-empty LakeCat-issued tokens
+and cannot carry decorated location material, query or fragment material, or
+credential strings before the event can be acknowledged. The service now also
+rejects unexpected fields inside top-level and receipt `read-restriction`
+objects, and inside nested `row-predicate` objects, before outbox
+acknowledgement. That keeps graph, OpenLineage, and QGLake evidence from
+inheriting extra unverified claims beside the known governed restriction fields.
+The scan replay payloads themselves are closed over the fields LakeCat producers
+emit for `table.scan-planned` and `table.scan-tasks-fetched`, so an archived
+governed read cannot attach unverified scan, lineage, graph, QueryGraph, or
+application claims beside the checked restriction, projection, stats, filter,
+plan-token, task-count, and authorization evidence.
 
 ## The Commit Path
 
@@ -8699,7 +8702,9 @@ The scan-planned replay proof also carries
 prove a broader stats request, the server-derived narrowing, and the final
 effective stats fields that match the allowed columns. Saved handoff summaries
 and captured replay output are rejected if those fields disappear, widen, or
-drift apart.
+drift apart. Planned and fetched scan replay also reject non-LakeCat,
+decorated, or credential-bearing `plan-task` values before graph, OpenLineage,
+or QGLake proof can inherit them.
 It also cross-checks the embedded ODRL policy projection against the structured
 binding so QueryGraph cannot import a stale copy while LakeCat verifies a
 different one.
@@ -9287,7 +9292,9 @@ bootstrap replay, and bootstrap OpenLineage anchors must be full
 placeholders as QueryGraph acceptance evidence. The scan
 proof shows LakeCat planned and fetched scan tasks through the
 governed path, including file, delete-file, and child plan-task counts with
-replay and OpenLineage hashes. The
+replay and OpenLineage hashes. Planned and fetched scan replay admission
+validates any carried `plan-task` as LakeCat-issued evidence, not as arbitrary
+client text. The
 commit-history proof shows the catalog
 pointer log was read back with commit count, sequence numbers, commit hashes,
 positive graph event evidence, and replay/OpenLineage hashes. The view

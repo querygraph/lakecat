@@ -646,10 +646,11 @@ Planned and fetched scan outbox admission now also rejects governed
 read-restriction evidence whose purpose is missing/blank or whose
 `max-credential-ttl-seconds` cap is missing or non-positive, so the service
 boundary enforces the purpose/TTL proof QGLake later verifies.
-Fetched scan outbox admission must also treat `plan-task` as replay evidence,
-not opaque free text: when present it must be a non-empty LakeCat-issued token
-and must not carry decorated location, query/fragment, or credential material
-before graph, OpenLineage, QGLake, or QueryGraph import can inherit it.
+Planned and fetched scan outbox admission must also treat `plan-task` as replay
+evidence, not opaque free text: when present it must be a non-empty
+LakeCat-issued token and must not carry decorated location, query/fragment, or
+credential material before graph, OpenLineage, QGLake, or QueryGraph import can
+inherit it.
 When fetched replay carries `stats-fields`, those fields must be non-empty,
 duplicate-free, and exactly bound to the effective stats-field evidence before
 downstream proof can accept them.

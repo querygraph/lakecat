@@ -5,6 +5,23 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest governed scan replay hardening slice:
+  `Validate planned scan plan-task evidence`.
+  `table.scan-planned` outbox admission now treats optional `plan-task` values
+  as replay evidence instead of opaque text. Planned scan plan-task evidence
+  must be non-empty, LakeCat-issued, and free of decorated location material or
+  credential markers before acknowledgement, graph projection, or OpenLineage
+  projection. This matches the existing fetched-scan plan-task boundary while
+  keeping the token audit-safe for QGLake and QueryGraph proof.
+- Local verification for this governed scan replay slice passed:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_malformed_scan_planned_plan_task_evidence -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_malformed_scan_fetch_plan_task_evidence -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_extra_scan_payload_fields -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest Grust Turso crate boundary slice:
   `Use dedicated grust-turso dependency`.
   The `grust-turso-local` feature now binds LakeCat graph projection to

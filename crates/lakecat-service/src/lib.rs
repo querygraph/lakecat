@@ -1604,6 +1604,7 @@ const SCAN_PLANNED_EVIDENCE_FIELDS: &[&str] = &[
     "authorization-receipt",
     "planned-by",
     "snapshot-id",
+    "plan-task",
     "scan-task-count",
     "storage-location",
     "metadata-location",
@@ -3170,6 +3171,7 @@ fn validate_scan_planned_event_evidence(
     validate_required_payload_table_hint(event, payload, &table, "scan-planned")?;
     validate_required_unsigned_count_field(event, payload, "scan-task-count", "scan-planned")?;
     validate_authorization_receipt_principal(event, payload, "scan-planned")?;
+    validate_plan_task_evidence(event, payload.get("plan-task"), "scan-planned")?;
     validate_optional_location_evidence(
         event,
         payload.get("storage-location"),
@@ -16871,6 +16873,120 @@ mod tests {
 
             let message = err.to_string();
             assert!(message.contains("table.scan-tasks-fetched"));
+            assert!(message.contains(expected_message), "{message}");
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(event_id));
+            assert!(
+                !message.contains(plan_task),
+                "operator-facing errors must not expose raw plan-task material"
+            );
+            assert!(!message.contains("raw-secret"));
+            assert!(store.delivered.lock().await.is_empty());
+            assert!(graph.events.lock().await.is_empty());
+            assert!(lineage.events.lock().await.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_scan_planned_plan_task_evidence() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let ident = table_ident("local", "default", "events").unwrap();
+        let policy_hash =
+            content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                .unwrap();
+        let read_restriction = json!({
+            "allowed-columns": ["event_id"],
+            "row-predicate": {
+                "type": "not-eq",
+                "term": "severity",
+                "value": "debug"
+            },
+            "purpose": "qglake-agent-demo",
+            "max-credential-ttl-seconds": 300,
+            "policy-hashes": [policy_hash]
+        });
+        let cases = [
+            (
+                "evt-scan-plan-foreign-plan-task",
+                "foreign:plan:abc",
+                "scan-planned plan-task must be LakeCat-issued evidence",
+            ),
+            (
+                "evt-scan-plan-decorated-plan-task",
+                "lakecat:plan:abc?token=raw-secret",
+                "scan-planned plan-task must not contain decorated location material",
+            ),
+            (
+                "evt-scan-plan-credential-plan-task",
+                "lakecat:plan:abc:session_token=raw-secret",
+                "scan-planned plan-task must not contain credential material",
+            ),
+        ];
+
+        for (event_id, plan_task, expected_message) in cases {
+            let payload = json!({
+                "event-type": "table.scan-planned",
+                "table": ident,
+                "authorization-receipt": {
+                    "principal": principal,
+                    "action": "table-plan-scan",
+                    "allowed": true,
+                    "engine": "test",
+                    "policy_hash": null,
+                    "context": {
+                        "read-restriction": read_restriction
+                    },
+                    "checked_at": chrono::Utc::now(),
+                },
+                "planned-by": "test",
+                "snapshot-id": 1,
+                "plan-task": plan_task,
+                "read-restriction": read_restriction,
+                "requested-projection": ["event_id"],
+                "effective-projection": ["event_id"],
+                "requested-stats-fields": ["event_id"],
+                "effective-stats-fields": ["event_id"],
+                "required-filters": [{
+                    "type": "not-eq",
+                    "term": "severity",
+                    "value": "debug"
+                }],
+                "scan-task-count": 1,
+                "storage-location": "s3://bucket/events",
+                "metadata-location": "s3://bucket/events/metadata/v1.json"
+            });
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "table.scan-planned".to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{event_id}"),
+                        "event-type": "table.scan-planned",
+                        "table": ident,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("malformed planned plan-task evidence should fail before delivery");
+
+            let message = err.to_string();
+            assert!(message.contains("table.scan-planned"));
             assert!(message.contains(expected_message), "{message}");
             assert!(message.contains("event-id-hash=sha256:"));
             assert!(!message.contains(event_id));
