@@ -9310,7 +9310,9 @@ lineage-drain verifier reject a config proof that drops required routes,
 including the standard Iceberg REST plan endpoint and the QueryGraph bootstrap
 endpoint. The same check covers the warehouse-prefixed plan route, so a saved
 handoff cannot keep default catalog discovery while silently weakening
-warehouse-scoped Iceberg planning.
+warehouse-scoped Iceberg planning. It also covers default and
+warehouse-prefixed `fetch-scan-tasks`, preserving the governed task-fetch
+surface that follows a Sail-planned scan.
 The lineage-drain replay summaries are bound back to the drain-level
 `eventTypes` manifest as well. A saved handoff cannot add a compact replay
 summary for `storage-profile.upserted`, `querygraph.bootstrap`, or any other

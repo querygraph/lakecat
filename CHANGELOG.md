@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Extended catalog-config endpoint-set coverage to governed fetch routes. Raw
+  `catalog.config-read` summaries, compact handoff summaries, and saved
+  lineage-drain semantics now prove default and warehouse-prefixed
+  `fetch-scan-tasks` routes stay advertised beside plan routes.
 - Extended catalog-config endpoint-set coverage to the warehouse-prefixed
   Iceberg REST plan route. Raw `catalog.config-read` summaries, compact
   handoff summaries, and saved lineage-drain semantics now prove both default

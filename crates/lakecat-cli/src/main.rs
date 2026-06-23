@@ -14456,6 +14456,8 @@ mod tests {
             "GET /querygraph/v1/bootstrap",
             "POST /catalog/v1/namespaces/{namespace}/tables/{table}/plan",
             "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/plan",
+            "POST /catalog/v1/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
+            "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
         ] {
             let mut summary = qglake_handoff_summary_json();
             let endpoints = summary["lakecatReplayVerification"]["catalogConfigProof"]["endpoints"]
@@ -28417,6 +28419,8 @@ mod tests {
             "GET /querygraph/v1/bootstrap",
             "POST /catalog/v1/namespaces/{namespace}/tables/{table}/plan",
             "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/plan",
+            "POST /catalog/v1/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
+            "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
         ] {
             let verification = qglake_handoff_lineage_verification();
             let mut drain = qglake_handoff_lineage_drain_with_config();
