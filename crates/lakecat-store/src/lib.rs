@@ -2054,11 +2054,15 @@ impl CatalogStore for MemoryCatalogStore {
 
     async fn list_servers(&self) -> LakeCatResult<Vec<ServerRecord>> {
         let state = self.state.read().await;
-        let mut servers = state.servers.values().cloned().collect::<Vec<_>>();
+        let mut servers = state
+            .servers
+            .iter()
+            .map(|(server_id, server)| {
+                validate_server_record_map_scope(server, server_id)?;
+                Ok(server.clone())
+            })
+            .collect::<LakeCatResult<Vec<_>>>()?;
         servers.sort_by(|left, right| left.server_id.cmp(&right.server_id));
-        for server in &servers {
-            server.validate()?;
-        }
         Ok(servers)
     }
 
@@ -2081,11 +2085,15 @@ impl CatalogStore for MemoryCatalogStore {
 
     async fn list_projects(&self) -> LakeCatResult<Vec<ProjectRecord>> {
         let state = self.state.read().await;
-        let mut projects = state.projects.values().cloned().collect::<Vec<_>>();
+        let mut projects = state
+            .projects
+            .iter()
+            .map(|(project_id, project)| {
+                validate_project_record_map_scope(project, project_id)?;
+                Ok(project.clone())
+            })
+            .collect::<LakeCatResult<Vec<_>>>()?;
         projects.sort_by(|left, right| left.project_id.cmp(&right.project_id));
-        for project in &projects {
-            project.validate()?;
-        }
         Ok(projects)
     }
 
@@ -2106,25 +2114,30 @@ impl CatalogStore for MemoryCatalogStore {
 
     async fn load_warehouse(&self, warehouse: &WarehouseName) -> LakeCatResult<WarehouseRecord> {
         let state = self.state.read().await;
+        let warehouse_key = warehouse.as_str().to_string();
         let warehouse = state
             .warehouses
-            .get(warehouse.as_str())
+            .get(warehouse_key.as_str())
             .cloned()
             .ok_or_else(|| LakeCatError::NotFound {
                 object: "warehouse",
                 name: warehouse.as_str().to_string(),
             })?;
-        warehouse.validate()?;
+        validate_warehouse_record_map_scope(&warehouse, warehouse_key.as_str())?;
         Ok(warehouse)
     }
 
     async fn list_warehouses(&self) -> LakeCatResult<Vec<WarehouseRecord>> {
         let state = self.state.read().await;
-        let mut warehouses = state.warehouses.values().cloned().collect::<Vec<_>>();
+        let mut warehouses = state
+            .warehouses
+            .iter()
+            .map(|(warehouse_key, warehouse)| {
+                validate_warehouse_record_map_scope(warehouse, warehouse_key)?;
+                Ok(warehouse.clone())
+            })
+            .collect::<LakeCatResult<Vec<_>>>()?;
         warehouses.sort_by(|left, right| left.warehouse.as_str().cmp(right.warehouse.as_str()));
-        for warehouse in &warehouses {
-            warehouse.validate()?;
-        }
         Ok(warehouses)
     }
 
@@ -2134,22 +2147,27 @@ impl CatalogStore for MemoryCatalogStore {
     ) -> LakeCatResult<Vec<WarehouseRecord>> {
         validate_project_id(project_id)?;
         let state = self.state.read().await;
-        if !state.projects.contains_key(project_id) {
-            return Err(LakeCatError::NotFound {
+        let project = state
+            .projects
+            .get(project_id)
+            .ok_or_else(|| LakeCatError::NotFound {
                 object: "project",
                 name: project_id.to_string(),
-            });
-        }
+            })?;
+        validate_project_record_map_scope(project, project_id)?;
         let mut warehouses = state
             .warehouses
-            .values()
+            .iter()
+            .map(|(warehouse_key, warehouse)| {
+                validate_warehouse_record_map_scope(warehouse, warehouse_key)?;
+                Ok(warehouse)
+            })
+            .collect::<LakeCatResult<Vec<_>>>()?
+            .into_iter()
             .filter(|warehouse| warehouse.project_id == project_id)
             .cloned()
             .collect::<Vec<_>>();
         warehouses.sort_by(|left, right| left.warehouse.as_str().cmp(right.warehouse.as_str()));
-        for warehouse in &warehouses {
-            warehouse.validate()?;
-        }
         Ok(warehouses)
     }
 
@@ -2785,8 +2803,31 @@ fn validate_server_record_scope(server: &ServerRecord, server_id: &str) -> LakeC
     Ok(())
 }
 
+fn validate_server_record_map_scope(server: &ServerRecord, server_id: &str) -> LakeCatResult<()> {
+    server.validate()?;
+    if server.server_id != server_id {
+        return Err(LakeCatError::Internal(
+            "server row scope does not match server identity".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(feature = "turso-local")]
 fn validate_project_record_scope(project: &ProjectRecord, project_id: &str) -> LakeCatResult<()> {
+    project.validate()?;
+    if project.project_id != project_id {
+        return Err(LakeCatError::Internal(
+            "project row scope does not match project identity".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_project_record_map_scope(
+    project: &ProjectRecord,
+    project_id: &str,
+) -> LakeCatResult<()> {
     project.validate()?;
     if project.project_id != project_id {
         return Err(LakeCatError::Internal(
@@ -2808,6 +2849,19 @@ fn validate_warehouse_record_scope(
         || record.project_id != row_project_id
         || record.storage_root.as_deref() != row_storage_root
     {
+        return Err(LakeCatError::Internal(
+            "warehouse row scope does not match warehouse identity".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_warehouse_record_map_scope(
+    record: &WarehouseRecord,
+    warehouse_key: &str,
+) -> LakeCatResult<()> {
+    record.validate()?;
+    if record.warehouse.as_str() != warehouse_key {
         return Err(LakeCatError::Internal(
             "warehouse row scope does not match warehouse identity".to_string(),
         ));
@@ -3566,6 +3620,36 @@ mod memory_tests {
     }
 
     #[tokio::test]
+    async fn memory_store_rejects_server_record_map_scope_drift() {
+        let store = MemoryCatalogStore::new();
+        let record = ServerRecord::new(
+            "lakecat-local",
+            Some("Local LakeCat".to_string()),
+            Some("http://127.0.0.1:8181".to_string()),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        store.upsert_server(record).await.unwrap();
+
+        store
+            .state
+            .write()
+            .await
+            .servers
+            .get_mut("lakecat-local")
+            .unwrap()
+            .server_id = "lakecat-other".to_string();
+
+        let err = store.list_servers().await.unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("server row scope does not match")
+        ));
+    }
+
+    #[tokio::test]
     async fn memory_store_persists_warehouse_records() {
         let store = MemoryCatalogStore::new();
         assert_eq!(store.list_warehouses().await.unwrap(), vec![]);
@@ -3684,6 +3768,51 @@ mod memory_tests {
             err.to_string()
                 .contains("warehouse-storage-root-hash=sha256:")
         );
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_warehouse_record_map_scope_drift() {
+        let store = MemoryCatalogStore::new();
+        let project = ProjectRecord::new(
+            "default",
+            None,
+            Some("Default Project".to_string()),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        store.upsert_project(project).await.unwrap();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let record = WarehouseRecord::new(
+            warehouse.clone(),
+            "default",
+            Some("file:///tmp/lakecat".to_string()),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        store.upsert_warehouse(record).await.unwrap();
+
+        store
+            .state
+            .write()
+            .await
+            .warehouses
+            .get_mut("local")
+            .unwrap()
+            .warehouse = WarehouseName::new("other").unwrap();
+
+        for err in [
+            store.load_warehouse(&warehouse).await.unwrap_err(),
+            store.list_warehouses().await.unwrap_err(),
+            store.list_project_warehouses("default").await.unwrap_err(),
+        ] {
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("warehouse row scope does not match")
+            ));
+        }
     }
 
     #[tokio::test]
@@ -3884,6 +4013,40 @@ mod memory_tests {
                 if message.contains("project") || message.contains("identifier")
         ));
         assert!(!message.contains("token=secret"));
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_project_record_map_scope_drift() {
+        let store = MemoryCatalogStore::new();
+        let project = ProjectRecord::new(
+            "default",
+            None,
+            Some("QueryGraph Project".to_string()),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        store.upsert_project(project).await.unwrap();
+
+        store
+            .state
+            .write()
+            .await
+            .projects
+            .get_mut("default")
+            .unwrap()
+            .project_id = "other-project".to_string();
+
+        for err in [
+            store.list_projects().await.unwrap_err(),
+            store.list_project_warehouses("default").await.unwrap_err(),
+        ] {
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("project row scope does not match")
+            ));
+        }
     }
 
     #[tokio::test]

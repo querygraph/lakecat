@@ -3120,12 +3120,12 @@ particular backing store. LakeCat uses the Rust `turso` crate behind the
 persistence, transactions, content validation, idempotency, and replay logic
 without leaving the Rust stack. The important behavior is not "Turso as a
 standard." The important behavior is that durable rows are scoped and checked:
-project rows must match project identity, warehouse rows must match warehouse
-identity, namespace, table, and active-view records must match their selected
-rows or memory keys, policy bindings and storage-profile records must match
-their durable keys and row anchors, idempotency responses must match the route
-and table they replay, and outbox records must be fit for graph and lineage
-projection. Those are LakeCat reliability properties. The
+server, project, and warehouse tenant-root records must match their selected
+rows or memory keys, namespace, table, and active-view records must match their
+selected rows or memory keys, policy bindings and storage-profile records must
+match their durable keys and row anchors, idempotency responses must match the
+route and table they replay, and outbox records must be fit for graph and
+lineage projection. Those are LakeCat reliability properties. The
 Iceberg-adjacent candidates are much smaller: atomic pointer CAS, exact retry
 semantics, pointer-history inspection, redacted conflict proof, and durable
 catalog event identity.

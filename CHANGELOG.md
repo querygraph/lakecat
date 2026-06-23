@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened memory management-root scope binding. Memory store server, project,
+  and warehouse reads now validate records against their map keys before
+  returning tenant-root inventory, matching Turso's decoded row-scope drift
+  rejection.
 - Hardened memory active-view scope binding. Memory store view reads and
   guarded mutations now validate active `ViewRecord` values against their map
   keys before listing, loading, updating, or dropping views, matching Turso's
