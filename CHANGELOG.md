@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Hardened standalone audit request-hash coverage. Memory and Turso store tests
+  now prove an audit event whose request hash drifts from its payload is
+  rejected before any audit row or lineage/graph outbox row is written.
 - Hardened Turso idempotent commit retry coverage. Turso store tests now prove
   a corrupted idempotency response whose decoded table identity drifts is
   rejected both by explicit replay and by an idempotent `commit_table` retry,

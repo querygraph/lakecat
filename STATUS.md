@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest standalone audit request-hash coverage:
+  memory and Turso store tests now prove an audit event whose request hash
+  drifts from its payload is rejected before any audit row or lineage/graph
+  outbox row is written.
+- Local verification for this standalone audit request-hash slice passed:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_rejects_audit_request_hash_drift_before_outbox -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_audit_request_hash_drift_before_outbox -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest Turso idempotent commit retry coverage:
   Turso store tests now prove a corrupted idempotency response whose decoded
   table identity drifts is rejected both by explicit replay and by an

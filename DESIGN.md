@@ -257,8 +257,11 @@ The current working plan is:
    create transactionally paired audit/outbox evidence. Standalone audit writes
    share the common audit event-id helper where supported and memory/Turso
    stores must fail duplicate writes without creating duplicate lineage/graph
-   outbox replay evidence. Secret references and storage roots must stay
-   redacted in replay, represented by provider labels, presence flags, and
+   outbox replay evidence. Memory/Turso stores must also reject missing or
+   drifted audit request hashes before writing either audit or outbox rows, so
+   standalone audit proof cannot point at a different payload than the event it
+   will later replay. Secret references and storage roots must stay redacted in
+   replay, represented by provider labels, presence flags, and
    content hashes such as `location-prefix-hash`; validation failures should
    follow the same hash-only rule for storage roots, secret references,
    public-config keys, and production resolver parse failures. Turso

@@ -482,6 +482,10 @@ lineage/graph outbox row are written in one transaction; if the outbox insert
 fails, the audit row is rolled back rather than leaving evidence that cannot be
 replayed. The same path uses the shared audit event-id rule, so a duplicate
 audit write fails without multiplying lineage/graph outbox replay evidence.
+Standalone audit evidence is also request-hash checked before side effects:
+the stored request hash must match the payload that will later be replayed, and
+memory/Turso stores reject a drifted hash before either the audit row or
+lineage/graph outbox row is written.
 The embedded memory store follows the same duplicate event-id rule, which keeps
 fast tests honest about replay identity even when no Turso file is involved.
 Replay validation then closes the loop: durable evidence must be well-formed,

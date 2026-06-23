@@ -5033,6 +5033,38 @@ mod memory_tests {
     }
 
     #[tokio::test]
+    async fn memory_store_rejects_audit_request_hash_drift_before_outbox() {
+        let store = MemoryCatalogStore::new();
+        let ident = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let mut event = CatalogAuditEvent::new(
+            "querygraph.bootstrap",
+            Some(ident.clone()),
+            Principal::anonymous(),
+            serde_json::json!({
+                "event-type": "querygraph.bootstrap",
+                "table": ident,
+                "manifest-hash": "lakecat:test"
+            }),
+        )
+        .unwrap();
+        event.request_hash = Some(content_hash_bytes(b"drifted-audit-request"));
+
+        let err = store.record_audit_event(event).await.unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("audit event request hash does not match payload")
+        ));
+        let state = store.state.read().await;
+        assert!(state.audit_events.is_empty());
+        assert!(state.outbox_events.is_empty());
+    }
+
+    #[tokio::test]
     async fn memory_store_rejects_audit_payload_table_scope_drift() {
         let store = MemoryCatalogStore::new();
         let ident = TableIdent::new(
@@ -11524,6 +11556,37 @@ pub mod turso_store {
                 err,
                 LakeCatError::InvalidArgument(message)
                     if message.contains("audit event request hash is required")
+            ));
+            assert_eq!(store.count_rows("audit_events").await.unwrap(), 0);
+            assert_eq!(store.count_rows("outbox_events").await.unwrap(), 0);
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_audit_request_hash_drift_before_outbox() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let ident = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let mut event = CatalogAuditEvent::new(
+                "querygraph.bootstrap",
+                Some(ident.clone()),
+                Principal::anonymous(),
+                serde_json::json!({
+                    "event-type": "querygraph.bootstrap",
+                    "table": ident,
+                    "manifest-hash": "lakecat:test"
+                }),
+            )
+            .unwrap();
+            event.request_hash = Some(content_hash_bytes(b"drifted-audit-request"));
+
+            let err = store.record_audit_event(event).await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("audit event request hash does not match payload")
             ));
             assert_eq!(store.count_rows("audit_events").await.unwrap(), 0);
             assert_eq!(store.count_rows("outbox_events").await.unwrap(), 0);
