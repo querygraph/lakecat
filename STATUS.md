@@ -5,6 +5,17 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest memory view-receipt scope binding:
+  memory view-version receipts now carry a private view-key anchor and validate
+  it before receipt reads or mutation-chain extension, matching Turso's durable
+  view receipt row binding.
+- Local verification for this memory view-receipt scope slice passed:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_rejects_view_receipt_row_scope_drift -- --test-threads=1`;
+  `cargo test -p lakecat-store memory_store_rejects_corrupt_view_receipt -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_view_receipt_json_scope_drift -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_view_receipt_row_column_scope_drift -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest memory table lifecycle audit/outbox evidence:
   memory table soft-delete and restore now emit `table.deleted` and
   `table.restored` audit/outbox events with audit request hashes bound to the

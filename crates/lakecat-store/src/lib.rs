@@ -1090,6 +1090,51 @@ fn latest_view_receipt_hash<'a>(
     latest_view_receipt_evidence(receipts).map(|evidence| evidence.map(|(_, hash)| hash))
 }
 
+fn validate_memory_view_receipt_scope(
+    record: &MemoryViewVersionReceipt,
+    warehouse: &WarehouseName,
+    namespace: &Namespace,
+    view: Option<&TableName>,
+) -> LakeCatResult<()> {
+    let expected_key = view_key_parts(
+        &record.receipt.warehouse,
+        &record.receipt.namespace,
+        &record.receipt.name,
+    );
+    if record.view_key != expected_key {
+        return Err(LakeCatError::Internal(
+            "view receipt row scope does not match receipt identity".to_string(),
+        ));
+    }
+    if record.receipt.warehouse != *warehouse || record.receipt.namespace != *namespace {
+        return Err(LakeCatError::Internal(
+            "view receipt row scope does not match receipt identity".to_string(),
+        ));
+    }
+    if let Some(view) = view
+        && record.receipt.name != *view
+    {
+        return Err(LakeCatError::Internal(
+            "view receipt row scope does not match receipt identity".to_string(),
+        ));
+    }
+    record.receipt.validate()?;
+    Ok(())
+}
+
+fn memory_view_receipt_key_matches_namespace(
+    view_key: &str,
+    warehouse: &WarehouseName,
+    namespace: &Namespace,
+) -> bool {
+    let mut parts = view_key.split('\u{1f}');
+    matches!(
+        (parts.next(), parts.next(), parts.next(), parts.next()),
+        (Some(row_warehouse), Some(row_namespace), Some(_), None)
+            if row_warehouse == warehouse.as_str() && row_namespace == namespace.path()
+    )
+}
+
 fn validate_view_receipt_chains(receipts: &[ViewVersionReceipt]) -> LakeCatResult<()> {
     let mut grouped = BTreeMap::<&str, Vec<&ViewVersionReceipt>>::new();
     for receipt in receipts {
@@ -1725,7 +1770,7 @@ struct MemoryState {
     idempotency: BTreeMap<String, IdempotencyReplay>,
     storage_profiles: BTreeMap<String, StorageProfile>,
     views: BTreeMap<String, ViewRecord>,
-    view_version_receipts: Vec<ViewVersionReceipt>,
+    view_version_receipts: Vec<MemoryViewVersionReceipt>,
     policy_bindings: BTreeMap<String, PolicyBinding>,
     soft_deletes: BTreeMap<String, SoftDeleteRecord>,
 }
@@ -1741,6 +1786,12 @@ struct IdempotencyReplay {
 struct MemoryCommitRecord {
     table_key: String,
     record: TableCommitRecord,
+}
+
+#[derive(Debug, Clone)]
+struct MemoryViewVersionReceipt {
+    view_key: String,
+    receipt: ViewVersionReceipt,
 }
 
 #[async_trait]
@@ -2387,7 +2438,18 @@ impl CatalogStore for MemoryCatalogStore {
             state
                 .view_version_receipts
                 .iter()
-                .filter(|receipt| receipt.stable_id == view_stable_id(&view)),
+                .filter(|receipt| receipt.view_key == view_key)
+                .map(|receipt| {
+                    validate_memory_view_receipt_scope(
+                        receipt,
+                        &view.warehouse,
+                        &view.namespace,
+                        Some(&view.name),
+                    )?;
+                    Ok(&receipt.receipt)
+                })
+                .collect::<LakeCatResult<Vec<_>>>()?
+                .into_iter(),
         )?;
         let latest_receipt_version = latest_receipt
             .as_ref()
@@ -2403,8 +2465,10 @@ impl CatalogStore for MemoryCatalogStore {
             &view,
             principal,
         )?;
-        state.views.insert(view_key, view.clone());
-        state.view_version_receipts.push(receipt);
+        state.views.insert(view_key.clone(), view.clone());
+        state
+            .view_version_receipts
+            .push(MemoryViewVersionReceipt { view_key, receipt });
         Ok(view)
     }
 
@@ -2431,7 +2495,18 @@ impl CatalogStore for MemoryCatalogStore {
             state
                 .view_version_receipts
                 .iter()
-                .filter(|receipt| receipt.stable_id == view_stable_id(&view)),
+                .filter(|receipt| receipt.view_key == view_key)
+                .map(|receipt| {
+                    validate_memory_view_receipt_scope(
+                        receipt,
+                        &view.warehouse,
+                        &view.namespace,
+                        Some(&view.name),
+                    )?;
+                    Ok(&receipt.receipt)
+                })
+                .collect::<LakeCatResult<Vec<_>>>()?
+                .into_iter(),
         )?;
         let latest_receipt_version = latest_receipt
             .as_ref()
@@ -2447,8 +2522,10 @@ impl CatalogStore for MemoryCatalogStore {
             &view,
             principal,
         )?;
-        state.views.insert(view_key, view.clone());
-        state.view_version_receipts.push(receipt);
+        state.views.insert(view_key.clone(), view.clone());
+        state
+            .view_version_receipts
+            .push(MemoryViewVersionReceipt { view_key, receipt });
         Ok(view)
     }
 
@@ -2462,13 +2539,12 @@ impl CatalogStore for MemoryCatalogStore {
         let receipts = state
             .view_version_receipts
             .iter()
-            .filter(|receipt| {
-                receipt.warehouse == *warehouse
-                    && receipt.namespace == *namespace
-                    && receipt.name == *view
+            .filter(|receipt| receipt.view_key == view_key_parts(warehouse, namespace, view))
+            .map(|receipt| {
+                validate_memory_view_receipt_scope(receipt, warehouse, namespace, Some(view))?;
+                Ok(receipt.receipt.clone())
             })
-            .cloned()
-            .collect::<Vec<_>>();
+            .collect::<LakeCatResult<Vec<_>>>()?;
         validate_view_receipt_chains(&receipts)?;
         Ok(receipts)
     }
@@ -2482,9 +2558,14 @@ impl CatalogStore for MemoryCatalogStore {
         let receipts = state
             .view_version_receipts
             .iter()
-            .filter(|receipt| receipt.warehouse == *warehouse && receipt.namespace == *namespace)
-            .cloned()
-            .collect::<Vec<_>>();
+            .filter(|receipt| {
+                memory_view_receipt_key_matches_namespace(&receipt.view_key, warehouse, namespace)
+            })
+            .map(|receipt| {
+                validate_memory_view_receipt_scope(receipt, warehouse, namespace, None)?;
+                Ok(receipt.receipt.clone())
+            })
+            .collect::<LakeCatResult<Vec<_>>>()?;
         validate_view_receipt_chains(&receipts)?;
         Ok(receipts)
     }
@@ -2557,10 +2638,18 @@ impl CatalogStore for MemoryCatalogStore {
             state
                 .view_version_receipts
                 .iter()
-                .filter(|receipt| receipt.stable_id == view_stable_id(&record)),
+                .filter(|receipt| receipt.view_key == view_key)
+                .map(|receipt| {
+                    validate_memory_view_receipt_scope(receipt, warehouse, namespace, Some(view))?;
+                    Ok(&receipt.receipt)
+                })
+                .collect::<LakeCatResult<Vec<_>>>()?
+                .into_iter(),
         )?;
         let receipt = ViewVersionReceipt::drop(&record, previous_receipt_hash, principal)?;
-        state.view_version_receipts.push(receipt);
+        state
+            .view_version_receipts
+            .push(MemoryViewVersionReceipt { view_key, receipt });
         Ok(record)
     }
 
@@ -4959,6 +5048,7 @@ mod memory_tests {
             .view_version_receipts
             .first_mut()
             .unwrap()
+            .receipt
             .view_hash = "sha256:short".to_string();
 
         let err = store
@@ -5024,6 +5114,7 @@ mod memory_tests {
             .view_version_receipts
             .get_mut(1)
             .unwrap()
+            .receipt
             .previous_receipt_hash = Some(forged_hash);
 
         let err = store
@@ -5044,6 +5135,87 @@ mod memory_tests {
             err,
             LakeCatError::Internal(message)
                 if message.contains("view receipt chain previous links must match")
+        ));
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_view_receipt_row_scope_drift() {
+        let store = MemoryCatalogStore::new();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let namespace = "default".parse::<Namespace>().unwrap();
+        let view_name = TableName::new("active_customers").unwrap();
+        let view = ViewRecord::new(
+            warehouse.clone(),
+            namespace.clone(),
+            view_name.clone(),
+            "select * from customers where active",
+            "sql",
+            Some(1),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        store.upsert_view(view).await.unwrap();
+
+        store
+            .state
+            .write()
+            .await
+            .view_version_receipts
+            .first_mut()
+            .unwrap()
+            .receipt
+            .name = TableName::new("shadow_customers").unwrap();
+
+        let err = store
+            .list_view_version_receipts(&warehouse, &namespace, &view_name)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("view receipt row scope does not match")
+        ));
+
+        let err = store
+            .list_namespace_view_version_receipts(&warehouse, &namespace)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("view receipt row scope does not match")
+        ));
+
+        let replacement = ViewRecord::new(
+            warehouse.clone(),
+            namespace.clone(),
+            view_name.clone(),
+            "select id from customers where active",
+            "sql",
+            Some(2),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        let err = store
+            .upsert_view_if_version(replacement, Some(1))
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("view receipt row scope does not match")
+        ));
+
+        let err = store
+            .drop_view(&warehouse, &namespace, &view_name, Principal::anonymous())
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("view receipt row scope does not match")
         ));
     }
 
@@ -5089,6 +5261,7 @@ mod memory_tests {
             .view_version_receipts
             .get_mut(1)
             .unwrap()
+            .receipt
             .previous_receipt_hash = Some(forged_hash);
 
         let attempted = ViewRecord::new(

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Hardened memory view-receipt scope binding. Memory view-version receipts now
+  carry a private view-key anchor and validate it before receipt reads or
+  mutation-chain extension, matching Turso's durable view receipt row binding.
 - Added memory table lifecycle audit/outbox evidence for soft delete and
   restore. Memory table lifecycle mutations now emit `table.deleted` and
   `table.restored` audit/outbox events with audit request hashes bound to the

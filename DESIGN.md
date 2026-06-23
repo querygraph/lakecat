@@ -304,11 +304,11 @@ The current working plan is:
    key or selected Turso warehouse, namespace, and view identity before
    returning, updating, or dropping active view state; the Turso active-view
    regression suite now covers both decoded JSON drift and durable `views`
-   row-column drift for load, list, guarded mutation, and drop paths. Turso receipt reads and
-   mutation-chain lookups
-   must also verify decoded receipt JSON against the durable receipt row and
-   row/query warehouse, namespace, and view scope before returning or extending
-   durable view-history evidence.
+   row-column drift for load, list, guarded mutation, and drop paths. Memory
+   view-version receipts now carry the same private view-key anchor that Turso
+   persists in `view_version_receipts.view_key`, and memory/Turso receipt reads
+   and mutation-chain lookups verify decoded receipt JSON against that durable
+   scope before returning or extending view-history evidence.
 6. Keep reproducibility ahead of integration claims. Run local gates before
    commit, keep cloud CI manual/disabled until it is known green, use published
    Grust/TypeSec crates when available, and keep any Sail path/patch bridge
