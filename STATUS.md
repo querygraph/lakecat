@@ -5,6 +5,17 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest compact QGLake handoff summary root closure:
+  handoff summary verification now rejects unexpected top-level fields before
+  archived artifacts can attach unverified root proof claims beside otherwise
+  valid LakeCat replay, QueryGraph import, graph projection, or artifact
+  evidence.
+- Local verification for this handoff summary root closure slice passed:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_extra_root_fields -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_accepts_compact_proofs -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest release-candidate proof refresh:
   `scripts/check-release-readiness.sh --release-candidate` passed locally on
   June 23, 2026 from clean head `5067b7af`. The gate covered shell syntax and

@@ -116,14 +116,16 @@ replay, `lakecat-verify`, and `lakecat-import` agree, structured
 scan/management/credential/commit replay evidence, artifact paths, raw file
 hashes, captured LakeCat replay output, QueryGraph verify output, QueryGraph
 import output, and service log path for automation. Handoff verification keeps
-those artifacts bundle-local and schema-closed: paths must resolve under the
-handoff summary directory before LakeCat hashes or parses them, and the primary
-`artifacts` manifest, nested `capturedOutputs` manifest, and individual
+those artifacts bundle-local and schema-closed: the handoff summary root rejects
+unexpected top-level fields, paths must resolve under the handoff summary
+directory before LakeCat hashes or parses them, and the primary `artifacts`
+manifest, nested `capturedOutputs` manifest, and individual
 bundle/lineage/import/captured-output artifact objects reject unexpected fields
 beside the checked `path` and `sha256` evidence. A saved handoff summary cannot
-attach alternate hashes, mirror artifacts, or unverified captured-output claims
-beside otherwise valid files. View receipt-chain proof is structural in this
-local gate as well: the script walks verified chains and receipts, checks
+attach alternate hashes, mirror artifacts, unverified root proof claims, or
+unverified captured-output claims beside otherwise valid files. View
+receipt-chain proof is structural in this local gate as well: the script walks
+verified chains and receipts, checks
 version-1 upsert heads, previous receipt links, supported operations, version
 transitions, identity binding, tombstone posture, and tombstone receipt coverage
 before compact handoff proof is accepted.

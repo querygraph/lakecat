@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Closed the compact QGLake handoff summary root schema. The CLI verifier now
+  rejects unexpected top-level handoff summary fields before archived artifacts
+  can attach unverified root proof claims beside otherwise valid evidence.
 - Fixed QGLake proof fixture assertions after full-hash hardening. Positive
   replay and handoff artifact tests now compare against deterministic full
   fixture digests instead of old readable `sha256:` placeholders.

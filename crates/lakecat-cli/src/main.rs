@@ -3117,6 +3117,7 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
             "handoff summary root must be an object".to_string(),
         )
     })?;
+    require_only_fields(summary, QGLAKE_HANDOFF_SUMMARY_FIELDS, "handoff summary")?;
     require_string_eq(
         summary,
         "schemaVersion",
@@ -3566,6 +3567,21 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "requestIdentityProof": request_identity,
     }))
 }
+
+const QGLAKE_HANDOFF_SUMMARY_FIELDS: &[&str] = &[
+    "schemaVersion",
+    "status",
+    "catalogUrl",
+    "principal",
+    "warehouse",
+    "namespace",
+    "table",
+    "querygraphVerification",
+    "querygraphImportVerification",
+    "lakecatReplayVerification",
+    "graphProjectionProof",
+    "artifacts",
+];
 
 const GRAPH_PROJECTION_PROOF_FIELDS: &[&str] = &[
     "backend",
@@ -13530,6 +13546,24 @@ mod tests {
         assert_eq!(
             verification["graphProjectionProof"]["tablePrefix"],
             json!(QGLAKE_GRUST_TURSO_TABLE_PREFIX)
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_root_fields() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["unverifiedTopLevelProof"] = json!({
+            "sha256": qglake_fixture_hash("unverified-top-level-proof")
+        });
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject extra root proof fields");
+        let err = err.to_string();
+
+        assert!(err.contains("handoff summary"), "{err}");
+        assert!(
+            err.contains("unexpected field unverifiedTopLevelProof"),
+            "{err}"
         );
     }
 

@@ -10847,7 +10847,10 @@ QueryGraph bootstrap artifacts, drains the outbox, and proves the resulting
 bundle through QueryGraph's Rust verifier/importer. It then asks LakeCat to
 verify its own compact handoff summary and recompute the raw artifact file
 hashes, making the summary a first-class acceptance artifact rather than an
-unchecked convenience file. The saved self-verifier output is checked too: its
+unchecked convenience file. The compact handoff summary root is closed over its
+known fields before any artifact is accepted, so an archived summary cannot add
+an unverified top-level proof claim beside a valid LakeCat replay and
+QueryGraph import result. The saved self-verifier output is checked too: its
 internal `artifactFiles` entries for the bootstrap bundle, lineage drain,
 QueryGraph import plan, captured LakeCat and QueryGraph outputs, and service
 log must carry full SHA-256 digests before they are compared with the compact
