@@ -1228,7 +1228,10 @@ Replay admission for both `storage-profile.upserted` and
 `public-config` objects: values must stay string-shaped, secret-like keys or
 values must fail with hash-only public-config-key evidence, and LakeCat-reserved
 credential evidence keys must be rejected before graph, OpenLineage, or QGLake
-proof can treat those public hints as accepted credential-root facts.
+proof can treat those public hints as accepted credential-root facts. Raw
+lineage-drain credential summaries now also pin that `credentials.vend-attempted`
+public-config key/value shape, so compact credential proof cannot bypass
+service replay by carrying secret-like public hints or non-string values.
 The compact `credentialVendingProof` object and captured LakeCat replay
 `credentials` object must stay closed over their compared field set at the
 top level, branch level, and nested redacted storage-profile level. Archived

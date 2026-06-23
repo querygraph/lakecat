@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw credential public-config summary coverage:
+  raw lineage-drain `credentials.vend-attempted` summaries now explicitly prove
+  secret-like public-config keys and non-string public-config values are
+  rejected with hash-only public-config key evidence before compact credential
+  proof can inherit them.
+- Local verification for this raw credential public-config summary slice
+  passed: `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_storage_profile_secret_ref_evidence -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest raw table-commit summary schema coverage:
   raw lineage-drain `table.commit` summaries now explicitly prove duplicate
   alias fields and unverified nested, top-level, or wrapper claims are rejected

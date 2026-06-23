@@ -8540,6 +8540,13 @@ custom issuer cannot widen catalog-owned storage scope. The rejection exposes
 only `credential-prefix-hash` and `storage-profile-prefix-hash` evidence, and
 LakeCat records no `credentials.vend-attempted` replay event for that failed
 issuer response.
+Public configuration on the selected storage profile remains non-secret
+evidence. Service replay and raw lineage-drain credential summaries both
+re-check that public-config keys are non-secret, values are strings, and
+LakeCat-reserved credential-evidence keys do not appear there. Rejections carry
+`public-config-key-hash=sha256:...` rather than the raw key or value, so compact
+credential proof cannot smuggle token-shaped hints or structured secret blobs
+beside an otherwise valid credential-vend event.
 
 ```sh
 curl -s -X PUT \

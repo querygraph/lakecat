@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Expanded raw credential public-config summary coverage. Raw
+  `credentials.vend-attempted` summaries now explicitly prove secret-like
+  public-config keys and non-string public-config values are rejected with
+  hash-only public-config key evidence before compact credential proof can
+  inherit them.
 - Expanded raw table-commit summary schema coverage. Raw lineage-drain
   `table.commit` summaries now explicitly prove duplicate alias fields and
   unverified nested, top-level, or wrapper claims are rejected with hash-only

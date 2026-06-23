@@ -54445,6 +54445,39 @@ mod tests {
         assert!(err.contains("public-config-key-hash=sha256:"));
         assert!(!err.contains("password=super-secret"));
 
+        let mut secret_like_public_config_key = valid_lineage_summary_credential_event(
+            "evt-summary-credential-secret-public-config-key",
+        );
+        secret_like_public_config_key.payload["payload"]["storage-profile"]["public-config"] = json!({
+            "access-token": "redacted"
+        });
+        let err = lineage_drain_event_summary(&secret_like_public_config_key, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("storage-profile public-config key may expose secret material"),
+            "{err}"
+        );
+        assert!(err.contains("public-config-key-hash=sha256:"));
+        assert!(!err.contains("access-token"));
+        assert!(!err.contains("redacted"));
+
+        let mut non_string_public_config_value = valid_lineage_summary_credential_event(
+            "evt-summary-credential-non-string-public-config-value",
+        );
+        non_string_public_config_value.payload["payload"]["storage-profile"]["public-config"] = json!({
+            "region": ["us-west-2"]
+        });
+        let err = lineage_drain_event_summary(&non_string_public_config_value, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("storage-profile public-config value must be a string"),
+            "{err}"
+        );
+        assert!(err.contains("public-config-key-hash=sha256:"));
+        assert!(!err.contains("us-west-2"));
+
         let mut missing_secret_ref_provider = valid_lineage_summary_credential_event(
             "evt-summary-storage-profile-missing-secret-provider",
         );
