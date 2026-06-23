@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Refreshed the full local release-candidate proof from clean head `1992d9b0`.
+  `scripts/check-release-readiness.sh --release-candidate` passed locally with
+  the release-proof contract in clean candidate mode, the full workspace and
+  feature-gate matrix, out-of-tree book artifact validation, Grust Turso QGLake
+  handoff, QueryGraph locked verify/import, bundle hash
+  `sha256:907d6ab2867c1d78ea7bc79f809639b8ee67c7d45274b108138190299aae462b`,
+  QueryGraph import hash
+  `sha256:a60b00e71851e10c71101916f215a4cbc425569580b85b5ce51dcd7de81ef199`,
+  and `git diff --check`.
 - Added release-proof freshness reporting to the local release-readiness gate.
   Quick/full runs now print a non-failing warning when executable changes after
   the last recorded release-candidate proof require a fresh full candidate run.

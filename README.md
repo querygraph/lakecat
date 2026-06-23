@@ -146,7 +146,7 @@ EPUB metadata and PDF layout validation, QGLake handoff proof, and
 The current full proof also verifies the Grust Turso graph projection evidence,
 including `graphProjectionProof.backend = grust-turso` and
 `graphProjectionProof.tablePrefix = lakecat_graph`; the latest clean
-release-candidate proof was refreshed from head `50451be5`.
+release-candidate proof was refreshed from head `1992d9b0`.
 `scripts/check-release-proof-contract.sh` verifies that active release docs
 agree on that proof commit and that any later commits are limited to
 documentation and checked-in book artifacts; executable changes after the

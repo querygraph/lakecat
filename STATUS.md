@@ -5,6 +5,21 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-candidate proof refresh:
+  `scripts/check-release-readiness.sh --release-candidate` passed locally on
+  June 23, 2026 from clean head `1992d9b0`. The gate covered shell syntax and
+  dependency contracts, manual workflow trigger contract checks, release
+  version and release-proof contracts, formatter checks, default and
+  all-features workspace tests, explicit Turso/Sail/TypeSec/Grust feature
+  rows, Grust Turso graph projection tests, explicit Rust QGLake handoff
+  verifier rows, out-of-tree book artifact generation and contract checks,
+  live QGLake replay verification through QueryGraph locked verify/import,
+  `graphProjectionProof.backend = grust-turso`,
+  `graphProjectionProof.tablePrefix = lakecat_graph`, bundle hash
+  `sha256:907d6ab2867c1d78ea7bc79f809639b8ee67c7d45274b108138190299aae462b`,
+  QueryGraph import hash
+  `sha256:a60b00e71851e10c71101916f215a4cbc425569580b85b5ce51dcd7de81ef199`,
+  and `git diff --check`.
 - Latest release-proof freshness reporting:
   `scripts/check-release-readiness.sh --quick` and full non-candidate runs now
   print a non-failing freshness note when executable changes after the latest
@@ -267,10 +282,9 @@ Updated: 2026-06-23
 - Local verification for this proof vocabulary documentation slice passed:
   `bash -n scripts/check-release-proof-contract.sh`;
   `scripts/check-release-readiness.sh --quick`; and `git diff --check`. A dirty
-  release-proof-contract self-test now accepts `GOAL.md` as documentation, but
-  still reports the already-existing post-proof Rust commits after
-  release-candidate proof `50451be5`; a fresh full release-candidate gate is
-  still required before final release proof refresh.
+  release-proof-contract self-test now accepts `GOAL.md` as documentation; the
+  later full release-candidate proof refresh is recorded at clean head
+  `1992d9b0`.
 - Latest compact QGLake standards proof closure:
   handoff verification now rejects non-string, blank, duplicate, or unsupported
   standards entries and requires the exact expected standards set, so saved
@@ -657,7 +671,7 @@ Updated: 2026-06-23
   now executable local evidence.
 - Latest release-candidate proof:
   `scripts/check-release-readiness.sh --release-candidate` passed locally on
-  June 23, 2026 from clean head `50451be5`. The gate covered shell syntax
+  June 23, 2026 from clean head `1992d9b0`. The gate covered shell syntax
   checks, dependency and workflow trigger contracts, release-version checks,
   tracked book artifact validation, formatting, default and all-features
   workspace tests, Turso/Sail/TypeSec/Grust and Grust Turso feature rows,
@@ -668,7 +682,11 @@ Updated: 2026-06-23
   executable book artifact contract, live QGLake handoff replay through
   QueryGraph locked verify/import with
   `graphProjectionProof.backend = grust-turso` and
-  `graphProjectionProof.tablePrefix = lakecat_graph`, and `git diff --check`.
+  `graphProjectionProof.tablePrefix = lakecat_graph`, bundle hash
+  `sha256:907d6ab2867c1d78ea7bc79f809639b8ee67c7d45274b108138190299aae462b`,
+  QueryGraph import hash
+  `sha256:a60b00e71851e10c71101916f215a4cbc425569580b85b5ce51dcd7de81ef199`,
+  and `git diff --check`.
   This is the current first-release evidence; cloud CI remains manual/disabled
   until local gates are boring from the final release commit.
 - Latest release-proof contract:
