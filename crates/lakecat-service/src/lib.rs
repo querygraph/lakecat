@@ -55150,6 +55150,26 @@ mod tests {
             .to_string();
         assert!(err.contains("catalog config-read endpoints must be an array"));
 
+        let mut missing_required_endpoint =
+            valid_lineage_summary_catalog_config_event("evt-missing-summary-config-endpoint");
+        let endpoints = missing_required_endpoint.payload["payload"]["endpoints"]
+            .as_array_mut()
+            .expect("valid summary config endpoints should be an array");
+        endpoints.retain(|endpoint| {
+            endpoint.as_str() != Some("POST /catalog/v1/namespaces/{namespace}/tables/{table}/plan")
+        });
+        let err = lineage_drain_event_summary(&missing_required_endpoint, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains(
+            "catalog config-read endpoints must include POST /catalog/v1/namespaces/{namespace}/tables/{table}/plan"
+        ));
+        assert!(err.contains("event-id-hash=sha256:"), "{err}");
+        assert!(
+            !err.contains("evt-missing-summary-config-endpoint"),
+            "{err}"
+        );
+
         let mut duplicate_endpoints =
             valid_lineage_summary_catalog_config_event("evt-duplicate-summary-config-endpoint");
         duplicate_endpoints.payload["payload"]["endpoints"] =

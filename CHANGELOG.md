@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added raw catalog-config summary endpoint-set coverage. Raw lineage-drain
+  `catalog.config-read` summaries now explicitly prove required Iceberg REST
+  plan/fetch endpoint evidence cannot be dropped before compact QGLake config
+  proof inherits the advertised compatibility surface.
 - Added raw namespace-list summary count-binding coverage. Raw lineage-drain
   `namespace.listed` summaries now explicitly prove `namespace-count` must
   match `namespace-paths` before compact QGLake standard catalog discovery

@@ -899,7 +899,8 @@ posture or integration discovery contract after source replay accepted it.
 Raw lineage-drain catalog-config summary construction must fail closed over
 the same config entry and endpoint shapes: defaults/overrides must remain
 `ConfigEntry` arrays with nonblank duplicate-free keys and string values, and
-endpoints must remain nonblank duplicate-free string arrays.
+endpoints must remain nonblank duplicate-free string arrays that include the
+required Iceberg REST, governed access, bootstrap, and lineage-drain routes.
 Compact `catalogConfigProof` and captured LakeCat replay `catalogConfig` proof
 objects must also stay closed over those compared fields, so a summary,
 captured replay output, or saved self-verifier sidecar cannot attach unverified
