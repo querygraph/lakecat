@@ -7318,6 +7318,17 @@ fn lineage_drain_event_summary(
         let payload = event.payload.get("payload").unwrap_or(&event.payload);
         validate_namespace_lifecycle_event_evidence(event, payload)?;
     }
+    if event.event_type == "view.listed" {
+        let payload = event.payload.get("payload").unwrap_or(&event.payload);
+        validate_view_list_event_evidence(event, payload)?;
+    }
+    if matches!(
+        event.event_type.as_str(),
+        "view.upserted" | "view.loaded" | "view.dropped"
+    ) {
+        let payload = event.payload.get("payload").unwrap_or(&event.payload);
+        validate_view_lifecycle_event_evidence(event, payload)?;
+    }
     if event.event_type == "querygraph.bootstrap" {
         let payload = event.payload.get("payload").unwrap_or(&event.payload);
         validate_querygraph_bootstrap_event_evidence(event, payload)?;
@@ -52024,103 +52035,41 @@ mod tests {
     #[test]
     fn lineage_drain_summary_rejects_malformed_view_versions() {
         let receipt = OutboxProjectionReceipt::default();
-        let malformed_view_version = OutboxEvent {
-            event_id: "evt-bad-summary-view-version".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "view.upserted".to_string(),
-            payload: json!({
-                "payload": {
-                    "warehouse": "local",
-                    "namespace": ["default"],
-                    "view": {
-                        "warehouse": "local",
-                        "namespace": ["default"],
-                        "name": "events_view",
-                        "view-version": "1"
-                    }
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut malformed_view_version =
+            valid_lineage_summary_view_event("evt-bad-summary-view-version", "view.upserted");
+        malformed_view_version.payload["payload"]["view"]["view-version"] = json!("1");
         let err = lineage_drain_event_summary(&malformed_view_version, &receipt)
             .unwrap_err()
             .to_string();
-        assert!(err.contains("view-version must be an unsigned integer when present"));
+        assert!(err.contains("view lifecycle evidence must contain positive view-version"));
 
-        let zero_view_version = OutboxEvent {
-            event_id: "evt-zero-summary-view-version".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "view.loaded".to_string(),
-            payload: json!({
-                "payload": {
-                    "warehouse": "local",
-                    "namespace": ["default"],
-                    "view": {
-                        "warehouse": "local",
-                        "namespace": ["default"],
-                        "name": "events_view",
-                        "view-version": 0
-                    }
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut zero_view_version =
+            valid_lineage_summary_view_event("evt-zero-summary-view-version", "view.loaded");
+        zero_view_version.payload["payload"]["view"]["view-version"] = json!(0);
         let err = lineage_drain_event_summary(&zero_view_version, &receipt)
             .unwrap_err()
             .to_string();
-        assert!(err.contains("view-version must be positive when present"));
+        assert!(err.contains("view lifecycle evidence must contain positive view-version"));
 
-        let malformed_expected_view_version = OutboxEvent {
-            event_id: "evt-bad-summary-expected-view-version".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "view.dropped".to_string(),
-            payload: json!({
-                "payload": {
-                    "warehouse": "local",
-                    "namespace": ["default"],
-                    "expected-view-version": "1",
-                    "view": {
-                        "warehouse": "local",
-                        "namespace": ["default"],
-                        "name": "events_view",
-                        "view-version": 1
-                    }
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut malformed_expected_view_version = valid_lineage_summary_view_event(
+            "evt-bad-summary-expected-view-version",
+            "view.dropped",
+        );
+        malformed_expected_view_version.payload["payload"]["expected-view-version"] = json!("1");
         let err = lineage_drain_event_summary(&malformed_expected_view_version, &receipt)
             .unwrap_err()
             .to_string();
-        assert!(err.contains("expected-view-version must be an unsigned integer when present"));
+        assert!(err.contains("view lifecycle expected-view-version must be positive when present"));
 
-        let zero_expected_view_version = OutboxEvent {
-            event_id: "evt-zero-summary-expected-view-version".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "view.dropped".to_string(),
-            payload: json!({
-                "payload": {
-                    "warehouse": "local",
-                    "namespace": ["default"],
-                    "expected-view-version": 0,
-                    "view": {
-                        "warehouse": "local",
-                        "namespace": ["default"],
-                        "name": "events_view",
-                        "view-version": 1
-                    }
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut zero_expected_view_version = valid_lineage_summary_view_event(
+            "evt-zero-summary-expected-view-version",
+            "view.dropped",
+        );
+        zero_expected_view_version.payload["payload"]["expected-view-version"] = json!(0);
         let err = lineage_drain_event_summary(&zero_expected_view_version, &receipt)
             .unwrap_err()
             .to_string();
-        assert!(err.contains("expected-view-version must be positive when present"));
+        assert!(err.contains("view lifecycle expected-view-version must be positive when present"));
     }
 
     #[test]
@@ -52477,6 +52426,91 @@ mod tests {
                 }),
             ),
             other => panic!("unsupported namespace event type: {other}"),
+        };
+        let mut payload = payload;
+        payload["authorization-receipt"] = json!({
+            "principal": principal,
+            "action": action,
+            "allowed": true,
+            "engine": "lakecat-test",
+            "policy_hash": null,
+            "checked_at": chrono::Utc::now().to_rfc3339()
+        });
+        OutboxEvent {
+            event_id: event_id.to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: event_type.to_string(),
+            payload: json!({
+                "audit-event-id": format!("audit-envelope-{event_id}"),
+                "event-type": event_type,
+                "payload": payload
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        }
+    }
+
+    fn valid_lineage_summary_view_event(event_id: &str, event_type: &str) -> OutboxEvent {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let view = json!({
+            "warehouse": "local",
+            "namespace": ["default"],
+            "name": "events_view",
+            "view-version": 7,
+            "sql": "select event_id from default.events",
+            "dialect": "spark-sql",
+            "schema-version": 1,
+            "columns": [{
+                "name": "event_id",
+                "data-type": "string",
+                "nullable": false,
+                "comment": null
+            }],
+            "properties": {
+                "owner": "querygraph"
+            }
+        });
+        let (action, payload) = match event_type {
+            "view.listed" => (
+                "view-load",
+                json!({
+                    "event-type": "view.listed",
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view-count": 1,
+                    "view-names": ["events_view"]
+                }),
+            ),
+            "view.upserted" => (
+                "view-manage",
+                json!({
+                    "event-type": "view.upserted",
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view": view,
+                    "expected-view-version": 6
+                }),
+            ),
+            "view.loaded" => (
+                "view-load",
+                json!({
+                    "event-type": "view.loaded",
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view": view
+                }),
+            ),
+            "view.dropped" => (
+                "view-drop",
+                json!({
+                    "event-type": "view.dropped",
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view": view,
+                    "expected-view-version": 7
+                }),
+            ),
+            other => panic!("unsupported view event type: {other}"),
         };
         let mut payload = payload;
         payload["authorization-receipt"] = json!({
@@ -53328,7 +53362,7 @@ mod tests {
                         "name": "events_view"
                     }
                 }),
-                "view namespace must contain strings",
+                "view lifecycle namespace components must be non-empty strings",
             ),
             (
                 "evt-blank-summary-view-name",
@@ -53340,7 +53374,7 @@ mod tests {
                         "name": " "
                     }
                 }),
-                "view name must not be blank",
+                "view lifecycle evidence has invalid view name",
             ),
             (
                 "evt-blank-summary-policy-id",
@@ -53384,6 +53418,13 @@ mod tests {
         for (event_id, event_type, payload, expected_message) in cases {
             let event = if event_type == "policy-binding.upserted" {
                 let mut event = valid_lineage_summary_management_upsert_event(event_id, event_type);
+                merge_json_object(&mut event.payload["payload"], payload);
+                event
+            } else if matches!(
+                event_type,
+                "view.listed" | "view.upserted" | "view.loaded" | "view.dropped"
+            ) {
+                let mut event = valid_lineage_summary_view_event(event_id, event_type);
                 merge_json_object(&mut event.payload["payload"], payload);
                 event
             } else if event_type == "warehouse.listed" {
@@ -53471,6 +53512,92 @@ mod tests {
 
         for (event_id, event_type, payload, expected_message) in cases {
             let mut event = valid_lineage_summary_namespace_event(event_id, event_type);
+            merge_json_object(&mut event.payload["payload"], payload);
+            let err = lineage_drain_event_summary(&event, &receipt)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains(expected_message), "{event_id}: {err}");
+            assert!(err.contains("event-id-hash=sha256:"), "{event_id}: {err}");
+            assert!(!err.contains(event_id), "{event_id}: {err}");
+        }
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_view_events() {
+        let receipt = OutboxProjectionReceipt::default();
+        let cases = [
+            (
+                "evt-bad-summary-view-count",
+                "view.listed",
+                json!({
+                    "view-count": "1"
+                }),
+                "view list evidence must contain unsigned view-count",
+            ),
+            (
+                "evt-bad-summary-view-name",
+                "view.listed",
+                json!({
+                    "view-count": 2,
+                    "view-names": ["events_view", "bad/view"]
+                }),
+                "view list view-names contains an invalid view name",
+            ),
+            (
+                "evt-duplicate-summary-view-name",
+                "view.listed",
+                json!({
+                    "view-count": 2,
+                    "view-names": ["events_view", "events_view"]
+                }),
+                "view list view-names must not contain duplicate view names",
+            ),
+            (
+                "evt-bad-summary-view-action",
+                "view.upserted",
+                json!({
+                    "authorization-receipt": {
+                        "action": "view-load"
+                    }
+                }),
+                "view lifecycle authorization receipt action does not match outbox event type",
+            ),
+            (
+                "evt-bad-summary-view-scope-drift",
+                "view.loaded",
+                json!({
+                    "view": {
+                        "namespace": ["shadow"]
+                    }
+                }),
+                "view lifecycle view namespace must match payload namespace",
+            ),
+            (
+                "evt-bad-summary-view-version",
+                "view.dropped",
+                json!({
+                    "view": {
+                        "view-version": 0
+                    }
+                }),
+                "view lifecycle evidence must contain positive view-version",
+            ),
+            (
+                "evt-extra-summary-view-field",
+                "view.upserted",
+                json!({
+                    "view": {
+                        "querygraph": {
+                            "claim": "shadow"
+                        }
+                    }
+                }),
+                "view lifecycle view contains unexpected field querygraph",
+            ),
+        ];
+
+        for (event_id, event_type, payload, expected_message) in cases {
+            let mut event = valid_lineage_summary_view_event(event_id, event_type);
             merge_json_object(&mut event.payload["payload"], payload);
             let err = lineage_drain_event_summary(&event, &receipt)
                 .unwrap_err()

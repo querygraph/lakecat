@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Hardened raw view summary extraction. Raw lineage-drain summary construction
+  now reuses the service replay validators for `view.listed`,
+  `view.upserted`, `view.loaded`, and `view.dropped` evidence, so malformed
+  wrappers, view lists, view lifecycle scope, version guards, receipt actions,
+  and authorization receipts cannot bypass replay admission before compact
+  QGLake view proof inherits them.
 - Hardened raw namespace summary extraction. Raw lineage-drain summary
   construction now reuses the service replay validators for `namespace.listed`,
   `namespace.created`, `namespace.loaded`, and `namespace.dropped` evidence, so

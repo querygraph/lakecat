@@ -1361,6 +1361,12 @@ columns, properties, and store-assigned version. Service replay now also
 closes the wrapped view lifecycle envelopes over the producer wrapper fields,
 so those claims cannot ride beside an otherwise valid checked view lifecycle
 payload.
+Raw lineage-drain summary extraction must apply the same validators for
+`view.listed`, `view.upserted`, `view.loaded`, and `view.dropped`, including
+count-bound and duplicate-free view lists, event-matching receipt actions,
+closed wrappers, nested view scope/version validation, and guarded
+`expected-view-version` checks before compact QGLake view proof inherits the
+evidence.
 
 ### P6 Reproducibility And V4
 

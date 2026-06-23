@@ -5,6 +5,22 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw view summary hardening slice:
+  `Validate raw view summaries`.
+  Raw lineage-drain summary construction now reuses the service replay
+  validators for `view.listed`, `view.upserted`, `view.loaded`, and
+  `view.dropped` evidence, rejecting malformed wrappers, view lists, view
+  lifecycle scope, version guards, receipt actions, and authorization receipts
+  before compact QGLake view proof can inherit them.
+- Local verification for this raw view summary slice passed:
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_view_events -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_view_versions -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_scope_scalars -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib lineage_drain_summary -- --test-threads=1`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`.
 - Latest raw namespace summary hardening slice:
   `Validate raw namespace summaries`.
   Raw lineage-drain summary construction now reuses the service replay

@@ -8332,8 +8332,12 @@ version, columns, and properties. If a sidecar also carries top-level
 warehouse or namespace evidence, it must match the nested view object before
 delivery. A replay sidecar cannot drift the view scope, add an extra
 QueryGraph, lineage, governance, or application claim inside that view object,
-and have it acknowledged as catalog evidence. Table lifecycle replay now
-follows the same rule:
+and have it acknowledged as catalog evidence. Raw lineage-drain summaries now
+use the same service replay validators for `view.listed`, `view.upserted`,
+`view.loaded`, and `view.dropped`, so compact QGLake view proof cannot inherit
+a looser view list, action-drifted receipt, malformed version guard, or
+sidecar-modified lifecycle payload than full replay would accept. Table
+lifecycle replay now follows the same rule:
 
 Active view state is protected before replay as well. A Turso row selected as
 warehouse `local`, namespace `default`, and view `active_customers` must decode
