@@ -1103,35 +1103,26 @@ fn require_qglake_handoff_verify_output_artifact_hashes_match_summary(
         "handoff summary artifacts",
     )?;
     for field in ["lakecatReplay", "querygraphVerify", "querygraphImport"] {
+        let output_capture_label =
+            format!("lakecatHandoffVerifyOutput.artifactFiles.capturedOutputs.{field}");
+        let summary_capture_label = format!("handoff summary artifacts.capturedOutputs.{field}");
         let output_capture = required_object(
             output_captures,
             field,
             "lakecatHandoffVerifyOutput.artifactFiles.capturedOutputs",
         )?;
-        require_only_fields(
-            output_capture,
-            &["sha256"],
-            "lakecatHandoffVerifyOutput.artifactFiles.capturedOutputs",
-        )?;
+        require_only_fields(output_capture, &["sha256"], &output_capture_label)?;
         let summary_capture = required_object(
             summary_captures,
             field,
             "handoff summary artifacts.capturedOutputs",
         )?;
-        require_full_hash_str(
-            output_capture,
-            "sha256",
-            "lakecatHandoffVerifyOutput.artifactFiles.capturedOutputs",
-        )?;
+        require_full_hash_str(output_capture, "sha256", &output_capture_label)?;
         require_value_match(
             output_capture,
             "sha256",
-            required_value(
-                summary_capture,
-                "sha256",
-                "handoff summary artifacts.capturedOutputs",
-            )?,
-            "lakecatHandoffVerifyOutput.artifactFiles.capturedOutputs",
+            required_value(summary_capture, "sha256", &summary_capture_label)?,
+            &output_capture_label,
         )?;
     }
     require_full_hash_str(
@@ -17902,6 +17893,40 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_artifact_verifier_rejects_extra_querygraph_capture_hash_field() {
+        for capture in ["querygraphVerify", "querygraphImport"] {
+            let temp = qglake_temp_dir(&format!(
+                "handoff-artifacts-self-verify-extra-{capture}-capture-hash-field"
+            ));
+            let summary_path = temp.join("handoff-summary.json");
+            let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+            let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+            output["artifactFiles"]["capturedOutputs"][capture]["unverifiedHash"] =
+                json!(qglake_fixture_hash("unverified-querygraph-capture-hash"));
+            let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+            fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+                .expect("write drifted handoff verify output");
+            summary["artifacts"]["lakecatHandoffVerifyOutputHash"] =
+                json!(content_hash_bytes(&bytes));
+            fs::write(
+                &summary_path,
+                serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+            )
+            .expect("write summary");
+
+            let err = verify_qglake_handoff_artifact_files(&summary_path, &summary).expect_err(
+                "artifact verifier should reject extra QueryGraph capture hash object fields",
+            );
+            let err = err.to_string();
+
+            assert!(err.contains("lakecatHandoffVerifyOutput"), "{err}");
+            assert!(err.contains("capturedOutputs"), "{err}");
+            assert!(err.contains(capture), "{err}");
+            assert!(err.contains("unexpected field unverifiedHash"), "{err}");
+        }
+    }
+
+    #[test]
     fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_short_capture_hash() {
         let temp = qglake_temp_dir("handoff-artifacts-self-verify-short-capture-hash");
         let summary_path = temp.join("handoff-summary.json");
@@ -17926,6 +17951,41 @@ mod tests {
         assert!(err.contains("lakecatHandoffVerifyOutput"), "{err}");
         assert!(err.contains("capturedOutputs"), "{err}");
         assert!(err.contains("full SHA-256"), "{err}");
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_short_querygraph_capture_hash() {
+        for (capture, short_hash) in [
+            ("querygraphVerify", "sha256:querygraph-verify"),
+            ("querygraphImport", "sha256:querygraph-import"),
+        ] {
+            let temp = qglake_temp_dir(&format!(
+                "handoff-artifacts-self-verify-short-{capture}-capture-hash"
+            ));
+            let summary_path = temp.join("handoff-summary.json");
+            let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+            let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+            output["artifactFiles"]["capturedOutputs"][capture]["sha256"] = json!(short_hash);
+            let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+            fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+                .expect("write drifted handoff verify output");
+            summary["artifacts"]["lakecatHandoffVerifyOutputHash"] =
+                json!(content_hash_bytes(&bytes));
+            fs::write(
+                &summary_path,
+                serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+            )
+            .expect("write summary");
+
+            let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+                .expect_err("artifact verifier should reject short QueryGraph capture hashes");
+            let err = err.to_string();
+
+            assert!(err.contains("lakecatHandoffVerifyOutput"), "{err}");
+            assert!(err.contains("capturedOutputs"), "{err}");
+            assert!(err.contains(capture), "{err}");
+            assert!(err.contains("full SHA-256"), "{err}");
+        }
     }
 
     #[test]

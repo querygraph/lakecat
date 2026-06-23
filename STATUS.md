@@ -5,6 +5,22 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest saved handoff verifier QueryGraph capture hash-shape coverage:
+  the CLI artifact verifier now explicitly proves saved
+  `lakecat-handoff-verify.json` output cannot use short placeholder hashes or
+  unverified extra hash fields under
+  `artifactFiles.capturedOutputs.querygraphVerify` or
+  `artifactFiles.capturedOutputs.querygraphImport`. Capture hash errors now
+  also name the malformed nested capture path.
+- Local verification for this saved handoff verifier QueryGraph capture
+  hash-shape slice passed: `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_extra_querygraph_capture_hash_field -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_short_querygraph_capture_hash -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_extra_capture_hash_field -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_short_capture_hash -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff -- --test-threads=1`;
+  `docs/book/build.sh`; `scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`; `git diff --check`.
 - Latest saved handoff verifier QueryGraph captured-output manifest coverage:
   the CLI artifact verifier now explicitly proves saved
   `lakecat-handoff-verify.json` output cannot omit its nested
