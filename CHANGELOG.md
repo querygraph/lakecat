@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Refreshed the full local release-candidate proof from clean head `50451be5`.
+  `scripts/check-release-readiness.sh --release-candidate` passed locally with
+  stable `git patch-id` verification for the Sail helper patch bridge, the full
+  workspace and feature-gate matrix, out-of-tree book artifact validation,
+  Grust Turso QGLake handoff, QueryGraph locked verify/import, and
+  `git diff --check`.
 - Hardened the Sail helper patch bridge. The third checked-in Sail patch now
   matches the local `a6964906` REST-model helper commit, and the local
   dependency contract verifies all three Sail helper patches against their
