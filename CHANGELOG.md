@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened lineage-drain response manifests. Service-side drain validation now
+  rejects blank or duplicate replay summary event IDs before returning a
+  response, so compact QGLake proof cannot inherit ambiguous event identity
+  sequences even when delivered counts and event-type order still match.
 - Defined LakeCat proof vocabulary in the active goal, design, and book source.
   The docs now state that LakeCat proofs are structured, replay-checkable
   receipt evidence for catalog actions, distinct from mathematical or

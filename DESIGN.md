@@ -856,6 +856,9 @@ event type that the drain did not declare as delivered, and repeated event
 types must match replay summary multiplicity rather than only set membership.
 The manifest order must also match replay summary order, so `eventTypes` is a
 compact replay sequence proof rather than a reorderable inventory.
+The service response manifest must also reject blank or duplicate replay
+summary event ids before returning a drain response, so compact QGLake proof
+cannot inherit an ambiguous or inflated event identity sequence.
 Accepted lineage-drain artifacts must also reconcile their top-level
 `delivered`, `eventTypes`, `graphEvents`, and `lineageEvents` totals with the
 actual replay summary array before the handoff can be treated as verified.

@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest lineage-drain response manifest hardening:
+  service-side drain validation now rejects blank or duplicate replay summary
+  event IDs before returning a response, keeping compact QGLake proof from
+  inheriting ambiguous event identity sequences when counts and event-type order
+  still appear valid.
+- Local verification for this lineage-drain response manifest slice passed:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service lineage_drain_response_manifest_rejects_summary_drift -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest proof vocabulary documentation slice:
   GOAL, design, and book source now define LakeCat "proof" as structured,
   replay-checkable receipt evidence for catalog actions, distinct from

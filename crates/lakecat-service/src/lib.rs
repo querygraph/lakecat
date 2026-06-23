@@ -1270,6 +1270,19 @@ fn validate_lineage_drain_response_manifest(
             response.events.len()
         )));
     }
+    let mut event_ids = BTreeSet::new();
+    for (index, summary) in response.events.iter().enumerate() {
+        if summary.event_id.trim().is_empty() {
+            return Err(LakeCatError::Conflict(format!(
+                "lineage drain response events[{index}].event_id must be non-empty"
+            )));
+        }
+        if !event_ids.insert(summary.event_id.as_str()) {
+            return Err(LakeCatError::Conflict(format!(
+                "lineage drain response events[{index}].event_id must be duplicate-free"
+            )));
+        }
+    }
     for (index, (event_type, summary)) in response
         .event_types
         .iter()
@@ -15363,6 +15376,20 @@ mod tests {
         assert!(message.contains(
             "event_types[0] table.created did not match events[0].event_type namespace.created"
         ));
+
+        let mut blank_event_id = response.clone();
+        blank_event_id.events[0].event_id = "   ".to_string();
+        let message = validate_lineage_drain_response_manifest(&blank_event_id)
+            .expect_err("blank replay summary event ids should fail")
+            .to_string();
+        assert!(message.contains("events[0].event_id must be non-empty"));
+
+        let mut duplicate_event_id = response.clone();
+        duplicate_event_id.events[1].event_id = "evt-namespace".to_string();
+        let message = validate_lineage_drain_response_manifest(&duplicate_event_id)
+            .expect_err("duplicate replay summary event ids should fail")
+            .to_string();
+        assert!(message.contains("events[1].event_id must be duplicate-free"));
 
         let mut graph_count_drift = response.clone();
         graph_count_drift.graph_events = 4;

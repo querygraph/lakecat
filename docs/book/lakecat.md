@@ -9391,6 +9391,10 @@ same multiplicity in `eventTypes` and in the replay summary array. It also
 checks order: `eventTypes[i]` must name the same event type as replay summary
 `events[i]`. That makes the manifest a compact replay sequence proof instead
 of a loose inventory that could be reordered after the fact.
+The service applies the same discipline to replay summary identities before
+returning the drain response: every summary event id must be nonblank and
+duplicate-free. That keeps later QGLake proof from inheriting an ambiguous
+event sequence even when counts and event types still add up.
 It also embeds `querygraphVerification.verifiedTables` and `verifiedViews`
 directly in the compact summary. `verifiedTables` must include the stable LakeCat
 table id derived from that scope, such as `lakecat:table:local:default:events`;
