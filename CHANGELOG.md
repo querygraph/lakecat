@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Refreshed the full local release-candidate proof from clean head `6d923feb`.
+  `scripts/check-release-readiness.sh --release-candidate` passed locally with
+  the release-proof contract in clean candidate mode, the full workspace and
+  feature-gate matrix, out-of-tree book artifact validation, Grust Turso QGLake
+  handoff, QueryGraph locked verify/import, bundle hash
+  `sha256:e26bb389cf2ec3ba0fdbba9dc350048b15d08384d74caaf1f7087f00a251e0b9`,
+  QueryGraph import hash
+  `sha256:fb30e5cc9dd7b7808d191968d499c6e83fdd814f2d8304c403777bb031d3bb03`,
+  and `git diff --check`.
 - Hardened Grust Turso graph-sink startup redaction. Service configuration and
   bootstrap failures now share one hash-only formatter and regression coverage
   proves operator-facing errors expose `graph-store-path-hash` and

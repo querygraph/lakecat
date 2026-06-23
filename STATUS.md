@@ -22,7 +22,7 @@ Updated: 2026-06-23
   `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest release-candidate proof refresh:
   `scripts/check-release-readiness.sh --release-candidate` passed locally on
-  June 23, 2026 from clean head `1992d9b0`. The gate covered shell syntax and
+  June 23, 2026 from clean head `6d923feb`. The gate covered shell syntax and
   dependency contracts, manual workflow trigger contract checks, release
   version and release-proof contracts, formatter checks, default and
   all-features workspace tests, explicit Turso/Sail/TypeSec/Grust feature
@@ -31,9 +31,9 @@ Updated: 2026-06-23
   live QGLake replay verification through QueryGraph locked verify/import,
   `graphProjectionProof.backend = grust-turso`,
   `graphProjectionProof.tablePrefix = lakecat_graph`, bundle hash
-  `sha256:907d6ab2867c1d78ea7bc79f809639b8ee67c7d45274b108138190299aae462b`,
+  `sha256:e26bb389cf2ec3ba0fdbba9dc350048b15d08384d74caaf1f7087f00a251e0b9`,
   QueryGraph import hash
-  `sha256:a60b00e71851e10c71101916f215a4cbc425569580b85b5ce51dcd7de81ef199`,
+  `sha256:fb30e5cc9dd7b7808d191968d499c6e83fdd814f2d8304c403777bb031d3bb03`,
   and `git diff --check`.
 - Latest release-proof freshness reporting:
   `scripts/check-release-readiness.sh --quick` and full non-candidate runs now
@@ -299,7 +299,7 @@ Updated: 2026-06-23
   `scripts/check-release-readiness.sh --quick`; and `git diff --check`. A dirty
   release-proof-contract self-test now accepts `GOAL.md` as documentation; the
   later full release-candidate proof refresh is recorded at clean head
-  `1992d9b0`.
+  `6d923feb`.
 - Latest compact QGLake standards proof closure:
   handoff verification now rejects non-string, blank, duplicate, or unsupported
   standards entries and requires the exact expected standards set, so saved
@@ -686,7 +686,7 @@ Updated: 2026-06-23
   now executable local evidence.
 - Latest release-candidate proof:
   `scripts/check-release-readiness.sh --release-candidate` passed locally on
-  June 23, 2026 from clean head `1992d9b0`. The gate covered shell syntax
+  June 23, 2026 from clean head `6d923feb`. The gate covered shell syntax
   checks, dependency and workflow trigger contracts, release-version checks,
   tracked book artifact validation, formatting, default and all-features
   workspace tests, Turso/Sail/TypeSec/Grust and Grust Turso feature rows,
@@ -698,9 +698,9 @@ Updated: 2026-06-23
   QueryGraph locked verify/import with
   `graphProjectionProof.backend = grust-turso` and
   `graphProjectionProof.tablePrefix = lakecat_graph`, bundle hash
-  `sha256:907d6ab2867c1d78ea7bc79f809639b8ee67c7d45274b108138190299aae462b`,
+  `sha256:e26bb389cf2ec3ba0fdbba9dc350048b15d08384d74caaf1f7087f00a251e0b9`,
   QueryGraph import hash
-  `sha256:a60b00e71851e10c71101916f215a4cbc425569580b85b5ce51dcd7de81ef199`,
+  `sha256:fb30e5cc9dd7b7808d191968d499c6e83fdd814f2d8304c403777bb031d3bb03`,
   and `git diff --check`.
   This is the current first-release evidence; cloud CI remains manual/disabled
   until local gates are boring from the final release commit.
