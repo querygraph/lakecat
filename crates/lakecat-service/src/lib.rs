@@ -33060,6 +33060,87 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_extra_namespace_receipt_context_policy_binding_fields() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let event_id = "evt-namespace-extra-auth-policy-binding-field";
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: event_id.to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "namespace.listed".to_string(),
+                payload: json!({
+                    "audit-event-id": format!("audit-{event_id}"),
+                    "event-type": "namespace.listed",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "namespace-list",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                            "context": {
+                                "warehouse": "local",
+                                "policy-bindings": [{
+                                    "policy-id": "agent-read",
+                                    "warehouse": "local",
+                                    "namespace": ["default"],
+                                    "table": "events",
+                                    "enforced": true,
+                                    "odrl": {"uid": "policy:agent-read"},
+                                    "unverified-policy-context-claim": "shadow",
+                                }],
+                            },
+                        },
+                        "warehouse": "local",
+                        "namespace-count": 1,
+                        "namespace-paths": ["default"],
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("extra namespace receipt context policy-binding fields should fail");
+
+        let message = err.to_string();
+        assert!(message.contains("namespace.listed"));
+        assert!(
+            message.contains(
+                "namespace list authorization receipt context policy-bindings contains unexpected field unverified-policy-context-claim"
+            ),
+            "namespace-list error should reject extra policy-binding context fields: {message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains(event_id));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "namespace policy-binding context schema failures must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "namespace policy-binding context schema failures must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "namespace policy-binding context schema failures must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_extra_authorization_receipt_principal_fields() {
         let event_id = "evt-config-extra-auth-principal-field";
         let store = Arc::new(RecordingOutboxStore {

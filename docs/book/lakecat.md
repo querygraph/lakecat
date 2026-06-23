@@ -1889,6 +1889,10 @@ free-form side notes. LakeCat accepts the policy response fields it emits:
 replayed receipt context adds another ODRL, scope, enforcement, delegation, or
 application field beside those checked values, LakeCat rejects it before graph,
 OpenLineage, QGLake, or QueryGraph can treat it as accepted governance proof.
+That closure is shared by ordinary control-plane replay too: namespace-list
+events get the same policy-binding context check as catalog config reads, so
+standard Iceberg catalog navigation cannot become a weaker governance evidence
+path.
 That is the pattern for LakeCat-specific catalog evidence: derive it from the
 standard catalog action, name the verified fields, and reject everything else.
 

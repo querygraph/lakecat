@@ -5,6 +5,16 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest namespace receipt-context policy-binding coverage:
+  standard namespace-list replay now has explicit regression coverage proving
+  extra fields inside `authorization-receipt.context.policy-bindings[]` fail
+  before acknowledgement, graph projection, or lineage projection. This extends
+  the shared receipt-context closure evidence beyond catalog config reads to an
+  Iceberg control-plane path.
+- Local verification for this namespace receipt-context policy-binding slice
+  passed: `cargo fmt -p lakecat-service -- --check`; and
+  `cargo test -p lakecat-service outbox_drain_rejects_extra_namespace_receipt_context_policy_binding_fields -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest lineage-drain credential response binding hardening:
   raw credential summaries now reuse the service credential-response validator
   for returned credential evidence, so compact QGLake proof cannot inherit

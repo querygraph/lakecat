@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Extended receipt-context policy-binding closure coverage to standard
+  namespace replay. Namespace-list outbox events now have an explicit
+  regression proving extra fields inside
+  `authorization-receipt.context.policy-bindings[]` fail before acknowledgement,
+  graph projection, or lineage projection.
 - Bound lineage-drain credential response summaries to catalog evidence. Raw
   credential summaries now reuse the service credential-response validator, so
   returned credential proof must still match the storage profile, receipt
