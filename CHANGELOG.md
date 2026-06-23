@@ -7,6 +7,17 @@
   `querygraphImportVerification`, and `lakecatReplayVerification`, preventing
   archived handoff summaries from carrying unverified QueryGraph/import/replay
   claims beside otherwise checked evidence.
+- Refreshed the full local release-candidate proof from clean head `b6844bdf`.
+  `scripts/check-release-readiness.sh --release-candidate` passed locally with
+  the release-proof contract in clean candidate mode, the full workspace and
+  feature-gate matrix, out-of-tree book artifact validation, Grust Turso QGLake
+  handoff, QueryGraph locked verify/import, bundle hash
+  `sha256:55083b5c0668d53d798bf1b4d264504b46a9e9ff03f0a19e787e4c218e924040`,
+  OpenLineage hash
+  `sha256:b0ce9d4eb08de4563f3b664a25936bf3399eecf6312004cc8a02afceea0e7f58`,
+  QueryGraph import hash
+  `sha256:86977d3c5ed93bd006ffa1557fc08cae7a58f17c198e1420970772706662f6ab`,
+  and `git diff --check`.
 - Closed the compact QGLake handoff summary root schema. The CLI verifier now
   rejects unexpected top-level handoff summary fields before archived artifacts
   can attach unverified root proof claims beside otherwise valid evidence.
