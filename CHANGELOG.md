@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Enforced the first-release checklist in the local dependency contract.
+  `scripts/check-local-dependency-contract.sh` now requires `RELEASE.md`,
+  verifies README and design links to the checklist, preserves the June 23,
+  2026 full-gate evidence date, and fails if the release checklist stops naming
+  the full local gate, dependency preflight, manual-cloud-CI posture, no-skip
+  release-candidate rule, current tag, or deferred Sail-owned v4 work.
 - Added `RELEASE.md` as the first-release checklist and reconciled the README
   and design release ledger with the June 23, 2026 full local release gate. The
   checklist keeps release evidence local-first, documents the required full

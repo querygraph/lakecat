@@ -5,6 +5,14 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-contract slice:
+  `Enforce first-release checklist contract`.
+  `scripts/check-local-dependency-contract.sh` now treats `RELEASE.md` as a
+  required release artifact, verifies README and design routing to the
+  checklist, preserves the June 23, 2026 full-gate evidence date, and fails if
+  the checklist stops naming the local full gate, dependency preflight,
+  manual-cloud-CI posture, no-skip release-candidate rule, current tag, or
+  Sail-owned typed v4 deferral.
 - Latest release-engineering slice:
   `Add first-release checklist`.
   `RELEASE.md` now turns the first-release ledger into an executable local-first

@@ -100,6 +100,7 @@ require_file .github/workflows/ci.yml
 require_file scripts/check-release-readiness.sh
 require_file DESIGN.md
 require_file README.md
+require_file RELEASE.md
 require_file docs/book/lakecat.md
 
 require_pattern 'workflow_dispatch:' .github/workflows/ci.yml \
@@ -121,6 +122,27 @@ require_pattern 'cargo test -p lakecat-service --features grust-local --lib' scr
   "release-readiness gate must prove service outbox projection through the Grust feature"
 require_pattern 'scripts/qglake-handoff-local.sh' scripts/check-release-readiness.sh \
   "release-readiness gate must include the QGLake handoff proof"
+
+require_pattern '\[RELEASE\.md\]\(RELEASE\.md\)' README.md \
+  "README.md must link to the first-release checklist"
+require_pattern 'full local release-readiness gate is green as of June 23, 2026' README.md \
+  "README.md must carry the latest local full-gate evidence date"
+require_pattern 'First-release checklist, gate commands, release notes, and tagging steps' DESIGN.md \
+  "DESIGN.md canonical map must route release checklist work to RELEASE.md"
+require_pattern 'use `RELEASE\.md` as the executable release' DESIGN.md \
+  "DESIGN.md first-release ledger must route release execution to RELEASE.md"
+require_pattern 'manual-only' RELEASE.md \
+  "RELEASE.md must preserve the manual-only cloud CI posture"
+require_pattern 'scripts/check-release-readiness\.sh' RELEASE.md \
+  "RELEASE.md must name the full local release gate"
+require_pattern 'scripts/check-local-dependency-contract\.sh' RELEASE.md \
+  "RELEASE.md must name the dependency contract preflight"
+require_pattern 'without `--skip-book` or `--skip-handoff`' RELEASE.md \
+  "RELEASE.md must forbid skipped book/handoff checks for release candidates"
+require_pattern 'git tag -a v0\.1\.0' RELEASE.md \
+  "RELEASE.md must document the current workspace release tag"
+require_pattern 'Typed Iceberg v4 support belongs in Sail' RELEASE.md \
+  "RELEASE.md must keep typed Iceberg v4 in the deferred Sail-owned ledger"
 
 require_pattern '### First-Release Ledger' DESIGN.md \
   "DESIGN.md must keep the first-release ledger as the living release scope"
