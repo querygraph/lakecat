@@ -635,8 +635,9 @@ carry unverified restriction or predicate claims into graph, OpenLineage, or
 later QGLake proof.
 Scan-planned and scan-tasks-fetched outbox admission must also reject missing
 or malformed `row-predicate` proof whenever governed read-restriction evidence
-is present, and fetched `required-filters` proof must exactly preserve that
-row predicate before the event is acknowledged.
+is present. Present planned or fetched `required-filters` proof must be
+array-shaped, and governed planned or fetched `required-filters` proof must
+exactly preserve that row predicate before the event is acknowledged.
 Planned and fetched scan outbox admission now also rejects governed
 read-restriction evidence whose purpose is missing/blank or whose
 `max-credential-ttl-seconds` cap is missing or non-positive, so the service

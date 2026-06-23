@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Reconciled planned/fetched scan required-filter design guidance. The living
+  design now matches service replay admission: present planned or fetched
+  `required-filters` proof must be array-shaped, and governed proof must
+  preserve the row predicate before acknowledgement.
 - Hardened planned-scan required-filter shape. Present `table.scan-planned`
   `required-filters` evidence must now be array-shaped even when no governed
   read restriction is attached, so optional scan proof fields cannot bypass

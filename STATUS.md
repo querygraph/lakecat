@@ -5,6 +5,16 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest design reconciliation slice:
+  `Reconcile scan required-filter design`.
+  `DESIGN.md` now matches the implemented service replay rule for planned and
+  fetched scan proof: present `required-filters` evidence must be array-shaped,
+  and governed planned/fetched `required-filters` proof must preserve the
+  server-derived row predicate before acknowledgement or projection.
+- Local verification for this design reconciliation slice is green:
+  `scripts/check-local-dependency-contract.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed; `git diff --check`
+  passed.
 - Latest planned-scan replay hardening slice:
   `Shape-check planned required-filter proof`.
   Service outbox replay now rejects present `table.scan-planned`
