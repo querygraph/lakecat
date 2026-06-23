@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added generated management-root evidence redaction coverage. Server and
+  warehouse upsert producer helpers now have focused regression coverage proving
+  route-generated audit/outbox evidence removes raw endpoint URLs and storage
+  roots before recording, preserving only recomputable full-hash anchors for
+  replay, graph, lineage, QGLake, and QueryGraph proof.
 - Added captured handoff omitted secret-ref proof coverage. QGLake handoff
   verification now explicitly proves compact storage-profile and credential
   storage-profile proof can omit absent secret-ref provider/hash fields only

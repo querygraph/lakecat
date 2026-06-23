@@ -483,6 +483,17 @@ fast tests honest about replay identity even when no Turso file is involved.
 Replay validation then closes the loop: durable evidence must be well-formed,
 scoped, hash-shaped, redacted, and admitted before graph projection,
 OpenLineage projection, QGLake handoff, or QueryGraph import can trust it.
+That evidence path is deliberately narrower than the privileged management
+API. A server management response may return the configured endpoint URL, and
+a warehouse management response may return the configured storage root to an
+authorized operator. But the audit/outbox proof path records those management
+roots as `endpoint-url-hash` and `storage-root-hash`, not as raw roots. Legacy
+events that still carry raw values must bind them to the matching full hash
+before projection; newly generated server and warehouse upsert evidence is
+hash-only before it is recorded. This is what LakeCat means by proof in the
+catalog-control sense: durable, replayable evidence that can verify a claim
+without copying sensitive operational material into every downstream graph or
+lineage surface.
 Even a catalog-config read is treated this way: the advertised defaults,
 overrides, endpoints, tenant records, and authorization receipt must pass the
 same replay schema before compact QGLake proof can treat that configuration as

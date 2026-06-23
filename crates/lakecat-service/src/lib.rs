@@ -13293,6 +13293,66 @@ mod tests {
         is_full_sha256_digest_evidence(value)
     }
 
+    #[test]
+    fn management_root_event_redaction_keeps_generated_evidence_hash_only() {
+        let endpoint_url = "https://lakecat.example.com";
+        let storage_root = "file:///tmp/lakecat";
+
+        let server_payload = redact_server_event_payload(json!({
+            "event-type": "server.upserted",
+            "server-id": "prod",
+            "server-record": {
+                "server-id": "prod",
+                "display-name": "Production",
+                "endpoint-url": endpoint_url,
+                "properties": {"region": "global"}
+            }
+        }));
+        assert!(
+            server_payload["server-record"]
+                .get("endpoint-url")
+                .is_none(),
+            "generated server evidence must not persist raw endpoint URLs"
+        );
+        assert_eq!(
+            server_payload["server-record"]["endpoint-url-hash"],
+            json!(content_hash_json(&json!({"endpoint-url": endpoint_url})).unwrap())
+        );
+        assert!(
+            !serde_json::to_string(&server_payload)
+                .unwrap()
+                .contains(endpoint_url),
+            "generated server evidence should be hash-only before audit/outbox recording"
+        );
+
+        let warehouse_payload = redact_warehouse_event_payload(json!({
+            "event-type": "warehouse.upserted",
+            "warehouse": "local",
+            "warehouse-record": {
+                "warehouse": "local",
+                "project-id": "default",
+                "storage-root": storage_root,
+                "properties": {"region": "local"}
+            }
+        }));
+        assert!(
+            warehouse_payload["warehouse-record"]
+                .get("storage-root")
+                .is_none(),
+            "generated warehouse evidence must not persist raw storage roots"
+        );
+        assert_eq!(
+            warehouse_payload["warehouse-record"]["storage-root-hash"],
+            json!(content_hash_json(&json!({"storage-root": storage_root})).unwrap())
+        );
+        assert!(
+            !serde_json::to_string(&warehouse_payload)
+                .unwrap()
+                .contains(storage_root),
+            "generated warehouse evidence should be hash-only before audit/outbox recording"
+        );
+    }
+
     #[derive(Debug, Default)]
     struct RecordingGovernance {
         principals: Mutex<Vec<Principal>>,

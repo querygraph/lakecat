@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest generated management-root evidence redaction coverage:
+  server and warehouse upsert producer helpers now explicitly prove
+  route-generated audit/outbox evidence removes raw endpoint URLs and storage
+  roots before recording, preserving only recomputable full-hash anchors for
+  replay, graph, lineage, QGLake, and QueryGraph proof.
+- Local verification for this generated management-root evidence redaction
+  slice passed: `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service management_root_event_redaction_keeps_generated_evidence_hash_only -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest captured handoff omitted secret-ref proof coverage:
   QGLake handoff verification now explicitly proves compact storage-profile and
   credential storage-profile proof can omit absent secret-ref provider/hash

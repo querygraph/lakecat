@@ -1337,6 +1337,12 @@ persist `endpoint-url-hash` and `storage-root-hash` instead of raw roots, and
 legacy durable events that still carry raw `endpoint-url` or `storage-root`
 values must include the matching full SHA-256 hash evidence before any graph or
 OpenLineage projection.
+Producer-side redaction now has focused regression coverage before
+`record_audit_event`: route-generated `server.upserted` and
+`warehouse.upserted` evidence removes raw endpoint/storage-root values and
+persists only the recomputable full-hash anchors. Privileged management API
+responses can still return the configured endpoint or root; replayable
+audit/outbox, graph, lineage, and QGLake proof surfaces stay hash-only.
 Provider and issuance-mode compatibility must be replay-checked too:
 `local-file-no-secret` requires the file provider, while
 `short-lived-secret-ref` requires a cloud object provider.
