@@ -277,6 +277,10 @@ require_pattern 'querygraphImportVerification' scripts/qglake-handoff-local.sh \
   "local QGLake handoff summary must persist QueryGraph import evidence"
 require_pattern '"graphProjectionProof"' scripts/qglake-handoff-local.sh \
   "local QGLake handoff must write machine-readable graph projection proof"
+require_pattern 'const graphNodes = graphCount\("graph-nodes"\)' scripts/qglake-handoff-local.sh \
+  "local QGLake handoff verification artifact must derive graph node count from the QueryGraph import plan"
+require_pattern 'const graphEdges = graphCount\("graph-edges"\)' scripts/qglake-handoff-local.sh \
+  "local QGLake handoff verification artifact must derive graph edge count from the QueryGraph import plan"
 require_pattern 'require_graph_projection_proof' crates/lakecat-cli/src/main.rs \
   "LakeCat handoff verifier must require graph projection proof"
 

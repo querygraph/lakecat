@@ -1665,13 +1665,23 @@ JSON
 bind_handoff_verify_output_artifact() {
   node -e '
 const fs = require("fs");
-const [summaryFile, drainFile, outputFile] = process.argv.slice(1);
+const [summaryFile, drainFile, importPlanFile, outputFile] = process.argv.slice(1);
 const summary = JSON.parse(fs.readFileSync(summaryFile, "utf8"));
 const drain = JSON.parse(fs.readFileSync(drainFile, "utf8"));
+const importPlan = JSON.parse(fs.readFileSync(importPlanFile, "utf8"));
 const lakecat = summary.lakecatReplayVerification;
 const querygraph = summary.querygraphVerification;
 const imported = summary.querygraphImportVerification;
 const artifacts = summary.artifacts;
+const graphCount = (name) => {
+  const value = importPlan[name];
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`QueryGraph import plan ${name} must be a positive integer`);
+  }
+  return value;
+};
+const graphNodes = graphCount("graph-nodes");
+const graphEdges = graphCount("graph-edges");
 const lineageDrainArtifactSemantics = {
   delivered: drain.delivered,
   eventTypes: drain["event-types"],
@@ -1709,8 +1719,8 @@ const querygraphSemantics = (value) => ({
 });
 const graphSemantics = (value) => ({
   ...querygraphSemantics(value),
-  graphNodes: 6,
-  graphEdges: 7,
+  graphNodes,
+  graphEdges,
 });
 const output = {
   schemaVersion: "lakecat.qglake.handoff-verification.v1",
@@ -1759,7 +1769,7 @@ const output = {
   lineageDrainArtifactSemantics,
 };
 fs.writeFileSync(outputFile, `${JSON.stringify(output, null, 2)}\n`);
-' "$SUMMARY" "$DRAIN" "$LAKECAT_HANDOFF_VERIFY_OUTPUT"
+' "$SUMMARY" "$DRAIN" "$IMPORT_PLAN" "$LAKECAT_HANDOFF_VERIFY_OUTPUT"
   local handoff_verify_sha
   handoff_verify_sha="$(sha256_file "$LAKECAT_HANDOFF_VERIFY_OUTPUT")"
   node -e '

@@ -5,6 +5,19 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest QGLake handoff evidence slice:
+  `Derive handoff graph counts from import plan`.
+  The local handoff script no longer writes fixed graph node/edge counts into
+  `lakecat-handoff-verify.json`; it reads `graph-nodes` and `graph-edges` from
+  the QueryGraph import-plan artifact and fails if either count is missing or
+  non-positive. The local dependency contract now guards that derivation so the
+  handoff artifact stays aligned with the replayed QueryGraph import evidence.
+- Local verification for this QGLake handoff evidence slice passed:
+  `bash -n scripts/check-local-dependency-contract.sh scripts/qglake-handoff-local.sh scripts/check-release-readiness.sh`;
+  `scripts/qglake-handoff-local.sh`; generated handoff verification artifact
+  inspection showing matching bundle/import-plan `graphNodes=8` and
+  `graphEdges=8`; `scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`.
 - Latest release-candidate proof:
   `scripts/check-release-readiness.sh --release-candidate` passed locally from
   clean head `1e7e8d0b`. The run covered dependency and workflow trigger

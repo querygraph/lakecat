@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Derived QGLake handoff graph-count evidence from the QueryGraph import plan
+  instead of hardcoded values. The generated `lakecat-handoff-verify.json`
+  artifact now fails if `graph-nodes` or `graph-edges` are missing or
+  non-positive in the import plan, and the local dependency contract guards
+  that derivation.
 - Refreshed the full local release-candidate proof from clean head `1e7e8d0b`.
   `scripts/check-release-readiness.sh --release-candidate` passed locally,
   covering dependency and workflow contracts, release-version checks,
