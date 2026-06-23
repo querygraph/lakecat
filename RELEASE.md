@@ -75,6 +75,10 @@ artifacts, formatting, default workspace tests, explicit Turso/Sail/TypeSec/
 Grust feature tests, all-features CLI and workspace tests, book rebuild, EPUB
 metadata and PDF layout validation, QGLake handoff replay verification, and
 `git diff --check`.
+The gate also runs the Rust `lakecat-cli` `qglake_handoff` verifier tests as
+an explicit row, so saved handoff summary, artifact-hash, graph-count,
+QueryGraph import-plan, and self-verification drift fail with a focused
+release-gate label before the broader all-features CLI row.
 `--release-candidate` additionally requires the tree to be clean before and
 after the complete full gate. In release-candidate mode the book build writes
 to a temporary artifact directory via `LAKECAT_BOOK_DIST_DIR`, so the gate still

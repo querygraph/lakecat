@@ -140,6 +140,8 @@ require_pattern 'cargo test -p lakecat-store --lib --no-default-features' script
   "release-readiness gate must prove lakecat-store no-default-feature builds"
 require_pattern 'encodes_null_and_nested_partition_literals_for_iceberg_rest' scripts/check-release-readiness.sh \
   "release-readiness gate must prove v4 bridge partition literal encoding"
+require_pattern 'cargo test -p lakecat-cli qglake_handoff' scripts/check-release-readiness.sh \
+  "release-readiness gate must explicitly exercise the Rust QGLake handoff verifier"
 require_pattern 'cargo test -p lakecat-service --features grust-local --lib' scripts/check-release-readiness.sh \
   "release-readiness gate must prove service outbox projection through the Grust feature"
 require_pattern 'cargo test -p lakecat-service --features grust-turso-local --bin lakecat-service' scripts/check-release-readiness.sh \

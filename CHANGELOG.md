@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added an explicit Rust QGLake handoff verifier row to the full local release
+  gate. `scripts/check-release-readiness.sh` now runs
+  `cargo test -p lakecat-cli qglake_handoff -- --test-threads=1` before the
+  broader all-features CLI row, and the local dependency contract and release
+  docs guard that focused handoff-artifact verifier coverage.
 - Aligned the Rust QGLake handoff verifier fixtures with the live graph-count
   path. CLI handoff tests now derive fixture graph node/edge counts through the
   QueryGraph catalog graph builder for the verified table and view set, so

@@ -367,7 +367,8 @@ release-hardening line. `scripts/check-release-readiness.sh` passed locally,
 including shell-contract checks, dependency-contract checks, manual CI trigger
 contract checks, formatter checks, default and all-features workspace tests,
 explicit Turso/Sail/TypeSec/Grust feature gates, Grust Turso graph projection
-tests, book artifact validation, local QGLake handoff replay verification with
+tests, explicit Rust `lakecat-cli qglake_handoff` verifier tests, book artifact
+validation, local QGLake handoff replay verification with
 `graphProjectionProof.backend = grust-turso`, and `git diff --check`. This
 remains local release evidence; automatic cloud CI stays manual/disabled until
 local gates are consistently boring from the final release commit.

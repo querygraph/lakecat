@@ -5,6 +5,19 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-contract slice:
+  `Run CLI handoff verifier in release gate`.
+  The full local release gate now runs
+  `cargo test -p lakecat-cli qglake_handoff -- --test-threads=1` as an
+  explicit row before the broader all-features CLI test. The dependency
+  contract guards that row, and `RELEASE.md`/`DESIGN.md` now describe the
+  focused saved-handoff, artifact-hash, graph-count, QueryGraph import-plan,
+  and self-verification drift coverage.
+- Local verification for this release-contract slice passed:
+  `bash -n scripts/check-release-readiness.sh scripts/check-local-dependency-contract.sh`;
+  `cargo test -p lakecat-cli qglake_handoff -- --test-threads=1`;
+  `scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`.
 - Latest QGLake verifier fixture slice:
   `Derive CLI handoff fixture graph counts`.
   The Rust CLI handoff test fixtures now derive table+view graph node/edge
