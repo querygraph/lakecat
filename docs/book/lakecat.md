@@ -506,7 +506,11 @@ accepted compact proof.
 Even a catalog-config read is treated this way: the advertised defaults,
 overrides, endpoints, tenant records, and authorization receipt must pass the
 same replay schema before compact QGLake proof can treat that configuration as
-evidence of what the catalog promised.
+evidence of what the catalog promised. Saved QGLake handoffs then repeat the
+same `catalogConfigProof` under lineage-drain semantics. That proof is closed
+recursively: every default and override entry is exactly `key` plus `value`,
+not an open extension bag where a stale v4, endpoint, compatibility, or
+integration claim can hide beside a valid setting.
 
 Governed scans and governed credential decisions are not standard Iceberg
 table semantics. They are LakeCat/TypeSec/Sail extensions around standard

@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest compact catalog-config entry proof closure:
+  QGLake handoff verification now rejects unverified fields inside
+  `catalogConfigProof` default/override entries, so saved handoffs cannot
+  append stale v4, endpoint, compatibility, or integration claims beside
+  otherwise valid key/value evidence.
+- Local verification for this compact catalog-config entry proof closure slice
+  passed: `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_extra_catalog_config_entry_fields -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest raw table lifecycle summary validation hardening:
   raw lineage-drain summaries now reuse the full table lifecycle replay
   validators for create/load/delete/restore events before compact QGLake proof

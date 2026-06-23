@@ -4470,6 +4470,8 @@ const CATALOG_CONFIG_PROOF_FIELDS: &[&str] = &[
     "openLineageHashes",
 ];
 
+const CONFIG_ENTRY_FIELDS: &[&str] = &["key", "value"];
+
 fn require_config_defaults(
     config: &serde_json::Map<String, Value>,
 ) -> lakecat_core::LakeCatResult<()> {
@@ -4540,6 +4542,7 @@ fn required_config_entries(
                     "{label}.{field}[{index}] must be an object"
                 ))
             })?;
+            require_only_fields(entry, CONFIG_ENTRY_FIELDS, &format!("{label}.{field}[]"))?;
             let key = require_non_blank_str(entry, "key", &format!("{label}.{field}[]"))?;
             let value = require_non_blank_str(entry, "value", &format!("{label}.{field}[]"))?;
             if !seen.insert(key.to_string()) {
@@ -14430,6 +14433,20 @@ mod tests {
             err.contains("unexpected field unverifiedEndpointClaim"),
             "{err}"
         );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_catalog_config_entry_fields() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["catalogConfigProof"]["defaults"][0]["unverifiedV4Claim"] =
+            json!("available");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject unverified config entry fields");
+        let err = err.to_string();
+
+        assert!(err.contains("catalogConfigProof.defaults"), "{err}");
+        assert!(err.contains("unexpected field unverifiedV4Claim"), "{err}");
     }
 
     #[test]

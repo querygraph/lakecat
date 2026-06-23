@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed compact catalog-config entry proof schemas. QGLake handoff
+  verification now rejects unverified fields inside `catalogConfigProof`
+  default/override entries, so saved handoffs cannot append stale v4,
+  endpoint, compatibility, or integration claims beside otherwise valid
+  key/value evidence.
 - Hardened raw table lifecycle summary validation. Raw lineage-drain summaries
   now reuse the full table lifecycle replay validators for create/load/delete/
   restore events, so compact QGLake proof rejects malformed metadata-graph

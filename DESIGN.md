@@ -1532,7 +1532,10 @@ contains lineage-drain semantics without the catalog-config proof must fail in
 the same way as a drifted proof. The repeated proof is closed over the same
 catalog-config field set, so unverified endpoint, v4, compatibility, or
 integration-discovery claims cannot be appended inside the lineage-drain
-semantics branch.
+semantics branch. Compact config entries inside the proof are closed
+recursively over `key` and `value` too, so an archived handoff cannot attach
+extra v4, endpoint, compatibility, or integration claims beside an otherwise
+valid default or override entry.
 The local dependency contract is the guardrail while cloud CI is manual-only:
 it must reject automatic triggers across every GitHub workflow file, not just
 the primary CI workflow, including compact, block-list, inline-map, and quoted
