@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest saved lineage-drain replay manifest hardening:
+  the CLI verifier now rejects blank or duplicate replay summary event IDs in
+  saved drain artifacts, matching the service-side response guard before compact
+  handoff proof can inherit archived event identity.
+- Local verification for this saved lineage-drain replay manifest slice passed:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_rejects_blank_replay_event_ids -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_rejects_duplicate_replay_event_ids -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest lineage-drain response manifest hardening:
   service-side drain validation now rejects blank or duplicate replay summary
   event IDs before returning a response, keeping compact QGLake proof from

@@ -859,6 +859,9 @@ compact replay sequence proof rather than a reorderable inventory.
 The service response manifest must also reject blank or duplicate replay
 summary event ids before returning a drain response, so compact QGLake proof
 cannot inherit an ambiguous or inflated event identity sequence.
+The standalone QGLake lineage-drain verifier must enforce the same nonblank,
+duplicate-free replay summary event-id rule for saved artifacts, so archived
+handoffs cannot bypass the service-side manifest guard.
 Accepted lineage-drain artifacts must also reconcile their top-level
 `delivered`, `eventTypes`, `graphEvents`, and `lineageEvents` totals with the
 actual replay summary array before the handoff can be treated as verified.

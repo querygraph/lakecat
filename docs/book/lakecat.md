@@ -9395,6 +9395,9 @@ The service applies the same discipline to replay summary identities before
 returning the drain response: every summary event id must be nonblank and
 duplicate-free. That keeps later QGLake proof from inheriting an ambiguous
 event sequence even when counts and event types still add up.
+The standalone QGLake lineage-drain verifier checks the same identity rule for
+saved artifacts, so archived handoff bundles cannot bypass the live service
+manifest guard by editing only the replay summary event ids.
 It also embeds `querygraphVerification.verifiedTables` and `verifiedViews`
 directly in the compact summary. `verifiedTables` must include the stable LakeCat
 table id derived from that scope, such as `lakecat:table:local:default:events`;

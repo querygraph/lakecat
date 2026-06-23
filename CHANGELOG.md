@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened saved QGLake lineage-drain replay manifests. The CLI verifier now
+  rejects blank or duplicate replay summary event IDs in saved drain artifacts,
+  matching the service-side response guard before compact handoff proof can
+  inherit archived event identity.
 - Hardened lineage-drain response manifests. Service-side drain validation now
   rejects blank or duplicate replay summary event IDs before returning a
   response, so compact QGLake proof cannot inherit ambiguous event identity

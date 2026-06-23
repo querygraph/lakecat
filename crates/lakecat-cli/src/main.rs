@@ -9321,6 +9321,19 @@ fn require_qglake_lineage_drain_counts_match_summaries(
             drain.events.len()
         )));
     }
+    let mut event_ids = BTreeSet::new();
+    for (index, event) in drain.events.iter().enumerate() {
+        if event.event_id.trim().is_empty() {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "qglake lineage drain replay summary event id at index {index} must be non-empty"
+            )));
+        }
+        if !event_ids.insert(event.event_id.as_str()) {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "qglake lineage drain replay summary event id at index {index} must be duplicate-free"
+            )));
+        }
+    }
     let summed_graph_events = drain
         .events
         .iter()
@@ -28427,6 +28440,34 @@ mod tests {
         assert!(err.to_string().contains("qglake lineage drain"));
         assert!(err.to_string().contains("delivered count"));
         assert!(err.to_string().contains("eventTypes count"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_blank_replay_event_ids() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        drain.events[0].event_id = "  ".to_string();
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject blank replay event ids");
+
+        assert!(err.to_string().contains("qglake lineage drain"));
+        assert!(err.to_string().contains("event id at index 0"));
+        assert!(err.to_string().contains("non-empty"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_duplicate_replay_event_ids() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        drain.events[1].event_id = drain.events[0].event_id.clone();
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject duplicate replay event ids");
+
+        assert!(err.to_string().contains("qglake lineage drain"));
+        assert!(err.to_string().contains("event id at index 1"));
+        assert!(err.to_string().contains("duplicate-free"));
     }
 
     #[test]
