@@ -6,6 +6,13 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Harden raw credential exception summaries`.
+  Raw lineage-drain summaries now fail closed when
+  `lakecat:raw-credential-exception` is malformed, carries malformed or blank
+  reasons, drifts from `lakecat:credential-block-reason`, blocks while
+  credentials are present, or carries a block reason on allowed raw credential
+  exceptions.
+- Latest implementation/testing slice:
   `Harden view-version summary parsing`.
   Raw lineage-drain summaries now fail closed when present view lifecycle
   `view.view-version` or `expected-view-version` evidence is malformed or zero,

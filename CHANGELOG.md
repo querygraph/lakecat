@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Hardened lineage-drain raw credential exception summaries. Raw replay summary
+  construction now rejects malformed `lakecat:raw-credential-exception`
+  objects, malformed or blank exception reasons, mismatched block reasons,
+  blocked exceptions with credentials, and block reasons on allowed raw
+  credential exceptions before QGLake/QueryGraph credential proof can consume
+  compact summaries.
 - Hardened lineage-drain view-version summary parsing. Raw replay summary
   construction now rejects malformed or zero `view.view-version` and
   `expected-view-version` evidence instead of silently omitting corrupted view

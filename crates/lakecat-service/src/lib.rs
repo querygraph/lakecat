@@ -7037,22 +7037,18 @@ fn lineage_drain_event_summary(
                 .and_then(|receipt| receipt.get("context"))
                 .and_then(|context| context.get("request-identity"))
         });
-    let raw_credential_exception_allowed = payload
-        .pointer("/lakecat:raw-credential-exception/allowed")
-        .and_then(Value::as_bool);
-    let raw_credential_exception_reason = raw_credential_exception_allowed
-        .filter(|allowed| *allowed)
-        .and_then(|_| {
-            payload
-                .pointer("/lakecat:raw-credential-exception/reason")
-                .and_then(Value::as_str)
-        })
-        .map(str::to_string);
     let credential_prefix_hashes = payload
         .get("credential-response-evidence")
         .map(|_| lineage_summary_credential_prefix_hashes(event, payload))
         .transpose()?
         .unwrap_or_default();
+    let credential_count =
+        lineage_summary_optional_count_alias_field(event, payload, &["credential-count"])?;
+    let (
+        raw_credential_exception_allowed,
+        raw_credential_exception_reason,
+        credential_block_reason,
+    ) = lineage_summary_credential_exception_fields(event, payload, credential_count)?;
     let policy = payload.get("policy");
     Ok(LineageDrainEventSummary {
         event_id: event.event_id.clone(),
@@ -7333,16 +7329,9 @@ fn lineage_drain_event_summary(
             .map(|_| lineage_summary_string_array_field(event, payload, "standards"))
             .transpose()?
             .unwrap_or_default(),
-        credential_count: lineage_summary_optional_count_alias_field(
-            event,
-            payload,
-            &["credential-count"],
-        )?,
+        credential_count,
         credential_prefix_hashes,
-        credential_block_reason: payload
-            .get("lakecat:credential-block-reason")
-            .and_then(Value::as_str)
-            .map(str::to_string),
+        credential_block_reason,
         raw_credential_exception_allowed,
         raw_credential_exception_reason,
         replay_event_hashes: receipt.lineage_event_hashes.clone(),
@@ -7769,6 +7758,121 @@ fn lineage_summary_positive_u64_field(
         ));
     }
     Ok(value)
+}
+
+type CredentialExceptionSummary = (Option<bool>, Option<String>, Option<String>);
+
+fn lineage_summary_credential_exception_fields(
+    event: &OutboxEvent,
+    payload: &Value,
+    credential_count: Option<usize>,
+) -> Result<CredentialExceptionSummary, LakeCatError> {
+    let block_reason = lineage_summary_optional_nonblank_string_field(
+        event,
+        payload,
+        "lakecat:credential-block-reason",
+    )?;
+    let Some(raw_exception) = payload.get("lakecat:raw-credential-exception") else {
+        return Ok((None, None, block_reason));
+    };
+    let Some(raw_exception) = raw_exception.as_object() else {
+        return Err(outbox_evidence_error(
+            event,
+            "lakecat:raw-credential-exception must be an object when present",
+        ));
+    };
+    let Some(allowed) = raw_exception.get("allowed") else {
+        return Err(outbox_evidence_error(
+            event,
+            "lakecat:raw-credential-exception.allowed must be present",
+        ));
+    };
+    let Some(allowed) = allowed.as_bool() else {
+        return Err(outbox_evidence_error(
+            event,
+            "lakecat:raw-credential-exception.allowed must be boolean when present",
+        ));
+    };
+    let reason = raw_exception
+        .get("reason")
+        .map(|value| {
+            let Some(reason) = value.as_str() else {
+                return Err(outbox_evidence_error(
+                    event,
+                    "lakecat:raw-credential-exception.reason must be a string when present",
+                ));
+            };
+            if reason.trim().is_empty() {
+                return Err(outbox_evidence_error(
+                    event,
+                    "lakecat:raw-credential-exception.reason must not be blank",
+                ));
+            }
+            Ok(reason.to_string())
+        })
+        .transpose()?;
+
+    if allowed {
+        if block_reason.is_some() {
+            return Err(outbox_evidence_error(
+                event,
+                "lakecat:credential-block-reason must be absent when raw credentials are allowed",
+            ));
+        }
+        return Ok((Some(true), reason, None));
+    }
+
+    if credential_count.is_some_and(|count| count != 0) {
+        return Err(outbox_evidence_error(
+            event,
+            "blocked raw-credential exception must not carry credentials",
+        ));
+    }
+    let Some(reason) = reason else {
+        return Err(outbox_evidence_error(
+            event,
+            "blocked raw-credential exception must carry non-empty reason",
+        ));
+    };
+    let Some(block_reason) = block_reason else {
+        return Err(outbox_evidence_error(
+            event,
+            "blocked credential evidence must contain block reason",
+        ));
+    };
+    if block_reason != reason {
+        return Err(outbox_evidence_error(
+            event,
+            "credential block reason must match raw-credential exception reason",
+        ));
+    }
+    Ok((Some(false), None, Some(block_reason)))
+}
+
+fn lineage_summary_optional_nonblank_string_field(
+    event: &OutboxEvent,
+    object: &Value,
+    field: &str,
+) -> Result<Option<String>, LakeCatError> {
+    let Some(value) = object.get(field) else {
+        return Ok(None);
+    };
+    if value.is_null() {
+        return Ok(None);
+    }
+    let Some(value) = value.as_str() else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{field} must be a string when present"),
+        ));
+    };
+    if value.trim().is_empty() {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{field} must not be blank"),
+        ));
+    }
+    Ok(Some(value.to_string()))
 }
 
 fn lineage_summary_counted_string_array_field(
@@ -49104,6 +49208,121 @@ mod tests {
             ),
             "{err}"
         );
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_raw_credential_exception() {
+        let receipt = OutboxProjectionReceipt::default();
+        let cases = [
+            (
+                "evt-bad-summary-raw-exception-shape",
+                json!({
+                    "credential-count": 0,
+                    "lakecat:raw-credential-exception": true
+                }),
+                "lakecat:raw-credential-exception must be an object when present",
+            ),
+            (
+                "evt-bad-summary-raw-exception-allowed",
+                json!({
+                    "credential-count": 0,
+                    "lakecat:credential-block-reason": "fine-grained read restriction requires Sail-planned reads",
+                    "lakecat:raw-credential-exception": {
+                        "allowed": "false",
+                        "reason": "fine-grained read restriction requires Sail-planned reads"
+                    }
+                }),
+                "lakecat:raw-credential-exception.allowed must be boolean when present",
+            ),
+            (
+                "evt-bad-summary-raw-exception-missing-reason",
+                json!({
+                    "credential-count": 0,
+                    "lakecat:credential-block-reason": "fine-grained read restriction requires Sail-planned reads",
+                    "lakecat:raw-credential-exception": {
+                        "allowed": false
+                    }
+                }),
+                "blocked raw-credential exception must carry non-empty reason",
+            ),
+            (
+                "evt-bad-summary-raw-exception-blank-reason",
+                json!({
+                    "credential-count": 0,
+                    "lakecat:credential-block-reason": "fine-grained read restriction requires Sail-planned reads",
+                    "lakecat:raw-credential-exception": {
+                        "allowed": false,
+                        "reason": " "
+                    }
+                }),
+                "lakecat:raw-credential-exception.reason must not be blank",
+            ),
+            (
+                "evt-bad-summary-credential-block-reason",
+                json!({
+                    "credential-count": 0,
+                    "lakecat:credential-block-reason": " ",
+                    "lakecat:raw-credential-exception": {
+                        "allowed": false,
+                        "reason": "fine-grained read restriction requires Sail-planned reads"
+                    }
+                }),
+                "lakecat:credential-block-reason must not be blank",
+            ),
+            (
+                "evt-bad-summary-block-reason-drift",
+                json!({
+                    "credential-count": 0,
+                    "lakecat:credential-block-reason": "another reason",
+                    "lakecat:raw-credential-exception": {
+                        "allowed": false,
+                        "reason": "fine-grained read restriction requires Sail-planned reads"
+                    }
+                }),
+                "credential block reason must match raw-credential exception reason",
+            ),
+            (
+                "evt-bad-summary-blocked-with-credentials",
+                json!({
+                    "credential-count": 1,
+                    "lakecat:credential-block-reason": "fine-grained read restriction requires Sail-planned reads",
+                    "lakecat:raw-credential-exception": {
+                        "allowed": false,
+                        "reason": "fine-grained read restriction requires Sail-planned reads"
+                    }
+                }),
+                "blocked raw-credential exception must not carry credentials",
+            ),
+            (
+                "evt-bad-summary-allowed-with-block-reason",
+                json!({
+                    "credential-count": 1,
+                    "lakecat:credential-block-reason": "fine-grained read restriction requires Sail-planned reads",
+                    "lakecat:raw-credential-exception": {
+                        "allowed": true,
+                        "reason": "trusted human principal may use audited raw credential vending"
+                    }
+                }),
+                "lakecat:credential-block-reason must be absent when raw credentials are allowed",
+            ),
+        ];
+
+        for (event_id, payload, expected_message) in cases {
+            let event = OutboxEvent {
+                event_id: event_id.to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "credentials.vend-attempted".to_string(),
+                payload: json!({
+                    "payload": payload
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            };
+            let err = lineage_drain_event_summary(&event, &receipt)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains(expected_message), "{err}");
+        }
     }
 
     #[test]
