@@ -5,6 +5,19 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest planned-scan replay hardening slice:
+  `Validate planned required-filter proof`.
+  Service outbox replay now validates present `table.scan-planned`
+  `required-filters` evidence against the governed read-restriction row
+  predicate before acknowledgement, graph projection, OpenLineage projection,
+  or QGLake replay. The focused regression asserts drifted planned filters
+  fail before delivery to graph or lineage sinks.
+- Local verification for this planned-scan replay slice is green:
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_scan_planned_drifted_required_filters -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service` passed;
+  `scripts/check-release-readiness.sh --quick` passed; `git diff --check`
+  passed.
 - Latest management-list replay hardening slice:
   `Hash invalid management list identifiers`.
   Service outbox replay now returns hash-only field diagnostics for invalid

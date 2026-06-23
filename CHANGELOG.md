@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened planned-scan required-filter replay. Service outbox admission now
+  validates present `table.scan-planned` `required-filters` evidence against
+  the governed read-restriction row predicate before acknowledgement, graph
+  projection, or lineage projection.
 - Hardened management-list identifier diagnostics. List replay now returns
   hash-only field diagnostics for invalid policy, project, server,
   storage-profile, warehouse-name, and warehouse-list project identifiers
