@@ -861,6 +861,10 @@ evidence cannot disappear from raw commit-history proof.
 Governed scan summary arrays for required/requested/effective projection and
 requested/effective stats fields should likewise reject malformed, blank, or
 duplicate string entries before a raw lineage-drain summary is returned.
+Fetched scan summary `required-filters` evidence should also fail closed when
+it is not an array or when it drifts from the server-derived read-restriction
+row predicate, so raw QGLake proof cannot lose or widen mandatory filter
+evidence.
 Credential summary extraction must likewise fail closed when
 `credential-response-evidence` is not an array or its returned entries omit,
 malform, or duplicate `prefix-hash` evidence, so redacted credential replay

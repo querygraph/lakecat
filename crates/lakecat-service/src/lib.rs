@@ -7229,11 +7229,7 @@ fn lineage_drain_event_summary(
             .map(|_| lineage_summary_string_array_field(event, payload, "effective-projection"))
             .transpose()?
             .unwrap_or_default(),
-        required_filters: payload
-            .get("required-filters")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default(),
+        required_filters: lineage_summary_required_filters(event, payload)?,
         requested_stats_fields: payload
             .get("requested-stats-fields")
             .map(|_| lineage_summary_string_array_field(event, payload, "requested-stats-fields"))
@@ -7420,6 +7416,23 @@ fn lineage_summary_credential_prefix_hashes(
         "prefix-hash",
         "lineage drain credential-response prefix-hashes",
     )
+}
+
+fn lineage_summary_required_filters(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<Vec<Value>, LakeCatError> {
+    let Some(filters) = optional_array_field(event, payload, "required-filters")? else {
+        return Ok(Vec::new());
+    };
+    if event.event_type == "table.scan-tasks-fetched" && payload.get("read-restriction").is_some() {
+        validate_scan_required_filters_match_row_predicate(
+            event,
+            payload,
+            "lineage drain scan-tasks-fetched",
+        )?;
+    }
+    Ok(filters.clone())
 }
 
 fn lineage_summary_string_array_field(
@@ -48184,6 +48197,73 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("effective-stats-fields must contain strings"));
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_scan_required_filters() {
+        let receipt = OutboxProjectionReceipt::default();
+        let row_predicate = json!({
+            "type": "eq",
+            "term": "event_id",
+            "value": "evt-1"
+        });
+        let non_array_required_filters = OutboxEvent {
+            event_id: "evt-bad-summary-required-filters".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.scan-tasks-fetched".to_string(),
+            payload: json!({
+                "payload": {
+                    "read-restriction": {
+                        "allowed-columns": ["event_id"],
+                        "row-predicate": row_predicate,
+                        "policy-hashes": [content_hash_bytes(b"policy")]
+                    },
+                    "required-filters": row_predicate
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&non_array_required_filters, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("required-filters must be an array when present"));
+
+        let expected_row_predicate = json!({
+            "type": "eq",
+            "term": "event_id",
+            "value": "evt-1"
+        });
+        let drifted_required_filters = OutboxEvent {
+            event_id: "evt-drifted-summary-required-filters".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.scan-tasks-fetched".to_string(),
+            payload: json!({
+                "payload": {
+                    "read-restriction": {
+                        "allowed-columns": ["event_id"],
+                        "row-predicate": expected_row_predicate,
+                        "policy-hashes": [content_hash_bytes(b"policy")]
+                    },
+                    "required-filters": [{
+                        "type": "eq",
+                        "term": "event_id",
+                        "value": "evt-2"
+                    }]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&drifted_required_filters, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains(
+                "lineage drain scan-tasks-fetched required-filters must exactly preserve read-restriction row-predicate"
+            ),
+            "{err}"
+        );
     }
 
     #[test]

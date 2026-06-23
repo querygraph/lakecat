@@ -9311,7 +9311,11 @@ cannot disappear from raw QGLake replay proof. Governed scan summary arrays
 for required/requested/effective projection and requested/effective stats
 fields also reject malformed, blank, or duplicate strings before raw replay
 proof is returned, so a malformed Sail-planned read summary cannot hide missing
-projection or stats evidence.
+projection or stats evidence. Fetched scan summary construction applies the
+same second-line check to `required-filters`: the field must remain array-shaped
+and, when row-predicate evidence is present, it must exactly preserve that
+server-derived predicate rather than widening or omitting the mandatory filter
+inside raw QGLake proof.
 The verifier
 also compares those QueryGraph import-plan graph node and edge counts with the
 verified bootstrap bundle graph counts, so an import plan cannot keep the

@@ -6,6 +6,20 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Harden lineage-drain fetched scan required-filter summaries`.
+  Raw lineage-drain summary construction now rejects non-array
+  `required-filters` evidence and fetched scan filters that drift from the
+  read-restriction row predicate, so QGLake scan proof cannot silently omit or
+  widen server-derived filter evidence.
+- Local verification for this lineage-drain fetched scan required-filter
+  summary slice is green:
+  `cargo test -p lakecat-service lineage_drain_summary_rejects_malformed_scan_required_filters -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service` passed; `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed; `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/testing slice:
   `Harden lineage-drain QueryGraph standards summaries`.
   Raw lineage-drain summary construction now rejects malformed, blank, or
   duplicate `standards` entries instead of silently dropping invalid bootstrap

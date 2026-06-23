@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened service lineage-drain fetched scan required-filter summaries. Raw
+  lineage-drain summary construction now rejects non-array `required-filters`
+  evidence and fetched scan filters that drift from the read-restriction row
+  predicate, so QGLake scan proof cannot silently omit or widen server-derived
+  filter evidence.
 - Hardened service lineage-drain QueryGraph standards summaries. Raw
   lineage-drain summary construction now rejects malformed, blank, or
   duplicate `standards` entries instead of silently dropping invalid bootstrap
