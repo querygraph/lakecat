@@ -54756,6 +54756,49 @@ mod tests {
             "{err}"
         );
 
+        let mut missing_principal = valid_lineage_summary_management_list_event(
+            "evt-missing-principal-summary-server-list",
+            "server.listed",
+        );
+        missing_principal.payload["payload"]["authorization-receipt"]
+            .as_object_mut()
+            .unwrap()
+            .remove("principal");
+        let err = lineage_drain_event_summary(&missing_principal, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("management-list evidence must contain authorization receipt principal"),
+            "{err}"
+        );
+        assert!(err.contains("event-id-hash=sha256:"), "{err}");
+        assert!(
+            !err.contains("evt-missing-principal-summary-server-list"),
+            "{err}"
+        );
+
+        let mut malformed_principal = valid_lineage_summary_management_list_event(
+            "evt-malformed-principal-summary-server-list",
+            "server.listed",
+        );
+        malformed_principal.payload["payload"]["authorization-receipt"]["principal"] = json!({
+            "subject": "agent:operator",
+            "kind": "unknown"
+        });
+        let err = lineage_drain_event_summary(&malformed_principal, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("management-list authorization receipt principal"),
+            "{err}"
+        );
+        assert!(err.contains("must be a valid principal"), "{err}");
+        assert!(err.contains("event-id-hash=sha256:"), "{err}");
+        assert!(
+            !err.contains("evt-malformed-principal-summary-server-list"),
+            "{err}"
+        );
+
         let mut missing_allowed = valid_lineage_summary_management_list_event(
             "evt-missing-allowed-summary-server-list",
             "server.listed",

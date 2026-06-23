@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added raw management-list summary principal coverage. Raw `server.listed`
+  summaries now explicitly prove missing or malformed authorization receipt
+  principals are rejected with hash-only event identity before compact QGLake
+  management proof can inherit tenant inventory.
 - Added raw management-list summary receipt-decision coverage. Raw
   `server.listed` summaries now explicitly prove missing or denied
   authorization `allowed` decisions are rejected with hash-only event identity
