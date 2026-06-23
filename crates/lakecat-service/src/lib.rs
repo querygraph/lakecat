@@ -54777,6 +54777,24 @@ mod tests {
         );
         assert!(!err.contains("analytics/../../secret"), "{err}");
 
+        let mut extra_field = valid_lineage_summary_management_list_event(
+            "evt-extra-field-summary-server-list",
+            "server.listed",
+        );
+        extra_field.payload["payload"]["querygraph"] = json!({"claim": "shadow"});
+        let err = lineage_drain_event_summary(&extra_field, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("server list contains unexpected field querygraph"),
+            "{err}"
+        );
+        assert!(err.contains("event-id-hash=sha256:"), "{err}");
+        assert!(
+            !err.contains("evt-extra-field-summary-server-list"),
+            "{err}"
+        );
+
         let mut action_drift = valid_lineage_summary_management_list_event(
             "evt-action-drift-summary-server-list",
             "server.listed",

@@ -1035,11 +1035,13 @@ Raw lineage-drain management ID summary arrays must match that posture:
 arrays, carry blank entries, repeat identities, or disappear while the list
 count remains. Invalid identifiers must fail with hash-only identifier
 evidence before compact proof can inherit them. Raw management-list summaries
-must also reuse the service replay authorization principal, action, and
-allowed-decision checks plus receipt engine and RFC3339 `checked_at` shape, so
-a list event cannot enter compact QGLake proof under an unrelated table or
-mutation action, with a missing or denied authorization decision, with a blank
-engine or malformed timestamp, or without valid actor evidence.
+must also remain closed over the service replay payload schema and reuse the
+service replay authorization principal, action, and allowed-decision checks
+plus receipt engine and RFC3339 `checked_at` shape, so a list event cannot
+enter compact QGLake proof under an unrelated table or mutation action, with an
+extra QueryGraph or OpenLineage claim, with a missing or denied authorization
+decision, with a blank engine or malformed timestamp, or without valid actor
+evidence.
 Service replay admission now closes the wrapped payload schema for
 `namespace.listed`, `view.listed`, and management list events, so an archived
 inventory read cannot append unverified namespace, view, management,

@@ -8389,12 +8389,13 @@ duplicate-free valid identifiers before QueryGraph can treat server, project,
 warehouse, policy-binding, or storage-profile inventory as accepted proof.
 Malformed management identifiers are reported with hash evidence rather than
 raw tenant-root text.
-Raw summaries enforce the same actor evidence, action match, and allowed
-decision before compact proof is built. They also require a nonblank receipt
-engine and RFC3339 `checked_at` timestamp, so a `server.listed` replay cannot
-be accepted under an unrelated table action, with missing or denied
-authorization, with an untraceable decision engine, with malformed decision
-time, or without a valid authorization principal.
+Raw summaries enforce the same closed payload schema, actor evidence, action
+match, and allowed decision before compact proof is built. They also require a
+nonblank receipt engine and RFC3339 `checked_at` timestamp, so a `server.listed`
+replay cannot be accepted under an unrelated table action, with unverified
+QueryGraph or OpenLineage claims, with missing or denied authorization, with an
+untraceable decision engine, with malformed decision time, or without a valid
+authorization principal.
 View replay is checked at the same boundary: view list events must carry valid
 warehouse, namespace, and count evidence, and the count must match the listed
 view names before graph or OpenLineage projection. View create/load/drop

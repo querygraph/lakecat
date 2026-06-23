@@ -5,6 +5,14 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw management-list closed-schema summary coverage:
+  raw `server.listed` lineage-drain summaries now explicitly prove unexpected
+  QueryGraph-style payload claims are rejected with hash-only event identity
+  before compact QGLake management inventory proof can inherit them.
+- Local verification for this raw management-list closed-schema slice passed:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service lineage_drain_summary_rejects_malformed_management_ids -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest raw management-list receipt-shape summary coverage:
   raw `server.listed` lineage-drain summaries now explicitly prove blank
   authorization receipt engines and malformed `checked_at` timestamps are

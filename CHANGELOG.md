@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added raw management-list summary closed-schema coverage. Raw `server.listed`
+  summaries now explicitly prove unexpected QueryGraph-style payload claims are
+  rejected with hash-only event identity before compact QGLake management proof
+  can inherit tenant inventory.
 - Added raw management-list summary receipt-shape coverage. Raw `server.listed`
   summaries now explicitly prove blank authorization receipt engines and
   malformed `checked_at` timestamps are rejected with hash-only event identity
