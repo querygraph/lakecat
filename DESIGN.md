@@ -382,7 +382,9 @@ Authoritative first-release evidence:
 - `scripts/check-release-readiness.sh` is the broad local proof.
 - `scripts/check-release-readiness.sh --quick` is the narrow-slice smoke proof;
   it also validates tracked `docs/book/dist` artifacts through the book
-  artifact contract.
+  artifact contract and prints a non-failing freshness note when executable
+  changes after the latest recorded release-candidate proof require a fresh
+  full candidate run before final proof refresh.
 - `scripts/qglake-handoff-local.sh` is the end-to-end LakeCat to QueryGraph
   handoff proof.
 - `docs/book/build.sh` proves the reader-facing book artifacts match the

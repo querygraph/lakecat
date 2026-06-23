@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added release-proof freshness reporting to the local release-readiness gate.
+  Quick/full runs now print a non-failing warning when executable changes after
+  the last recorded release-candidate proof require a fresh full candidate run.
 - Hardened catalog graph projection admission. LakeCat graph sinks now validate
   nonblank projection identity, object-shaped properties, and table identity
   for table-scoped labels before no-op or Grust-backed sinks accept a catalog

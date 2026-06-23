@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-proof freshness reporting:
+  `scripts/check-release-readiness.sh --quick` and full non-candidate runs now
+  print a non-failing freshness note when executable changes after the latest
+  recorded release-candidate proof require a fresh
+  `scripts/check-release-readiness.sh --release-candidate` run before final
+  proof refresh.
+- Local verification for this release-proof freshness slice passed:
+  `bash -n scripts/check-release-readiness.sh`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest catalog graph projection admission hardening:
   LakeCat graph sinks now validate nonblank projection identity, object-shaped
   properties, and table identity for table-scoped labels before no-op or

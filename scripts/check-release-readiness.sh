@@ -86,6 +86,68 @@ require_clean_tree() {
   fi
 }
 
+report_release_proof_freshness() {
+  local proof_refs proof_count proof_ref changed_files changed_file stale
+  proof_refs="$(
+    {
+      rg --no-filename -o 'release-candidate proof (?:was )?refreshed from (?:clean )?head `([0-9a-f]{8,40})`' \
+        README.md CHANGELOG.md docs/book/lakecat.md --replace '$1' || true
+      rg --no-filename -o 'from clean head `([0-9a-f]{8,40})`\. `scripts/check-release-readiness\.sh --release-candidate` passed' \
+        DESIGN.md --replace '$1' || true
+      rg --no-filename -o 'from clean head `([0-9a-f]{8,40})`\. The gate covered' \
+        STATUS.md --replace '$1' || true
+    } | sort -u
+  )"
+
+  if [[ -z "$proof_refs" ]]; then
+    echo "LakeCat release-candidate proof freshness: no active proof ref found; run scripts/check-release-proof-contract.sh for details."
+    return
+  fi
+
+  proof_count="$(printf '%s\n' "$proof_refs" | sed '/^$/d' | wc -l | tr -d ' ')"
+  if [[ "$proof_count" != "1" ]]; then
+    echo "LakeCat release-candidate proof freshness: proof refs disagree; run scripts/check-release-proof-contract.sh for details."
+    return
+  fi
+
+  proof_ref="$(printf '%s\n' "$proof_refs" | sed -n '1p')"
+  if ! git rev-parse -q --verify "$proof_ref^{commit}" >/dev/null; then
+    echo "LakeCat release-candidate proof freshness: proof ref $proof_ref is not a local commit."
+    return
+  fi
+  if ! git merge-base --is-ancestor "$proof_ref" HEAD; then
+    echo "LakeCat release-candidate proof freshness: proof ref $proof_ref is not an ancestor of HEAD."
+    return
+  fi
+
+  changed_files="$(
+    {
+      git diff --name-only "$proof_ref"..HEAD
+      git diff --name-only
+      git diff --name-only --cached
+      git ls-files --others --exclude-standard
+    } | sort -u
+  )"
+  stale=0
+  while IFS= read -r changed_file; do
+    [[ -n "$changed_file" ]] || continue
+    case "$changed_file" in
+      CHANGELOG.md|DESIGN.md|GOAL.md|README.md|RELEASE.md|STATUS.md|docs/book/lakecat.md|docs/book/dist/*|scripts/check-release-proof-contract.sh)
+        ;;
+      *)
+        stale=1
+        break
+        ;;
+    esac
+  done <<< "$changed_files"
+
+  if [[ "$stale" -eq 1 ]]; then
+    echo "LakeCat release-candidate proof freshness: executable changes exist after $proof_ref; rerun scripts/check-release-readiness.sh --release-candidate before final release proof refresh."
+  else
+    echo "LakeCat release-candidate proof freshness: changes after $proof_ref are limited to documentation/book/proof-contract paths."
+  fi
+}
+
 if [[ "$require_clean" -ne 0 ]]; then
   if [[ "$mode" != "full" || "$skip_book" -ne 0 || "$skip_handoff" -ne 0 ]]; then
     echo "--release-candidate requires the complete full gate without skipped evidence" >&2
@@ -104,6 +166,7 @@ run bash -n scripts/check-release-readiness.sh
 run scripts/check-local-dependency-contract.sh
 run scripts/check-workflow-trigger-contract.sh
 run scripts/check-release-version-contract.sh
+run report_release_proof_freshness
 if [[ "$require_clean" -ne 0 ]]; then
   run env LAKECAT_RELEASE_PROOF_CANDIDATE=1 scripts/check-release-proof-contract.sh
 fi

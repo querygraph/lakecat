@@ -13829,6 +13829,12 @@ the proof. If Rust code, manifests, workflows, dependency bridges, release
 scripts, or other executable behavior changes after the cited proof commit,
 the old proof is no longer enough and the full release-candidate gate must run
 again.
+The quick and ordinary full release-readiness gates surface that distinction
+without becoming release proof themselves. They print a non-failing freshness
+note when executable changes exist after the recorded proof commit, so a narrow
+development slice can still finish while the operator sees that final release
+proof requires a new `scripts/check-release-readiness.sh --release-candidate`
+run.
 
 The contract requires a clean tree by default. While editing the proof contract
 or release docs, maintainers can run:
