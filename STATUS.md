@@ -6,6 +6,14 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Close table lifecycle replay wrappers`.
+  Service outbox admission now closes wrapped `table.created`, `table.loaded`,
+  `table.deleted`, and `table.restored` replay payloads over the wrapper
+  fields current producers emit, rejecting extra unverified table lifecycle,
+  storage, graph, lineage, QGLake, QueryGraph, or application claims before
+  acknowledgement, graph projection, or OpenLineage projection. A focused
+  regression covers create, load, delete, and restore wrapper shapes.
+- Latest implementation/testing slice:
   `Close namespace lifecycle replay wrappers`.
   Service outbox admission now closes wrapped `namespace.created`,
   `namespace.loaded`, and `namespace.dropped` replay payloads over the wrapper

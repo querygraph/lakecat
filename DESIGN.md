@@ -1278,7 +1278,11 @@ Service replay must also close the top-level table lifecycle payload schema
 over the fields current producers emit, so create/load/delete/restore replay
 cannot append unverified table lifecycle, storage, lineage, graph, QueryGraph,
 or application claims beside checked table identity, version, format-version,
-soft-delete, location, and authorization evidence. Table lifecycle
+soft-delete, location, and authorization evidence. Service replay now also
+closes the wrapped table lifecycle envelopes over the producer wrapper fields,
+including the delete-side `soft-delete` wrapper evidence, so those claims
+cannot ride beside an otherwise valid checked lifecycle payload.
+Table lifecycle
 `metadata-location`, table `location`, and `soft-delete.metadata-location`
 evidence must also remain undecorated and credential-free before projection, so
 standard table lifecycle replay cannot smuggle token-bearing paths or

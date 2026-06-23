@@ -1938,6 +1938,13 @@ const TABLE_LIFECYCLE_EVIDENCE_FIELDS: &[&str] = &[
     "soft-delete",
     "metadata-graph",
 ];
+const TABLE_LIFECYCLE_OUTBOX_PAYLOAD_FIELDS: &[&str] = &[
+    "audit-event-id",
+    "event-type",
+    "table",
+    "soft-delete",
+    "payload",
+];
 const TABLE_METADATA_GRAPH_EVIDENCE_FIELDS: &[&str] = &[
     "current-schema-id",
     "fields",
@@ -2899,6 +2906,14 @@ fn validate_table_lifecycle_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    if event.payload.get("payload").is_some() {
+        validate_object_evidence_schema(
+            event,
+            &event.payload,
+            "table lifecycle outbox payload",
+            TABLE_LIFECYCLE_OUTBOX_PAYLOAD_FIELDS,
+        )?;
+    }
     validate_object_evidence_schema(
         event,
         payload,
@@ -37995,6 +38010,151 @@ mod tests {
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_table_lifecycle_wrapper_fields() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let checked_at = chrono::Utc::now();
+        let receipt = |action: &str| {
+            json!({
+                "principal": &principal,
+                "action": action,
+                "allowed": true,
+                "engine": "test",
+                "policy_hash": null,
+                "checked_at": checked_at,
+            })
+        };
+        let cases = vec![
+            (
+                "table.created",
+                "created",
+                json!({
+                    "authorization-receipt": receipt("table-create"),
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "table": "events",
+                    "metadata-location": "file:///tmp/events/metadata/00000.json",
+                    "format-version": 3,
+                    "version": 1,
+                }),
+                None,
+            ),
+            (
+                "table.loaded",
+                "loaded",
+                json!({
+                    "authorization-receipt": receipt("table-load"),
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "table": "events",
+                    "metadata-location": "file:///tmp/events/metadata/00000.json",
+                    "format-version": 3,
+                    "version": 1,
+                }),
+                None,
+            ),
+            (
+                "table.deleted",
+                "deleted",
+                json!({
+                    "authorization-receipt": receipt("table-drop"),
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "table": "events",
+                }),
+                Some(json!({
+                    "table": &table,
+                    "metadata-location": "file:///tmp/events/metadata/00000.json",
+                    "version": 1,
+                    "format-version": 3,
+                    "principal": &principal,
+                    "authorization-receipt": null,
+                    "deleted-at": checked_at,
+                })),
+            ),
+            (
+                "table.restored",
+                "restored",
+                json!({
+                    "authorization-receipt": receipt("table-restore"),
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "table": "events",
+                    "metadata-location": "file:///tmp/events/metadata/00001.json",
+                    "format-version": 3,
+                    "version": 2,
+                }),
+                None,
+            ),
+        ];
+
+        for (event_type, label, payload, soft_delete) in cases {
+            let event_id = format!("evt-table-{label}-extra-wrapper-field");
+            let mut wrapper = json!({
+                "audit-event-id": format!("audit-table-{label}-extra-wrapper-field"),
+                "event-type": event_type,
+                "table": &table,
+                "payload": payload,
+                "unverified-table-lifecycle-wrapper-claim": "shadow",
+            });
+            if let Some(soft_delete) = soft_delete {
+                wrapper["soft-delete"] = soft_delete;
+            }
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: wrapper,
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("extra table lifecycle wrapper fields should fail");
+
+            let message = err.to_string();
+            assert!(message.contains(event_type), "{message}");
+            assert!(message.contains("event-id-hash=sha256:"), "{message}");
+            assert!(
+                message.contains(
+                    "table lifecycle outbox payload contains unexpected field unverified-table-lifecycle-wrapper-claim"
+                ),
+                "{message}"
+            );
+            assert!(!message.contains(&event_id), "{message}");
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{event_type} extra wrapper fields must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{event_type} extra wrapper fields must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{event_type} extra wrapper fields must fail before lineage projection"
+            );
+        }
     }
 
     #[tokio::test]

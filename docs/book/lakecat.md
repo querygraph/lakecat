@@ -9792,7 +9792,10 @@ That means an otherwise valid `table.created`, `table.loaded`,
 `table.deleted`, or `table.restored` replay cannot append unverified lifecycle,
 storage, lineage, graph, QueryGraph, or application claims beside checked table
 identity, version, format-version, location, soft-delete, and authorization
-evidence. The nested `metadata-graph` summary used for graph projection is
+evidence. It also closes the wrapped outbox envelope for those table lifecycle
+events, including delete-side `soft-delete` wrapper evidence, so those claims
+cannot be placed beside an otherwise valid checked inner lifecycle payload. The
+nested `metadata-graph` summary used for graph projection is
 closed over its current schema and snapshot summary fields as well; richer
 graph taxonomy and query behavior still belong in Grust, not in the catalog
 validator.
