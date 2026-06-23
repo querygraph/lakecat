@@ -3130,13 +3130,14 @@ match their durable keys and row anchors, idempotency responses must match the
 route and table they replay, memory idempotent replay records must carry the
 same table-key anchor that Turso persists in durable idempotency rows, memory
 pointer-log records must carry the same private table-key anchor before
-commit-history reads return them, generated table-commit audit rows must bind
-their audit request hash to the audit payload while the pointer-log record keeps
-the inner commit request hash, outbox records must be fit for graph and lineage
-projection, and delivery acknowledgements must validate pending outbox rows
-before hiding them from drains, with batch delivery failing before any selected
-event is marked delivered if one pending row is malformed. Those are LakeCat
-reliability properties. The
+commit-history reads return them, table lifecycle mutations must emit
+`table.deleted` and `table.restored` audit/outbox evidence, generated
+table-commit audit rows must bind their audit request hash to the audit payload
+while the pointer-log record keeps the inner commit request hash, outbox records
+must be fit for graph and lineage projection, and delivery acknowledgements
+must validate pending outbox rows before hiding them from drains, with batch
+delivery failing before any selected event is marked delivered if one pending
+row is malformed. Those are LakeCat reliability properties. The
 Iceberg-adjacent candidates are much smaller: atomic pointer CAS, exact retry
 semantics, pointer-history inspection, redacted conflict proof, and durable
 catalog event identity.

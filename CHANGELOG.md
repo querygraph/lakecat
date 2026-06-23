@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added memory table lifecycle audit/outbox evidence for soft delete and
+  restore. Memory table lifecycle mutations now emit `table.deleted` and
+  `table.restored` audit/outbox events with audit request hashes bound to the
+  generated payload, matching the Turso lifecycle replay surface.
 - Bound generated table-commit audit request hashes to their audit payloads.
   Memory and Turso commit producers now keep the commit request hash inside the
   pointer-log record while storing the audit payload hash as audit request

@@ -2254,15 +2254,40 @@ impl CatalogStore for MemoryCatalogStore {
             deleted_at: Utc::now(),
         };
         record.validate_for_table(ident, &table)?;
+        let audit_payload = serde_json::json!({
+            "event-type": "table.deleted",
+            "table": ident,
+            "soft-delete": &record,
+            "authorization-receipt": &record.authorization_receipt,
+        });
+        let audit_payload_hash = content_hash_json(&audit_payload)?;
+        let outbox_payload = serde_json::json!({
+            "audit-event-id": audit_payload_hash,
+            "event-type": "table.deleted",
+            "table": ident,
+            "soft-delete": audit_payload["soft-delete"].clone(),
+            "authorization-receipt": audit_payload["authorization-receipt"].clone(),
+        });
+        let outbox_event = outbox_event_from_payload(&outbox_payload, record.deleted_at)?;
+        let audit_principal = record.principal.clone();
         state.soft_deletes.insert(key, record);
+        state.audit_events.push(CatalogAuditEvent {
+            event_type: "table.deleted".to_string(),
+            table: Some(ident.clone()),
+            principal: audit_principal,
+            request_hash: Some(audit_payload_hash),
+            payload: audit_payload,
+            created_at: outbox_event.created_at,
+        });
+        state.outbox_events.push(outbox_event);
         Ok(table)
     }
 
     async fn restore_table(
         &self,
         ident: &TableIdent,
-        _principal: Principal,
-        _authorization_receipt: Option<Value>,
+        principal: Principal,
+        authorization_receipt: Option<Value>,
     ) -> LakeCatResult<TableRecord> {
         let mut state = self.state.write().await;
         let key = table_key(ident);
@@ -2284,7 +2309,34 @@ impl CatalogStore for MemoryCatalogStore {
         validate_table_record_map_scope(&table, &key)?;
         validate_table_record_identity(&table, ident)?;
         record.validate_for_table(ident, &table)?;
+        let restored_at = Utc::now();
+        let audit_payload = serde_json::json!({
+            "event-type": "table.restored",
+            "table": ident,
+            "authorization-receipt": authorization_receipt,
+            "metadata-location": table.metadata_location,
+            "format-version": table_commit_format_version(&table),
+            "version": table.version,
+        });
+        let audit_payload_hash = content_hash_json(&audit_payload)?;
+        let outbox_payload = serde_json::json!({
+            "audit-event-id": audit_payload_hash,
+            "event-type": "table.restored",
+            "table": ident,
+            "payload": audit_payload.clone(),
+            "authorization-receipt": audit_payload["authorization-receipt"].clone(),
+        });
+        let outbox_event = outbox_event_from_payload(&outbox_payload, restored_at)?;
         state.soft_deletes.remove(&key);
+        state.audit_events.push(CatalogAuditEvent {
+            event_type: "table.restored".to_string(),
+            table: Some(ident.clone()),
+            principal,
+            request_hash: Some(audit_payload_hash),
+            payload: audit_payload,
+            created_at: restored_at,
+        });
+        state.outbox_events.push(outbox_event);
         Ok(table)
     }
 
@@ -5196,6 +5248,106 @@ mod memory_tests {
                 if message.contains("soft-delete row scope does not match")
         ));
         assert_eq!(store.state.read().await.soft_deletes.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn memory_store_records_table_lifecycle_audit_outbox_events() {
+        let store = MemoryCatalogStore::new();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let namespace = "default".parse::<Namespace>().unwrap();
+        let ident = TableIdent::new(
+            warehouse.clone(),
+            namespace,
+            TableName::new("events").unwrap(),
+        );
+        let deleter =
+            Principal::new("did:example:deleter", lakecat_core::PrincipalKind::Agent).unwrap();
+        let restorer =
+            Principal::new("did:example:restorer", lakecat_core::PrincipalKind::Agent).unwrap();
+        store
+            .create_table(TableRecord::new(
+                ident.clone(),
+                "file:///tmp/events".to_string(),
+                Some("file:///tmp/events/metadata/00000.json".to_string()),
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            ))
+            .await
+            .unwrap();
+
+        store
+            .soft_delete_table(
+                &ident,
+                deleter.clone(),
+                Some(serde_json::json!({
+                    "engine": "typesec",
+                    "allowed": true,
+                    "action": "table-drop"
+                })),
+            )
+            .await
+            .unwrap();
+        assert!(matches!(
+            store.load_table(&ident).await,
+            Err(LakeCatError::NotFound { .. })
+        ));
+        {
+            let state = store.state.read().await;
+            assert_eq!(state.soft_deletes.len(), 1);
+            assert_eq!(state.audit_events.len(), 1);
+            assert_eq!(state.audit_events[0].event_type, "table.deleted");
+            assert_eq!(state.audit_events[0].principal, deleter);
+            assert_eq!(
+                state.audit_events[0].request_hash.as_deref(),
+                Some(
+                    content_hash_json(&state.audit_events[0].payload)
+                        .unwrap()
+                        .as_str()
+                )
+            );
+            assert_eq!(state.outbox_events.len(), 1);
+            assert_eq!(state.outbox_events[0].event_type, "table.deleted");
+        }
+
+        store
+            .restore_table(
+                &ident,
+                restorer.clone(),
+                Some(serde_json::json!({
+                    "engine": "typesec",
+                    "allowed": true,
+                    "action": "table-restore"
+                })),
+            )
+            .await
+            .unwrap();
+        assert_eq!(store.load_table(&ident).await.unwrap().ident, ident);
+        let state = store.state.read().await;
+        assert!(state.soft_deletes.is_empty());
+        assert_eq!(state.audit_events.len(), 2);
+        assert_eq!(state.audit_events[1].event_type, "table.restored");
+        assert_eq!(state.audit_events[1].principal, restorer);
+        assert_eq!(
+            state.audit_events[1].request_hash.as_deref(),
+            Some(
+                content_hash_json(&state.audit_events[1].payload)
+                    .unwrap()
+                    .as_str()
+            )
+        );
+        assert_eq!(state.outbox_events.len(), 2);
+        assert!(
+            state
+                .outbox_events
+                .iter()
+                .any(|event| event.event_type == "table.restored")
+        );
+        drop(state);
+        let pending = store
+            .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+            .await
+            .unwrap();
+        assert_eq!(pending.len(), 2);
     }
 
     #[tokio::test]

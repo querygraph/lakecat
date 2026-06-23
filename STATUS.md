@@ -5,6 +5,16 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest memory table lifecycle audit/outbox evidence:
+  memory table soft-delete and restore now emit `table.deleted` and
+  `table.restored` audit/outbox events with audit request hashes bound to the
+  generated payload, matching the Turso lifecycle replay surface.
+- Local verification for this memory table lifecycle audit/outbox slice passed:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_records_table_lifecycle_audit_outbox_events -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_soft_deletes_tables_from_normal_catalog_reads -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_restores_soft_deleted_tables -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest generated table-commit audit request-hash binding:
   memory and Turso commit producers now keep the commit request hash inside the
   pointer-log record while storing the audit payload hash as generated audit

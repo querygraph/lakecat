@@ -264,7 +264,9 @@ The current working plan is:
    outbox replay evidence. Memory/Turso stores must also reject missing or
    drifted audit request hashes before writing either audit or outbox rows, so
    standalone audit proof cannot point at a different payload than the event it
-   will later replay. Generated table-commit audit rows must follow the same
+   will later replay. Memory and Turso table lifecycle mutations must emit
+   paired `table.deleted` and `table.restored` audit/outbox evidence with the
+   same hash binding. Generated table-commit audit rows must follow the same
    rule: the commit request hash stays in the pointer-log record, while the
    audit event request hash binds to the generated audit payload. Memory/Turso
    stores must validate pending outbox rows before marking them delivered, and
