@@ -5,6 +5,13 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest documentation/book slice:
+  `Expand standards and Sail engine-boundary book guidance`.
+  The LakeCat book now includes a sharper decision model for whether a concept
+  is standard Iceberg parlance, a LakeCat/QueryGraph/TypeSec product surface,
+  or a future neutral proposal candidate, plus a governed scan walkthrough that
+  shows TypeSec deciding authority, LakeCat binding catalog proof, Sail
+  computing Iceberg table truth, and QueryGraph composing the resulting anchors.
 - Latest implementation/testing slice:
   `Harden management summary count proof`.
   Lineage-drain compact management summaries now fail closed when

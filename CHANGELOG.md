@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's standards and engine-boundary explanation with
+  an explicit extension/proposal/product-surface decision model and a
+  step-by-step governed scan example. The new text shows how ordinary Iceberg
+  table access stays compatible while TypeSec answers authority questions,
+  LakeCat binds catalog proof, Sail computes Iceberg table truth, and
+  QueryGraph composes the resulting anchors.
 - Hardened lineage-drain management summary count proof. Compact management
   replay summaries now require `project-ids`, `server-ids`, `warehouse-names`,
   `storage-profile-ids`, and `policy-ids` arrays to match their corresponding
