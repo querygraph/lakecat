@@ -944,8 +944,8 @@ archived sidecars cannot hide conflicting pointer, hash, timestamp, format, or
 snapshot claims behind an otherwise valid `table.commit` event. Service replay
 admission must also close the top-level `table.commit` payload over checked
 table scope, authorization receipt, and nested commit evidence, and close the
-nested `commit` object over
-the pointer-transition, identity, authorization, hash, format, snapshot, and
+nested `commit` object over the pointer-transition, identity, authorization,
+hash, format, snapshot, and
 timestamp fields LakeCat actually verifies. A durable `table.commit` event
 cannot append unverified commit, policy, storage, graph, lineage, QueryGraph,
 or application claims beside an otherwise valid pointer transition. The store
@@ -1181,10 +1181,13 @@ evidence through required `soft-delete.version` and `soft-delete.format_version`
 or `soft-delete.format-version`, and `table.deleted` replay must reject missing
 soft-delete objects, non-positive soft-delete versions, or missing/non-positive
 soft-delete format versions before acknowledgement, graph projection, or
-OpenLineage projection. Full table identity objects and soft-delete objects are
-also closed over the fields LakeCat verifies before projection, so unverified
-table-scope, delete-state, principal, storage, or application claims cannot ride
-beside the checked lifecycle identity and soft-delete proof.
+OpenLineage projection. Saved soft-delete sidecars may use either spelling for
+the format-version evidence, but a single event must not carry both aliases for
+that semantic field, so replay cannot hide conflicting table-format claims in
+the nested delete proof. Full table identity objects and soft-delete objects
+are also closed over the fields LakeCat verifies before projection, so
+unverified table-scope, delete-state, principal, storage, or application claims
+cannot ride beside the checked lifecycle identity and soft-delete proof.
 
 View lifecycle replay must carry valid view names and positive store-assigned
 `view-version` values before projection, and guarded view lifecycle replay must

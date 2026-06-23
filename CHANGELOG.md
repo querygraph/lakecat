@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened service table-lifecycle soft-delete replay alias admission.
+  `table.deleted` replay now accepts either `format-version` or
+  `format_version` in the nested soft-delete evidence while rejecting duplicate
+  aliases before acknowledgement, graph projection, or OpenLineage projection.
 - Expanded the LakeCat book with a front-loaded catalog contract chapter. The
   new chapter separates standard Iceberg catalog parlance from LakeCat's Rust
   and Turso control spine, TypeSec/Sail governed scan and credential paths,

@@ -5,6 +5,21 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/testing slice:
+  `Harden table lifecycle soft-delete replay aliases`.
+  Service `table.deleted` replay admission now accepts either `format-version`
+  or `format_version` in the nested soft-delete evidence while rejecting
+  duplicate aliases for that semantic field before acknowledgement, graph
+  projection, or OpenLineage projection.
+- Local verification for this table lifecycle replay-alias slice is green:
+  `cargo test -p lakecat-service table_lifecycle_soft_delete_format_version -- --test-threads=1`
+  passed;
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest docs/book slice:
   `Expand catalog contract chapter`.
   The LakeCat book now front-loads the distinction between standard Iceberg

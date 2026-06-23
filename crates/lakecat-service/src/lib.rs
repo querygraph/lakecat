@@ -6647,9 +6647,15 @@ fn require_positive_i64_field(
     label: &str,
 ) -> Result<i64, LakeCatError> {
     let alternate_field = field.replace('-', "_");
-    let value = object
-        .get(field)
-        .or_else(|| object.get(alternate_field.as_str()));
+    let primary_value = object.get(field);
+    let alternate_value = object.get(alternate_field.as_str());
+    if primary_value.is_some() && alternate_value.is_some() {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} must not carry both {field} and {alternate_field} evidence fields"),
+        ));
+    }
+    let value = primary_value.or(alternate_value);
     let Some(value) = value else {
         return Err(outbox_evidence_error(
             event,
@@ -35381,6 +35387,163 @@ mod tests {
                 "{event_type} must fail before lineage projection"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_accepts_snake_case_table_lifecycle_soft_delete_format_version() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let checked_at = chrono::Utc::now();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-snake-soft-delete-format-version".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.deleted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-snake-soft-delete-format-version",
+                    "event-type": "table.deleted",
+                    "table": &table,
+                    "soft-delete": {
+                        "table": &table,
+                        "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "version": 1,
+                        "format_version": 3,
+                        "principal": &principal,
+                        "authorization-receipt": null,
+                        "deleted-at": checked_at,
+                    },
+                    "authorization-receipt": {
+                        "principal": &principal,
+                        "action": "table-drop",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": checked_at,
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let summary = drain_outbox_once(&state, 10)
+            .await
+            .expect("snake_case soft-delete format-version evidence should be accepted");
+
+        assert_eq!(summary.delivered, 1);
+        assert_eq!(store.delivered.lock().await.len(), 1);
+        assert!(
+            graph.events.lock().await.iter().any(|event| {
+                event.label == GraphNodeLabel::Table && event.action == GraphAction::Deleted
+            }),
+            "snake_case soft-delete evidence should still project graph delete proof"
+        );
+        assert!(
+            lineage
+                .events
+                .lock()
+                .await
+                .iter()
+                .any(|event| event.event_type == LineageEventType::TableDeleted),
+            "snake_case soft-delete evidence should still project lineage delete proof"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_duplicate_table_lifecycle_soft_delete_format_version_aliases() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let checked_at = chrono::Utc::now();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-duplicate-soft-delete-format-version".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.deleted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-duplicate-soft-delete-format-version",
+                    "event-type": "table.deleted",
+                    "table": &table,
+                    "soft-delete": {
+                        "table": &table,
+                        "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "version": 1,
+                        "format-version": 3,
+                        "format_version": 3,
+                        "principal": &principal,
+                        "authorization-receipt": null,
+                        "deleted-at": checked_at,
+                    },
+                    "authorization-receipt": {
+                        "principal": &principal,
+                        "action": "table-drop",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": checked_at,
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("duplicate soft-delete format-version aliases should fail");
+
+        let message = err.to_string();
+        assert!(message.contains("table.deleted"), "{message}");
+        assert!(
+            message.contains(
+                "table lifecycle soft-delete must not carry both format-version and format_version evidence fields"
+            ),
+            "{message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"), "{message}");
+        assert!(
+            !message.contains("evt-duplicate-soft-delete-format-version"),
+            "{message}"
+        );
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "duplicate soft-delete aliases must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "duplicate soft-delete aliases must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "duplicate soft-delete aliases must fail before lineage projection"
+        );
     }
 
     #[tokio::test]

@@ -7319,7 +7319,13 @@ and any payload warehouse, namespace, table-name, or soft-delete table evidence
 must agree with that identity before the event can be acknowledged. Their
 authorization receipts must also carry the matching lifecycle action:
 `table-create`, `table-load`, `table-drop`, or `table-restore`, along with an
-allow decision, engine, and checked-at timestamp.
+allow decision, engine, and checked-at timestamp. Delete replay preserves the
+table-format generation through nested soft-delete `format-version` evidence.
+Older sidecars may spell that field as `format_version`, but LakeCat rejects a
+soft-delete object that carries both aliases before acknowledgement, graph
+projection, or OpenLineage projection. That keeps archived delete proof from
+hiding conflicting table-format evidence behind the spelling LakeCat happens
+to read first.
 Server endpoint URLs are operator-visible management metadata, so LakeCat keeps
 them deliberately plain: they must be absolute `http` or `https` URLs, and they
 cannot include query strings, fragments, or URI userinfo. Rejected submissions
