@@ -5,6 +5,23 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw management-list summary hardening slice:
+  `Validate raw management-list summaries`.
+  Raw lineage-drain summary construction now reuses the service replay
+  validator for `policy-binding.listed`, `project.listed`, `server.listed`,
+  `storage-profile.listed`, and `warehouse.listed` evidence, rejecting
+  malformed wrappers, authorization receipts, action drift, warehouse/project
+  scope, counts, and duplicate or malformed management identifiers before
+  compact QGLake management proof can inherit them.
+- Local verification for this raw management-list summary slice passed:
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_management_ids -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_scope_scalars -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib lineage_drain_summary -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_management_list -- --test-threads=1`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`; `git diff --check`.
 - Latest raw storage-profile upsert summary hardening slice:
   `Validate raw storage-profile upsert summaries`.
   Raw lineage-drain summary construction now reuses the service replay

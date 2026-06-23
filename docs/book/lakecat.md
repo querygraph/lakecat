@@ -8291,6 +8291,14 @@ project, server, storage-profile, and warehouse list events must carry unsigned
 counts, warehouse-scoped lists must carry a valid warehouse, and optional
 project scope on warehouse-list replay must be a non-empty, syntactically valid
 project identifier before those reads can become replay evidence.
+Raw management-list summaries now use that same service replay validator before
+compact QGLake proof inherits the inventory. This keeps management proof as a
+LakeCat/QueryGraph control-plane extension around catalog state, not a loose
+JSON appendix: list events must still carry the event-matching management
+action, valid authorization receipt, closed wrapper schema, valid warehouse or
+project scope where applicable, count-aligned IDs, and duplicate-free
+identifiers before QueryGraph can treat server, project, warehouse,
+policy-binding, or storage-profile inventory as accepted proof.
 View replay is checked at the same boundary: view list events must carry valid
 warehouse, namespace, and count evidence, while view create/load/drop evidence
 must carry a valid warehouse, namespace, and non-empty view name before graph or

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Hardened raw management-list summary extraction. Raw lineage-drain summary
+  construction now reuses the service replay validator for
+  `policy-binding.listed`, `project.listed`, `server.listed`,
+  `storage-profile.listed`, and `warehouse.listed` evidence, so malformed
+  wrappers, authorization receipts, action drift, warehouse/project scope,
+  counts, and duplicate or malformed management identifiers cannot bypass
+  replay admission before compact QGLake management proof inherits them.
 - Hardened raw storage-profile upsert summary extraction. Raw lineage-drain
   summary construction now reuses the service replay validator for
   `storage-profile.upserted` evidence, so malformed wrapped payloads,

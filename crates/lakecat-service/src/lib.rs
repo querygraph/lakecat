@@ -7279,6 +7279,17 @@ fn lineage_drain_event_summary(
         let payload = event.payload.get("payload").unwrap_or(&event.payload);
         validate_storage_profile_upsert_event_evidence(event, payload)?;
     }
+    if matches!(
+        event.event_type.as_str(),
+        "policy-binding.listed"
+            | "project.listed"
+            | "server.listed"
+            | "storage-profile.listed"
+            | "warehouse.listed"
+    ) {
+        let payload = event.payload.get("payload").unwrap_or(&event.payload);
+        validate_management_list_event_evidence(event, payload)?;
+    }
     if event.event_type == "querygraph.bootstrap" {
         let payload = event.payload.get("payload").unwrap_or(&event.payload);
         validate_querygraph_bootstrap_event_evidence(event, payload)?;
@@ -52401,6 +52412,79 @@ mod tests {
         }
     }
 
+    fn valid_lineage_summary_management_list_event(
+        event_id: &str,
+        event_type: &str,
+    ) -> OutboxEvent {
+        let (action, payload) = match event_type {
+            "policy-binding.listed" => (
+                "policy-manage",
+                json!({
+                    "event-type": "policy-binding.listed",
+                    "warehouse": "local",
+                    "policy-count": 1,
+                    "policy-ids": ["agent-read"]
+                }),
+            ),
+            "project.listed" => (
+                "project-manage",
+                json!({
+                    "event-type": "project.listed",
+                    "project-count": 1,
+                    "project-ids": ["analytics"]
+                }),
+            ),
+            "server.listed" => (
+                "server-manage",
+                json!({
+                    "event-type": "server.listed",
+                    "server-count": 1,
+                    "server-ids": ["primary"]
+                }),
+            ),
+            "storage-profile.listed" => (
+                "storage-profile-manage",
+                json!({
+                    "event-type": "storage-profile.listed",
+                    "warehouse": "local",
+                    "storage-profile-count": 1,
+                    "storage-profile-ids": ["local-file"]
+                }),
+            ),
+            "warehouse.listed" => (
+                "warehouse-manage",
+                json!({
+                    "event-type": "warehouse.listed",
+                    "warehouse-count": 1,
+                    "warehouse-names": ["local"]
+                }),
+            ),
+            other => panic!("unsupported management list event type: {other}"),
+        };
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let mut payload = payload;
+        payload["authorization-receipt"] = json!({
+            "principal": principal,
+            "action": action,
+            "allowed": true,
+            "engine": "lakecat-test",
+            "policy_hash": null,
+            "checked_at": chrono::Utc::now().to_rfc3339()
+        });
+        OutboxEvent {
+            event_id: event_id.to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: event_type.to_string(),
+            payload: json!({
+                "audit-event-id": format!("audit-envelope-{event_id}"),
+                "event-type": event_type,
+                "payload": payload
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        }
+    }
+
     #[test]
     fn lineage_drain_summary_rejects_malformed_raw_credential_exception() {
         let receipt = OutboxProjectionReceipt::default();
@@ -52894,287 +52978,128 @@ mod tests {
     #[test]
     fn lineage_drain_summary_rejects_malformed_management_ids() {
         let receipt = OutboxProjectionReceipt::default();
-        let malformed_project_ids = OutboxEvent {
-            event_id: "evt-bad-summary-project-ids".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "project.listed".to_string(),
-            payload: json!({
-                "payload": {
-                    "project-count": 2,
-                    "project-ids": ["analytics", 42]
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
-        let err = lineage_drain_event_summary(&malformed_project_ids, &receipt)
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("project-ids must contain strings"));
+        let cases = [
+            (
+                "evt-bad-summary-project-ids",
+                "project.listed",
+                "project-ids",
+                json!([42]),
+                "project list project-ids must contain non-empty strings",
+            ),
+            (
+                "evt-blank-summary-server-id",
+                "server.listed",
+                "server-ids",
+                json!([" "]),
+                "server list server-ids must contain non-empty strings",
+            ),
+            (
+                "evt-duplicate-summary-warehouse-name",
+                "warehouse.listed",
+                "warehouse-names",
+                json!(["local", "local"]),
+                "warehouse list warehouse-names must not contain duplicate identifiers",
+            ),
+            (
+                "evt-duplicate-summary-policy-id",
+                "policy-binding.listed",
+                "policy-ids",
+                json!(["agent-read", "agent-read"]),
+                "policy-binding list policy-ids must not contain duplicate identifiers",
+            ),
+            (
+                "evt-bad-summary-storage-profile-ids",
+                "storage-profile.listed",
+                "storage-profile-ids",
+                json!({"profile-id": "local-file"}),
+                "storage-profile list storage-profile-ids must be an array when present",
+            ),
+            (
+                "evt-count-drift-summary-project-ids",
+                "project.listed",
+                "project-ids",
+                json!(["analytics", "experiments"]),
+                "project list project-ids count must match project list count",
+            ),
+            (
+                "evt-count-drift-summary-server-ids",
+                "server.listed",
+                "server-ids",
+                json!(["primary", "backup"]),
+                "server list server-ids count must match server list count",
+            ),
+            (
+                "evt-count-drift-summary-warehouse-names",
+                "warehouse.listed",
+                "warehouse-names",
+                json!(["local", "warehouse2"]),
+                "warehouse list warehouse-names count must match warehouse list count",
+            ),
+            (
+                "evt-count-drift-summary-storage-profile-ids",
+                "storage-profile.listed",
+                "storage-profile-ids",
+                json!(["local-file", "s3-events"]),
+                "storage-profile list storage-profile-ids count must match storage-profile list count",
+            ),
+            (
+                "evt-count-drift-summary-policy-ids",
+                "policy-binding.listed",
+                "policy-ids",
+                json!(["agent-read", "agent-write"]),
+                "policy-binding list policy-ids count must match policy-binding list count",
+            ),
+            (
+                "evt-malformed-summary-project-count",
+                "project.listed",
+                "project-count",
+                json!("2"),
+                "project list evidence must contain unsigned project-count",
+            ),
+            (
+                "evt-malformed-summary-server-count",
+                "server.listed",
+                "server-count",
+                json!(-1),
+                "server list evidence must contain unsigned server-count",
+            ),
+            (
+                "evt-malformed-summary-warehouse-count",
+                "warehouse.listed",
+                "warehouse-count",
+                json!("3"),
+                "warehouse list evidence must contain unsigned warehouse-count",
+            ),
+            (
+                "evt-malformed-summary-storage-profile-count",
+                "storage-profile.listed",
+                "storage-profile-count",
+                json!("1"),
+                "storage-profile list evidence must contain unsigned storage-profile-count",
+            ),
+            (
+                "evt-malformed-summary-policy-count",
+                "policy-binding.listed",
+                "policy-count",
+                json!("1"),
+                "policy-binding list evidence must contain unsigned policy-count",
+            ),
+        ];
 
-        let blank_server_id = OutboxEvent {
-            event_id: "evt-blank-summary-server-id".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "server.listed".to_string(),
-            payload: json!({
-                "payload": {
-                    "server-count": 2,
-                    "server-ids": ["primary", " "]
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
-        let err = lineage_drain_event_summary(&blank_server_id, &receipt)
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("server-ids must not contain blank strings"));
-
-        let duplicate_warehouse_name = OutboxEvent {
-            event_id: "evt-duplicate-summary-warehouse-name".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "warehouse.listed".to_string(),
-            payload: json!({
-                "payload": {
-                    "warehouse-count": 2,
-                    "warehouse-names": ["local", "local"]
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
-        let err = lineage_drain_event_summary(&duplicate_warehouse_name, &receipt)
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("warehouse-names must not contain duplicate values"));
-
-        let duplicate_policy_id = OutboxEvent {
-            event_id: "evt-duplicate-summary-policy-id".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "policy-binding.listed".to_string(),
-            payload: json!({
-                "payload": {
-                    "policy-binding-count": 2,
-                    "policy-ids": ["agent-read", "agent-read"]
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
-        let err = lineage_drain_event_summary(&duplicate_policy_id, &receipt)
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("policy-ids must not contain duplicate values"));
-
-        let malformed_storage_profile_ids = OutboxEvent {
-            event_id: "evt-bad-summary-storage-profile-ids".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "storage-profile.listed".to_string(),
-            payload: json!({
-                "payload": {
-                    "storage-profile-count": 1,
-                    "storage-profile-ids": {"profile-id": "local-file"}
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
-        let err = lineage_drain_event_summary(&malformed_storage_profile_ids, &receipt)
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("storage-profile-ids must be an array when present"));
-
-        let project_count_drift = OutboxEvent {
-            event_id: "evt-count-drift-summary-project-ids".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "project.listed".to_string(),
-            payload: json!({
-                "payload": {
-                    "project-count": 2,
-                    "project-ids": ["analytics"]
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
-        let err = lineage_drain_event_summary(&project_count_drift, &receipt)
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("project-ids count must match project-count"));
-
-        let server_count_drift = OutboxEvent {
-            event_id: "evt-count-drift-summary-server-ids".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "server.listed".to_string(),
-            payload: json!({
-                "payload": {
-                    "server-count": 2,
-                    "server-ids": ["primary"]
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
-        let err = lineage_drain_event_summary(&server_count_drift, &receipt)
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("server-ids count must match server-count"));
-
-        let warehouse_count_drift = OutboxEvent {
-            event_id: "evt-count-drift-summary-warehouse-names".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "warehouse.listed".to_string(),
-            payload: json!({
-                "payload": {
-                    "warehouse-count": 2,
-                    "warehouse-names": ["local"]
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
-        let err = lineage_drain_event_summary(&warehouse_count_drift, &receipt)
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("warehouse-names count must match warehouse-count"));
-
-        let storage_profile_count_drift = OutboxEvent {
-            event_id: "evt-count-drift-summary-storage-profile-ids".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "storage-profile.listed".to_string(),
-            payload: json!({
-                "payload": {
-                    "storage-profile-count": 2,
-                    "storage-profile-ids": ["local-file"]
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
-        let err = lineage_drain_event_summary(&storage_profile_count_drift, &receipt)
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("storage-profile-ids count must match storage-profile-count"));
-
-        let policy_count_drift = OutboxEvent {
-            event_id: "evt-count-drift-summary-policy-ids".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "policy-binding.listed".to_string(),
-            payload: json!({
-                "payload": {
-                    "policy-binding-count": 2,
-                    "policy-ids": ["agent-read"]
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
-        let err = lineage_drain_event_summary(&policy_count_drift, &receipt)
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("policy-ids count must match policy-binding-count"));
-
-        let malformed_project_count = OutboxEvent {
-            event_id: "evt-malformed-summary-project-count".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "project.listed".to_string(),
-            payload: json!({
-                "payload": {
-                    "project-count": "2"
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
-        let err = lineage_drain_event_summary(&malformed_project_count, &receipt)
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("project-count must be an unsigned integer when present"));
-
-        let malformed_server_count = OutboxEvent {
-            event_id: "evt-malformed-summary-server-count".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "server.listed".to_string(),
-            payload: json!({
-                "payload": {
-                    "server-count": -1
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
-        let err = lineage_drain_event_summary(&malformed_server_count, &receipt)
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("server-count must be an unsigned integer when present"));
-
-        let malformed_warehouse_count = OutboxEvent {
-            event_id: "evt-malformed-summary-warehouse-count".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "warehouse.listed".to_string(),
-            payload: json!({
-                "payload": {
-                    "warehouse-count": "3"
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
-        let err = lineage_drain_event_summary(&malformed_warehouse_count, &receipt)
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("warehouse-count must be an unsigned integer when present"));
-
-        let malformed_storage_profile_count = OutboxEvent {
-            event_id: "evt-malformed-summary-storage-profile-count".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "storage-profile.listed".to_string(),
-            payload: json!({
-                "payload": {
-                    "storage-profile-count": "1"
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
-        let err = lineage_drain_event_summary(&malformed_storage_profile_count, &receipt)
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("storage-profile-count must be an unsigned integer when present"));
-
-        let malformed_policy_binding_count = OutboxEvent {
-            event_id: "evt-malformed-summary-policy-binding-count".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "policy-binding.listed".to_string(),
-            payload: json!({
-                "payload": {
-                    "policy-binding-count": "1"
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
-        let err = lineage_drain_event_summary(&malformed_policy_binding_count, &receipt)
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("policy-binding-count must be an unsigned integer when present"));
-
-        let malformed_legacy_policy_count = OutboxEvent {
-            event_id: "evt-malformed-summary-legacy-policy-count".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "policy-binding.listed".to_string(),
-            payload: json!({
-                "payload": {
-                    "policy-count": "1"
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
-        let err = lineage_drain_event_summary(&malformed_legacy_policy_count, &receipt)
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("policy-count must be an unsigned integer when present"));
+        for (event_id, event_type, field, value, expected_message) in cases {
+            let mut event = valid_lineage_summary_management_list_event(event_id, event_type);
+            event.payload["payload"][field] = value;
+            if event_id.contains("duplicate-summary-warehouse-name") {
+                event.payload["payload"]["warehouse-count"] = json!(2);
+            }
+            if event_id.contains("duplicate-summary-policy-id") {
+                event.payload["payload"]["policy-count"] = json!(2);
+            }
+            let err = lineage_drain_event_summary(&event, &receipt)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains(expected_message), "{err}");
+        }
     }
 
     #[test]
@@ -53257,15 +53182,21 @@ mod tests {
         ];
 
         for (event_id, event_type, payload, expected_message) in cases {
-            let event = OutboxEvent {
-                event_id: event_id.to_string(),
-                sink: "lakecat.lineage-and-graph".to_string(),
-                event_type: event_type.to_string(),
-                payload: json!({
-                    "payload": payload
-                }),
-                created_at: chrono::Utc::now(),
-                delivered_at: None,
+            let event = if event_type == "warehouse.listed" {
+                let mut event = valid_lineage_summary_management_list_event(event_id, event_type);
+                merge_json_object(&mut event.payload["payload"], payload);
+                event
+            } else {
+                OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "payload": payload
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }
             };
             let err = lineage_drain_event_summary(&event, &receipt)
                 .unwrap_err()
