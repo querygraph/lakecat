@@ -6,6 +6,12 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Harden authorization identity summaries`.
+  Raw lineage-drain summaries now fail closed when authorization principal,
+  receipt action, or request-identity state/source string evidence is malformed
+  or blank, preventing compact QGLake/QueryGraph summaries from silently
+  omitting corrupted TypeSec/agent identity proof.
+- Latest implementation/testing slice:
   `Harden QueryGraph hash summaries`.
   Raw lineage-drain summaries now fail closed when present QueryGraph bootstrap
   `bundle-hash`, `graph-hash`, `open-lineage-hash`, `querygraph-import-hash`,

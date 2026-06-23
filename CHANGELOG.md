@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened lineage-drain authorization identity string summaries. Raw replay
+  summary construction now rejects malformed or blank authorization principal,
+  receipt action, and request-identity state/source string evidence instead of
+  silently omitting corrupted TypeSec/agent identity proof from compact
+  QGLake/QueryGraph summaries.
 - Hardened lineage-drain QueryGraph hash summaries. Raw replay summary
   construction now rejects malformed present bootstrap `bundle-hash`,
   `graph-hash`, `open-lineage-hash`, `querygraph-import-hash`, and

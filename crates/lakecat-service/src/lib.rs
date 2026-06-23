@@ -7049,6 +7049,8 @@ fn lineage_drain_event_summary(
         raw_credential_exception_reason,
         credential_block_reason,
     ) = lineage_summary_credential_exception_fields(event, payload, credential_count)?;
+    let (principal_subject, principal_kind) =
+        lineage_summary_authorization_principal_fields(event, authorization_receipt)?;
     let policy = payload.get("policy");
     Ok(LineageDrainEventSummary {
         event_id: event.event_id.clone(),
@@ -7070,29 +7072,27 @@ fn lineage_drain_event_summary(
             .map(|_| lineage_summary_string_array_field(event, payload, "endpoints"))
             .transpose()?
             .unwrap_or_default(),
-        principal_subject: payload
-            .pointer("/authorization-receipt/principal/subject")
-            .and_then(Value::as_str)
-            .map(str::to_string),
-        principal_kind: payload
-            .pointer("/authorization-receipt/principal/kind")
-            .and_then(Value::as_str)
-            .map(str::to_string),
+        principal_subject,
+        principal_kind,
         authorization_receipt_hash: payload
             .get("authorization-receipt")
             .and_then(|receipt| content_hash_json(receipt).ok()),
         authorization_receipt_action: authorization_receipt
-            .and_then(|receipt| receipt.get("action"))
-            .and_then(Value::as_str)
-            .map(str::to_string),
+            .map(|receipt| lineage_summary_optional_nonblank_string_field(event, receipt, "action"))
+            .transpose()?
+            .flatten(),
         request_identity_state: request_identity
-            .and_then(|identity| identity.get("attestation-state"))
-            .and_then(Value::as_str)
-            .map(str::to_string),
+            .map(|identity| {
+                lineage_summary_optional_nonblank_string_field(event, identity, "attestation-state")
+            })
+            .transpose()?
+            .flatten(),
         request_identity_source: request_identity
-            .and_then(|identity| identity.get("source"))
-            .and_then(Value::as_str)
-            .map(str::to_string),
+            .map(|identity| {
+                lineage_summary_optional_nonblank_string_field(event, identity, "source")
+            })
+            .transpose()?
+            .flatten(),
         typedid_envelope_hash: request_identity
             .map(|identity| {
                 lineage_summary_optional_full_hash_field(event, identity, "typedid-envelope-sha256")
@@ -7867,6 +7867,21 @@ fn lineage_summary_credential_exception_fields(
         ));
     }
     Ok((Some(false), None, Some(block_reason)))
+}
+
+fn lineage_summary_authorization_principal_fields(
+    event: &OutboxEvent,
+    authorization_receipt: Option<&Value>,
+) -> Result<(Option<String>, Option<String>), LakeCatError> {
+    let Some(authorization_receipt) = authorization_receipt else {
+        return Ok((None, None));
+    };
+    let Some(principal) = authorization_receipt.get("principal") else {
+        return Ok((None, None));
+    };
+    let subject = lineage_summary_optional_nonblank_string_field(event, principal, "subject")?;
+    let kind = lineage_summary_optional_nonblank_string_field(event, principal, "kind")?;
+    Ok((subject, kind))
 }
 
 fn lineage_summary_optional_nonblank_string_field(
@@ -49639,6 +49654,89 @@ mod tests {
                             }
                         }
                     }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            };
+            let err = lineage_drain_event_summary(&event, &receipt)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains(expected_message), "{err}");
+        }
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_authorization_identity_strings() {
+        let receipt = OutboxProjectionReceipt::default();
+        let cases = [
+            (
+                "evt-bad-summary-principal-subject",
+                json!({
+                    "authorization-receipt": {
+                        "principal": {
+                            "subject": 42,
+                            "kind": "agent"
+                        }
+                    }
+                }),
+                "subject must be a string when present",
+            ),
+            (
+                "evt-blank-summary-principal-kind",
+                json!({
+                    "authorization-receipt": {
+                        "principal": {
+                            "subject": "agent:writer",
+                            "kind": " "
+                        }
+                    }
+                }),
+                "kind must not be blank",
+            ),
+            (
+                "evt-bad-summary-receipt-action",
+                json!({
+                    "authorization-receipt": {
+                        "action": 42
+                    }
+                }),
+                "action must be a string when present",
+            ),
+            (
+                "evt-blank-summary-request-identity-state",
+                json!({
+                    "authorization-receipt": {
+                        "context": {
+                            "request-identity": {
+                                "attestation-state": " "
+                            }
+                        }
+                    }
+                }),
+                "attestation-state must not be blank",
+            ),
+            (
+                "evt-bad-summary-request-identity-source",
+                json!({
+                    "authorization-receipt": {
+                        "context": {
+                            "request-identity": {
+                                "source": 42
+                            }
+                        }
+                    }
+                }),
+                "source must be a string when present",
+            ),
+        ];
+
+        for (event_id, payload, expected_message) in cases {
+            let event = OutboxEvent {
+                event_id: event_id.to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "querygraph.bootstrap".to_string(),
+                payload: json!({
+                    "payload": payload
                 }),
                 created_at: chrono::Utc::now(),
                 delivered_at: None,
