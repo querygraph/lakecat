@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened fetched-scan stats-field summary extraction. Raw lineage-drain
+  summary construction now rejects present `stats-fields` proof when it is
+  empty, duplicate-bearing, or drifted from `effective-stats-fields`, matching
+  service replay before compact QGLake scan proof can inherit fetched stats
+  evidence.
 - Hardened fetched-scan plan-task summary extraction. Raw lineage-drain summary
   construction now rejects decorated, credential-bearing, or non-LakeCat
   `plan-task` evidence before compact QGLake scan proof can inherit archived

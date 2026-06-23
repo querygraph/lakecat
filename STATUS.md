@@ -6,6 +6,18 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest raw scan summary hardening slice:
+  `Validate fetched stats-field summaries`.
+  Raw lineage-drain summary construction now rejects present fetched
+  `stats-fields` evidence unless it is non-empty, duplicate-free, and bound to
+  `effective-stats-fields`, so compact QGLake scan proof cannot inherit
+  archived fetched stats evidence that service replay would reject.
+- Local verification for this raw scan summary slice passed:
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_scan_stats_fields -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service` passed;
+  `scripts/check-release-readiness.sh --quick` passed; `git diff --check`
+  passed.
+- Latest raw scan summary hardening slice:
   `Validate scan plan-task summaries`.
   Raw lineage-drain summary construction now rejects present fetched-scan
   `plan-task` evidence unless it is a non-empty LakeCat-issued token without

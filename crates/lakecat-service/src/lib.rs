@@ -7367,6 +7367,17 @@ fn lineage_drain_event_summary(
         &table_commit_sequence_numbers,
         &table_commit_hashes,
     )?;
+    let requested_stats_fields = payload
+        .get("requested-stats-fields")
+        .map(|_| lineage_summary_string_array_field(event, payload, "requested-stats-fields"))
+        .transpose()?
+        .unwrap_or_default();
+    let effective_stats_fields = payload
+        .get("effective-stats-fields")
+        .map(|_| lineage_summary_string_array_field(event, payload, "effective-stats-fields"))
+        .transpose()?
+        .unwrap_or_default();
+    validate_lineage_summary_stats_fields(event, payload, &effective_stats_fields)?;
     Ok(LineageDrainEventSummary {
         event_id: event.event_id.clone(),
         event_type: event.event_type.clone(),
@@ -7619,16 +7630,8 @@ fn lineage_drain_event_summary(
             .transpose()?
             .unwrap_or_default(),
         required_filters: lineage_summary_required_filters(event, payload)?,
-        requested_stats_fields: payload
-            .get("requested-stats-fields")
-            .map(|_| lineage_summary_string_array_field(event, payload, "requested-stats-fields"))
-            .transpose()?
-            .unwrap_or_default(),
-        effective_stats_fields: payload
-            .get("effective-stats-fields")
-            .map(|_| lineage_summary_string_array_field(event, payload, "effective-stats-fields"))
-            .transpose()?
-            .unwrap_or_default(),
+        requested_stats_fields,
+        effective_stats_fields,
         management_scope_project_id: lineage_summary_optional_nonblank_string_field(
             event,
             payload,
@@ -7811,6 +7814,31 @@ fn validate_lineage_summary_commit_history_counts(
         ));
     }
     Ok(())
+}
+
+fn validate_lineage_summary_stats_fields(
+    event: &OutboxEvent,
+    payload: &Value,
+    effective_stats_fields: &[String],
+) -> Result<(), LakeCatError> {
+    if payload.get("stats-fields").is_none() {
+        return Ok(());
+    }
+    let stats_fields = lineage_summary_string_array_field(event, payload, "stats-fields")?;
+    if stats_fields.is_empty() {
+        return Err(outbox_evidence_error(
+            event,
+            "stats-fields must not be empty when present",
+        ));
+    }
+    validate_effective_evidence_subset(
+        event,
+        "lineage drain summary stats-fields",
+        &stats_fields,
+        "effective-stats-fields",
+        effective_stats_fields,
+        true,
+    )
 }
 
 fn optional_array_field<'a>(
@@ -51229,6 +51257,84 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("effective-stats-fields must contain strings"));
+
+        let empty_stats_fields = OutboxEvent {
+            event_id: "evt-empty-summary-stats-fields".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.scan-tasks-fetched".to_string(),
+            payload: json!({
+                "payload": {
+                    "requested-projection": ["event_id"],
+                    "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
+                    "stats-fields": [],
+                    "file-scan-task-count": 1,
+                    "delete-file-count": 0,
+                    "child-plan-task-count": 0
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&empty_stats_fields, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("stats-fields must not be empty when present"));
+
+        let duplicate_stats_fields = OutboxEvent {
+            event_id: "evt-duplicate-summary-stats-fields".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.scan-tasks-fetched".to_string(),
+            payload: json!({
+                "payload": {
+                    "requested-projection": ["event_id"],
+                    "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
+                    "stats-fields": ["event_id", "event_id"],
+                    "file-scan-task-count": 1,
+                    "delete-file-count": 0,
+                    "child-plan-task-count": 0
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&duplicate_stats_fields, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("stats-fields must not contain duplicate values"));
+
+        let drifted_stats_fields = OutboxEvent {
+            event_id: "evt-drifted-summary-stats-fields".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.scan-tasks-fetched".to_string(),
+            payload: json!({
+                "payload": {
+                    "requested-projection": ["event_id", "payload"],
+                    "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id", "payload"],
+                    "effective-stats-fields": ["event_id"],
+                    "stats-fields": ["event_id", "payload"],
+                    "file-scan-task-count": 1,
+                    "delete-file-count": 0,
+                    "child-plan-task-count": 0
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&drifted_stats_fields, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains(
+                "lineage drain summary stats-fields must be a subset of effective-stats-fields"
+            ) || err
+                .contains("lineage drain summary stats-fields must match effective-stats-fields"),
+            "{err}"
+        );
     }
 
     #[test]
