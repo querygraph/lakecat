@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Hardened raw namespace summary extraction. Raw lineage-drain summary
+  construction now reuses the service replay validators for `namespace.listed`,
+  `namespace.created`, `namespace.loaded`, and `namespace.dropped` evidence, so
+  malformed wrappers, namespace paths, counts, duplicate namespace inventory,
+  receipt actions, and authorization receipts cannot bypass replay admission
+  before compact QGLake standard catalog proof inherits them.
 - Hardened raw management-upsert summary extraction. Raw lineage-drain summary
   construction now reuses the service replay validators for
   `policy-binding.upserted`, `project.upserted`, `server.upserted`, and

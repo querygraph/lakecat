@@ -7307,6 +7307,17 @@ fn lineage_drain_event_summary(
         let payload = event.payload.get("payload").unwrap_or(&event.payload);
         validate_management_list_event_evidence(event, payload)?;
     }
+    if event.event_type == "namespace.listed" {
+        let payload = event.payload.get("payload").unwrap_or(&event.payload);
+        validate_namespace_list_event_evidence(event, payload)?;
+    }
+    if matches!(
+        event.event_type.as_str(),
+        "namespace.created" | "namespace.dropped" | "namespace.loaded"
+    ) {
+        let payload = event.payload.get("payload").unwrap_or(&event.payload);
+        validate_namespace_lifecycle_event_evidence(event, payload)?;
+    }
     if event.event_type == "querygraph.bootstrap" {
         let payload = event.payload.get("payload").unwrap_or(&event.payload);
         validate_querygraph_bootstrap_event_evidence(event, payload)?;
@@ -52429,6 +52440,67 @@ mod tests {
         }
     }
 
+    fn valid_lineage_summary_namespace_event(event_id: &str, event_type: &str) -> OutboxEvent {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let (action, payload) = match event_type {
+            "namespace.listed" => (
+                "namespace-list",
+                json!({
+                    "event-type": "namespace.listed",
+                    "warehouse": "local",
+                    "namespace-count": 1,
+                    "namespace-paths": ["default"]
+                }),
+            ),
+            "namespace.created" => (
+                "namespace-create",
+                json!({
+                    "event-type": "namespace.created",
+                    "warehouse": "local",
+                    "namespace": ["default"]
+                }),
+            ),
+            "namespace.loaded" => (
+                "namespace-load",
+                json!({
+                    "event-type": "namespace.loaded",
+                    "warehouse": "local",
+                    "namespace": ["default"]
+                }),
+            ),
+            "namespace.dropped" => (
+                "namespace-drop",
+                json!({
+                    "event-type": "namespace.dropped",
+                    "warehouse": "local",
+                    "namespace": ["default"]
+                }),
+            ),
+            other => panic!("unsupported namespace event type: {other}"),
+        };
+        let mut payload = payload;
+        payload["authorization-receipt"] = json!({
+            "principal": principal,
+            "action": action,
+            "allowed": true,
+            "engine": "lakecat-test",
+            "policy_hash": null,
+            "checked_at": chrono::Utc::now().to_rfc3339()
+        });
+        OutboxEvent {
+            event_id: event_id.to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: event_type.to_string(),
+            payload: json!({
+                "audit-event-id": format!("audit-envelope-{event_id}"),
+                "event-type": event_type,
+                "payload": payload
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        }
+    }
+
     fn valid_lineage_summary_management_upsert_event(
         event_id: &str,
         event_type: &str,
@@ -53334,6 +53406,78 @@ mod tests {
                 .unwrap_err()
                 .to_string();
             assert!(err.contains(expected_message), "{err}");
+        }
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_namespace_events() {
+        let receipt = OutboxProjectionReceipt::default();
+        let cases = [
+            (
+                "evt-bad-summary-namespace-count",
+                "namespace.listed",
+                json!({
+                    "namespace-count": "1"
+                }),
+                "namespace list evidence must contain unsigned namespace-count",
+            ),
+            (
+                "evt-bad-summary-namespace-paths",
+                "namespace.listed",
+                json!({
+                    "namespace-count": 2,
+                    "namespace-paths": ["default", 42]
+                }),
+                "namespace list namespace-paths must contain non-empty strings",
+            ),
+            (
+                "evt-duplicate-summary-namespace-paths",
+                "namespace.listed",
+                json!({
+                    "namespace-count": 2,
+                    "namespace-paths": ["default", "default"]
+                }),
+                "namespace list namespace-paths must not contain duplicate namespaces",
+            ),
+            (
+                "evt-bad-summary-namespace-lifecycle-namespace",
+                "namespace.created",
+                json!({
+                    "namespace": ["default", 42]
+                }),
+                "namespace lifecycle namespace components must be non-empty strings",
+            ),
+            (
+                "evt-bad-summary-namespace-lifecycle-action",
+                "namespace.loaded",
+                json!({
+                    "authorization-receipt": {
+                        "action": "namespace-create"
+                    }
+                }),
+                "namespace lifecycle authorization receipt action does not match outbox event type",
+            ),
+            (
+                "evt-extra-summary-namespace-lifecycle-field",
+                "namespace.dropped",
+                json!({
+                    "querygraph": {
+                        "claim": "shadow"
+                    }
+                }),
+                "namespace lifecycle contains unexpected field querygraph",
+            ),
+        ];
+
+        for (event_id, event_type, payload, expected_message) in cases {
+            let mut event = valid_lineage_summary_namespace_event(event_id, event_type);
+            merge_json_object(&mut event.payload["payload"], payload);
+            let err = lineage_drain_event_summary(&event, &receipt)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains(expected_message), "{event_id}: {err}");
+            assert!(err.contains("event-id-hash=sha256:"), "{event_id}: {err}");
+            assert!(!err.contains(event_id), "{event_id}: {err}");
         }
     }
 

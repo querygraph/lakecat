@@ -1301,6 +1301,11 @@ lineage, or QGLake claims beside otherwise valid standard catalog evidence.
 Service replay now also closes the wrapped namespace lifecycle envelopes over
 the producer wrapper fields, so those claims cannot ride beside an otherwise
 valid checked namespace create/load/drop payload.
+Raw lineage-drain summary extraction must apply those same validators for
+`namespace.listed`, `namespace.created`, `namespace.loaded`, and
+`namespace.dropped`, including count-bound and duplicate-free namespace
+inventory, event-matching receipt actions, closed wrappers, and namespace path
+validation before compact QGLake standard catalog proof inherits the evidence.
 Table lifecycle replay for create, load, delete, and restore events must carry
 the same valid authorization receipt principal plus an event-matching catalog
 action, affirmative allowed decision, non-empty engine, and RFC3339 `checked_at`
