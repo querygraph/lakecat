@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened management-list identifier diagnostics. List replay now returns
+  hash-only field diagnostics for invalid policy, project, server,
+  storage-profile, warehouse-name, and warehouse-list project identifiers
+  before acknowledgement, graph projection, or lineage projection.
 - Hardened management identifier replay diagnostics. Policy-binding,
   project, server, and warehouse management replay now validates policy,
   project, and server-style identifiers before record reconstruction, returning

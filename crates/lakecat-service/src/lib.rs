@@ -4989,6 +4989,7 @@ fn validate_management_list_event_evidence(
                 "policy-ids",
                 count,
                 "policy-binding list",
+                "policy-id",
                 |id| PolicyBinding::new(id, warehouse.clone(), None, None, true, json!({})).is_ok(),
             )?;
         }
@@ -5011,6 +5012,7 @@ fn validate_management_list_event_evidence(
                 "project-ids",
                 count,
                 "project list",
+                "project-id",
                 |id| {
                     ProjectRecord::new(id, None, None, BTreeMap::new(), Principal::anonymous())
                         .is_ok()
@@ -5036,6 +5038,7 @@ fn validate_management_list_event_evidence(
                 "server-ids",
                 count,
                 "server list",
+                "server-id",
                 |id| {
                     ServerRecord::new(id, None, None, BTreeMap::new(), Principal::anonymous())
                         .is_ok()
@@ -5063,6 +5066,7 @@ fn validate_management_list_event_evidence(
                 "storage-profile-ids",
                 count,
                 "storage-profile list",
+                "storage-profile-id",
                 |id| {
                     StorageProfile::new(
                         id,
@@ -5104,7 +5108,10 @@ fn validate_management_list_event_evidence(
                 {
                     return Err(outbox_evidence_error(
                         event,
-                        "warehouse list project-id contains an invalid identifier",
+                        &format!(
+                            "warehouse list project-id contains an invalid identifier; project-id-hash={}",
+                            content_hash_bytes(project_id.as_bytes())
+                        ),
                     ));
                 }
             }
@@ -5114,6 +5121,7 @@ fn validate_management_list_event_evidence(
                 "warehouse-names",
                 count,
                 "warehouse list",
+                "warehouse-name",
                 |id| WarehouseName::new(id).is_ok(),
             )?;
         }
@@ -5129,6 +5137,7 @@ fn validate_required_management_id_array(
     field: &str,
     expected_count: u64,
     label: &str,
+    hash_field: &str,
     is_valid_id: impl Fn(&str) -> bool,
 ) -> Result<(), LakeCatError> {
     let Some(ids) = payload.get(field) else {
@@ -5166,7 +5175,10 @@ fn validate_required_management_id_array(
         if !is_valid_id(id) {
             return Err(outbox_evidence_error(
                 event,
-                &format!("{label} {field} contains an invalid identifier"),
+                &format!(
+                    "{label} {field} contains an invalid identifier; {hash_field}-hash={}",
+                    content_hash_bytes(id.as_bytes())
+                ),
             ));
         }
     }
@@ -39650,6 +39662,108 @@ mod tests {
             lineage_events[4].payload["warehouse-names"],
             serde_json::json!(["local", "sandbox", "prod"])
         );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_management_list_invalid_ids_with_hashes() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let invalid_id = "agent-read?token=secret";
+        let cases = [
+            (
+                "policy-binding.listed",
+                "policy-manage",
+                json!({
+                    "warehouse": "local",
+                    "policy-count": 1,
+                    "policy-ids": [invalid_id],
+                }),
+                "policy-id-hash=sha256:",
+            ),
+            (
+                "project.listed",
+                "project-manage",
+                json!({
+                    "project-count": 1,
+                    "project-ids": [invalid_id],
+                }),
+                "project-id-hash=sha256:",
+            ),
+            (
+                "storage-profile.listed",
+                "storage-profile-manage",
+                json!({
+                    "warehouse": "local",
+                    "storage-profile-count": 1,
+                    "storage-profile-ids": [invalid_id],
+                }),
+                "storage-profile-id-hash=sha256:",
+            ),
+            (
+                "warehouse.listed",
+                "warehouse-manage",
+                json!({
+                    "project-id": invalid_id,
+                    "warehouse-count": 1,
+                    "warehouse-names": ["local"],
+                }),
+                "project-id-hash=sha256:",
+            ),
+        ];
+
+        for (event_type, action, mut payload, expected_hash) in cases {
+            let payload_object = payload.as_object_mut().unwrap();
+            payload_object.insert(
+                "authorization-receipt".to_string(),
+                json!({
+                    "principal": principal,
+                    "action": action,
+                    "allowed": true,
+                    "engine": "test",
+                    "policy_hash": null,
+                    "checked_at": chrono::Utc::now(),
+                }),
+            );
+            let event_id = format!("evt-invalid-management-list-{}", event_type);
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{event_id}"),
+                        "event-type": event_type,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("invalid management list id should fail before delivery");
+            let message = err.to_string();
+            assert!(message.contains(event_type));
+            assert!(message.contains("invalid identifier"));
+            assert!(message.contains(expected_hash));
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(invalid_id));
+            assert!(!message.contains("token=secret"));
+            assert!(!message.contains(&event_id));
+            assert!(store.delivered.lock().await.is_empty());
+            assert!(graph.events.lock().await.is_empty());
+            assert!(lineage.events.lock().await.is_empty());
+        }
     }
 
     #[tokio::test]

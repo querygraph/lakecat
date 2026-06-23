@@ -5,6 +5,19 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest management-list replay hardening slice:
+  `Hash invalid management list identifiers`.
+  Service outbox replay now returns hash-only field diagnostics for invalid
+  policy, project, server, storage-profile, warehouse-name, and warehouse-list
+  project identifiers before acknowledgement, graph projection, OpenLineage
+  projection, or QGLake replay. The focused regression asserts token-bearing
+  invalid IDs stay out of errors.
+- Local verification for this management-list replay slice is green:
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_management_list_invalid_ids_with_hashes -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service` passed;
+  `scripts/check-release-readiness.sh --quick` passed; `git diff --check`
+  passed.
 - Latest management replay hardening slice:
   `Hash invalid management identifiers at replay`.
   Service outbox replay now validates policy, project, server, and
