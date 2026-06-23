@@ -387,6 +387,12 @@ function requireHash(value, label) {
     process.exit(1);
   }
 }
+function requireNonBlankString(value, label) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    console.error(`LakeCat storage-profile upsert evidence ${label} must be a non-empty string`);
+    process.exit(1);
+  }
+}
 function requireHashArray(value, label) {
   if (!Array.isArray(value) || value.length === 0) {
     console.error(`LakeCat storage-profile upsert evidence is missing ${label}`);
@@ -470,6 +476,9 @@ if (!Array.isArray(evidence.replayEventHashes) || evidence.replayEventHashes.len
 if (typeof evidence.secretRefPresent !== "boolean") {
   console.error("LakeCat storage-profile upsert evidence is missing explicit secretRefPresent");
   process.exit(1);
+}
+if (evidence.secretRefPresent) {
+  requireNonBlankString(evidence.secretRefProvider, "secretRefProvider");
 }
 if (evidence.secretRefPresent && !evidence.secretRefProvider) {
   console.error("LakeCat storage-profile upsert evidence is missing secretRefProvider");
@@ -710,6 +719,10 @@ function requireStorageProfile(value, label) {
   }
   if (value.secretRefPresent === false && value.secretRefProvider !== null && value.secretRefProvider !== undefined) {
     console.error(`LakeCat credential replay evidence carried ${label} secret-ref provider without secret-ref presence`);
+    process.exit(1);
+  }
+  if (value.secretRefPresent === true && (typeof value.secretRefProvider !== "string" || value.secretRefProvider.trim().length === 0)) {
+    console.error(`LakeCat credential replay evidence is missing ${label} secret-ref provider`);
     process.exit(1);
   }
   if (value.secretRefPresent === true && !value.secretRefHash) {

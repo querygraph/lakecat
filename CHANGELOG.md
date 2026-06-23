@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Tightened the local QGLake handoff secret-reference verifier. Compact
+  storage-profile upsert proof and credential storage-profile proof now require
+  nonblank `secretRefProvider` evidence whenever `secretRefPresent` is true.
 - Tightened the local QGLake handoff management verifier. Compact management
   proof now rejects duplicate server/project/warehouse/policy/storage-profile
   identity arrays and requires present `warehouseProjectId` scope evidence to

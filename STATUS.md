@@ -6,6 +6,11 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest handoff-script hardening slice:
+  `Tighten compact secret-reference provider proof`.
+  `scripts/qglake-handoff-local.sh` now requires nonblank
+  `secretRefProvider` evidence whenever compact storage-profile upsert proof
+  or credential storage-profile proof sets `secretRefPresent` to true.
+- Latest handoff-script hardening slice:
   `Tighten compact management identity proof`.
   `scripts/qglake-handoff-local.sh` now rejects duplicate compact management
   identity arrays and requires present `warehouseProjectId` scope evidence to

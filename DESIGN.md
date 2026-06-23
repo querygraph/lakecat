@@ -924,7 +924,9 @@ so corrupted bootstrap standards claims cannot disappear from raw QGLake proof.
 Compact QGLake storage-profile and credential secret-reference proof must
 mirror service replay admission: present secret refs require nonblank providers
 and full SHA-256 hashes, while absent secret refs may omit provider/hash fields
-or encode them as null, but any other provider/hash value is rejected.
+or encode them as null, but any other provider/hash value is rejected. The
+local QGLake handoff script now applies the nonblank provider rule to both
+compact storage-profile upsert proof and credential storage-profile proof.
 Raw lineage-drain summary construction must enforce the same redacted nested
 storage-profile posture before compact proof can inherit it: summary extraction
 rejects raw `secret-ref` fields, non-object or unexpected storage-profile

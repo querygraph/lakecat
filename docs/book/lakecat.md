@@ -9191,7 +9191,10 @@ a full `sha256:`-prefixed 64-hex digest and requires a redacted
 secret-reference provider plus full-digest `secretRefHash` whenever the proof
 says a secret reference is present. If the proof says no secret reference is
 present, the provider and hash may be omitted or null, but any other
-provider/hash value is rejected. Source replay enforces the same full-digest
+provider/hash value is rejected. The local QGLake handoff script applies the
+same nonblank provider rule to compact credential storage-profile proof, so
+credential proof cannot claim secret-reference presence while omitting the
+provider anchor. Source replay enforces the same full-digest
 secret-reference rule before compact proof generation, so the saved summary
 cannot launder short placeholder credential-root hashes through the
 lineage-drain artifact. The positive QGLake acceptance fixture covers the
