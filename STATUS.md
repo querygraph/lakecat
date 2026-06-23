@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest outbox delivery admission hardening:
+  memory and Turso stores now validate a pending outbox event before marking it
+  delivered, so malformed graph/lineage replay evidence cannot be hidden from
+  drains by delivery acknowledgement.
+- Local verification for this outbox delivery admission slice passed:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_validates_pending_outbox_before_delivery -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_validates_pending_outbox_before_delivery -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest memory commit-history pointer-log scope binding:
   memory pointer-log records now carry a private table-key anchor and validate
   it before returning commit-history records, matching Turso's durable

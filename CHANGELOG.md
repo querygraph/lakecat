@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Hardened outbox delivery admission. Memory and Turso stores now validate a
+  pending outbox event before marking it delivered, so malformed graph/lineage
+  replay evidence cannot be hidden from drains by delivery acknowledgement.
 - Hardened memory commit-history pointer-log scope binding. Memory pointer-log
   records now carry a private table-key anchor and validate it before returning
   commit-history records, matching Turso's durable pointer-log row binding.
