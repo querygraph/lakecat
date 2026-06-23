@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's standards and engine-boundary decision record
+  with a catalog-concepts-in-plain-terms section. The added text separates
+  standard Iceberg vocabulary from LakeCat, QueryGraph, TypeSec, Sail, Turso,
+  and QGLake product architecture; explains which pieces are local extensions
+  versus plausible future neutral profiles; and strengthens the case for
+  pushing table interpretation and governed scan work into Sail.
 - Hardened service lineage-drain credential prefix summaries. Raw
   lineage-drain summary construction now rejects non-array, missing,
   malformed, or duplicate `credential-response-evidence[].prefix-hash`

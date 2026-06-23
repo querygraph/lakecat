@@ -5,6 +5,19 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest documentation/book slice:
+  `Expand catalog concept and Sail engine-boundary explanations`.
+  The book now separates standard Iceberg vocabulary from LakeCat,
+  QueryGraph, TypeSec, Sail, Turso, and QGLake product architecture; explains
+  which surfaces are local extensions versus plausible future neutral profiles;
+  and strengthens the argument for pushing table interpretation, scan
+  planning, metadata-as-data, commit validation, and typed v4 behavior into
+  Sail.
+- Local verification for this documentation/book slice is green:
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed; `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest implementation/testing slice:
   `Harden lineage-drain credential prefix summaries`.
   Raw lineage-drain summary construction now rejects non-array, missing,
