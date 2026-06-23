@@ -1133,7 +1133,10 @@ Service replay must also close the top-level `storage-profile.upserted`
 payload over the fields LakeCat actually compares, so an archived upsert cannot
 append unverified storage-profile, credential-root, governance, lineage, graph,
 QueryGraph, or application claims beside the checked warehouse, redacted
-storage-profile object, and authorization evidence.
+storage-profile object, and authorization evidence. Service replay now closes
+the wrapped storage-profile upsert envelope over the producer fields as well,
+so those unverified claims cannot ride beside an otherwise valid nested
+storage-profile payload.
 Management-upsert replay for policy bindings, projects, servers, storage
 profiles, and warehouses must also carry a valid authorization receipt
 principal plus an event-matching catalog action, affirmative allowed decision,

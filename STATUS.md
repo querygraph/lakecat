@@ -6,6 +6,14 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Close storage-profile replay wrappers`.
+  Service outbox admission now closes wrapped `storage-profile.upserted` replay
+  payloads over the wrapper fields current producers emit, rejecting extra
+  unverified storage-profile, credential-root, governance, graph, lineage,
+  QueryGraph, or application claims before acknowledgement, graph projection,
+  or OpenLineage projection. A focused regression covers storage-profile
+  wrapper drift.
+- Latest implementation/testing slice:
   `Close credential-vend replay wrappers`.
   Service outbox admission now closes wrapped `credentials.vend-attempted`
   replay payloads over the wrapper fields current producers emit, rejecting

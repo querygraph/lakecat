@@ -1688,6 +1688,8 @@ const STORAGE_PROFILE_UPSERT_EVIDENCE_FIELDS: &[&str] = &[
     "warehouse",
     "storage-profile",
 ];
+const STORAGE_PROFILE_UPSERT_OUTBOX_PAYLOAD_FIELDS: &[&str] =
+    &["audit-event-id", "event-type", "payload"];
 const RESERVED_STORAGE_PROFILE_PUBLIC_CONFIG_KEYS: &[&str] = &[
     "lakecat.storage-profile-id",
     "lakecat.storage-provider",
@@ -3854,6 +3856,14 @@ fn validate_storage_profile_upsert_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    if event.payload.get("payload").is_some() {
+        validate_object_evidence_schema(
+            event,
+            &event.payload,
+            "storage-profile upsert outbox payload",
+            STORAGE_PROFILE_UPSERT_OUTBOX_PAYLOAD_FIELDS,
+        )?;
+    }
     validate_object_evidence_schema(
         event,
         payload,
@@ -39511,6 +39521,80 @@ mod tests {
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_storage_profile_upsert_outbox_payload_fields() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let event_id = "evt-storage-profile-extra-wrapper-field";
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: event_id.to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "storage-profile.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-storage-profile-extra-wrapper-field",
+                    "event-type": "storage-profile.upserted",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "storage-profile-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "storage-profile": {
+                            "profile-id": "file-events",
+                            "warehouse": "local",
+                            "location-prefix-hash": content_hash_json(&json!({
+                                "location-prefix": "file:///tmp/lakecat/events"
+                            })).unwrap(),
+                            "provider": "file",
+                            "issuance-mode": "local-file-no-secret",
+                            "secret-ref-present": false,
+                        },
+                    },
+                    "unverified-storage-profile-wrapper-claim": "shadow",
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("extra storage-profile wrapper fields should fail before delivery");
+        let message = err.to_string();
+        assert!(message.contains("storage-profile.upserted"));
+        assert!(message.contains(
+            "storage-profile upsert outbox payload contains unexpected field unverified-storage-profile-wrapper-claim"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains(event_id));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "extra storage-profile wrapper fields must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "extra storage-profile wrapper fields must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "extra storage-profile wrapper fields must fail before lineage projection"
+        );
     }
 
     #[tokio::test]
