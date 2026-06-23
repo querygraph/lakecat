@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Redacted Grust Turso graph-sink startup failures. The
+  `grust-turso-local` service wiring still configures
+  `grust_turso::TursoGraphStore`, but connect/bootstrap errors now expose only
+  `graph-store-path-hash` and `backend-error-hash` evidence instead of raw
+  Turso graph database paths or backend text.
 - Added Turso soft-delete row-column restore coverage. The Turso store
   regression suite now corrupts `soft_deletes` row scope, metadata-location,
   version, and timestamp columns after a valid delete and proves restore rejects

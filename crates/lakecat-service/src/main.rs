@@ -1,7 +1,7 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use lakecat_core::WarehouseName;
-#[cfg(feature = "typesec-local")]
+#[cfg(any(feature = "grust-turso-local", feature = "typesec-local"))]
 use lakecat_core::content_hash_bytes;
 use lakecat_graph::CatalogGraphSink;
 #[cfg(not(feature = "grust-local"))]
@@ -138,22 +138,27 @@ async fn configured_graph_sink() -> lakecat_core::LakeCatResult<Arc<dyn CatalogG
 async fn configured_grust_turso_graph_sink_for_path(
     path: impl Into<String>,
 ) -> lakecat_core::LakeCatResult<Arc<dyn CatalogGraphSink>> {
+    let path = path.into();
     let store = grust_turso::TursoGraphStore::connect(grust_turso::TursoConfig {
-        path: path.into(),
+        path: path.clone(),
         table_prefix: "lakecat_graph".to_string(),
         ..Default::default()
     })
     .await
     .map_err(|err| {
         lakecat_core::LakeCatError::Internal(format!(
-            "failed to configure Grust Turso graph sink: {err}"
+            "failed to configure Grust Turso graph sink; graph-store-path-hash={}; backend-error-hash={}",
+            content_hash_bytes(path.as_bytes()),
+            content_hash_bytes(err.to_string().as_bytes())
         ))
     })?;
     grust_graph::GraphAdminStore::bootstrap(&store)
         .await
         .map_err(|err| {
             lakecat_core::LakeCatError::Internal(format!(
-                "failed to bootstrap Grust Turso graph sink: {err}"
+                "failed to bootstrap Grust Turso graph sink; graph-store-path-hash={}; backend-error-hash={}",
+                content_hash_bytes(path.as_bytes()),
+                content_hash_bytes(err.to_string().as_bytes())
             ))
         })?;
     Ok(lakecat_graph::grust_integration::GrustCatalogGraphSink::new(Arc::new(store)))
@@ -223,6 +228,44 @@ mod grust_turso_tests {
         );
 
         let _ = std::fs::remove_file(path);
+    }
+
+    #[tokio::test]
+    async fn configured_grust_turso_graph_sink_redacts_backend_path_errors() {
+        let path = std::env::temp_dir().join(format!(
+            "lakecat-grust-turso-dir-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&path).expect("create invalid graph db directory path");
+        let path_string = path.to_string_lossy().to_string();
+
+        let err = match configured_grust_turso_graph_sink_for_path(path_string.clone()).await {
+            Ok(_) => panic!("directory path should fail as a Turso graph db file"),
+            Err(err) => err,
+        };
+        let message = err.to_string();
+
+        assert!(
+            message.contains("failed to configure Grust Turso graph sink"),
+            "unexpected error: {message}"
+        );
+        assert!(
+            message.contains("graph-store-path-hash=sha256:"),
+            "error should include graph path hash evidence: {message}"
+        );
+        assert!(
+            message.contains("backend-error-hash=sha256:"),
+            "error should include backend error hash evidence: {message}"
+        );
+        assert!(
+            !message.contains(&path_string),
+            "error must not expose raw graph Turso path: {message}"
+        );
+
+        let _ = std::fs::remove_dir(path);
     }
 }
 

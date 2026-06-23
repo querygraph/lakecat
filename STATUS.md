@@ -5,6 +5,18 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest Grust Turso graph-sink startup hardening:
+  `grust-turso-local` service wiring still uses
+  `grust_turso::TursoGraphStore` for durable graph projection, but
+  connect/bootstrap failures now return `graph-store-path-hash` and
+  `backend-error-hash` evidence rather than raw graph database paths or backend
+  error text.
+- Local verification for this Grust Turso graph-sink startup slice passed:
+  `cargo fmt -p lakecat-service`; `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --features grust-turso-local --bin lakecat-service configured_grust_turso_graph_sink -- --test-threads=1`;
+  `cargo test -p lakecat-graph --features grust-turso-local --lib grust_turso_store -- --test-threads=1`;
+  `docs/book/build.sh`; `scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`; `git diff --check`.
 - Latest Turso soft-delete restore row-column coverage:
   `turso_store_rejects_soft_delete_row_column_drift_on_restore` now tampers
   `soft_deletes` row scope, metadata-location, version, and timestamp columns

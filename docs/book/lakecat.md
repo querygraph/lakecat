@@ -4390,7 +4390,10 @@ durable graph tests instantiate
 `grust_turso::TursoGraphStore`, write catalog-event projections through Grust,
 traverse them through Grust, run Cypher-over-Turso through Grust, and apply
 Grust's matched-node mutation plan. The service startup test uses the same
-configured sink and table prefix that the QGLake handoff proof reports.
+configured sink and table prefix that the QGLake handoff proof reports. Startup
+configuration failures follow the same evidence rule: LakeCat reports
+`graph-store-path-hash` and `backend-error-hash`, not raw graph database paths
+or backend text that came back from the Turso layer.
 
 A local QueryGraph acceptance run therefore has three distinct graph stages:
 
@@ -13542,7 +13545,10 @@ crate. `grust-local` keeps fast memory-backed projection tests, while
 `grust-turso-local` proves durable graph projection through a bootstrapped
 `grust_turso::TursoGraphStore`. QueryGraph's `qg-rust` checkout uses the same
 local Grust path for `lakecat-verify` and `lakecat-import`, keeping the
-end-to-end graph import path aligned with the catalog graph sink.
+end-to-end graph import path aligned with the catalog graph sink. The service
+also redacts Grust Turso graph-sink connect/bootstrap failures to
+`graph-store-path-hash` and `backend-error-hash` evidence so release logs do not
+capture raw graph database paths.
 
 README, status, changelog, book artifacts, and version notes must be refreshed
 from the same clean commit, and the release should be tagged only after the

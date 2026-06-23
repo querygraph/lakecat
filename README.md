@@ -48,9 +48,11 @@ can use the dedicated `grust-turso` crate for durable catalog graph projection.
 Plain `grust-local` keeps the fast memory-backed Grust sink;
 `grust-turso-local` constructs a bootstrapped `grust_turso::TursoGraphStore`,
 using `LAKECAT_GRUST_TURSO_PATH` when set and an in-memory Turso graph database
-otherwise. TypeSec remains on the published `typesec` 0.8.0 crate, and Sail
-integration still uses local Sail paths plus the checked-in helper patch bridge
-until the required Sail APIs are published.
+otherwise. Startup connect/bootstrap failures for that graph sink are reported
+with `graph-store-path-hash` and `backend-error-hash` evidence, not raw graph
+database paths or backend text. TypeSec remains on the published `typesec`
+0.8.0 crate, and Sail integration still uses local Sail paths plus the
+checked-in helper patch bridge until the required Sail APIs are published.
 
 The local QueryGraph handoff path has a separate compatibility contract:
 `/Users/alexy/src/querygraph/qg-rust` follows the local Grust 0.10.0 path
