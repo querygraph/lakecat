@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+No changes yet.
+
+## 0.1.0 - 2026-06-23
+
 - Refreshed the full local release-candidate proof after release-gate
   hardening. `scripts/check-release-readiness.sh --release-candidate` passed
   from a clean current head with the isolated dependency metadata files, Grust

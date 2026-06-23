@@ -5,6 +5,12 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-prep slice:
+  `Prepare v0.1.0 changelog heading`.
+  `CHANGELOG.md` now has an empty `Unreleased` section and a dated
+  `0.1.0 - 2026-06-23` release section for the current first-release notes.
+  `scripts/check-release-version-contract.sh` now verifies the workspace
+  release version also appears in that changelog heading.
 - Latest release evidence:
   `scripts/check-release-readiness.sh --release-candidate` passed from a clean
   current head on 2026-06-23. This refreshed proof covers shell syntax checks,

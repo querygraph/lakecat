@@ -14,6 +14,7 @@ require_file() {
 }
 
 require_file Cargo.toml
+require_file CHANGELOG.md
 require_file RELEASE.md
 require_file docs/book/dist/VERSION.md
 require_file docs/book/dist/lakecat.epub
@@ -58,6 +59,9 @@ release_tag="$(sed -n 's/.*git tag -a v\([0-9][0-9A-Za-z.-]*\) .*/\1/p' RELEASE.
 [[ -n "$release_tag" ]] || fail "could not read release tag command from RELEASE.md"
 [[ "$release_tag" == "$workspace_version" ]] || \
   fail "RELEASE.md tag v$release_tag does not match workspace version $workspace_version"
+release_date="$(date -u +%F)"
+rg -q "^## $workspace_version - $release_date$" CHANGELOG.md || \
+  fail "CHANGELOG.md must contain release heading '$workspace_version - $release_date'"
 
 kindle_name="$(awk -F': ' '/^kindle_name:/ { print $2; exit }' docs/book/dist/VERSION.md)"
 epub_file="$(awk -F': ' '/^epub_file:/ { print $2; exit }' docs/book/dist/VERSION.md)"

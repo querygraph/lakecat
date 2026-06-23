@@ -119,6 +119,8 @@ require_pattern 'scripts/check-workflow-trigger-contract.sh' scripts/check-relea
   "release-readiness gate must run the workflow trigger self-test"
 require_pattern 'scripts/check-release-version-contract.sh' scripts/check-release-readiness.sh \
   "release-readiness gate must run the release version contract"
+require_pattern 'require_file CHANGELOG\.md' scripts/check-release-version-contract.sh \
+  "release version contract must verify the changelog release heading"
 require_pattern 'run cargo test --workspace --all-features$' scripts/check-release-readiness.sh \
   "release-readiness gate must run the complete all-features workspace test"
 require_pattern 'cargo test -p lakecat-api --lib' scripts/check-release-readiness.sh \
