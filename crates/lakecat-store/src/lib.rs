@@ -5388,6 +5388,18 @@ mod memory_tests {
             );
         }
 
+        let mut empty_expected_location = base_commit.clone();
+        empty_expected_location.expected_previous_metadata_location = Some("  ".to_string());
+        let err = store
+            .commit_table(&ident, empty_expected_location)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("expected table metadata location must not be empty")
+        ));
+
         let mut empty_new_location = base_commit.clone();
         empty_new_location.new_metadata_location = Some("  ".to_string());
         let err = store
@@ -5469,6 +5481,15 @@ mod memory_tests {
             vec![]
         );
         assert_eq!(store.pending_outbox_events(None, 10).await.unwrap(), vec![]);
+        let state = store.state.read().await;
+        assert!(
+            state.audit_events.is_empty(),
+            "invalid commit metadata evidence must fail before audit insertion"
+        );
+        assert!(
+            state.idempotency.is_empty(),
+            "invalid commit metadata evidence must fail before idempotency replay state"
+        );
     }
 
     #[tokio::test]
@@ -9602,7 +9623,9 @@ pub mod turso_store {
                 Some("file:///tmp/events/metadata/00000.json")
             );
             assert_eq!(store.count_rows("metadata_pointer_log").await.unwrap(), 0);
+            assert_eq!(store.count_rows("audit_events").await.unwrap(), 0);
             assert_eq!(store.count_rows("outbox_events").await.unwrap(), 0);
+            assert_eq!(store.count_rows("idempotency_records").await.unwrap(), 0);
         }
 
         #[tokio::test]

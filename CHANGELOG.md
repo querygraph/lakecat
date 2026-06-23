@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened invalid commit metadata side-effect coverage. Memory and Turso
+  invalid table-commit tests now prove malformed expected/new metadata
+  pointers, non-object metadata, and missing or non-positive format versions
+  fail before pointer-log, audit, outbox, or idempotency replay state changes.
 - Added a Grust Turso sink regression. The `grust-turso-local` graph tests now
   prove LakeCat's `CatalogGraphSink::emit` path writes catalog projection
   events through Grust's `TursoGraphStore`, rather than LakeCat owning Turso

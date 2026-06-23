@@ -5,6 +5,20 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest commit metadata hardening slice:
+  `Prove invalid commit metadata has no store side effects`.
+  Memory and Turso invalid table-commit tests now prove malformed expected and
+  new metadata pointer evidence, non-object new metadata, and missing or
+  non-positive `format-version` evidence fail before table pointer movement,
+  pointer-log rows, audit rows, outbox rows, or idempotency replay state.
+- Local verification for this commit metadata slice is green:
+  `cargo test -p lakecat-store --lib memory_store_rejects_deserialized_invalid_table_commits -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-store --features turso-local --lib turso_store_rejects_deserialized_invalid_table_commits -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local` passed;
+  `scripts/check-release-readiness.sh --quick` passed; `git diff --check`
+  passed.
 - Latest graph-boundary slice:
   `Prove grust-turso graph sink emission`.
   LakeCat's `grust-turso-local` graph tests now include a Turso-backed
