@@ -55155,6 +55155,8 @@ mod tests {
             "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/plan",
             "POST /catalog/v1/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
             "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
+            "GET /catalog/v1/namespaces/{namespace}/tables/{table}/credentials",
+            "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/credentials",
         ] {
             let mut missing_required_endpoint =
                 valid_lineage_summary_catalog_config_event("evt-missing-summary-config-endpoint");

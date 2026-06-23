@@ -5,6 +5,18 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest credential catalog-config endpoint-set coverage:
+  raw `catalog.config-read` summaries, compact handoff summaries, and saved
+  lineage-drain semantics now explicitly prove default and warehouse-prefixed
+  credential endpoints cannot be dropped from advertised config proof,
+  preserving audited credential-decision discovery beside governed plan/fetch
+  routes.
+- Local verification for this credential catalog-config endpoint-set slice
+  passed: `cargo fmt -p lakecat-service -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-service lineage_drain_summary_rejects_malformed_catalog_config_fields -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_missing_config_endpoint -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_rejects_missing_config_endpoint -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest governed fetch catalog-config endpoint-set coverage:
   raw `catalog.config-read` summaries, compact handoff summaries, and saved
   lineage-drain semantics now explicitly prove default and warehouse-prefixed

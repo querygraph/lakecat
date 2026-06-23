@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Extended catalog-config endpoint-set coverage to credential routes. Raw
+  `catalog.config-read` summaries, compact handoff summaries, and saved
+  lineage-drain semantics now prove default and warehouse-prefixed credential
+  endpoints stay advertised beside governed plan/fetch routes.
 - Extended catalog-config endpoint-set coverage to governed fetch routes. Raw
   `catalog.config-read` summaries, compact handoff summaries, and saved
   lineage-drain semantics now prove default and warehouse-prefixed

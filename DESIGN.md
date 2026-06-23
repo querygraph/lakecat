@@ -911,7 +911,9 @@ proof, including the standard Iceberg REST plan endpoint as well as QueryGraph
 bootstrap. Default and warehouse-prefixed route forms are both part of this
 proof because warehouse routing is a standard LakeCat compatibility surface for
 Iceberg clients. The same endpoint-set proof applies to `fetch-scan-tasks`,
-because governed task fetch is the second half of the Sail-planned read loop.
+because governed task fetch is the second half of the Sail-planned read loop,
+and to credential endpoints because raw credential vending remains an audited
+exception that must stay explicit in the advertised catalog contract.
 Raw `catalog.config-read` and `querygraph.bootstrap` replay payloads must also
 stay closed over their checked service schemas before graph, OpenLineage,
 QGLake, or QueryGraph import proof can inherit them. A durable outbox row cannot

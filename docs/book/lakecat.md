@@ -9312,7 +9312,8 @@ endpoint. The same check covers the warehouse-prefixed plan route, so a saved
 handoff cannot keep default catalog discovery while silently weakening
 warehouse-scoped Iceberg planning. It also covers default and
 warehouse-prefixed `fetch-scan-tasks`, preserving the governed task-fetch
-surface that follows a Sail-planned scan.
+surface that follows a Sail-planned scan, and default and warehouse-prefixed
+credential endpoints, preserving the audited credential-decision surface.
 The lineage-drain replay summaries are bound back to the drain-level
 `eventTypes` manifest as well. A saved handoff cannot add a compact replay
 summary for `storage-profile.upserted`, `querygraph.bootstrap`, or any other
