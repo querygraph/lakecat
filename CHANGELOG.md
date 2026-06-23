@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added tracked book artifact validation to the quick release gate.
+  `scripts/check-release-readiness.sh --quick` now runs
+  `scripts/check-book-artifact-contract.sh docs/book/dist`, so narrow-slice
+  checks catch stale or malformed tracked EPUB/PDF/MOBI artifacts, dist marker
+  drift, and versioned Kindle symlink drift before the full release-candidate
+  gate.
 - Added an executable book artifact contract. The new
   `scripts/check-book-artifact-contract.sh` validates the generated book dist
   marker, stable EPUB/PDF/MOBI files, versioned Kindle symlink, EPUB metadata,

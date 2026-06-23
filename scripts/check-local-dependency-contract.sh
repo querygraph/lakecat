@@ -154,6 +154,8 @@ require_pattern 'scripts/check-workflow-trigger-contract.sh' scripts/check-relea
   "release-readiness gate must run the workflow trigger self-test"
 require_pattern 'scripts/check-release-version-contract.sh' scripts/check-release-readiness.sh \
   "release-readiness gate must run the release version contract"
+require_pattern 'scripts/check-book-artifact-contract.sh docs/book/dist' scripts/check-release-readiness.sh \
+  "release-readiness gate must run the tracked book artifact contract"
 require_pattern 'require_file CHANGELOG\.md' scripts/check-release-version-contract.sh \
   "release version contract must verify the changelog release heading"
 require_pattern 'published release tag \$local_tag must be an ancestor of HEAD' scripts/check-release-version-contract.sh \
@@ -219,7 +221,7 @@ require_pattern 'without `--skip-book` or `--skip-handoff`' RELEASE.md \
   "RELEASE.md must forbid skipped book/handoff checks for release candidates"
 require_pattern 'partial release-readiness checks passed with skipped release-candidate evidence' scripts/check-release-readiness.sh \
   "release-readiness gate must label skipped full runs as partial evidence"
-require_pattern 'workflow, release-version, formatting' scripts/check-release-readiness.sh \
+require_pattern 'workflow, release-version, tracked' scripts/check-release-readiness.sh \
   "release-readiness help must describe the current quick-gate contract surface"
 require_pattern 'release-candidate' scripts/check-release-readiness.sh \
   "release-readiness help must document clean release-candidate mode"

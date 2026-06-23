@@ -30,8 +30,9 @@ than a per-slice check and is meant to replace cloud CI as the release proof
 while CI remains manual-only.
 
 Options:
-  --quick         Run syntax, dependency, workflow, release-version, formatting,
-                  and diff checks. This is not release evidence by itself.
+  --quick         Run syntax, dependency, workflow, release-version, tracked
+                  book artifact, formatting, and diff checks. This is not
+                  release evidence by itself.
   --release-candidate
                   Require a clean tree before and after the complete full gate.
                   This rejects skipped book or handoff proof.
@@ -101,6 +102,7 @@ run bash -n scripts/check-release-readiness.sh
 run scripts/check-local-dependency-contract.sh
 run scripts/check-workflow-trigger-contract.sh
 run scripts/check-release-version-contract.sh
+run scripts/check-book-artifact-contract.sh docs/book/dist
 
 run cargo fmt \
   -p lakecat-api \

@@ -5,6 +5,11 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest quick-gate hardening:
+  `scripts/check-release-readiness.sh --quick` now runs the tracked
+  `docs/book/dist` artifact contract, so narrow release-slice checks verify the
+  stable EPUB/PDF/MOBI files, dist marker, versioned Kindle symlink, EPUB
+  metadata, and PDF layout without waiting for a full release-candidate build.
 - Latest release-process hardening:
   `scripts/check-book-artifact-contract.sh` now validates the generated book
   dist marker, stable EPUB/PDF/MOBI files, versioned Kindle symlink, EPUB

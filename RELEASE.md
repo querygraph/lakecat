@@ -95,7 +95,10 @@ Use the quick gate only while preparing a narrow slice:
 scripts/check-release-readiness.sh --quick
 ```
 
-The quick gate is not release evidence by itself.
+The quick gate is not release evidence by itself. It does validate the tracked
+`docs/book/dist` artifact contract so narrow slices catch stale or malformed
+book deliverables before the full release-candidate build regenerates them out
+of tree.
 Full runs that use `--skip-book` or `--skip-handoff` are also partial evidence;
 the script labels them that way and they must not be used for a release
 candidate.

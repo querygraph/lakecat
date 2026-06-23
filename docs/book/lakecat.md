@@ -13646,6 +13646,9 @@ The quick check is acceptable while landing a narrow slice:
 scripts/check-release-readiness.sh --quick
 ```
 
+The quick check is not a release claim, but it does validate the tracked
+`docs/book/dist` artifact contract so stale EPUB/PDF/MOBI deliverables are
+caught before a full release-candidate build regenerates temporary artifacts.
 The full gate is the first-release claim. It runs local dependency-contract
 checks, workflow-trigger checks, formatting, default workspace tests, feature
 matrix tests, Turso rows, Sail/TypeSec/Grust integration rows, all-features
