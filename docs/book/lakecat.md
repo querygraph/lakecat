@@ -10496,7 +10496,9 @@ stable ids, standards, request-identity proof, and QueryGraph bootstrap proof
 still match the compact handoff summary. It also checks the saved
 self-verifier output's bundle, lineage-drain, QueryGraph import-plan,
 captured-output, and service-log hashes against the summary's artifact
-manifest. The saved sidecar must keep the nested
+manifest. The saved sidecar must keep the core `artifactFiles.bundle`,
+`artifactFiles.lineageDrain`, and `artifactFiles.querygraphImportPlan` hash
+objects present, and it must keep the nested
 `artifactFiles.capturedOutputs` manifest present before any captured LakeCat or
 QueryGraph output hash is trusted. The saved output cannot keep a valid
 verifier-output hash while

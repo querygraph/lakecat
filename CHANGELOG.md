@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added saved handoff verifier bundle artifact manifest coverage. The archived
+  `lakecat-handoff-verify.json` self-verification artifact now explicitly
+  rejects a missing `artifactFiles.bundle` hash object even when the outer
+  verifier-output hash is updated to match the tampered file.
 - Added saved handoff verifier captured-output manifest coverage. The archived
   `lakecat-handoff-verify.json` self-verification artifact now explicitly
   rejects a missing `artifactFiles.capturedOutputs` manifest even when the
