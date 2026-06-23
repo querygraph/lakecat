@@ -7526,6 +7526,10 @@ the first event in a multi-event batch already projected to graph and lineage
 but a later event fails during lineage projection, LakeCat still acknowledges
 none of the events. Recovery starts from the committed outbox batch instead of
 from a half-delivered response.
+The same suite now pins Turso's durable row guard for event-id drift: a pending
+row whose stored `event_id` no longer matches the payload hash fails with
+hash-only event-id, event-type, and payload evidence before graph or lineage
+projection can see it.
 The drain also refuses unknown event types before any projection happens. A
 future or custom event stays pending until LakeCat knows how to project it,
 instead of disappearing behind an empty graph/lineage receipt.

@@ -1046,6 +1046,9 @@ row validation should return hash-only event-id, payload, and event-type
 evidence for corrupt pending rows, so operators can identify the damaged
 durable record without echoing raw event IDs or corrupt payload strings before
 graph or lineage projection observes the batch.
+Turso pending-row tests cover the same event-id/content binding as memory:
+durable rows whose stored `event_id` no longer matches the payload hash fail
+before graph or lineage projection can observe them.
 Store-level commit idempotency evidence must also be shaped before a durable
 mutation starts, not only at the REST header boundary: blank or malformed keys,
 caller-provided request hashes without keys, and non-SHA-256 request hashes

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added Turso pending outbox event-id drift coverage. Durable Turso pending-row
+  validation now has a regression matching the embedded memory store: if a
+  stored pending outbox row's `event_id` no longer matches its payload hash,
+  reads fail with hash-only event-id, event-type, and payload evidence before
+  graph or lineage projection can observe the corrupted row.
 - Hardened raw view receipt summary extraction. Raw lineage-drain summary
   construction now reuses the service replay validators for
   `view.version-receipts-listed` and

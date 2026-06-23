@@ -5,6 +5,19 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest Turso pending outbox durability slice:
+  `Cover Turso pending outbox event-id drift`.
+  Durable Turso pending-row validation now has explicit regression coverage
+  matching the embedded memory store: if a pending outbox row's stored
+  `event_id` no longer matches its payload hash, reads fail with hash-only
+  event-id, event-type, and payload evidence before graph or lineage
+  projection can observe the corrupted row.
+- Local verification for this Turso pending outbox slice passed:
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_corrupt_pending_outbox_event_ids -- --test-threads=1`;
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`; `git diff --check`.
 - Latest raw view receipt summary hardening slice:
   `Validate raw view receipt summaries`.
   Raw lineage-drain summary construction now reuses the service replay

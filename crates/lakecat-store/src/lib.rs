@@ -11781,6 +11781,60 @@ pub mod turso_store {
         }
 
         #[tokio::test]
+        async fn turso_store_rejects_corrupt_pending_outbox_event_ids() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let ident = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            store
+                .record_audit_event(
+                    CatalogAuditEvent::new(
+                        "querygraph.bootstrap",
+                        Some(ident.clone()),
+                        Principal::anonymous(),
+                        serde_json::json!({
+                            "event-type": "querygraph.bootstrap",
+                            "table": ident,
+                            "manifest-hash": "lakecat:test"
+                        }),
+                    )
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+            let pending = store
+                .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+                .await
+                .unwrap();
+            assert_eq!(pending.len(), 1);
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update outbox_events set event_id = ?2 where event_id = ?1",
+                (pending[0].event_id.as_str(), "sha256:short"),
+            )
+            .await
+            .unwrap();
+
+            let err = store
+                .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+                .await
+                .unwrap_err();
+            let LakeCatError::Internal(message) = err else {
+                panic!("expected internal pending outbox validation error");
+            };
+            assert!(message.contains("pending outbox event id does not match payload hash"));
+            assert!(message.contains("event-id-hash=sha256:"), "{message}");
+            assert!(message.contains("event-type-hash=sha256:"), "{message}");
+            assert!(message.contains("payload-hash=sha256:"), "{message}");
+            assert!(!message.contains("sha256:short"), "{message}");
+            assert!(!message.contains("manifest-hash"), "{message}");
+            assert!(!message.contains("lakecat:test"), "{message}");
+        }
+
+        #[tokio::test]
         async fn turso_store_rejects_blank_pending_outbox_event_types() {
             let store = TursoCatalogStore::in_memory().await.unwrap();
             let ident = TableIdent::new(
