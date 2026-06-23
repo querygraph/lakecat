@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened service lineage-drain view receipt summary hashes. Raw
+  lineage-drain summary construction now rejects malformed top-level or nested
+  view receipt and receipt-chain hashes instead of silently dropping them, so
+  a future validation bypass cannot return QGLake replay summaries with
+  omitted malformed view-history evidence.
 - Expanded the LakeCat book with a standards and engine-boundary decision
   record. The new section classifies the Rust service spine, Turso store,
   Iceberg REST paths, commit CAS, idempotency/pointer-log/audit/outbox replay

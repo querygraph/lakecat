@@ -851,6 +851,10 @@ receipt-chain, and receipt-chain replay/OpenLineage arrays now reject short
 drain should reject projection receipts whose replay/OpenLineage hash arrays
 are count-drifted, malformed, or duplicate before returning a raw
 lineage-drain summary or acknowledging delivery.
+Lineage-drain summary construction should also fail closed over top-level and
+nested view receipt / receipt-chain hash evidence, so malformed receipt or
+chain hashes cannot be silently omitted from raw QGLake replay summaries if a
+future internal path bypasses replay admission.
 Compact QGLake storage-profile and credential secret-reference proof must
 mirror service replay admission: present secret refs require nonblank providers
 and full SHA-256 hashes, while absent secret refs may omit provider/hash fields

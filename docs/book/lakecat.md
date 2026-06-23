@@ -9204,8 +9204,11 @@ Dropped accepted-view source replay also binds the namespace receipt-chain read
 back to the accepted view warehouse/namespace and rejects verified-chain count
 or receipt-hash coverage drift before compact handoff proof is generated. The
 lineage-drain summary now carries the nested chain receipts as full receipt
-hash coverage before that check runs. Generated replay evidence also preserves
-each accepted view's `acceptedReceiptChainHash` inside the namespace
+hash coverage before that check runs. Summary construction also fails closed
+when top-level or nested view receipt and receipt-chain hashes are malformed,
+instead of omitting bad values from the raw replay summary. Generated replay
+evidence also preserves each accepted view's `acceptedReceiptChainHash` inside
+the namespace
 `receiptChains[].chainHashes` set, even when the namespace read has its own
 chain hash, so the compact summary can prove the accepted chain is covered by
 the namespace proof it verifies. The same replay now emits catalog-facing

@@ -1221,7 +1221,7 @@ pub async fn drain_outbox_once(
         validate_projection_receipt_evidence(&event, &receipt)?;
         graph_events += receipt.graph_events;
         lineage_events += receipt.lineage_events;
-        summaries.push(lineage_drain_event_summary(&event, &receipt));
+        summaries.push(lineage_drain_event_summary(&event, &receipt)?);
         event_types.push(event.event_type.clone());
         delivered.push(event.event_id.clone());
     }
@@ -6920,7 +6920,7 @@ fn attach_lineage_drain_authorization(
 fn lineage_drain_event_summary(
     event: &OutboxEvent,
     receipt: &OutboxProjectionReceipt,
-) -> LineageDrainEventSummary {
+) -> Result<LineageDrainEventSummary, LakeCatError> {
     let payload = event.payload.get("payload").unwrap_or(&event.payload);
     let view = payload.get("view");
     let view_warehouse = view
@@ -6953,92 +6953,9 @@ fn lineage_drain_event_summary(
         )),
         _ => None,
     };
-    let view_version_receipt_hashes = payload
-        .get("view-version-receipts")
-        .and_then(Value::as_array)
-        .map(|receipts| {
-            receipts
-                .iter()
-                .filter_map(|receipt| {
-                    receipt
-                        .get("receipt-hash")
-                        .and_then(Value::as_str)
-                        .map(str::to_string)
-                })
-                .collect()
-        })
-        .or_else(|| {
-            payload
-                .get("view-version-receipt-chains")
-                .and_then(Value::as_array)
-                .map(|chains| {
-                    chains
-                        .iter()
-                        .flat_map(|chain| {
-                            chain
-                                .get("receipts")
-                                .and_then(Value::as_array)
-                                .into_iter()
-                                .flatten()
-                        })
-                        .filter_map(|receipt| {
-                            receipt
-                                .get("receipt-hash")
-                                .and_then(Value::as_str)
-                                .map(str::to_string)
-                        })
-                        .collect()
-                })
-        })
-        .or_else(|| {
-            payload.get("receipt-hashes").and_then(|hashes| {
-                hashes.as_array().map(|hashes| {
-                    hashes
-                        .iter()
-                        .filter_map(Value::as_str)
-                        .map(str::to_string)
-                        .collect()
-                })
-            })
-        })
-        .or_else(|| {
-            payload.get("drop-receipt-hashes").and_then(|hashes| {
-                hashes.as_array().map(|hashes| {
-                    hashes
-                        .iter()
-                        .filter_map(Value::as_str)
-                        .map(str::to_string)
-                        .collect()
-                })
-            })
-        })
-        .unwrap_or_default();
-    let view_version_receipt_chain_hashes = payload
-        .get("view-version-receipt-chains")
-        .and_then(Value::as_array)
-        .map(|chains| {
-            chains
-                .iter()
-                .filter_map(|chain| {
-                    chain
-                        .get("chain-hash")
-                        .and_then(Value::as_str)
-                        .map(str::to_string)
-                })
-                .collect()
-        })
-        .or_else(|| {
-            payload.get("chain-hashes").and_then(|hashes| {
-                hashes.as_array().map(|hashes| {
-                    hashes
-                        .iter()
-                        .filter_map(Value::as_str)
-                        .map(str::to_string)
-                        .collect()
-                })
-            })
-        })
-        .unwrap_or_default();
+    let view_version_receipt_hashes = lineage_summary_view_receipt_hashes(event, payload)?;
+    let view_version_receipt_chain_hashes =
+        lineage_summary_view_receipt_chain_hashes(event, payload)?;
     let view_version_receipt_chain_verified_count = payload
         .get("chain-verified-count")
         .and_then(Value::as_u64)
@@ -7134,7 +7051,7 @@ fn lineage_drain_event_summary(
         })
         .unwrap_or_default();
     let policy = payload.get("policy");
-    LineageDrainEventSummary {
+    Ok(LineageDrainEventSummary {
         event_id: event.event_id.clone(),
         event_type: event.event_type.clone(),
         catalog_config_defaults: config_entries_summary(payload.get("defaults")),
@@ -7402,7 +7319,111 @@ fn lineage_drain_event_summary(
         raw_credential_exception_reason,
         replay_event_hashes: receipt.lineage_event_hashes.clone(),
         replay_open_lineage_hashes: receipt.open_lineage_hashes.clone(),
+    })
+}
+
+fn lineage_summary_view_receipt_hashes(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<Vec<String>, LakeCatError> {
+    if let Some(receipts) = optional_array_field(event, payload, "view-version-receipts")? {
+        return lineage_summary_required_hashes_from_objects(
+            event,
+            receipts,
+            "receipt-hash",
+            "lineage drain view-version-receipts",
+        );
     }
+    if let Some(chains) = optional_array_field(event, payload, "view-version-receipt-chains")? {
+        let mut hashes = Vec::new();
+        for chain in chains {
+            let Some(receipts) = optional_array_field(event, chain, "receipts")? else {
+                continue;
+            };
+            hashes.extend(lineage_summary_required_hashes_from_objects(
+                event,
+                receipts,
+                "receipt-hash",
+                "lineage drain view-version-receipt-chain receipts",
+            )?);
+        }
+        return Ok(hashes);
+    }
+    if payload.get("receipt-hashes").is_some() {
+        return Ok(
+            validate_required_full_hash_array_field(event, payload, "receipt-hashes")?
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+        );
+    }
+    if payload.get("drop-receipt-hashes").is_some() {
+        return Ok(
+            validate_required_full_hash_array_field(event, payload, "drop-receipt-hashes")?
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+        );
+    }
+    Ok(Vec::new())
+}
+
+fn lineage_summary_view_receipt_chain_hashes(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<Vec<String>, LakeCatError> {
+    if let Some(chains) = optional_array_field(event, payload, "view-version-receipt-chains")? {
+        return lineage_summary_required_hashes_from_objects(
+            event,
+            chains,
+            "chain-hash",
+            "lineage drain view-version-receipt-chains",
+        );
+    }
+    if payload.get("chain-hashes").is_some() {
+        return Ok(
+            validate_required_full_hash_array_field(event, payload, "chain-hashes")?
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+        );
+    }
+    Ok(Vec::new())
+}
+
+fn optional_array_field<'a>(
+    event: &OutboxEvent,
+    object: &'a Value,
+    field: &str,
+) -> Result<Option<&'a Vec<Value>>, LakeCatError> {
+    let Some(value) = object.get(field) else {
+        return Ok(None);
+    };
+    value.as_array().map(Some).ok_or_else(|| {
+        outbox_evidence_error(event, &format!("{field} must be an array when present"))
+    })
+}
+
+fn lineage_summary_required_hashes_from_objects(
+    event: &OutboxEvent,
+    objects: &[Value],
+    field: &str,
+    label: &str,
+) -> Result<Vec<String>, LakeCatError> {
+    let mut hashes = Vec::with_capacity(objects.len());
+    for object in objects {
+        validate_required_full_hash_field(event, object, field)?;
+        hashes.push(
+            object
+                .get(field)
+                .and_then(Value::as_str)
+                .expect("hash field was validated")
+                .to_string(),
+        );
+    }
+    let hash_refs = hashes.iter().map(String::as_str).collect::<Vec<_>>();
+    validate_unique_hash_array(event, &hash_refs, label)?;
+    Ok(hashes)
 }
 
 fn config_entries_summary(value: Option<&Value>) -> Vec<ConfigEntry> {
@@ -48012,7 +48033,7 @@ mod tests {
             open_lineage_hashes: vec![content_hash_bytes(b"recorded-openlineage")],
         };
 
-        let summary = lineage_drain_event_summary(&event, &receipt);
+        let summary = lineage_drain_event_summary(&event, &receipt).unwrap();
 
         assert_eq!(summary.event_type, "table.scan-planned");
         assert_eq!(summary.scan_task_count, Some(1));
@@ -48048,6 +48069,101 @@ mod tests {
                 .iter()
                 .all(|hash| is_full_sha256_hash(hash))
         );
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_view_receipt_hashes() {
+        let receipt = OutboxProjectionReceipt::default();
+        let malformed_top_level_receipt_hash = OutboxEvent {
+            event_id: "evt-bad-receipt-hashes".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "view.version-receipts-listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view": "events_view",
+                    "receipt-hashes": [42],
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&malformed_top_level_receipt_hash, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("receipt-hashes must contain full SHA-256 digest evidence"));
+
+        let malformed_nested_receipt_hash = OutboxEvent {
+            event_id: "evt-bad-nested-receipt-hash".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "view.version-receipt-chains-listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view-version-receipt-chains": [{
+                        "chain-hash": content_hash_bytes(b"chain"),
+                        "receipts": [{
+                            "receipt-hash": "not-a-full-hash"
+                        }]
+                    }]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&malformed_nested_receipt_hash, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("receipt-hash must contain full SHA-256 digest evidence"));
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_view_chain_hashes() {
+        let receipt = OutboxProjectionReceipt::default();
+        let malformed_nested_chain_hash = OutboxEvent {
+            event_id: "evt-bad-nested-chain-hash".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "view.version-receipt-chains-listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view-version-receipt-chains": [{
+                        "chain-hash": 42,
+                        "receipts": [{
+                            "receipt-hash": content_hash_bytes(b"receipt")
+                        }]
+                    }]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&malformed_nested_chain_hash, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("chain-hash must contain full SHA-256 digest evidence"));
+
+        let malformed_top_level_chain_hash = OutboxEvent {
+            event_id: "evt-bad-chain-hashes".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "view.version-receipt-chains-listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "chain-hashes": ["sha256:not-full"]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&malformed_top_level_chain_hash, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("chain-hashes must contain full SHA-256 digest evidence"));
     }
 
     #[test]
