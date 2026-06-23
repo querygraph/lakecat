@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw management-list missing-ID summary coverage:
+  raw `storage-profile.listed` lineage-drain summaries now explicitly prove a
+  list count cannot enter compact QGLake management inventory proof without the
+  required `storage-profile-ids` array, and rejected summaries keep hash-only
+  event identity.
+- Local verification for this raw management-list missing-ID slice passed:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service lineage_drain_summary_rejects_malformed_management_ids -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest raw management-list principal summary coverage:
   raw `server.listed` lineage-drain summaries now explicitly prove missing or
   malformed authorization receipt principals are rejected with hash-only event

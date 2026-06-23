@@ -54736,6 +54736,27 @@ mod tests {
             assert!(err.contains(expected_message), "{err}");
         }
 
+        let mut missing_ids = valid_lineage_summary_management_list_event(
+            "evt-missing-storage-profile-ids-summary-list",
+            "storage-profile.listed",
+        );
+        missing_ids.payload["payload"]
+            .as_object_mut()
+            .unwrap()
+            .remove("storage-profile-ids");
+        let err = lineage_drain_event_summary(&missing_ids, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("storage-profile list evidence must contain storage-profile-ids"),
+            "{err}"
+        );
+        assert!(err.contains("event-id-hash=sha256:"), "{err}");
+        assert!(
+            !err.contains("evt-missing-storage-profile-ids-summary-list"),
+            "{err}"
+        );
+
         let mut action_drift = valid_lineage_summary_management_list_event(
             "evt-action-drift-summary-server-list",
             "server.listed",

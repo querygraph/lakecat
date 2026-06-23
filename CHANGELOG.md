@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added raw management-list summary missing-ID coverage. Raw
+  `storage-profile.listed` summaries now explicitly prove list counts cannot
+  enter compact QGLake management proof without the required ID array and
+  hash-only event identity.
 - Added raw management-list summary principal coverage. Raw `server.listed`
   summaries now explicitly prove missing or malformed authorization receipt
   principals are rejected with hash-only event identity before compact QGLake
