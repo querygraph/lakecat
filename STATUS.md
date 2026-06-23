@@ -5,6 +5,19 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest store/outbox coverage slice:
+  `Cover blank pending outbox payload event types`.
+  Memory and Turso pending outbox tests now cover persisted rows whose durable
+  row event type remains nonblank but whose payload `event-type` is blank and
+  hash-consistent. This proves the payload-specific fail-closed branch before
+  graph or lineage projection, with only event-id, event-type,
+  payload-event-type, and payload hash evidence in the error.
+- Local verification for this store/outbox coverage slice is green:
+  `cargo test -p lakecat-store --lib memory_store_rejects_blank_pending_outbox_payload_event_types -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-store --features turso-local --lib turso_store_rejects_blank_pending_outbox_payload_event_types -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local` passed.
 - Latest store/outbox hardening slice:
   `Reject blank pending outbox event types`.
   Memory and Turso pending outbox reads now reject hash-consistent durable rows

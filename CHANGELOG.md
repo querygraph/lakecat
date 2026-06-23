@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added pending outbox payload event-type corruption coverage for memory and
+  Turso stores. Persisted rows whose payload event type is blank now have
+  dedicated regressions proving they fail before projection with hash-only
+  event, payload, and payload-event-type diagnostics.
 - Hardened pending outbox row validation in the memory and Turso stores.
   Hash-consistent but blank outbox event types now fail before graph or lineage
   projection with hash-only diagnostics, and focused regressions cover the

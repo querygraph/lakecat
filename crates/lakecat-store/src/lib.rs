@@ -4739,6 +4739,59 @@ mod memory_tests {
     }
 
     #[tokio::test]
+    async fn memory_store_rejects_blank_pending_outbox_payload_event_types() {
+        let store = MemoryCatalogStore::new();
+        let ident = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        store
+            .record_audit_event(
+                CatalogAuditEvent::new(
+                    "querygraph.bootstrap",
+                    Some(ident.clone()),
+                    Principal::anonymous(),
+                    serde_json::json!({
+                        "event-type": "querygraph.bootstrap",
+                        "table": ident,
+                        "manifest-hash": "lakecat:test"
+                    }),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let blank_payload = serde_json::json!({
+            "event-type": " ",
+            "manifest-hash": "lakecat:test"
+        });
+        let blank_payload_hash = content_hash_json(&blank_payload).unwrap();
+        {
+            let mut state = store.state.write().await;
+            state.outbox_events[0].event_id = blank_payload_hash;
+            state.outbox_events[0].payload = blank_payload;
+        }
+
+        let err = store
+            .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("pending outbox payload event-type must not be empty")
+                    && message.contains("event-id-hash=sha256:")
+                    && message.contains("event-type-hash=sha256:")
+                    && message.contains("payload-event-type-hash=sha256:")
+                    && message.contains("payload-hash=sha256:")
+                    && !message.contains("manifest-hash")
+                    && !message.contains("lakecat:test")
+        ));
+    }
+
+    #[tokio::test]
     async fn memory_store_rejects_audit_event_type_drift_before_outbox() {
         let store = MemoryCatalogStore::new();
         let ident = TableIdent::new(
@@ -11413,6 +11466,74 @@ pub mod turso_store {
             assert!(message.contains("pending outbox event type must not be empty"));
             assert!(message.contains("event-id-hash=sha256:"), "{message}");
             assert!(message.contains("event-type-hash=sha256:"), "{message}");
+            assert!(message.contains("payload-hash=sha256:"), "{message}");
+            assert!(!message.contains("manifest-hash"), "{message}");
+            assert!(!message.contains("lakecat:test"), "{message}");
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_blank_pending_outbox_payload_event_types() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let ident = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            store
+                .record_audit_event(
+                    CatalogAuditEvent::new(
+                        "querygraph.bootstrap",
+                        Some(ident.clone()),
+                        Principal::anonymous(),
+                        serde_json::json!({
+                            "event-type": "querygraph.bootstrap",
+                            "table": ident,
+                            "manifest-hash": "lakecat:test"
+                        }),
+                    )
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+            let pending = store
+                .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+                .await
+                .unwrap();
+            assert_eq!(pending.len(), 1);
+
+            let blank_payload = serde_json::json!({
+                "event-type": " ",
+                "manifest-hash": "lakecat:test"
+            });
+            let blank_payload_hash = crate::content_hash_json(&blank_payload).unwrap();
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update outbox_events
+                 set event_id = ?2, payload_json = ?3
+                 where event_id = ?1",
+                (
+                    pending[0].event_id.as_str(),
+                    blank_payload_hash.as_str(),
+                    encode_json(&blank_payload).unwrap(),
+                ),
+            )
+            .await
+            .unwrap();
+
+            let err = store
+                .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+                .await
+                .unwrap_err();
+            let LakeCatError::Internal(message) = err else {
+                panic!("expected internal pending outbox validation error");
+            };
+            assert!(message.contains("pending outbox payload event-type must not be empty"));
+            assert!(message.contains("event-id-hash=sha256:"), "{message}");
+            assert!(message.contains("event-type-hash=sha256:"), "{message}");
+            assert!(
+                message.contains("payload-event-type-hash=sha256:"),
+                "{message}"
+            );
             assert!(message.contains("payload-hash=sha256:"), "{message}");
             assert!(!message.contains("manifest-hash"), "{message}");
             assert!(!message.contains("lakecat:test"), "{message}");
