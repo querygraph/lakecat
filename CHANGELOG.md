@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed service outbox admission over wrapped credential-vend replay payloads.
+  `credentials.vend-attempted` wrappers now reject extra unverified credential,
+  storage-scope, authorization, issuer, graph, lineage, QueryGraph, or
+  application claims before acknowledgement, graph projection, or OpenLineage
+  projection.
 - Closed service outbox admission over wrapped catalog-config and QueryGraph
   bootstrap replay payloads. `catalog.config-read` and `querygraph.bootstrap`
   wrappers now reject extra unverified compatibility, endpoint, bootstrap,

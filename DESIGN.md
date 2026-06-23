@@ -1114,7 +1114,10 @@ Service outbox admission must also close the top-level
 raw lineage drains cannot append unverified credential, storage-scope,
 authorization, issuer, graph, OpenLineage, QueryGraph, or application claims
 beside checked table, read-restriction, raw-credential exception, storage
-profile, response evidence, and authorization proof.
+profile, response evidence, and authorization proof. Service replay now closes
+the wrapped credential-vend envelope over the producer fields as well, so those
+unverified claims cannot ride beside an otherwise valid nested credential
+payload and table hint.
 Storage-profile upsert replay must be hash-only for storage roots: generated
 audit/outbox evidence records `location-prefix-hash`, and raw
 `location-prefix` values must fail before acknowledgement or projection.

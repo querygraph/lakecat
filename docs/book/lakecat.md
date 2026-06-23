@@ -13433,7 +13433,10 @@ management, scan, credential, or QueryGraph body cannot be smuggled under a
 different catalog event name. Catalog config and QueryGraph bootstrap wrappers
 are closed the same way, preventing compatibility, endpoint, standards,
 artifact, graph, lineage, or application claims from riding beside otherwise
-valid config-read or bootstrap payloads.
+valid config-read or bootstrap payloads. Credential-vend wrappers are also
+closed over their producer fields, so extra credential-scope, issuer,
+authorization, storage, graph, lineage, or application claims cannot ride
+beside an otherwise valid nested credential decision.
 
 These concepts are LakeCat extensions today. The future proposal candidates
 inside them are the neutral pieces: exact retry, pointer-history proof,
