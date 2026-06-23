@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added pending outbox sink corruption coverage for memory and Turso stores.
+  Persisted rows with blank sink values now have focused regressions proving
+  they fail before projection with hash-only event and payload diagnostics.
 - Added pending outbox payload event-type corruption coverage for memory and
   Turso stores. Persisted rows whose payload event type is blank now have
   dedicated regressions proving they fail before projection with hash-only
