@@ -5,6 +5,14 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/testing slice:
+  `Harden management summary count proof`.
+  Lineage-drain compact management summaries now fail closed when
+  `project-ids`, `server-ids`, `warehouse-names`, `storage-profile-ids`, or
+  `policy-ids` drift from their corresponding count fields before QGLake or
+  QueryGraph handoff proof consumes them. Regression coverage now uses the
+  canonical LakeCat `project.listed`, `server.listed`, `warehouse.listed`,
+  `storage-profile.listed`, and `policy-binding.listed` event names.
 - Latest release-contract slice:
   `Enforce first-release checklist contract`.
   `scripts/check-local-dependency-contract.sh` now treats `RELEASE.md` as a

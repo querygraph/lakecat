@@ -7088,7 +7088,14 @@ fn lineage_drain_event_summary(
             .unwrap_or_default(),
         policy_ids: payload
             .get("policy-ids")
-            .map(|_| lineage_summary_string_array_field(event, payload, "policy-ids"))
+            .map(|_| {
+                lineage_summary_counted_string_array_field(
+                    event,
+                    payload,
+                    "policy-ids",
+                    &["policy-binding-count", "policy-count"],
+                )
+            })
             .transpose()?
             .unwrap_or_default(),
         policy_id: policy
@@ -7105,7 +7112,14 @@ fn lineage_drain_event_summary(
             .and_then(|count| usize::try_from(count).ok()),
         project_ids: payload
             .get("project-ids")
-            .map(|_| lineage_summary_string_array_field(event, payload, "project-ids"))
+            .map(|_| {
+                lineage_summary_counted_string_array_field(
+                    event,
+                    payload,
+                    "project-ids",
+                    &["project-count"],
+                )
+            })
             .transpose()?
             .unwrap_or_default(),
         server_count: payload
@@ -7114,7 +7128,14 @@ fn lineage_drain_event_summary(
             .and_then(|count| usize::try_from(count).ok()),
         server_ids: payload
             .get("server-ids")
-            .map(|_| lineage_summary_string_array_field(event, payload, "server-ids"))
+            .map(|_| {
+                lineage_summary_counted_string_array_field(
+                    event,
+                    payload,
+                    "server-ids",
+                    &["server-count"],
+                )
+            })
             .transpose()?
             .unwrap_or_default(),
         storage_profile_count: payload
@@ -7123,7 +7144,14 @@ fn lineage_drain_event_summary(
             .and_then(|count| usize::try_from(count).ok()),
         storage_profile_ids: payload
             .get("storage-profile-ids")
-            .map(|_| lineage_summary_string_array_field(event, payload, "storage-profile-ids"))
+            .map(|_| {
+                lineage_summary_counted_string_array_field(
+                    event,
+                    payload,
+                    "storage-profile-ids",
+                    &["storage-profile-count"],
+                )
+            })
             .transpose()?
             .unwrap_or_default(),
         storage_profile_id: storage_profile
@@ -7153,7 +7181,14 @@ fn lineage_drain_event_summary(
             .and_then(|count| usize::try_from(count).ok()),
         warehouse_names: payload
             .get("warehouse-names")
-            .map(|_| lineage_summary_string_array_field(event, payload, "warehouse-names"))
+            .map(|_| {
+                lineage_summary_counted_string_array_field(
+                    event,
+                    payload,
+                    "warehouse-names",
+                    &["warehouse-count"],
+                )
+            })
             .transpose()?
             .unwrap_or_default(),
         table_commit_count: payload
@@ -7599,6 +7634,43 @@ fn lineage_summary_string_array_field(
         strings.push(string.to_string());
     }
     validate_unique_string_array(event, &strings, field)?;
+    Ok(strings)
+}
+
+fn lineage_summary_counted_string_array_field(
+    event: &OutboxEvent,
+    object: &Value,
+    field: &str,
+    count_fields: &[&str],
+) -> Result<Vec<String>, LakeCatError> {
+    let strings = lineage_summary_string_array_field(event, object, field)?;
+    let Some((count_field, count_value)) = count_fields
+        .iter()
+        .find_map(|count_field| object.get(*count_field).map(|value| (*count_field, value)))
+    else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{field} must carry a matching count field"),
+        ));
+    };
+    let Some(count) = count_value.as_u64() else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{count_field} must be an unsigned integer when {field} is present"),
+        ));
+    };
+    let count = usize::try_from(count).map_err(|_| {
+        outbox_evidence_error(
+            event,
+            &format!("{count_field} is too large to summarize on this platform"),
+        )
+    })?;
+    if count != strings.len() {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{field} count must match {count_field}"),
+        ));
+    }
     Ok(strings)
 }
 
@@ -48926,7 +48998,7 @@ mod tests {
         let malformed_project_ids = OutboxEvent {
             event_id: "evt-bad-summary-project-ids".to_string(),
             sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "management.projects-listed".to_string(),
+            event_type: "project.listed".to_string(),
             payload: json!({
                 "payload": {
                     "project-count": 2,
@@ -48944,7 +49016,7 @@ mod tests {
         let blank_server_id = OutboxEvent {
             event_id: "evt-blank-summary-server-id".to_string(),
             sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "management.servers-listed".to_string(),
+            event_type: "server.listed".to_string(),
             payload: json!({
                 "payload": {
                     "server-count": 2,
@@ -48962,7 +49034,7 @@ mod tests {
         let duplicate_warehouse_name = OutboxEvent {
             event_id: "evt-duplicate-summary-warehouse-name".to_string(),
             sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "management.warehouses-listed".to_string(),
+            event_type: "warehouse.listed".to_string(),
             payload: json!({
                 "payload": {
                     "warehouse-count": 2,
@@ -48980,7 +49052,7 @@ mod tests {
         let duplicate_policy_id = OutboxEvent {
             event_id: "evt-duplicate-summary-policy-id".to_string(),
             sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "policy.bindings-listed".to_string(),
+            event_type: "policy-binding.listed".to_string(),
             payload: json!({
                 "payload": {
                     "policy-binding-count": 2,
@@ -48998,7 +49070,7 @@ mod tests {
         let malformed_storage_profile_ids = OutboxEvent {
             event_id: "evt-bad-summary-storage-profile-ids".to_string(),
             sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "management.storage-profiles-listed".to_string(),
+            event_type: "storage-profile.listed".to_string(),
             payload: json!({
                 "payload": {
                     "storage-profile-count": 1,
@@ -49012,6 +49084,96 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("storage-profile-ids must be an array when present"));
+
+        let project_count_drift = OutboxEvent {
+            event_id: "evt-count-drift-summary-project-ids".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "project.listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "project-count": 2,
+                    "project-ids": ["analytics"]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&project_count_drift, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("project-ids count must match project-count"));
+
+        let server_count_drift = OutboxEvent {
+            event_id: "evt-count-drift-summary-server-ids".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "server.listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "server-count": 2,
+                    "server-ids": ["primary"]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&server_count_drift, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("server-ids count must match server-count"));
+
+        let warehouse_count_drift = OutboxEvent {
+            event_id: "evt-count-drift-summary-warehouse-names".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "warehouse.listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "warehouse-count": 2,
+                    "warehouse-names": ["local"]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&warehouse_count_drift, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("warehouse-names count must match warehouse-count"));
+
+        let storage_profile_count_drift = OutboxEvent {
+            event_id: "evt-count-drift-summary-storage-profile-ids".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "storage-profile.listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "storage-profile-count": 2,
+                    "storage-profile-ids": ["local-file"]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&storage_profile_count_drift, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("storage-profile-ids count must match storage-profile-count"));
+
+        let policy_count_drift = OutboxEvent {
+            event_id: "evt-count-drift-summary-policy-ids".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "policy-binding.listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "policy-binding-count": 2,
+                    "policy-ids": ["agent-read"]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&policy_count_drift, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("policy-ids count must match policy-binding-count"));
     }
 
     #[test]

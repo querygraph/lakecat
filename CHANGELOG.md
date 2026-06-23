@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened lineage-drain management summary count proof. Compact management
+  replay summaries now require `project-ids`, `server-ids`, `warehouse-names`,
+  `storage-profile-ids`, and `policy-ids` arrays to match their corresponding
+  count fields before QGLake/QueryGraph handoff proof can consume them, with
+  regression coverage moved to LakeCat's canonical `*.listed` event names.
 - Enforced the first-release checklist in the local dependency contract.
   `scripts/check-local-dependency-contract.sh` now requires `RELEASE.md`,
   verifies README and design links to the checklist, preserves the June 23,
