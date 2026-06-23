@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Re-verified the Grust Turso graph boundary against the current Grust checkout.
+  LakeCat's graph path resolves through `/Users/alexy/src/grust/crates/grust-turso`;
+  focused LakeCat tests cover `TursoGraphStore` persistence, traversal, Cypher
+  mutation, matched-node patching, and service startup configuration without
+  direct LakeCat-owned Turso graph SQL.
 - Added raw storage-profile public-config summary coverage. Lineage-drain
   summary regressions now prove reserved LakeCat credential evidence keys and
   secret-like public-config values are rejected with hash-only diagnostics
