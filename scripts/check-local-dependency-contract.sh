@@ -154,6 +154,10 @@ require_pattern 'grust_turso_store_runs_cypher_over_lakecat_catalog_projection_b
   "release-readiness gate must keep the explicit Grust Turso Cypher projection row"
 require_pattern 'grust_turso_store_runs_cypher_over_lakecat_catalog_projection_boundary' crates/lakecat-graph/src/lib.rs \
   "LakeCat graph tests must prove Grust Cypher over the Turso-backed catalog projection"
+require_pattern 'grust_turso_store_patches_lakecat_catalog_projection_nodes' scripts/check-release-readiness.sh \
+  "release-readiness gate must prove Grust Turso matched-node patches over LakeCat catalog projection nodes"
+require_pattern 'grust_turso_store_patches_lakecat_catalog_projection_nodes' crates/lakecat-graph/src/lib.rs \
+  "LakeCat graph tests must prove Grust Turso matched-node patches stay in Grust"
 require_pattern 'scripts/qglake-handoff-local.sh' scripts/check-release-readiness.sh \
   "release-readiness gate must include the QGLake handoff proof"
 

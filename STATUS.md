@@ -5,6 +5,20 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest Grust Turso graph boundary slice:
+  `Prove Grust Turso matched-node patches`.
+  The `grust-turso-local` graph tests now project a LakeCat catalog event into
+  Grust's `TursoGraphStore`, execute Grust's matched-node mutation plan over
+  the projected table node, and verify the patched `querygraph_ready` property
+  through the Turso store. This keeps matched-node graph mutation behavior in
+  Grust while proving LakeCat uses the new backend capability at its catalog
+  projection boundary.
+- Local verification for this Grust Turso matched-node slice is green:
+  `cargo test -p lakecat-graph --features grust-turso-local --lib grust_turso_store_patches_lakecat_catalog_projection_nodes -- --test-threads=1`
+  passed; `cargo test -p lakecat-graph --features grust-turso-local --lib grust_turso_store -- --test-threads=1`
+  passed; `scripts/check-local-dependency-contract.sh` passed;
+  `cargo fmt -p lakecat-graph -- --check` passed;
+  `scripts/check-release-readiness.sh --quick` passed.
 - Latest design reconciliation slice:
   `Reconcile scan required-filter design`.
   `DESIGN.md` now matches the implemented service replay rule for planned and

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added Grust Turso matched-node patch verification. The `grust-turso-local`
+  graph tests now project a LakeCat catalog event into Grust's
+  `TursoGraphStore`, execute Grust's matched-node mutation plan over the
+  projected table node, and assert the patched QueryGraph readiness property is
+  durably visible without LakeCat owning Turso graph mutation logic.
 - Hardened raw view receipt-chain summary extraction. Lineage-drain summary
   construction now rejects decoded `view-version-receipt-chains` entries whose
   `chain-verified` flag is false, so raw QGLake replay proof cannot inherit an
