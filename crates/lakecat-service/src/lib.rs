@@ -54797,6 +54797,45 @@ mod tests {
             "{err}"
         );
 
+        let mut blank_engine = valid_lineage_summary_management_list_event(
+            "evt-blank-engine-summary-server-list",
+            "server.listed",
+        );
+        blank_engine.payload["payload"]["authorization-receipt"]["engine"] = json!(" ");
+        let err = lineage_drain_event_summary(&blank_engine, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("management-list authorization receipt engine must be non-empty"),
+            "{err}"
+        );
+        assert!(err.contains("event-id-hash=sha256:"), "{err}");
+        assert!(
+            !err.contains("evt-blank-engine-summary-server-list"),
+            "{err}"
+        );
+
+        let mut malformed_checked_at = valid_lineage_summary_management_list_event(
+            "evt-malformed-checked-at-summary-server-list",
+            "server.listed",
+        );
+        malformed_checked_at.payload["payload"]["authorization-receipt"]["checked_at"] =
+            json!("not-a-timestamp");
+        let err = lineage_drain_event_summary(&malformed_checked_at, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains(
+                "management-list authorization receipt checked_at timestamp must be RFC3339"
+            ),
+            "{err}"
+        );
+        assert!(err.contains("event-id-hash=sha256:"), "{err}");
+        assert!(
+            !err.contains("evt-malformed-checked-at-summary-server-list"),
+            "{err}"
+        );
+
         let mut missing_principal = valid_lineage_summary_management_list_event(
             "evt-missing-principal-summary-server-list",
             "server.listed",
