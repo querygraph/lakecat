@@ -120,6 +120,8 @@ lineage/graph outbox row are written in one transaction; if the outbox insert
 fails, the audit row is rolled back rather than leaving evidence that cannot be
 replayed. The same path uses the shared audit event-id rule, so a duplicate
 audit write fails without multiplying lineage/graph outbox replay evidence.
+The embedded memory store follows the same duplicate event-id rule, which keeps
+fast tests honest about replay identity even when no Turso file is involved.
 Replay validation then closes the loop: durable evidence must be well-formed,
 scoped, hash-shaped, redacted, and admitted before graph projection,
 OpenLineage projection, QGLake handoff, or QueryGraph import can trust it.
@@ -275,9 +277,11 @@ receipt posture without leaking secrets. An outbox row is only durable if it is
 written as part of the accepted catalog transition rather than as a best-effort
 side effect; the Turso audit path now proves this by rolling back the audit row
 when the paired outbox insert fails and by rejecting duplicate audit writes
-without duplicating outbox evidence. Replay validation is the admission layer
-that prevents malformed or widened claims from entering graph, OpenLineage,
-QGLake, or QueryGraph evidence. These are not standard PySpark concepts. They
+without duplicating outbox evidence. The memory store rejects the same duplicate
+event identity before changing its audit/outbox state. Replay validation is the
+admission layer that prevents malformed or widened claims from entering graph,
+OpenLineage, QGLake, or QueryGraph evidence. These are not standard PySpark
+concepts. They
 are credible future catalog reliability concepts because other catalogs also
 need retry, history,
 event recovery, and downstream proof admission.

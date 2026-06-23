@@ -245,12 +245,12 @@ The current working plan is:
    to Grust.
 5. Keep tenancy and credentials replayable. Durable server/project/warehouse,
    namespace, view, policy, storage-profile, and credential-root changes should
-   create transactionally paired audit/outbox evidence. Standalone Turso audit
-   writes share the common audit event-id helper and must fail duplicate writes
-   without creating duplicate lineage/graph outbox replay evidence. Secret
-   references and storage roots must stay redacted in replay, represented by
-   provider labels, presence flags, and content hashes such as
-   `location-prefix-hash`; validation failures should
+   create transactionally paired audit/outbox evidence. Standalone audit writes
+   share the common audit event-id helper where supported and memory/Turso
+   stores must fail duplicate writes without creating duplicate lineage/graph
+   outbox replay evidence. Secret references and storage roots must stay
+   redacted in replay, represented by provider labels, presence flags, and
+   content hashes such as `location-prefix-hash`; validation failures should
    follow the same hash-only rule for storage roots, secret references,
    public-config keys, and production resolver parse failures. Turso
    server/project/warehouse reads must bind decoded JSON back to the selecting

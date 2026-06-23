@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Hardened memory-store audit event identity parity. Embedded audit recording
+  now rejects duplicate audit event ids before mutating audit/outbox state, so
+  memory and Turso stores both prevent duplicate lineage/graph replay evidence.
 - Hardened Turso audit event identity reuse. Standalone Turso audit recording
   now uses the shared audit event-id helper, and duplicate audit writes are
   covered so they cannot create duplicate lineage/graph outbox replay evidence.

@@ -6,6 +6,19 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Harden memory audit event identity parity`.
+  Embedded memory-store audit recording now rejects duplicate audit event ids
+  before mutating audit/outbox state, so memory and Turso stores both prevent
+  duplicate lineage/graph replay evidence.
+- Local verification for this memory audit event identity slice is green:
+  `cargo test -p lakecat-store memory_store_duplicate_audit_write_does_not_duplicate_outbox -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed.
+- Latest implementation/testing slice:
   `Harden Turso audit event identity reuse`.
   Standalone Turso audit recording now uses the shared audit event-id helper,
   and regression coverage proves duplicate audit writes fail without creating

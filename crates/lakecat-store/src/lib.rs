@@ -2449,6 +2449,15 @@ impl CatalogStore for MemoryCatalogStore {
         let outbox_payload = audit_outbox_payload(&event_id, &event);
         let outbox_event = outbox_event_from_payload(&outbox_payload, event.created_at)?;
         let mut state = self.state.write().await;
+        if state
+            .outbox_events
+            .iter()
+            .any(|candidate| candidate.event_id == outbox_event.event_id)
+        {
+            return Err(LakeCatError::Internal(
+                "duplicate audit event id would duplicate outbox replay evidence".to_string(),
+            ));
+        }
         state.audit_events.push(event);
         state.outbox_events.push(outbox_event);
         Ok(())
@@ -4460,6 +4469,39 @@ mod memory_tests {
                 .is_empty()
         );
         assert_eq!(store.mark_outbox_delivered(&event_ids).await.unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn memory_store_duplicate_audit_write_does_not_duplicate_outbox() {
+        let store = MemoryCatalogStore::new();
+        let ident = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let mut event = CatalogAuditEvent::new(
+            "querygraph.bootstrap",
+            Some(ident.clone()),
+            Principal::anonymous(),
+            serde_json::json!({
+                "event-type": "querygraph.bootstrap",
+                "table": ident,
+                "manifest-hash": "lakecat:test"
+            }),
+        )
+        .unwrap();
+        event.created_at = "2026-01-01T00:00:00Z".parse().unwrap();
+
+        store.record_audit_event(event.clone()).await.unwrap();
+        let err = store.record_audit_event(event).await.unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("duplicate audit event id would duplicate outbox replay evidence")
+        ));
+        let state = store.state.read().await;
+        assert_eq!(state.audit_events.len(), 1);
+        assert_eq!(state.outbox_events.len(), 1);
     }
 
     #[tokio::test]
