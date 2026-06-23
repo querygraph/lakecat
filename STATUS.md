@@ -162,6 +162,20 @@ Updated: 2026-06-23
   `scripts/check-release-readiness.sh --quick` passed; `git diff --check`
   passed.
 - Latest graph-boundary slice:
+  `Bind service startup to Grust Turso graph store`.
+  The `grust-turso-local` service binary test now exercises the actual runtime
+  graph-sink constructor, emits a catalog table event through
+  `GrustCatalogGraphSink<TursoGraphStore>`, and reopens the Grust Turso store
+  to prove the projected table node landed in Grust-owned graph tables.
+  Release readiness now runs this real service-level gate instead of the older
+  lib-test filter that matched no tests.
+- Local verification for this graph-boundary slice is green:
+  `cargo test -p lakecat-service --features grust-turso-local --bin lakecat-service configured_grust_turso_graph_sink_projects_catalog_events_to_turso_store -- --test-threads=1`
+  passed; `cargo test -p lakecat-graph --features grust-turso-local --lib grust_turso_store -- --test-threads=1`
+  passed; `cargo tree -p lakecat-graph --features grust-turso-local -i grust-turso`
+  resolves through `/Users/alexy/src/grust/crates/grust-turso`;
+  `cargo fmt -p lakecat-service -- --check` passed.
+- Latest graph-boundary slice:
   `Prove grust-turso graph sink emission`.
   LakeCat's `grust-turso-local` graph tests now include a Turso-backed
   `CatalogGraphSink::emit` regression. The test constructs Grust's

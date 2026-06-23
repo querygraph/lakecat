@@ -127,8 +127,8 @@ if [[ "$mode" == "full" ]]; then
   run cargo test -p lakecat-service --features typesec-local --lib -- --test-threads=1
   run cargo test -p lakecat-service --features grust-local --lib \
     outbox_drain_projects_table_events_to_sinks -- --test-threads=1
-  run cargo test -p lakecat-service --features grust-turso-local --lib \
-    outbox_drain_projects_table_events_to_sinks -- --test-threads=1
+  run cargo test -p lakecat-service --features grust-turso-local --bin lakecat-service \
+    configured_grust_turso_graph_sink_projects_catalog_events_to_turso_store -- --test-threads=1
   run cargo test -p lakecat-security --features typesec-local --lib -- --test-threads=1
   run cargo test -p lakecat-graph --features grust-local --lib -- --test-threads=1
   run cargo test -p lakecat-graph --features grust-local --lib \

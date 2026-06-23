@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added service-level Grust Turso graph sink verification. The
+  `grust-turso-local` service binary tests now configure
+  `GrustCatalogGraphSink<TursoGraphStore>` with the same Turso path/prefix used
+  by runtime startup, emit a LakeCat catalog event through the configured sink,
+  and read the projected table node back from Grust's Turso store; release
+  readiness now runs that real service-level gate instead of a zero-match lib
+  filter.
 - Reconciled planned/fetched scan required-filter design guidance. The living
   design now matches service replay admission: present planned or fetched
   `required-filters` proof must be array-shaped, and governed proof must

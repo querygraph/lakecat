@@ -131,8 +131,15 @@ async fn configured_graph_sink() -> lakecat_core::LakeCatResult<Arc<dyn CatalogG
 #[cfg(feature = "grust-turso-local")]
 async fn configured_graph_sink() -> lakecat_core::LakeCatResult<Arc<dyn CatalogGraphSink>> {
     let path = std::env::var("LAKECAT_GRUST_TURSO_PATH").unwrap_or_else(|_| ":memory:".to_string());
+    configured_grust_turso_graph_sink_for_path(path).await
+}
+
+#[cfg(feature = "grust-turso-local")]
+async fn configured_grust_turso_graph_sink_for_path(
+    path: impl Into<String>,
+) -> lakecat_core::LakeCatResult<Arc<dyn CatalogGraphSink>> {
     let store = grust_graph::TursoGraphStore::connect(grust_graph::TursoConfig {
-        path,
+        path: path.into(),
         table_prefix: "lakecat_graph".to_string(),
         ..Default::default()
     })
@@ -155,6 +162,68 @@ async fn configured_graph_sink() -> lakecat_core::LakeCatResult<Arc<dyn CatalogG
 #[cfg(not(feature = "grust-local"))]
 async fn configured_graph_sink() -> lakecat_core::LakeCatResult<Arc<dyn CatalogGraphSink>> {
     Ok(NoopCatalogGraphSink::new())
+}
+
+#[cfg(all(test, feature = "grust-turso-local"))]
+mod grust_turso_tests {
+    use super::*;
+    use grust_graph::prelude::*;
+    use lakecat_core::{Namespace, TableIdent, TableName, WarehouseName};
+    use lakecat_graph::{GraphAction, GraphEvent};
+
+    #[tokio::test]
+    async fn configured_grust_turso_graph_sink_projects_catalog_events_to_turso_store() {
+        let path = std::env::temp_dir().join(format!(
+            "lakecat-grust-turso-{}.db",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let path_string = path.to_string_lossy().to_string();
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let table_id = table.stable_id();
+        let event = GraphEvent::table(
+            GraphAction::Created,
+            table,
+            serde_json::json!({"kind":"service-configured-grust-turso"}),
+        )
+        .with_event_id("lakecat:outbox:evt-service-grust-turso");
+
+        let sink = configured_grust_turso_graph_sink_for_path(path_string.clone())
+            .await
+            .expect("configure service Grust Turso graph sink");
+        sink.emit(event)
+            .await
+            .expect("service graph sink should write through Grust Turso");
+        drop(sink);
+
+        let store = grust_graph::TursoGraphStore::connect(grust_graph::TursoConfig {
+            path: path_string,
+            table_prefix: "lakecat_graph".to_string(),
+            ..Default::default()
+        })
+        .await
+        .expect("reopen Grust Turso graph store");
+        let node = store
+            .get_node(&NodeId::new(table_id.clone()))
+            .await
+            .expect("read table node from Grust Turso")
+            .expect("configured service sink persisted table node");
+
+        assert_eq!(node.id.as_str(), table_id);
+        assert_eq!(node.label.as_str(), "Table");
+        assert_eq!(
+            node.props.get("warehouse"),
+            Some(&Value::String("local".to_string()))
+        );
+
+        let _ = std::fs::remove_file(path);
+    }
 }
 
 #[cfg(all(test, feature = "typesec-local"))]
