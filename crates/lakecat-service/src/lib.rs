@@ -7094,39 +7094,47 @@ fn lineage_drain_event_summary(
             .and_then(Value::as_str)
             .map(str::to_string),
         typedid_envelope_hash: request_identity
-            .and_then(|identity| identity.get("typedid-envelope-sha256"))
-            .and_then(Value::as_str)
-            .map(str::to_string),
+            .map(|identity| {
+                lineage_summary_optional_full_hash_field(event, identity, "typedid-envelope-sha256")
+            })
+            .transpose()?
+            .flatten(),
         typedid_proof_hash: request_identity
-            .and_then(|identity| identity.get("typedid-proof-sha256"))
-            .and_then(Value::as_str)
-            .map(str::to_string),
+            .map(|identity| {
+                lineage_summary_optional_full_hash_field(event, identity, "typedid-proof-sha256")
+            })
+            .transpose()?
+            .flatten(),
         agent_delegation_hash: request_identity
-            .and_then(|identity| identity.get("agent-delegation-sha256"))
-            .and_then(Value::as_str)
-            .map(str::to_string),
+            .map(|identity| {
+                lineage_summary_optional_full_hash_field(event, identity, "agent-delegation-sha256")
+            })
+            .transpose()?
+            .flatten(),
         agent_summary_signature_hash: request_identity
-            .and_then(|identity| identity.get("agent-summary-signature-sha256"))
-            .and_then(Value::as_str)
-            .map(str::to_string),
+            .map(|identity| {
+                lineage_summary_optional_full_hash_field(
+                    event,
+                    identity,
+                    "agent-summary-signature-sha256",
+                )
+            })
+            .transpose()?
+            .flatten(),
         graph_events: receipt.graph_events,
         lineage_events: receipt.lineage_events,
-        bundle_hash: payload
-            .get("bundle-hash")
-            .and_then(Value::as_str)
-            .map(str::to_string),
-        graph_hash: payload
-            .get("graph-hash")
-            .and_then(Value::as_str)
-            .map(str::to_string),
-        open_lineage_hash: payload
-            .get("open-lineage-hash")
-            .and_then(Value::as_str)
-            .map(str::to_string),
-        querygraph_import_hash: payload
-            .get("querygraph-import-hash")
-            .and_then(Value::as_str)
-            .map(str::to_string),
+        bundle_hash: lineage_summary_optional_full_hash_field(event, payload, "bundle-hash")?,
+        graph_hash: lineage_summary_optional_full_hash_field(event, payload, "graph-hash")?,
+        open_lineage_hash: lineage_summary_optional_full_hash_field(
+            event,
+            payload,
+            "open-lineage-hash",
+        )?,
+        querygraph_import_hash: lineage_summary_optional_full_hash_field(
+            event,
+            payload,
+            "querygraph-import-hash",
+        )?,
         table_artifact_count: lineage_summary_array_len_field(event, payload, "table-artifacts")?,
         view_artifact_count: lineage_summary_array_len_field(event, payload, "view-artifacts")?,
         view_version_receipt_hashes,
@@ -7527,6 +7535,18 @@ fn lineage_summary_full_hash_array_field(
     let hash_refs = hashes.to_vec();
     validate_unique_hash_array(event, &hash_refs, field)?;
     Ok(hashes.into_iter().map(str::to_string).collect())
+}
+
+fn lineage_summary_optional_full_hash_field(
+    event: &OutboxEvent,
+    object: &Value,
+    field: &str,
+) -> Result<Option<String>, LakeCatError> {
+    validate_optional_full_hash_field(event, object, field)?;
+    Ok(object
+        .get(field)
+        .and_then(Value::as_str)
+        .map(str::to_string))
 }
 
 fn lineage_summary_credential_prefix_hashes(
@@ -49534,6 +49554,100 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("standards must not contain duplicate values"));
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_querygraph_hashes() {
+        let receipt = OutboxProjectionReceipt::default();
+        let cases = [
+            (
+                "evt-bad-summary-bundle-hash",
+                json!({ "bundle-hash": "sha256:not-full" }),
+                "bundle-hash must contain full SHA-256 digest evidence",
+            ),
+            (
+                "evt-bad-summary-graph-hash",
+                json!({ "graph-hash": 42 }),
+                "graph-hash must contain full SHA-256 digest evidence",
+            ),
+            (
+                "evt-bad-summary-open-lineage-hash",
+                json!({ "open-lineage-hash": "sha256:not-full" }),
+                "open-lineage-hash must contain full SHA-256 digest evidence",
+            ),
+            (
+                "evt-bad-summary-querygraph-import-hash",
+                json!({ "querygraph-import-hash": "sha256:not-full" }),
+                "querygraph-import-hash must contain full SHA-256 digest evidence",
+            ),
+        ];
+
+        for (event_id, payload, expected_message) in cases {
+            let event = OutboxEvent {
+                event_id: event_id.to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "querygraph.bootstrap".to_string(),
+                payload: json!({ "payload": payload }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            };
+            let err = lineage_drain_event_summary(&event, &receipt)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains(expected_message), "{err}");
+        }
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_request_identity_hashes() {
+        let receipt = OutboxProjectionReceipt::default();
+        let cases = [
+            (
+                "typedid-envelope-sha256",
+                json!("sha256:not-full"),
+                "typedid-envelope-sha256 must contain full SHA-256 digest evidence",
+            ),
+            (
+                "typedid-proof-sha256",
+                json!(42),
+                "typedid-proof-sha256 must contain full SHA-256 digest evidence",
+            ),
+            (
+                "agent-delegation-sha256",
+                json!("sha256:not-full"),
+                "agent-delegation-sha256 must contain full SHA-256 digest evidence",
+            ),
+            (
+                "agent-summary-signature-sha256",
+                json!("sha256:not-full"),
+                "agent-summary-signature-sha256 must contain full SHA-256 digest evidence",
+            ),
+        ];
+
+        for (field, value, expected_message) in cases {
+            let mut request_identity = serde_json::Map::new();
+            request_identity.insert(field.to_string(), value);
+            let event = OutboxEvent {
+                event_id: format!("evt-bad-summary-{field}"),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "querygraph.bootstrap".to_string(),
+                payload: json!({
+                    "payload": {
+                        "authorization-receipt": {
+                            "context": {
+                                "request-identity": Value::Object(request_identity)
+                            }
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            };
+            let err = lineage_drain_event_summary(&event, &receipt)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains(expected_message), "{err}");
+        }
     }
 
     #[test]

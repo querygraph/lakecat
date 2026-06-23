@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened lineage-drain QueryGraph hash summaries. Raw replay summary
+  construction now rejects malformed present bootstrap `bundle-hash`,
+  `graph-hash`, `open-lineage-hash`, `querygraph-import-hash`, and
+  request-identity TypeDID/agent hash evidence before QGLake/QueryGraph compact
+  proof can consume it.
 - Hardened lineage-drain raw credential exception summaries. Raw replay summary
   construction now rejects malformed `lakecat:raw-credential-exception`
   objects, malformed or blank exception reasons, mismatched block reasons,

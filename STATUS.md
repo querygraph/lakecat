@@ -6,6 +6,12 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Harden QueryGraph hash summaries`.
+  Raw lineage-drain summaries now fail closed when present QueryGraph bootstrap
+  `bundle-hash`, `graph-hash`, `open-lineage-hash`, `querygraph-import-hash`,
+  or request-identity TypeDID/agent hash evidence is malformed, preventing
+  compact QGLake/QueryGraph proof from silently omitting corrupted hashes.
+- Latest implementation/testing slice:
   `Harden raw credential exception summaries`.
   Raw lineage-drain summaries now fail closed when
   `lakecat:raw-credential-exception` is malformed, carries malformed or blank
