@@ -422,8 +422,8 @@ boundary cleanup rather than new architecture:
   QGLake/QueryGraph acceptance path exercises the same durable Grust Turso
   backend. The handoff summary must carry hash-only `graphProjectionProof`
   evidence for that backend, including the configured `lakecat_graph` table
-  prefix, and the Rust handoff verifier must reject missing or drifted
-  graph-backend proof before accepting saved artifacts. Graph
+  prefix, and the Rust handoff verifier must reject missing, drifted, or
+  extra unverified graph-backend proof before accepting saved artifacts. Graph
   persistence, traversal, and Cypher-over-Turso behavior remain Grust-owned;
   LakeCat only proves the catalog projection boundary. Grust Turso graph-sink
   connect/bootstrap failures are operator-facing LakeCat errors and must expose

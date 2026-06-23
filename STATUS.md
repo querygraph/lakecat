@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest compact Grust Turso graph-proof schema coverage:
+  QGLake handoff verification now has focused regression coverage proving
+  `graphProjectionProof` rejects extra unverified backend claims, so saved
+  handoffs can only describe the closed LakeCat-to-Grust Turso projection
+  boundary.
+- Local verification for this compact Grust Turso graph-proof schema slice
+  passed: `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_extra_graph_projection_fields -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest saved lineage-drain replay manifest hardening:
   the CLI verifier now rejects blank or duplicate replay summary event IDs in
   saved drain artifacts, matching the service-side response guard before compact

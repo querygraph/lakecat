@@ -13590,6 +13590,23 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_graph_projection_fields() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["graphProjectionProof"]["unverifiedBackendClaim"] =
+            json!(qglake_fixture_hash("unverified-graph-backend-claim"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject extra graph projection proof fields");
+
+        let err = err.to_string();
+        assert!(err.contains("graphProjectionProof"), "{err}");
+        assert!(
+            err.contains("unexpected field unverifiedBackendClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_rejects_blank_principal_anchor() {
         let mut summary = qglake_handoff_summary_json();
         summary["principal"] = json!("   ");

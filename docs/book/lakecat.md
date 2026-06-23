@@ -8056,7 +8056,9 @@ handoff summary records this as hash-only
 `graphProjectionProof` evidence: the backend, feature, and configured
 `lakecat_graph` table prefix are named, but the local graph database path is
 represented by a digest. The Rust verifier rejects missing, malformed, or
-drifted graph-backend proof before accepting saved artifacts. TypeSec still
+drifted graph-backend proof before accepting saved artifacts, and it treats
+extra graph-backend claims as invalid rather than letting a saved handoff attach
+unverified Turso or Grust behavior to the compact proof. TypeSec still
 resolves from the published `typesec` 0.8.0 crate.
 
 Sail is different today: LakeCat still uses local Sail paths plus a checked-in

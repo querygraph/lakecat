@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added compact Grust Turso graph-proof schema coverage. QGLake handoff
+  verification now has focused regression coverage proving `graphProjectionProof`
+  rejects extra unverified backend claims, so saved handoffs can only describe
+  the closed LakeCat-to-Grust Turso projection boundary.
 - Hardened saved QGLake lineage-drain replay manifests. The CLI verifier now
   rejects blank or duplicate replay summary event IDs in saved drain artifacts,
   matching the service-side response guard before compact handoff proof can
