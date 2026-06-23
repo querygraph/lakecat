@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Clarified the post-tag release posture. `RELEASE.md`, `DESIGN.md`, and the
+  book now distinguish the already-published `v0.1.0` baseline from future
+  version-bump releases, so post-tag hardening stays under `Unreleased` while
+  future tags remain gated by the full local release-candidate proof.
 - Wired the release-proof freshness contract into the clean release-candidate
   gate. `scripts/check-release-readiness.sh --release-candidate` now runs
   `scripts/check-release-proof-contract.sh` in candidate mode, so the heavy

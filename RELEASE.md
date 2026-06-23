@@ -156,10 +156,14 @@ quick gate before committing.
 
 ## Release Notes
 
-Before tagging:
+For the already-published `v0.1.0` baseline, do not move current post-tag
+hardening out of `Unreleased` while the workspace version remains `0.1.0`.
+Keep proof refs, status, and book artifacts current instead.
 
-- Move the relevant `CHANGELOG.md` entries from `Unreleased` into a versioned
-  release heading.
+For a future version-bump release, before tagging:
+
+- Move the relevant `CHANGELOG.md` entries from `Unreleased` into the new
+  versioned release heading.
 - Update `STATUS.md` with the final full-gate command and date.
 - Update `README.md` if the release evidence date, dependency posture, feature
   gates, or first-release scope changed.

@@ -13608,7 +13608,9 @@ also redacts Grust Turso graph-sink connect/bootstrap failures to
 capture raw graph database paths.
 
 README, status, changelog, book artifacts, and version notes must be refreshed
-from the same clean commit, and the release should be tagged only after the
+from the same clean proof commit. The already-published `v0.1.0` tag should not
+move; current post-tag hardening stays under `Unreleased` while the workspace
+version remains `0.1.0`. For a future version-bump release, tag only after the
 broad local gate, QGLake handoff, QueryGraph locked verify/import,
 dependency-contract check, and book validation all pass together. Tracked book
 artifacts are refreshed deliberately with `docs/book/build.sh`; the
