@@ -5,6 +5,18 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest Grust Turso graph operation check:
+  LakeCat's graph-over-Turso route is already using Grust's dedicated
+  `grust-turso` crate. The inverse dependency tree resolves as
+  `turso -> grust-turso -> lakecat-graph/lakecat-service`, service startup
+  configures `GrustCatalogGraphSink<grust_turso::TursoGraphStore>`, and graph
+  persistence, traversal, Cypher, and matched-node mutation stay in Grust.
+- Local verification for this Grust Turso graph operation check passed:
+  `cargo tree -p lakecat-graph --features grust-turso-local -i turso`;
+  `cargo tree -p lakecat-service --features grust-turso-local -i turso`;
+  `cargo test -p lakecat-graph --features grust-turso-local --lib grust_turso_store -- --test-threads=1`;
+  `cargo test -p lakecat-service --features grust-turso-local --bin lakecat-service configured_grust_turso_graph_sink_projects_catalog_events_to_turso_store -- --test-threads=1`;
+  `/Users/alexy/src/grust: cargo test -p grust-turso`.
 - Latest memory/Turso idempotency row-hash parity:
   the default memory store now shares the same stored idempotency request-hash
   validation as the Turso store. Corrupted replay state fails closed before

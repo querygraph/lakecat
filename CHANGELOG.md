@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Re-verified current Grust Turso graph operations. LakeCat still reaches Turso
+  graph storage through `/Users/alexy/src/grust/crates/grust-turso`, the graph
+  crate exercises persistence, traversal, Cypher, and matched-node patches over
+  `grust_turso::TursoGraphStore`, and the service sink persists catalog events
+  through the configured Grust Turso backend.
 - Extended idempotency request-hash row validation to the memory store. Default
   and Turso-backed stores now both reject corrupted stored idempotency
   `request_hash` evidence before direct replay or idempotent commit retry can
