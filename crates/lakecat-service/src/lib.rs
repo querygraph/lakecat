@@ -54954,6 +54954,16 @@ mod tests {
                 "view list view-names must not contain duplicate view names",
             ),
             (
+                "evt-bad-summary-view-list-action",
+                "view.listed",
+                json!({
+                    "authorization-receipt": {
+                        "action": "view-manage"
+                    }
+                }),
+                "view list authorization receipt action does not match outbox event type",
+            ),
+            (
                 "evt-bad-summary-view-action",
                 "view.upserted",
                 json!({

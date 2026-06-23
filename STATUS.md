@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw view-list authorization summary coverage:
+  raw lineage-drain `view.listed` summaries now explicitly prove
+  `view-manage` receipts are rejected; archived view inventory proof must carry
+  the read-side `view-load` action before compact QGLake standard catalog proof
+  can inherit it.
+- Local verification for this raw view-list authorization slice passed:
+  `cargo fmt -p lakecat-service -- --check`; and
+  `cargo test -p lakecat-service lineage_drain_summary_rejects_malformed_view_events -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest raw management server endpoint hash coverage:
   raw lineage-drain management-upsert summaries now explicitly prove
   `server.upserted` endpoint URL evidence must recompute to

@@ -8393,9 +8393,12 @@ authorization receipt principal before delivery, preserving actor evidence for
 QueryGraph view proofs. A view list is read-side catalog evidence, so the
 service requires its authorization receipt action to be `view-load`; a
 `view-manage` receipt is valid for mutations but not for replaying
-`view.listed`. View lifecycle replay is action-bound too: `view.upserted`
-requires `view-manage`, `view.loaded` requires `view-load`, and `view.dropped`
-requires `view-drop` before LakeCat emits graph or OpenLineage evidence. The
+`view.listed`. Raw lineage-drain summaries enforce the same read-side action
+before compact QGLake proof is built, so an archived view inventory cannot be
+accepted under mutation authority. View lifecycle replay is action-bound too:
+`view.upserted` requires `view-manage`, `view.loaded` requires `view-load`,
+and `view.dropped` requires `view-drop` before LakeCat emits graph or
+OpenLineage evidence. The
 nested `view` evidence is closed over the catalog route's view shape too:
 warehouse, namespace, name, store-assigned `view-version`, SQL, dialect, schema
 version, columns, and properties. If a sidecar also carries top-level

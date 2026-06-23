@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added raw view-list summary coverage for read-side authorization. Raw
+  lineage-drain `view.listed` summaries now explicitly prove `view-manage`
+  receipts are rejected; view inventory replay must carry the read-side
+  `view-load` action before compact QGLake proof can inherit it.
 - Added raw management summary coverage for server endpoint hash drift. Raw
   lineage-drain management-upsert summaries now explicitly prove
   `server.upserted` endpoint URL evidence must recompute to
