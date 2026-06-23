@@ -13403,6 +13403,10 @@ than disappearing from a compact proof summary. Governed scan replay also
 closes the wrapped `table.scan-planned` and `table.scan-tasks-fetched` payload
 schemas, so an archived scan event cannot attach unverified lineage, graph,
 QueryGraph, or application claims beside otherwise valid Sail-planned proof.
+Inventory replay applies the same rule to `namespace.listed`, `view.listed`,
+and management list wrappers, keeping archived namespace, view, project,
+server, warehouse, policy, and storage-profile reads from carrying unchecked
+application claims beside otherwise valid count and identity evidence.
 
 These concepts are LakeCat extensions today. The future proposal candidates
 inside them are the neutral pieces: exact retry, pointer-history proof,

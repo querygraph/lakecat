@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed service outbox admission over wrapped inventory-list replay payloads.
+  `namespace.listed`, `view.listed`, and management list wrappers now reject
+  extra unverified inventory, replay, lineage, graph, QueryGraph, or
+  application claims before acknowledgement, graph projection, or OpenLineage
+  projection.
 - Closed service outbox admission over wrapped governed scan replay payloads.
   `table.scan-planned` and `table.scan-tasks-fetched` wrapper payloads now
   reject extra unverified fields before acknowledgement, graph projection, or

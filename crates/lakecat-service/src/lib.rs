@@ -1966,6 +1966,7 @@ const WAREHOUSE_LIST_EVIDENCE_FIELDS: &[&str] = &[
     "warehouse-count",
     "warehouse-names",
 ];
+const LIST_OUTBOX_PAYLOAD_FIELDS: &[&str] = &["audit-event-id", "event-type", "payload"];
 const NAMESPACE_LIFECYCLE_EVIDENCE_FIELDS: &[&str] = &[
     "event-type",
     "authorization-receipt",
@@ -4560,6 +4561,14 @@ fn validate_namespace_list_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    if event.payload.get("payload").is_some() {
+        validate_object_evidence_schema(
+            event,
+            &event.payload,
+            "namespace list outbox payload",
+            LIST_OUTBOX_PAYLOAD_FIELDS,
+        )?;
+    }
     validate_object_evidence_schema(
         event,
         payload,
@@ -4629,6 +4638,14 @@ fn validate_view_list_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    if event.payload.get("payload").is_some() {
+        validate_object_evidence_schema(
+            event,
+            &event.payload,
+            "view list outbox payload",
+            LIST_OUTBOX_PAYLOAD_FIELDS,
+        )?;
+    }
     validate_object_evidence_schema(event, payload, "view list", VIEW_LIST_EVIDENCE_FIELDS)?;
     validate_required_warehouse_field(event, payload, "view list")?;
     let Some(namespace) = payload.get("namespace") else {
@@ -4794,6 +4811,14 @@ fn validate_management_list_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    if event.payload.get("payload").is_some() {
+        validate_object_evidence_schema(
+            event,
+            &event.payload,
+            "management list outbox payload",
+            LIST_OUTBOX_PAYLOAD_FIELDS,
+        )?;
+    }
     match event.event_type.as_str() {
         "policy-binding.listed" => {
             validate_object_evidence_schema(
@@ -28808,6 +28833,194 @@ mod tests {
             assert!(
                 lineage.events.lock().await.is_empty(),
                 "extra management-list fields must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_inventory_list_outbox_payload_fields() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let cases = vec![
+            (
+                "namespace.listed",
+                "namespace",
+                "namespace list outbox payload contains unexpected field unverified-inventory-claim",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "namespace-list",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "namespace-count": 1,
+                    "namespace-paths": ["default"],
+                }),
+            ),
+            (
+                "view.listed",
+                "view",
+                "view list outbox payload contains unexpected field unverified-inventory-claim",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "view-load",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view-count": 1,
+                    "view-names": ["active_events"],
+                }),
+            ),
+            (
+                "policy-binding.listed",
+                "policy-binding",
+                "management list outbox payload contains unexpected field unverified-inventory-claim",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "policy-manage",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "policy-count": 1,
+                    "policy-ids": ["restricted-events"],
+                }),
+            ),
+            (
+                "project.listed",
+                "project",
+                "management list outbox payload contains unexpected field unverified-inventory-claim",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "project-manage",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "project-count": 1,
+                    "project-ids": ["analytics"],
+                }),
+            ),
+            (
+                "server.listed",
+                "server",
+                "management list outbox payload contains unexpected field unverified-inventory-claim",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "server-manage",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "server-count": 1,
+                    "server-ids": ["prod-us"],
+                }),
+            ),
+            (
+                "storage-profile.listed",
+                "storage-profile",
+                "management list outbox payload contains unexpected field unverified-inventory-claim",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "storage-profile-manage",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "storage-profile-count": 1,
+                    "storage-profile-ids": ["events-local"],
+                }),
+            ),
+            (
+                "warehouse.listed",
+                "warehouse",
+                "management list outbox payload contains unexpected field unverified-inventory-claim",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "warehouse-manage",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "project-id": "analytics",
+                    "warehouse-count": 1,
+                    "warehouse-names": ["local"],
+                }),
+            ),
+        ];
+
+        for (event_type, label, expected_message, payload) in cases {
+            let event_id = format!("evt-{label}-list-extra-wrapper-field");
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{label}-list-extra-wrapper-field"),
+                        "event-type": event_type,
+                        "payload": payload,
+                        "unverified-inventory-claim": "shadow",
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("extra inventory-list wrapper fields should fail before delivery");
+
+            let message = err.to_string();
+            assert!(
+                message.contains(&format!(
+                    "outbox event {event_type} (lakecat.lineage-and-graph) has invalid"
+                )),
+                "{event_type} should be identified in the validation error"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(message.contains(expected_message), "{message}");
+            assert!(!message.contains(&event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "extra inventory-list wrapper fields must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "extra inventory-list wrapper fields must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "extra inventory-list wrapper fields must fail before lineage projection"
             );
         }
     }
