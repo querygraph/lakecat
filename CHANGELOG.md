@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Extended QGLake catalog-config endpoint verifier coverage. Compact handoff
+  summaries and saved lineage-drain semantics now explicitly prove the standard
+  Iceberg REST plan endpoint cannot be dropped from `catalogConfigProof`.
 - Added raw catalog-config summary endpoint-set coverage. Raw lineage-drain
   `catalog.config-read` summaries now explicitly prove required Iceberg REST
   plan/fetch endpoint evidence cannot be dropped before compact QGLake config

@@ -14452,17 +14452,22 @@ mod tests {
 
     #[test]
     fn qglake_handoff_summary_verifier_rejects_missing_config_endpoint() {
-        let mut summary = qglake_handoff_summary_json();
-        let endpoints = summary["lakecatReplayVerification"]["catalogConfigProof"]["endpoints"]
-            .as_array_mut()
-            .expect("config endpoints");
-        endpoints.retain(|endpoint| endpoint != "GET /querygraph/v1/bootstrap");
+        for missing_endpoint in [
+            "GET /querygraph/v1/bootstrap",
+            "POST /catalog/v1/namespaces/{namespace}/tables/{table}/plan",
+        ] {
+            let mut summary = qglake_handoff_summary_json();
+            let endpoints = summary["lakecatReplayVerification"]["catalogConfigProof"]["endpoints"]
+                .as_array_mut()
+                .expect("config endpoints");
+            endpoints.retain(|endpoint| endpoint != missing_endpoint);
 
-        let err = verify_qglake_handoff_summary_value(&summary)
-            .expect_err("handoff summary should reject missing compact config endpoint");
+            let err = verify_qglake_handoff_summary_value(&summary)
+                .expect_err("handoff summary should reject missing compact config endpoint");
 
-        assert!(err.to_string().contains("catalogConfigProof"));
-        assert!(err.to_string().contains("GET /querygraph/v1/bootstrap"));
+            assert!(err.to_string().contains("catalogConfigProof"));
+            assert!(err.to_string().contains(missing_endpoint));
+        }
     }
 
     #[test]
@@ -28407,25 +28412,31 @@ mod tests {
 
     #[test]
     fn qglake_lineage_drain_verifier_rejects_missing_config_endpoint() {
-        let verification = qglake_handoff_lineage_verification();
-        let mut drain = qglake_handoff_lineage_drain_with_config();
-        let config = drain
-            .events
-            .iter_mut()
-            .find(|event| event.event_type == "catalog.config-read")
-            .expect("catalog config replay fixture");
-        config
-            .catalog_config_endpoints
-            .retain(|endpoint| endpoint != "GET /querygraph/v1/bootstrap");
+        for missing_endpoint in [
+            "GET /querygraph/v1/bootstrap",
+            "POST /catalog/v1/namespaces/{namespace}/tables/{table}/plan",
+        ] {
+            let verification = qglake_handoff_lineage_verification();
+            let mut drain = qglake_handoff_lineage_drain_with_config();
+            let config = drain
+                .events
+                .iter_mut()
+                .find(|event| event.event_type == "catalog.config-read")
+                .expect("catalog config replay fixture");
+            config
+                .catalog_config_endpoints
+                .retain(|endpoint| endpoint != missing_endpoint);
 
-        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
-            .expect_err("QGLake lineage drain should reject missing config endpoints");
+            let err =
+                verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+                    .expect_err("QGLake lineage drain should reject missing config endpoints");
 
-        assert!(err.to_string().contains("catalog config replay"));
-        assert!(
-            err.to_string()
-                .contains("endpoints must include GET /querygraph/v1/bootstrap")
-        );
+            assert!(err.to_string().contains("catalog config replay"));
+            assert!(
+                err.to_string()
+                    .contains(&format!("endpoints must include {missing_endpoint}"))
+            );
+        }
     }
 
     #[test]

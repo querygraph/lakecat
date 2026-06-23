@@ -5,6 +5,16 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest QGLake catalog-config endpoint verifier coverage:
+  compact handoff summaries and saved lineage-drain semantics now explicitly
+  prove the standard Iceberg REST plan endpoint cannot be dropped from
+  `catalogConfigProof`, matching the raw `catalog.config-read` summary
+  endpoint-set admission rule.
+- Local verification for this QGLake catalog-config endpoint verifier slice
+  passed: `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_missing_config_endpoint -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_rejects_missing_config_endpoint -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest raw catalog-config endpoint-set summary coverage:
   raw lineage-drain `catalog.config-read` summaries now explicitly prove the
   required Iceberg REST plan endpoint cannot be dropped from advertised

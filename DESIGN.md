@@ -905,7 +905,10 @@ Compact `catalogConfigProof` and captured LakeCat replay `catalogConfig` proof
 objects must also stay closed over those compared fields, so a summary,
 captured replay output, or saved self-verifier sidecar cannot attach unverified
 v4 bridge, endpoint, authorization, graph, replay, or OpenLineage compatibility
-claims beside checked config-read proof.
+claims beside checked config-read proof. The compact handoff verifier and the
+saved lineage-drain verifier must reject missing required endpoints from that
+proof, including the standard Iceberg REST plan endpoint as well as QueryGraph
+bootstrap.
 Raw `catalog.config-read` and `querygraph.bootstrap` replay payloads must also
 stay closed over their checked service schemas before graph, OpenLineage,
 QGLake, or QueryGraph import proof can inherit them. A durable outbox row cannot
