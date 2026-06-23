@@ -6991,10 +6991,20 @@ fn lineage_drain_event_summary(
         .or_else(|| payload.get("view").and_then(Value::as_str))
         .map(str::to_string);
     let view_name_ref = view_name.as_deref();
-    let view_version = view
-        .and_then(|view| view.get("view-version"))
-        .and_then(Value::as_u64);
-    let expected_view_version = payload.get("expected-view-version").and_then(Value::as_u64);
+    let view_version = if let Some(view) = view.filter(|view| view.get("view-version").is_some()) {
+        Some(lineage_summary_positive_u64_field(
+            event,
+            view,
+            "view-version",
+        )?)
+    } else {
+        None
+    };
+    let expected_view_version = payload
+        .get("expected-view-version")
+        .filter(|value| !value.is_null())
+        .map(|_| lineage_summary_positive_u64_field(event, payload, "expected-view-version"))
+        .transpose()?;
     let view_stable_id = match (
         view_warehouse.as_deref(),
         view_namespace.as_slice(),
@@ -7733,6 +7743,32 @@ fn lineage_summary_optional_count_field(
             &format!("{field} is too large to summarize on this platform"),
         )
     })
+}
+
+fn lineage_summary_positive_u64_field(
+    event: &OutboxEvent,
+    object: &Value,
+    field: &str,
+) -> Result<u64, LakeCatError> {
+    let Some(value) = object.get(field) else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{field} must be present"),
+        ));
+    };
+    let Some(value) = value.as_u64() else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{field} must be an unsigned integer when present"),
+        ));
+    };
+    if value == 0 {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{field} must be positive when present"),
+        ));
+    }
+    Ok(value)
 }
 
 fn lineage_summary_counted_string_array_field(
@@ -48837,6 +48873,108 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("chain-verified-count must be an unsigned integer when present"));
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_view_versions() {
+        let receipt = OutboxProjectionReceipt::default();
+        let malformed_view_version = OutboxEvent {
+            event_id: "evt-bad-summary-view-version".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "view.upserted".to_string(),
+            payload: json!({
+                "payload": {
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view": {
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "name": "events_view",
+                        "view-version": "1"
+                    }
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&malformed_view_version, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("view-version must be an unsigned integer when present"));
+
+        let zero_view_version = OutboxEvent {
+            event_id: "evt-zero-summary-view-version".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "view.loaded".to_string(),
+            payload: json!({
+                "payload": {
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view": {
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "name": "events_view",
+                        "view-version": 0
+                    }
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&zero_view_version, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("view-version must be positive when present"));
+
+        let malformed_expected_view_version = OutboxEvent {
+            event_id: "evt-bad-summary-expected-view-version".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "view.dropped".to_string(),
+            payload: json!({
+                "payload": {
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "expected-view-version": "1",
+                    "view": {
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "name": "events_view",
+                        "view-version": 1
+                    }
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&malformed_expected_view_version, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("expected-view-version must be an unsigned integer when present"));
+
+        let zero_expected_view_version = OutboxEvent {
+            event_id: "evt-zero-summary-expected-view-version".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "view.dropped".to_string(),
+            payload: json!({
+                "payload": {
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "expected-view-version": 0,
+                    "view": {
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "name": "events_view",
+                        "view-version": 1
+                    }
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&zero_expected_view_version, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("expected-view-version must be positive when present"));
     }
 
     #[test]

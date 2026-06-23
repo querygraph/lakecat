@@ -5,6 +5,12 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/testing slice:
+  `Harden view-version summary parsing`.
+  Raw lineage-drain summaries now fail closed when present view lifecycle
+  `view.view-version` or `expected-view-version` evidence is malformed or zero,
+  preventing compact QGLake/QueryGraph view proof from silently omitting
+  corrupted version evidence.
 - Latest documentation/book slice:
   `Clarify catalog vocabulary and Sail engine boundary`.
   The LakeCat book now front-loads a clearer distinction between standard

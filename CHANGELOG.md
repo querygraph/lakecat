@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened lineage-drain view-version summary parsing. Raw replay summary
+  construction now rejects malformed or zero `view.view-version` and
+  `expected-view-version` evidence instead of silently omitting corrupted view
+  lifecycle proof before QGLake/QueryGraph handoff.
 - Expanded the LakeCat book's front-loaded catalog vocabulary guidance. The
   book now more directly distinguishes standard Iceberg parlance from
   LakeCat/QueryGraph/TypeSec product surfaces and future neutral proposal
