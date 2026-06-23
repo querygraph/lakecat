@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added a front-loaded LakeCat book concept boundary map and engine-boundary
+  argument. The new section classifies the Rust service spine, Turso local
+  store, Iceberg REST paths, commit CAS, proof spine, governed scan/credential
+  receipts, QueryGraph/QGLake/OpenLineage surfaces, and typed v4 direction as
+  standard Iceberg parlance, LakeCat/TypeSec/QueryGraph product behavior, or
+  possible future neutral profiles, then explains why Sail should own the
+  reusable table-format and scan-planning work.
 - Tightened local QGLake scan-proof string validation. The handoff script now
   treats whitespace-only scan projection/stat fields as invalid and applies the
   same duplicate-free nonblank string-array validation to planned and fetched

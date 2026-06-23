@@ -5,6 +5,16 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest documentation/book slice:
+  `Clarify concept boundaries and Sail engine ownership`.
+  The book now opens its concept guidance with a boundary map for the Rust
+  service spine, Turso local store, Iceberg REST namespace/table paths, commit
+  CAS, idempotency/pointer/audit/outbox/replay proof, governed scan and
+  credential receipts, QueryGraph/QGLake/OpenLineage integration surfaces, and
+  typed v4 direction. The new material explicitly separates standard Iceberg
+  vocabulary from LakeCat/TypeSec/QueryGraph product behavior and possible
+  future neutral profiles, then makes the correctness and performance argument
+  for pushing reusable table-format and scan-planning work into Sail.
 - Latest handoff-script hardening slice:
   `Tighten local scan proof string validation`.
   The local QGLake handoff script now treats whitespace-only scan
