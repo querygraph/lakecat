@@ -10500,8 +10500,10 @@ manifest. The saved sidecar must keep the core `artifactFiles.bundle`,
 `artifactFiles.lineageDrain`, and `artifactFiles.querygraphImportPlan` hash
 objects present, and it must keep the nested
 `artifactFiles.capturedOutputs` manifest present before any captured LakeCat or
-QueryGraph output hash is trusted. The regression suite covers the core
-bundle, lineage-drain, and QueryGraph import-plan hash objects as required
+QueryGraph output hash is trusted. The saved sidecar must also keep the
+`artifactFiles.capturedOutputs.lakecatReplay` hash object present before the
+captured LakeCat replay transcript is trusted. The regression suite covers the
+core bundle, lineage-drain, and QueryGraph import-plan hash objects as required
 saved-sidecar entries. The saved output cannot keep a valid verifier-output
 hash while
 rewriting `artifactFiles.serviceLogHash`; that operational log digest must

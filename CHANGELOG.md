@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added saved handoff verifier LakeCat replay capture manifest coverage. The
+  archived `lakecat-handoff-verify.json` self-verification artifact now
+  explicitly rejects a missing
+  `artifactFiles.capturedOutputs.lakecatReplay` hash object even when the
+  outer verifier-output hash is updated to match the tampered file.
 - Added saved handoff verifier import-plan artifact manifest coverage. The
   archived `lakecat-handoff-verify.json` self-verification artifact now
   explicitly rejects a missing `artifactFiles.querygraphImportPlan` hash object
