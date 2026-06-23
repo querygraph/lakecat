@@ -8969,10 +8969,10 @@ fn verify_qglake_lineage_drain(
     }
     if !verification.verified_views.is_empty()
         && (bootstrap.view_version_receipt_hashes.len() != verification.verified_views.len()
-            || !qglake_has_sha256_hashes(&bootstrap.view_version_receipt_hashes))
+            || !qglake_has_full_sha256_hashes(&bootstrap.view_version_receipt_hashes))
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
-            "qglake lineage drain replay evidence is missing SHA-256 view version receipt hashes"
+            "qglake lineage drain replay evidence is missing full SHA-256 view version receipt hashes"
                 .to_string(),
         ));
     }
@@ -9908,11 +9908,11 @@ fn verify_qglake_credential_lineage_projection(
         &format!("qglake lineage drain {label} credential read restriction"),
     )?;
     verify_qglake_credential_storage_profile_projection(event, label)?;
-    if !qglake_has_sha256_hashes(&event.replay_event_hashes)
-        || !qglake_has_sha256_hashes(&event.replay_open_lineage_hashes)
+    if !qglake_has_full_sha256_hashes(&event.replay_event_hashes)
+        || !qglake_has_full_sha256_hashes(&event.replay_open_lineage_hashes)
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "qglake lineage drain {label} credential replay is missing SHA-256 sink receipt hashes"
+            "qglake lineage drain {label} credential replay is missing full SHA-256 sink receipt hashes"
         )));
     }
     Ok(())
@@ -10437,11 +10437,11 @@ fn verify_qglake_table_commit_history_replay(
             )));
         }
     }
-    if !qglake_has_sha256_hashes(&commit_history.replay_event_hashes)
-        || !qglake_has_sha256_hashes(&commit_history.replay_open_lineage_hashes)
+    if !qglake_has_full_sha256_hashes(&commit_history.replay_event_hashes)
+        || !qglake_has_full_sha256_hashes(&commit_history.replay_open_lineage_hashes)
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
-            "qglake lineage drain table commit history replay is missing SHA-256 receipt hashes"
+            "qglake lineage drain table commit history replay is missing full SHA-256 receipt hashes"
                 .to_string(),
         ));
     }
@@ -10683,10 +10683,6 @@ fn verify_qglake_management_list_receipts(
         )));
     }
     Ok(())
-}
-
-fn qglake_has_sha256_hashes(hashes: &[String]) -> bool {
-    !hashes.is_empty() && hashes.iter().all(|hash| is_sha256_hash(hash))
 }
 
 fn qglake_has_full_sha256_hashes(hashes: &[String]) -> bool {
@@ -25658,7 +25654,7 @@ mod tests {
         )
         .expect_err("QGLake lineage drain should reject missing trusted human credential receipts");
         assert!(err.to_string().contains(
-            "qglake lineage drain trusted human credential replay is missing SHA-256 sink receipt hashes"
+            "qglake lineage drain trusted human credential replay is missing full SHA-256 sink receipt hashes"
         ));
 
         let mut human_without_prefix_hash = qglake_human_credential_summary();
@@ -26199,7 +26195,7 @@ mod tests {
         )
         .expect_err("QGLake lineage drain should require view version receipt hashes");
         assert!(err.to_string().contains(
-            "qglake lineage drain replay evidence is missing SHA-256 view version receipt hashes"
+            "qglake lineage drain replay evidence is missing full SHA-256 view version receipt hashes"
         ));
 
         let mut bootstrap_malformed_view_receipt = bootstrap_with_view.clone();
@@ -26253,7 +26249,7 @@ mod tests {
         )
         .expect_err("QGLake lineage drain should reject malformed view version receipt hashes");
         assert!(err.to_string().contains(
-            "qglake lineage drain replay evidence is missing SHA-256 view version receipt hashes"
+            "qglake lineage drain replay evidence is missing full SHA-256 view version receipt hashes"
         ));
 
         let mut bootstrap_drifted_view_receipt = bootstrap_with_view.clone();
@@ -28855,6 +28851,24 @@ mod tests {
     }
 
     #[test]
+    fn qglake_lineage_drain_verifier_rejects_short_bootstrap_view_receipt_hashes() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let bootstrap = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "querygraph.bootstrap")
+            .expect("bootstrap replay fixture");
+        bootstrap.view_version_receipt_hashes = vec!["sha256:view-version-receipt".to_string()];
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject short bootstrap view receipt hashes");
+
+        assert!(err.to_string().contains("view version receipt hashes"));
+        assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
     fn qglake_lineage_drain_verifier_rejects_short_view_receipt_hashes() {
         let verification = qglake_view_lineage_verification();
         let mut tombstone = qglake_view_tombstone_receipt_lineage_summary();
@@ -29043,6 +29057,46 @@ mod tests {
         assert!(err
             .to_string()
             .contains("qglake lineage drain scan task fetch replay is missing compact file/delete task or SHA-256 receipt evidence"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_short_credential_receipt_hashes() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let credential = drain
+            .events
+            .iter_mut()
+            .find(|event| {
+                event.event_type == "credentials.vend-attempted"
+                    && event.principal_kind.as_deref() == Some("agent")
+            })
+            .expect("restricted credential replay fixture");
+        credential.replay_event_hashes = vec!["sha256:restricted-credential-replay".to_string()];
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject short credential receipt hashes");
+
+        assert!(err.to_string().contains("credential replay"));
+        assert!(err.to_string().contains("full SHA-256 sink receipt hashes"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_short_commit_history_receipt_hashes() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let commit_history = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "table.commits-listed")
+            .expect("table commit history replay fixture");
+        commit_history.replay_open_lineage_hashes =
+            vec!["sha256:table-commits-openlineage".to_string()];
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject short commit-history receipt hashes");
+
+        assert!(err.to_string().contains("table commit history replay"));
+        assert!(err.to_string().contains("full SHA-256 receipt hashes"));
     }
 
     #[test]
@@ -29808,8 +29862,8 @@ mod tests {
             credential_block_reason: None,
             raw_credential_exception_allowed: None,
             raw_credential_exception_reason: None,
-            replay_event_hashes: vec!["sha256:table-commits-replay-event".to_string()],
-            replay_open_lineage_hashes: vec!["sha256:table-commits-openlineage".to_string()],
+            replay_event_hashes: vec![qglake_fixture_hash("table-commits-replay-event")],
+            replay_open_lineage_hashes: vec![qglake_fixture_hash("table-commits-openlineage")],
         }
     }
 
@@ -30682,10 +30736,10 @@ mod tests {
             credential_block_reason: Some(QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON.to_string()),
             raw_credential_exception_allowed: Some(false),
             raw_credential_exception_reason: None,
-            replay_event_hashes: vec!["sha256:restricted-credential-replay".to_string()],
-            replay_open_lineage_hashes: vec![
-                "sha256:restricted-credential-openlineage".to_string(),
-            ],
+            replay_event_hashes: vec![qglake_fixture_hash("restricted-credential-replay")],
+            replay_open_lineage_hashes: vec![qglake_fixture_hash(
+                "restricted-credential-openlineage",
+            )],
         }
     }
 
@@ -30770,8 +30824,8 @@ mod tests {
             raw_credential_exception_reason: Some(
                 QGLAKE_HUMAN_RAW_CREDENTIAL_EXCEPTION_REASON.to_string(),
             ),
-            replay_event_hashes: vec!["sha256:human-credential-replay".to_string()],
-            replay_open_lineage_hashes: vec!["sha256:human-credential-openlineage".to_string()],
+            replay_event_hashes: vec![qglake_fixture_hash("human-credential-replay")],
+            replay_open_lineage_hashes: vec![qglake_fixture_hash("human-credential-openlineage")],
         }
     }
 

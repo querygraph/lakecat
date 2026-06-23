@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened raw QGLake lineage-drain sink receipt verification. The CLI
+  verifier now requires full SHA-256 digest evidence for bootstrap accepted-view
+  receipt hashes, credential replay sink receipts, and table commit-history
+  replay/OpenLineage receipts; readable `sha256:` placeholders are accepted
+  only in negative tests.
 - Refreshed the full local release-candidate proof from clean head `6d923feb`.
   `scripts/check-release-readiness.sh --release-candidate` passed locally with
   the release-proof contract in clean candidate mode, the full workspace and

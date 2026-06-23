@@ -10484,13 +10484,15 @@ lineage payload. The
 core QueryGraph bundle, graph, OpenLineage, and import anchors must be
 SHA-256-shaped in compact verify/import/bootstrap proof before a matching
 summary can pass; matching strings are not enough. The bootstrap, scan,
-credential, view,
-receipt-chain, and commit-history receipt arrays must also be SHA-256-shaped
-before compact proof generation can consume them. The same shape
-check applies to accepted-view receipt evidence: bootstrap view-version receipt
-hashes, tombstone receipt hashes, and namespace receipt-chain hashes must be
-full SHA-256 digest evidence before accepted-view proof feeds the compact
-handoff summary.
+credential, view, receipt-chain, and commit-history receipt arrays must also
+carry full SHA-256 digest evidence before compact proof generation can consume
+them. The same full-digest check applies to accepted-view receipt evidence:
+bootstrap view-version receipt hashes, tombstone receipt hashes, and namespace
+receipt-chain hashes must be full SHA-256 digest evidence before accepted-view
+proof feeds the compact handoff summary. Raw lineage-drain verification also
+rejects short `sha256:` placeholders for credential replay sink receipts and
+table commit-history replay/OpenLineage receipts before those arrays can become
+compact QueryGraph proof.
 Raw lineage-drain summary construction now applies the structural shape rule
 too: every `view-version-receipt-chains` entry must decode as a
 `ViewVersionReceiptChainResponse`, and a present `chain-verified-count` must be

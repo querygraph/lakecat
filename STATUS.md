@@ -5,6 +5,19 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest QGLake lineage-drain receipt-shape hardening:
+  raw QGLake lineage-drain verification now requires full SHA-256 digest
+  evidence for bootstrap accepted-view receipt hashes, credential replay sink
+  receipts, and table commit-history replay/OpenLineage receipts. Readable
+  `sha256:` placeholders are rejected before those arrays can feed compact
+  handoff proof.
+- Local verification for this QGLake lineage-drain receipt-shape slice passed:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_rejects_short -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_lineage_drain -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick` (which correctly reports that
+  executable changes after `6d923feb` require a fresh release-candidate run
+  before final proof refresh); and `git diff --check`.
 - Latest Grust Turso graph-sink startup redaction:
   service graph-sink configuration and bootstrap failures now share one
   hash-only formatter for operator-facing errors. Coverage proves the error
