@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's front-loaded catalog vocabulary guidance. The
+  book now more directly distinguishes standard Iceberg parlance from
+  LakeCat/QueryGraph/TypeSec product surfaces and future neutral proposal
+  candidates, while making the case that Sail should own engine-truth work such
+  as field-id projection, manifest metrics, delete planning, metadata-as-data,
+  and typed Iceberg v4 support.
+- Hardened lineage-drain operational summary count parsing. Raw replay summary
+  construction now rejects malformed present `commit-count`, governed scan
+  task counts, fetched scan file/delete/child-plan counts, and
+  `credential-count` evidence instead of silently dropping corrupted
+  QGLake/QueryGraph proof totals.
 - Hardened store-level pending outbox corruption diagnostics. Embedded and
   Turso pending-row validation now includes hash-only event-type evidence in
   every corrupt pending event error alongside event-id and payload hashes, so

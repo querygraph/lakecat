@@ -5,6 +5,19 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest documentation/book slice:
+  `Clarify catalog vocabulary and Sail engine boundary`.
+  The LakeCat book now front-loads a clearer distinction between standard
+  Iceberg parlance, LakeCat/QueryGraph/TypeSec product surfaces, and future
+  neutral proposal candidates, and it strengthens the argument that Sail should
+  own engine-truth work such as field-id projection, manifest metrics, delete
+  planning, metadata-as-data, and typed v4 support.
+- Latest implementation/testing slice:
+  `Harden operational summary count parsing`.
+  Raw lineage-drain summaries now fail closed when present commit-history,
+  governed scan, fetched scan, or credential count evidence is malformed,
+  preventing compact QGLake/QueryGraph proof from silently omitting corrupted
+  operational totals.
 - Latest implementation/testing slice:
   `Harden pending outbox corruption diagnostics`.
   Embedded and Turso store pending-row validation now includes hash-only

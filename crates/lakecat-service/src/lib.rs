@@ -7248,10 +7248,11 @@ fn lineage_drain_event_summary(
             })
             .transpose()?
             .unwrap_or_default(),
-        table_commit_count: payload
-            .get("commit-count")
-            .and_then(Value::as_u64)
-            .and_then(|count| usize::try_from(count).ok()),
+        table_commit_count: lineage_summary_optional_count_alias_field(
+            event,
+            payload,
+            &["commit-count"],
+        )?,
         table_commit_sequence_numbers: payload
             .get("sequence-numbers")
             .map(|_| lineage_summary_u64_array_field(event, payload, "sequence-numbers"))
@@ -7262,22 +7263,26 @@ fn lineage_drain_event_summary(
             .map(|_| lineage_summary_full_hash_array_field(event, payload, "commit-hashes"))
             .transpose()?
             .unwrap_or_default(),
-        scan_task_count: payload
-            .get("scan-task-count")
-            .and_then(Value::as_u64)
-            .and_then(|count| usize::try_from(count).ok()),
-        file_scan_task_count: payload
-            .get("file-scan-task-count")
-            .and_then(Value::as_u64)
-            .and_then(|count| usize::try_from(count).ok()),
-        delete_file_count: payload
-            .get("delete-file-count")
-            .and_then(Value::as_u64)
-            .and_then(|count| usize::try_from(count).ok()),
-        child_plan_task_count: payload
-            .get("child-plan-task-count")
-            .and_then(Value::as_u64)
-            .and_then(|count| usize::try_from(count).ok()),
+        scan_task_count: lineage_summary_optional_count_alias_field(
+            event,
+            payload,
+            &["scan-task-count"],
+        )?,
+        file_scan_task_count: lineage_summary_optional_count_alias_field(
+            event,
+            payload,
+            &["file-scan-task-count"],
+        )?,
+        delete_file_count: lineage_summary_optional_count_alias_field(
+            event,
+            payload,
+            &["delete-file-count"],
+        )?,
+        child_plan_task_count: lineage_summary_optional_count_alias_field(
+            event,
+            payload,
+            &["child-plan-task-count"],
+        )?,
         read_restriction: payload.get("read-restriction").cloned(),
         required_projection: payload
             .get("required-projection")
@@ -7318,10 +7323,11 @@ fn lineage_drain_event_summary(
             .map(|_| lineage_summary_string_array_field(event, payload, "standards"))
             .transpose()?
             .unwrap_or_default(),
-        credential_count: payload
-            .get("credential-count")
-            .and_then(Value::as_u64)
-            .and_then(|count| usize::try_from(count).ok()),
+        credential_count: lineage_summary_optional_count_alias_field(
+            event,
+            payload,
+            &["credential-count"],
+        )?,
         credential_prefix_hashes,
         credential_block_reason: payload
             .get("lakecat:credential-block-reason")
@@ -48547,6 +48553,68 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("effective-stats-fields must contain strings"));
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_operational_counts() {
+        let receipt = OutboxProjectionReceipt::default();
+        let cases = [
+            (
+                "table.commits-listed",
+                "commit-count",
+                json!("2"),
+                "commit-count must be an unsigned integer when present",
+            ),
+            (
+                "table.scan-planned",
+                "scan-task-count",
+                json!("1"),
+                "scan-task-count must be an unsigned integer when present",
+            ),
+            (
+                "table.scan-tasks-fetched",
+                "file-scan-task-count",
+                json!("1"),
+                "file-scan-task-count must be an unsigned integer when present",
+            ),
+            (
+                "table.scan-tasks-fetched",
+                "delete-file-count",
+                json!(-1),
+                "delete-file-count must be an unsigned integer when present",
+            ),
+            (
+                "table.scan-tasks-fetched",
+                "child-plan-task-count",
+                json!("1"),
+                "child-plan-task-count must be an unsigned integer when present",
+            ),
+            (
+                "credentials.vend-attempted",
+                "credential-count",
+                json!("0"),
+                "credential-count must be an unsigned integer when present",
+            ),
+        ];
+
+        for (event_type, field, value, expected_message) in cases {
+            let mut payload = serde_json::Map::new();
+            payload.insert(field.to_string(), value);
+            let event = OutboxEvent {
+                event_id: format!("evt-malformed-summary-{field}"),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: event_type.to_string(),
+                payload: json!({
+                    "payload": Value::Object(payload)
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            };
+            let err = lineage_drain_event_summary(&event, &receipt)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains(expected_message), "{err}");
+        }
     }
 
     #[test]
