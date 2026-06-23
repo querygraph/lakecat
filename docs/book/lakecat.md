@@ -8030,6 +8030,13 @@ substitute for upstreaming the Sail helper APIs or re-enabling automatic CI; it
 is a guard that makes drift visible while LakeCat still depends on unpublished
 Sail helper work and a local QueryGraph acceptance target.
 
+While LakeCat is still changing quickly, the book source is the active editing
+surface. Development slices should update `docs/book/lakecat.md` when workflow
+or architecture behavior changes, but checked-in `docs/book/dist` artifacts
+should wait for an explicit finishing or release-proof step. That keeps the
+reader-facing explanation current without turning every source edit into a
+binary artifact refresh.
+
 For the first release, LakeCat has one local release gate:
 
 ```sh

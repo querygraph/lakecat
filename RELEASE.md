@@ -133,9 +133,11 @@ candidate.
 ## Book Artifacts
 
 The release-candidate gate rebuilds the book into a temporary dist directory.
-Deliberate tracked artifact refreshes still use the default build path, and
-release preparation should inspect the tracked artifact contract before
-tagging:
+During ordinary development slices, edit `docs/book/lakecat.md` as the source
+of truth and defer checked-in `docs/book/dist` regeneration until an explicit
+finishing or release-proof step. Deliberate tracked artifact refreshes still
+use the default build path, and release preparation should inspect the tracked
+artifact contract before tagging:
 
 ```sh
 docs/book/build.sh

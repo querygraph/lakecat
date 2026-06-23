@@ -5,6 +5,12 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book workflow guidance:
+  for in-progress development slices, keep editing the book source
+  `docs/book/lakecat.md` but do not regenerate or stage checked-in
+  `docs/book/dist` artifacts until an explicit finishing or release-proof step.
+  This keeps binary artifact churn out of ordinary source updates while
+  preserving the book as the reader-facing engineering record.
 - Latest Sail helper patch-bridge hardening:
   the checked-in `ci/sail-patches/0003-Expose-Iceberg-generated-model-module.patch`
   now matches local Sail helper commit `a6964906` (`Expose Iceberg REST models

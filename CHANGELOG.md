@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Clarified the in-progress book workflow. During ordinary development slices,
+  edit `docs/book/lakecat.md` as the source of truth and defer checked-in
+  `docs/book/dist` artifact regeneration until an explicit finishing or
+  release-proof step.
 - Refreshed the full local release-candidate proof from clean head `50451be5`.
   `scripts/check-release-readiness.sh --release-candidate` passed locally with
   stable `git patch-id` verification for the Sail helper patch bridge, the full
