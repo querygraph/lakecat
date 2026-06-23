@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Tightened local QGLake handoff receipt-chain hash coverage. The handoff
+  script now requires each `receiptChains[]` group's `chainHashes` and
+  `receiptHashes` arrays to exactly match the nested structural chain and
+  receipt objects, rejecting extra hash-shaped evidence before compact proof is
+  accepted.
 - Tightened the local QGLake handoff view receipt-chain verifier. The handoff
   script now walks nested structural chains and receipts, rejecting invalid
   chain heads, forged previous links, unsupported operations, skipped versions,

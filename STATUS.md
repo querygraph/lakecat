@@ -6,6 +6,13 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Tighten handoff receipt-chain hash coverage`.
+  The local QGLake handoff script now rejects extra hash-shaped
+  `chainHashes` or `receiptHashes` evidence that is not represented by the
+  nested structural view receipt-chain objects, keeping compact proof
+  construction aligned with the Rust handoff verifier's exact structural
+  coverage checks.
+- Latest implementation/testing slice:
   `Tighten handoff view receipt-chain structure`.
   The local QGLake handoff script now validates nested view receipt-chain
   structure before accepting compact handoff proof. It walks every verified

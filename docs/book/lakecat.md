@@ -7939,9 +7939,11 @@ receipt-chain evidence is checked as ordered structure: a chain must begin with
 a version-1 upsert without previous links, every later receipt must point to
 the previous receipt hash, upserts must advance the version, drops must keep the
 same durable version, unsupported operations fail closed, and tombstone
-receipts must be covered by verified chains. That lets QueryGraph trust view
-history as replayed catalog evidence instead of treating it as an opaque bag of
-digests.
+receipts must be covered by verified chains. The group-level chain and receipt
+hash arrays must also exactly match the nested structural chains and receipts,
+so a handoff cannot carry extra digest claims that are not backed by ordered
+view-history objects. That lets QueryGraph trust view history as replayed
+catalog evidence instead of treating it as an opaque bag of digests.
 
 As of the current local reconciliation, the Sail helper work is not an
 anonymous dirty tree. `/Users/alexy/src/sail` has scoped local commits on

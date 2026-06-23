@@ -1117,6 +1117,17 @@ function sameArray(left, right) {
     && left.length === right.length
     && left.every((item, index) => item === right[index]);
 }
+function sameSet(left, right) {
+  if (left.size !== right.size) {
+    return false;
+  }
+  for (const item of left) {
+    if (!right.has(item)) {
+      return false;
+    }
+  }
+  return true;
+}
 function requireNullable(value, label) {
   if (value !== null && value !== undefined) {
     console.error(`LakeCat view replay evidence ${label} must be null`);
@@ -1227,6 +1238,10 @@ for (const [index, chain] of evidence.receiptChains.entries()) {
     console.error(`LakeCat view receipt-chain evidence ${index} chains do not match verifiedChainCount`);
     process.exit(1);
   }
+  const expectedChainHashes = new Set(chain.chainHashes);
+  const structuralChainHashes = new Set();
+  const expectedReceiptHashes = new Set(chain.receiptHashes);
+  const structuralReceiptHashes = new Set();
   for (const chainHash of chain.chainHashes) {
     verifiedChainHashes.add(chainHash);
   }
@@ -1240,6 +1255,11 @@ for (const [index, chain] of evidence.receiptChains.entries()) {
       console.error(`LakeCat view receipt-chain evidence ${index}.${chainIndex} chainHash is not covered by chainHashes`);
       process.exit(1);
     }
+    if (structuralChainHashes.has(item.chainHash)) {
+      console.error(`LakeCat view receipt-chain evidence ${index}.${chainIndex} chainHash is duplicated in structural chains`);
+      process.exit(1);
+    }
+    structuralChainHashes.add(item.chainHash);
     if (item.chainVerified !== true) {
       console.error(`LakeCat view receipt-chain evidence ${index}.${chainIndex} is not verified`);
       process.exit(1);
@@ -1280,6 +1300,7 @@ for (const [index, chain] of evidence.receiptChains.entries()) {
         console.error(`LakeCat view receipt-chain receipt ${index}.${chainIndex}.${receiptIndex} receiptHash is not covered by receiptHashes`);
         process.exit(1);
       }
+      structuralReceiptHashes.add(receipt.receiptHash);
       const coveredReceiptHashes = coveredReceiptHashesByStableId.get(receipt.stableId) ?? new Set();
       coveredReceiptHashes.add(receipt.receiptHash);
       coveredReceiptHashesByStableId.set(receipt.stableId, coveredReceiptHashes);
@@ -1326,6 +1347,14 @@ for (const [index, chain] of evidence.receiptChains.entries()) {
       console.error(`LakeCat view receipt-chain evidence ${index}.${chainIndex} tombstoned flag does not match the latest operation`);
       process.exit(1);
     }
+  }
+  if (!sameSet(expectedChainHashes, structuralChainHashes)) {
+    console.error(`LakeCat view receipt-chain evidence ${index} chainHashes do not exactly match structural chains`);
+    process.exit(1);
+  }
+  if (!sameSet(expectedReceiptHashes, structuralReceiptHashes)) {
+    console.error(`LakeCat view receipt-chain evidence ${index} receiptHashes do not exactly match structural receipts`);
+    process.exit(1);
   }
   requireHashArray(chain.replayEventHashes, `chain ${index} replayEventHashes`);
   requireHashArray(chain.openLineageHashes, `chain ${index} openLineageHashes`);
