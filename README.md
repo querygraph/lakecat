@@ -123,7 +123,10 @@ manifest, nested `capturedOutputs` manifest, and individual
 bundle/lineage/import/captured-output artifact objects reject unexpected fields
 beside the checked `path` and `sha256` evidence. A saved handoff summary cannot
 attach alternate hashes, mirror artifacts, unverified root proof claims, or
-unverified captured-output claims beside otherwise valid files. View
+unverified captured-output claims beside otherwise valid files; the compact
+`querygraphVerification`, `querygraphImportVerification`, and
+`lakecatReplayVerification` roots are also schema-closed before archived
+QueryGraph/import/replay proof is accepted. View
 receipt-chain proof is structural in this local gate as well: the script walks
 verified chains and receipts, checks
 version-1 upsert heads, previous receipt links, supported operations, version

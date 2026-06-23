@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed the compact QGLake proof-root schemas. The CLI handoff summary
+  verifier now rejects unexpected root fields inside `querygraphVerification`,
+  `querygraphImportVerification`, and `lakecatReplayVerification`, preventing
+  archived handoff summaries from carrying unverified QueryGraph/import/replay
+  claims beside otherwise checked evidence.
 - Closed the compact QGLake handoff summary root schema. The CLI verifier now
   rejects unexpected top-level handoff summary fields before archived artifacts
   can attach unverified root proof claims beside otherwise valid evidence.

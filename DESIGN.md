@@ -935,6 +935,10 @@ LakeCat compares, so a summary, captured replay output, or saved
 self-verifier sidecar cannot attach unverified bundle/import, artifact-count,
 standards, identity, TypeDID, authorization, delegation, view-receipt, replay,
 or OpenLineage claims beside the accepted QueryGraph bootstrap proof.
+The compact QGLake proof roots are closed as well: `querygraphVerification`,
+`querygraphImportVerification`, and `lakecatReplayVerification` accept only the
+root fields LakeCat validates, so a saved handoff summary cannot attach a new
+QueryGraph, import, or replay claim beside otherwise verified nested proof.
 Compact table commit-history proof must preserve the same explicit
 zero-count and duplicate-free commit-hash invariants as service replay, so
 archived QueryGraph handoff summaries can represent an empty history without

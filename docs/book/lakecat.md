@@ -8087,6 +8087,11 @@ drifted graph-backend proof before accepting saved artifacts, and it treats
 extra graph-backend claims as invalid rather than letting a saved handoff attach
 unverified Turso or Grust behavior to the compact proof. TypeSec still
 resolves from the published `typesec` 0.8.0 crate.
+The same closure rule applies one level higher: the compact
+`querygraphVerification`, `querygraphImportVerification`, and
+`lakecatReplayVerification` roots accept only the fields LakeCat validates.
+That keeps a saved handoff from hiding a new QueryGraph, import, or replay claim
+beside otherwise checked hashes, counts, scopes, and receipt evidence.
 
 Sail is different today: LakeCat still uses local Sail paths plus a checked-in
 patch bridge for helper APIs that are not yet published. Before pushing a slice

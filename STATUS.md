@@ -5,6 +5,22 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest compact QGLake proof-root closure:
+  handoff summary verification now rejects unexpected root fields inside
+  `querygraphVerification`, `querygraphImportVerification`, and
+  `lakecatReplayVerification`, so archived summaries cannot attach unverified
+  QueryGraph verify/import or LakeCat replay claims beside otherwise validated
+  compact proof.
+- Local verification for this compact QGLake proof-root closure slice passed:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_extra_querygraph_root_fields -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_extra_querygraph_import_root_fields -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_extra_lakecat_replay_root_fields -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_summary -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick` (which correctly reported that
+  executable changes after the `6e0c3d10` release proof require a fresh
+  release-candidate run before final proof refresh); and `git diff --check`.
 - Latest compact QGLake handoff summary root closure:
   handoff summary verification now rejects unexpected top-level fields before
   archived artifacts can attach unverified root proof claims beside otherwise

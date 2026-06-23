@@ -3129,7 +3129,17 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
     let scope = require_handoff_scope(summary)?;
     let graph_projection = require_graph_projection_proof(summary)?;
     let querygraph = required_object(summary, "querygraphVerification", "handoff summary")?;
+    require_only_fields(
+        querygraph,
+        QUERYGRAPH_VERIFICATION_FIELDS,
+        "querygraphVerification",
+    )?;
     let import = required_object(summary, "querygraphImportVerification", "handoff summary")?;
+    require_only_fields(
+        import,
+        QUERYGRAPH_IMPORT_VERIFICATION_FIELDS,
+        "querygraphImportVerification",
+    )?;
     if required_bool(import, "matchesVerify", "querygraphImportVerification")? != true {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "handoff summary querygraphImportVerification.matchesVerify must be true".to_string(),
@@ -3151,6 +3161,11 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "querygraphVerification.standards",
     )?;
     let lakecat = required_object(summary, "lakecatReplayVerification", "handoff summary")?;
+    require_only_fields(
+        lakecat,
+        LAKECAT_REPLAY_VERIFICATION_FIELDS,
+        "lakecatReplayVerification",
+    )?;
     require_string_eq(
         lakecat,
         "schemaVersion",
@@ -3591,6 +3606,47 @@ const GRAPH_PROJECTION_PROOF_FIELDS: &[&str] = &[
     "catalogGraphSink",
 ];
 const QGLAKE_GRUST_TURSO_TABLE_PREFIX: &str = "lakecat_graph";
+
+const QUERYGRAPH_VERIFICATION_FIELDS: &[&str] = &[
+    "tableCount",
+    "viewCount",
+    "verifiedTables",
+    "verifiedViews",
+    "bundleHash",
+    "graphHash",
+    "openLineageHash",
+    "querygraphImportHash",
+    "standards",
+];
+
+const QUERYGRAPH_IMPORT_VERIFICATION_FIELDS: &[&str] = &[
+    "matchesVerify",
+    "tableCount",
+    "viewCount",
+    "verifiedTables",
+    "verifiedViews",
+    "bundleHash",
+    "graphHash",
+    "openLineageHash",
+    "querygraphImportHash",
+    "standards",
+];
+
+const LAKECAT_REPLAY_VERIFICATION_FIELDS: &[&str] = &[
+    "schemaVersion",
+    "status",
+    "matchesQueryGraph",
+    "requestIdentityProof",
+    "queryGraphBootstrapProof",
+    "catalogConfigProof",
+    "governedScanProof",
+    "tableCommitHistoryProof",
+    "managementProof",
+    "viewReceiptChainProof",
+    "storageProfileUpsertProof",
+    "credentialVendingProof",
+    "replayEvidence",
+];
 
 fn require_graph_projection_proof(
     summary: &serde_json::Map<String, Value>,
@@ -13888,6 +13944,57 @@ mod tests {
 
         assert!(err.to_string().contains("querygraphImportVerification"));
         assert!(err.to_string().contains("querygraphImportHash mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_querygraph_root_fields() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["querygraphVerification"]["unverifiedQueryGraphClaim"] =
+            json!(qglake_fixture_hash("unverified-querygraph-claim"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject extra QueryGraph verify root fields");
+        let err = err.to_string();
+
+        assert!(err.contains("querygraphVerification"), "{err}");
+        assert!(
+            err.contains("unexpected field unverifiedQueryGraphClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_querygraph_import_root_fields() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["querygraphImportVerification"]["unverifiedImportClaim"] =
+            json!(qglake_fixture_hash("unverified-querygraph-import-claim"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject extra QueryGraph import root fields");
+        let err = err.to_string();
+
+        assert!(err.contains("querygraphImportVerification"), "{err}");
+        assert!(
+            err.contains("unexpected field unverifiedImportClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_lakecat_replay_root_fields() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["unverifiedReplayClaim"] =
+            json!(qglake_fixture_hash("unverified-lakecat-replay-claim"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject extra LakeCat replay root fields");
+        let err = err.to_string();
+
+        assert!(err.contains("lakecatReplayVerification"), "{err}");
+        assert!(
+            err.contains("unexpected field unverifiedReplayClaim"),
+            "{err}"
+        );
     }
 
     #[test]
