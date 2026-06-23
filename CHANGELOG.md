@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Refreshed the full local release-candidate proof from clean head `1e7e8d0b`.
+  `scripts/check-release-readiness.sh --release-candidate` passed locally,
+  covering dependency and workflow contracts, release-version checks,
+  formatting, default and all-features workspace tests, Turso/Sail/TypeSec/Grust
+  feature rows, Grust Turso graph projection, out-of-tree book artifact
+  validation, QGLake handoff replay, and `git diff --check`.
 - Re-verified the current Grust Turso graph boundary against Grust commit
   `107bbf9`. LakeCat still performs durable catalog graph projection through
   `GrustCatalogGraphSink<TursoGraphStore>` via the `grust-turso-local` feature,

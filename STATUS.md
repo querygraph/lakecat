@@ -5,6 +5,14 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-candidate proof:
+  `scripts/check-release-readiness.sh --release-candidate` passed locally from
+  clean head `1e7e8d0b`. The run covered dependency and workflow trigger
+  contracts, release-version checks, formatting, default workspace tests,
+  package/feature rows for Turso, Sail, TypeSec, Grust, and Grust Turso,
+  `cargo test --workspace --all-features`, out-of-tree book artifact
+  validation, QGLake handoff replay with `grust-turso-local`, and
+  `git diff --check`. No cloud CI run was needed or claimed.
 - Latest Grust Turso boundary verification:
   `Re-verify current grust-turso graph operations`.
   The active local Grust checkout is `107bbf9 Add Turso Cypher matched-node
