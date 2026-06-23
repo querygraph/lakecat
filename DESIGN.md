@@ -901,8 +901,8 @@ future internal path bypasses replay admission.
 Raw view receipt-chain summary construction must also decode every
 `view-version-receipt-chains` entry into the expected
 `ViewVersionReceiptChainResponse` shape and reject malformed
-`chain-verified-count` evidence rather than recomputing around corrupted
-structural chain objects.
+or drifted `chain-verified-count` evidence rather than recomputing around
+corrupted structural chain objects or inflating compact verified-chain proof.
 The same fail-closed summary rule applies to table commit-history
 `sequence-numbers` and `commit-hashes`, so malformed sequence or commit hash
 evidence cannot disappear from raw commit-history proof.

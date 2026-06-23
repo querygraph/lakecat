@@ -6,6 +6,13 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Bind view receipt-chain verified summary counts`.
+  Raw lineage-drain summary construction now decodes every
+  `view-version-receipt-chains` entry and requires present
+  `chain-verified-count` evidence to match the decoded verified-chain count,
+  rejecting drifted archived QGLake view-history proof instead of inflating
+  compact receipt-chain summaries.
+- Latest implementation/testing slice:
   `Close view receipt-read replay wrappers`.
   Service outbox admission now closes wrapped `view.version-receipts-listed`
   and `view.version-receipt-chains-listed` replay payloads over the wrapper

@@ -7668,6 +7668,7 @@ fn lineage_summary_view_receipt_chain_verified_count(
     payload: &Value,
     chains: &[ViewVersionReceiptChainResponse],
 ) -> Result<usize, LakeCatError> {
+    let verified_count = chains.iter().filter(|chain| chain.chain_verified).count();
     if let Some(count) = payload.get("chain-verified-count") {
         let Some(count) = count.as_u64() else {
             return Err(outbox_evidence_error(
@@ -7675,14 +7676,21 @@ fn lineage_summary_view_receipt_chain_verified_count(
                 "chain-verified-count must be an unsigned integer when present",
             ));
         };
-        return usize::try_from(count).map_err(|_| {
+        let count = usize::try_from(count).map_err(|_| {
             outbox_evidence_error(
                 event,
                 "chain-verified-count is too large to summarize on this platform",
             )
-        });
+        })?;
+        if count != verified_count {
+            return Err(outbox_evidence_error(
+                event,
+                "chain-verified-count must match verified view receipt chains",
+            ));
+        }
+        return Ok(count);
     }
-    Ok(chains.iter().filter(|chain| chain.chain_verified).count())
+    Ok(verified_count)
 }
 
 fn optional_array_field<'a>(
@@ -50828,6 +50836,54 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("chain-verified-count must be an unsigned integer when present"));
+
+        let chain_hash = content_hash_bytes(b"verified-chain");
+        let receipt_hash = content_hash_bytes(b"verified-chain-receipt");
+        let drifted_verified_count = OutboxEvent {
+            event_id: "evt-drifted-summary-chain-verified-count".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "view.version-receipt-chains-listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "chain-verified-count": 2,
+                    "view-version-receipt-chains": [{
+                        "stable-id": "lakecat:view:local:default:events_view",
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "name": "events_view",
+                        "chain-hash": chain_hash,
+                        "chain-verified": true,
+                        "latest-view-version": 1,
+                        "latest-operation": "upsert",
+                        "tombstoned": false,
+                        "receipt-count": 1,
+                        "receipts": [{
+                            "stable-id": "lakecat:view:local:default:events_view",
+                            "warehouse": "local",
+                            "namespace": ["default"],
+                            "name": "events_view",
+                            "view-version": 1,
+                            "previous-view-version": null,
+                            "previous-receipt-hash": null,
+                            "operation": "upsert",
+                            "view-hash": content_hash_bytes(b"view-v1"),
+                            "receipt-hash": receipt_hash,
+                            "principal-subject": "agent:operator",
+                            "principal-kind": "agent",
+                            "recorded-at": "2026-06-20T00:00:00Z"
+                        }]
+                    }]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&drifted_verified_count, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("chain-verified-count must match verified view receipt chains"));
     }
 
     #[test]

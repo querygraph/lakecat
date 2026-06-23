@@ -9627,9 +9627,13 @@ view-version transition. The receipt-chain summary payload plus the nested
 receipt-chain and receipt objects are closed over the fields LakeCat verifies,
 so a replay sidecar cannot attach extra view-history, principal, lifecycle,
 graph, lineage, QueryGraph, or application claims beside a valid chain hash or
-receipt hash. That keeps malformed view-history evidence out of both graph
-projection and OpenLineage replay before QueryGraph ever sees a compact
-handoff. The verifier also requires
+receipt hash. Raw lineage-drain summary construction also decodes the archived
+receipt-chain objects and requires `chain-verified-count` to match the decoded
+verified chains, so compact QGLake proof cannot inflate verified view-history
+by changing a count beside otherwise valid structural chain evidence. That
+keeps malformed or drifted view-history evidence out of both graph projection
+and OpenLineage replay before QueryGraph ever sees a compact handoff. The
+verifier also requires
 table-commit replay to be internally consistent before delivery:
 `table.commit` must carry a commit object, unsigned sequence number, stable
 table identity, matching nested commit-table identity, a valid commit principal

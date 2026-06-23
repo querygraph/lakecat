@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound raw lineage-drain view receipt-chain verified counts to decoded chain
+  objects. Archived QGLake summaries now reject drifted
+  `chain-verified-count` evidence instead of accepting a valid integer that
+  inflates verified view-history proof.
 - Closed service outbox admission over wrapped view receipt-read replay
   payloads. `view.version-receipts-listed` and
   `view.version-receipt-chains-listed` wrappers now reject extra unverified
