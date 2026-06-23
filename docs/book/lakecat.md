@@ -7711,6 +7711,13 @@ when no credentials are returned: provider and issuance mode must be
 compatible, and secret-reference presence must match the mode. That keeps
 blocked credential attempts from projecting a weaker credential-root proof than
 storage-profile management would accept.
+Raw lineage-drain summaries now enforce that same nested storage-profile
+posture before returning compact event proof. A summary cannot carry a raw
+`secret-ref`, a short `location-prefix-hash`, a short `secret-ref-hash`, a
+provider/hash field when `secret-ref-present` is false, a missing provider/hash
+when it is true, or a provider/issuance-mode combination that service replay
+would reject. That closes the gap between accepted replay and the compact
+lineage-drain artifact QueryGraph later imports.
 The storage-profile and
 credential-vend service tests pin that producer-side `location-prefix-hash`
 evidence is already a full SHA-256 digest before QGLake receives the compact
@@ -8711,7 +8718,14 @@ hashes, and OpenLineage hashes that LakeCat verifies. QueryGraph should treat
 any extra credential-root claim as untrusted until it is promoted into that
 closed proof contract and backed by replay evidence. This is a LakeCat/TypeSec
 governance extension around Iceberg access, not an Iceberg table-metadata
-extension. Raw lineage-drain management summaries now apply the same
+extension. Raw lineage-drain summaries also apply the same storage-profile
+redaction and secret-reference posture before compact proof generation:
+nested storage-profile evidence must use the closed producer schema, full
+location and secret-reference hashes, coherent secret-ref presence/provider/hash
+fields, and a valid provider/issuance-mode pairing. A saved lineage-drain
+artifact therefore cannot hide a raw secret reference or launder a malformed
+credential root by silently dropping the bad fields. Raw lineage-drain
+management summaries now apply the same
 inventory posture to control-plane ID arrays: project ids, server ids,
 warehouse names, policy ids, and storage-profile ids must be string-shaped,
 nonblank, and duplicate-free before QGLake proof can inherit them. It also

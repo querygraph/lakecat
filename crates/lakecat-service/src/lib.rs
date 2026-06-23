@@ -6989,34 +6989,7 @@ fn lineage_drain_event_summary(
                 .collect()
         })
         .unwrap_or_default();
-    let storage_profile = payload.get("storage-profile");
-    let storage_profile_secret_ref = storage_profile
-        .and_then(|profile| profile.get("secret-ref"))
-        .and_then(Value::as_str);
-    let storage_profile_secret_ref_hash = storage_profile.and_then(|profile| {
-        profile
-            .get("secret-ref-hash")
-            .and_then(Value::as_str)
-            .map(str::to_string)
-            .or_else(|| {
-                storage_profile_secret_ref
-                    .map(|secret_ref| content_hash_bytes(secret_ref.as_bytes()))
-            })
-    });
-    let storage_profile_location_prefix_hash = storage_profile.and_then(|profile| {
-        profile
-            .get("location-prefix-hash")
-            .and_then(Value::as_str)
-            .map(str::to_string)
-            .or_else(|| {
-                profile
-                    .get("location-prefix")
-                    .and_then(Value::as_str)
-                    .and_then(|location_prefix| {
-                        content_hash_json(&json!({"location-prefix": location_prefix})).ok()
-                    })
-            })
-    });
+    let storage_profile = lineage_summary_storage_profile(event, payload.get("storage-profile"))?;
     let authorization_receipt = payload
         .get("authorization-receipt")
         .or_else(|| payload.pointer("/payload/authorization-receipt"));
@@ -7186,28 +7159,26 @@ fn lineage_drain_event_summary(
             .transpose()?
             .unwrap_or_default(),
         storage_profile_id: storage_profile
-            .and_then(|profile| profile.get("profile-id"))
-            .and_then(Value::as_str)
-            .map(str::to_string),
+            .as_ref()
+            .map(|profile| profile.profile_id.clone()),
         storage_profile_provider: storage_profile
-            .and_then(|profile| profile.get("provider"))
-            .and_then(Value::as_str)
-            .map(str::to_string),
+            .as_ref()
+            .map(|profile| profile.provider.clone()),
         storage_profile_issuance_mode: storage_profile
-            .and_then(|profile| profile.get("issuance-mode"))
-            .and_then(Value::as_str)
-            .map(str::to_string),
-        storage_profile_location_prefix_hash,
+            .as_ref()
+            .map(|profile| profile.issuance_mode.clone()),
+        storage_profile_location_prefix_hash: storage_profile
+            .as_ref()
+            .map(|profile| profile.location_prefix_hash.clone()),
         storage_profile_secret_ref_present: storage_profile
-            .and_then(|profile| profile.get("secret-ref-present"))
-            .and_then(Value::as_bool)
-            .or_else(|| storage_profile_secret_ref.map(|_| true)),
+            .as_ref()
+            .map(|profile| profile.secret_ref_present),
         storage_profile_secret_ref_provider: storage_profile
-            .and_then(|profile| profile.get("secret-ref-provider"))
-            .and_then(Value::as_str)
-            .or_else(|| storage_profile_secret_ref.and_then(secret_ref_provider_label))
-            .map(str::to_string),
-        storage_profile_secret_ref_hash,
+            .as_ref()
+            .and_then(|profile| profile.secret_ref_provider.clone()),
+        storage_profile_secret_ref_hash: storage_profile
+            .as_ref()
+            .and_then(|profile| profile.secret_ref_hash.clone()),
         warehouse_count: payload
             .get("warehouse-count")
             .and_then(Value::as_u64)
@@ -7488,6 +7459,97 @@ fn lineage_summary_config_entries(
             &format!("{label} must match ConfigEntry JSON shape: {err}"),
         )
     })
+}
+
+#[derive(Debug, Clone)]
+struct LineageSummaryStorageProfile {
+    profile_id: String,
+    provider: String,
+    issuance_mode: String,
+    location_prefix_hash: String,
+    secret_ref_present: bool,
+    secret_ref_provider: Option<String>,
+    secret_ref_hash: Option<String>,
+}
+
+fn lineage_summary_storage_profile(
+    event: &OutboxEvent,
+    storage_profile: Option<&Value>,
+) -> Result<Option<LineageSummaryStorageProfile>, LakeCatError> {
+    let Some(storage_profile) = storage_profile else {
+        return Ok(None);
+    };
+    validate_storage_profile_evidence_schema(
+        event,
+        storage_profile,
+        "lineage drain storage-profile summary",
+    )?;
+    validate_storage_profile_public_config_evidence(
+        event,
+        storage_profile,
+        "lineage drain storage-profile summary",
+    )?;
+    validate_required_full_hash_field(event, storage_profile, "location-prefix-hash")?;
+    validate_secret_ref_evidence(
+        event,
+        storage_profile,
+        "lineage drain storage-profile summary",
+    )?;
+    validate_storage_profile_provider_mode_evidence(
+        event,
+        storage_profile,
+        "lineage drain storage-profile summary",
+    )?;
+    let profile_id = required_string_field(
+        event,
+        storage_profile,
+        "profile-id",
+        "lineage drain storage-profile summary",
+    )?
+    .to_string();
+    let provider = required_string_field(
+        event,
+        storage_profile,
+        "provider",
+        "lineage drain storage-profile summary",
+    )?
+    .to_string();
+    let issuance_mode = required_string_field(
+        event,
+        storage_profile,
+        "issuance-mode",
+        "lineage drain storage-profile summary",
+    )?
+    .to_string();
+    let location_prefix_hash = required_string_field(
+        event,
+        storage_profile,
+        "location-prefix-hash",
+        "lineage drain storage-profile summary",
+    )?
+    .to_string();
+    let secret_ref_present = storage_profile
+        .get("secret-ref-present")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let secret_ref_provider = storage_profile
+        .get("secret-ref-provider")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let secret_ref_hash = storage_profile
+        .get("secret-ref-hash")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+
+    Ok(Some(LineageSummaryStorageProfile {
+        profile_id,
+        provider,
+        issuance_mode,
+        location_prefix_hash,
+        secret_ref_present,
+        secret_ref_provider,
+        secret_ref_hash,
+    }))
 }
 
 fn lineage_summary_string_array_field(
@@ -48515,6 +48577,162 @@ mod tests {
         assert!(
             err.contains(
                 "lineage drain credential-response prefix-hashes must not contain duplicate hashes"
+            ),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_storage_profile_secret_ref_evidence() {
+        let receipt = OutboxProjectionReceipt::default();
+        let valid_location_hash = content_hash_bytes(b"storage-profile-prefix");
+        let valid_secret_hash = content_hash_bytes(b"storage-profile-secret-ref");
+
+        let raw_secret_ref = OutboxEvent {
+            event_id: "evt-summary-storage-profile-raw-secret-ref".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "credentials.vend-attempted".to_string(),
+            payload: json!({
+                "payload": {
+                    "storage-profile": {
+                        "profile-id": "s3-events",
+                        "warehouse": "local",
+                        "provider": "s3",
+                        "issuance-mode": "short-lived-secret-ref",
+                        "location-prefix-hash": valid_location_hash,
+                        "secret-ref-present": true,
+                        "secret-ref-provider": "typesec",
+                        "secret-ref-hash": valid_secret_hash,
+                        "secret-ref": "typesec://env/LAKECAT_S3_EVENTS"
+                    }
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&raw_secret_ref, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains(
+                "lineage drain storage-profile summary contains unexpected field secret-ref"
+            ),
+            "{err}"
+        );
+
+        let short_location_hash = OutboxEvent {
+            event_id: "evt-summary-storage-profile-short-prefix".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "storage-profile.upserted".to_string(),
+            payload: json!({
+                "payload": {
+                    "storage-profile": {
+                        "profile-id": "s3-events",
+                        "warehouse": "local",
+                        "provider": "s3",
+                        "issuance-mode": "short-lived-secret-ref",
+                        "location-prefix-hash": "sha256:short",
+                        "secret-ref-present": true,
+                        "secret-ref-provider": "typesec",
+                        "secret-ref-hash": valid_secret_hash
+                    }
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&short_location_hash, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("location-prefix-hash must contain full SHA-256 digest evidence"));
+
+        let missing_secret_ref_provider = OutboxEvent {
+            event_id: "evt-summary-storage-profile-missing-secret-provider".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "credentials.vend-attempted".to_string(),
+            payload: json!({
+                "payload": {
+                    "storage-profile": {
+                        "profile-id": "s3-events",
+                        "warehouse": "local",
+                        "provider": "s3",
+                        "issuance-mode": "short-lived-secret-ref",
+                        "location-prefix-hash": valid_location_hash,
+                        "secret-ref-present": true,
+                        "secret-ref-hash": valid_secret_hash
+                    }
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&missing_secret_ref_provider, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains(
+                "lineage drain storage-profile summary secret-ref-present requires secret-ref-provider"
+            ),
+            "{err}"
+        );
+
+        let unexpected_secret_ref_hash = OutboxEvent {
+            event_id: "evt-summary-storage-profile-unexpected-secret-hash".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "credentials.vend-attempted".to_string(),
+            payload: json!({
+                "payload": {
+                    "storage-profile": {
+                        "profile-id": "local-events",
+                        "warehouse": "local",
+                        "provider": "file",
+                        "issuance-mode": "local-file-no-secret",
+                        "location-prefix-hash": valid_location_hash,
+                        "secret-ref-present": false,
+                        "secret-ref-hash": valid_secret_hash
+                    }
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&unexpected_secret_ref_hash, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains(
+                "lineage drain storage-profile summary cannot carry secret-ref evidence when secret-ref-present is false"
+            ),
+            "{err}"
+        );
+
+        let invalid_secret_ref_mode = OutboxEvent {
+            event_id: "evt-summary-storage-profile-invalid-secret-mode".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "storage-profile.upserted".to_string(),
+            payload: json!({
+                "payload": {
+                    "storage-profile": {
+                        "profile-id": "file-secret",
+                        "warehouse": "local",
+                        "provider": "file",
+                        "issuance-mode": "short-lived-secret-ref",
+                        "location-prefix-hash": valid_location_hash,
+                        "secret-ref-present": true,
+                        "secret-ref-provider": "typesec",
+                        "secret-ref-hash": valid_secret_hash
+                    }
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&invalid_secret_ref_mode, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains(
+                "lineage drain storage-profile summary short-lived-secret-ref issuance mode requires cloud object provider"
             ),
             "{err}"
         );

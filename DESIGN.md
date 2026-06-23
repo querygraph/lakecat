@@ -880,6 +880,12 @@ Compact QGLake storage-profile and credential secret-reference proof must
 mirror service replay admission: present secret refs require nonblank providers
 and full SHA-256 hashes, while absent secret refs may omit provider/hash fields
 or encode them as null, but any other provider/hash value is rejected.
+Raw lineage-drain summary construction must enforce the same redacted nested
+storage-profile posture before compact proof can inherit it: summary extraction
+rejects raw `secret-ref` fields, non-object or unexpected storage-profile
+fields, malformed `location-prefix-hash`, incoherent secret-ref
+presence/provider/hash evidence, and provider/issuance-mode combinations that
+service replay would reject.
 Compact management proof must preserve the same duplicate-free ID invariant as
 service replay, so saved QGLake summaries and lineage-drain artifacts cannot
 inflate server, project, warehouse, policy, or storage-profile reads by

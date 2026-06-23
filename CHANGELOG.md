@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Hardened service lineage-drain storage-profile secret-reference summaries.
+  Raw lineage-drain summary construction now rejects malformed nested
+  storage-profile evidence, raw secret references, short location/secret hashes,
+  incoherent secret-ref presence/provider/hash posture, and invalid
+  provider/issuance-mode combinations instead of silently dropping credential
+  root proof before QGLake handoff.
 - Expanded the LakeCat book with a front-loaded detailed catalog concept
   reference. The new section walks through the Rust service spine, Turso store,
   Iceberg REST paths, commit CAS, idempotency/pointer-log/audit/outbox replay,

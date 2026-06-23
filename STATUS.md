@@ -5,6 +5,21 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/testing slice:
+  `Harden lineage-drain storage-profile secret-reference summaries`.
+  Raw lineage-drain summary construction now rejects malformed nested
+  storage-profile evidence, raw secret references, short location/secret
+  hashes, incoherent secret-ref presence/provider/hash posture, and invalid
+  provider/issuance-mode combinations instead of silently dropping credential
+  root proof before QGLake handoff.
+- Local verification for this lineage-drain storage-profile summary slice is
+  green:
+  `cargo test -p lakecat-service lineage_drain_summary_rejects_malformed_storage_profile_secret_ref_evidence -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service` passed; `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed; `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest documentation/book slice:
   `Expand detailed catalog concept reference`.
   The book now front-loads a detailed reference for the Rust service spine,
