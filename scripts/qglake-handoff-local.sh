@@ -146,8 +146,8 @@ if (typeof evidence.requestIdentityState !== "string" || evidence.requestIdentit
   console.error("LakeCat request identity evidence is missing requestIdentityState");
   process.exit(1);
 }
-if (typeof evidence.authorizationReceiptHash !== "string" || evidence.authorizationReceiptHash.length === 0) {
-  console.error("LakeCat request identity evidence is missing authorizationReceiptHash");
+if (typeof evidence.authorizationReceiptHash !== "string" || !/^sha256:[0-9a-fA-F]{64}$/.test(evidence.authorizationReceiptHash)) {
+  console.error("LakeCat request identity evidence authorizationReceiptHash must be a full sha256 hash");
   process.exit(1);
 }
 if (typeof evidence.authorizationReceiptAction !== "string" || evidence.authorizationReceiptAction.length === 0) {
@@ -215,8 +215,8 @@ if (!evidence || typeof evidence !== "object") {
   process.exit(1);
 }
 function requireHash(value, label) {
-  if (typeof value !== "string" || value.length === 0) {
-    console.error(`LakeCat QueryGraph bootstrap evidence is missing ${label}`);
+  if (typeof value !== "string" || !/^sha256:[0-9a-fA-F]{64}$/.test(value)) {
+    console.error(`LakeCat QueryGraph bootstrap evidence ${label} must be a full sha256 hash`);
     process.exit(1);
   }
 }

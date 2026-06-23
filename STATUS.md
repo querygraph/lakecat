@@ -6,6 +6,17 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Harden required QGLake proof hashes`.
+  The live QGLake handoff helper now requires request-identity authorization
+  and QueryGraph bootstrap authorization/delegation/summary-signature replay
+  proof fields to be full `sha256:<64 hex>` digests before writing compact
+  handoff evidence.
+- Local verification for this handoff proof-hash slice is green:
+  `bash -n scripts/qglake-handoff-local.sh` passed;
+  `scripts/check-local-dependency-contract.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/testing slice:
   `Harden QGLake TypeDID proof hashes`.
   The live `scripts/qglake-handoff-local.sh` helper now requires optional
   request-identity and QueryGraph bootstrap TypeDID envelope/proof hashes to be

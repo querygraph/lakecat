@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened required QGLake handoff replay proof hashes. The live handoff script
+  now requires request-identity authorization, QueryGraph bootstrap
+  authorization, delegation, and summary-signature proof fields to be full
+  `sha256:<64 hex>` digests before summarizing LakeCat replay evidence.
 - Tightened the local QGLake handoff proof helper for TypeDID evidence. The
   live handoff script now requires optional request-identity and QueryGraph
   bootstrap TypeDID hashes to be full SHA-256 values instead of accepting any
