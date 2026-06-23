@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest memory storage-profile scope binding:
+  memory store reads now validate stored storage-profile values against their
+  map keys before list or credential-root matching, matching Turso's decoded
+  row-scope drift rejection.
+- Local verification for this memory storage-profile scope slice passed:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_rejects_storage_profile_map_scope_drift -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_storage_profile_key_scope_drift -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest standalone audit request-hash coverage:
   memory and Turso store tests now prove an audit event whose request hash
   drifts from its payload is rejected before any audit row or lineage/graph

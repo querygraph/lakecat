@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Hardened memory storage-profile scope binding. Memory store reads now validate
+  stored storage-profile values against their map keys before list or
+  credential-root matching, matching Turso's decoded row-scope drift rejection.
 - Hardened standalone audit request-hash coverage. Memory and Turso store tests
   now prove an audit event whose request hash drifts from its payload is
   rejected before any audit row or lineage/graph outbox row is written.

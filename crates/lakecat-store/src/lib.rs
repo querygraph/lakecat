@@ -2226,14 +2226,17 @@ impl CatalogStore for MemoryCatalogStore {
         let state = self.state.read().await;
         let mut profiles = state
             .storage_profiles
-            .values()
+            .iter()
+            .map(|(profile_key, profile)| {
+                validate_storage_profile_map_scope(profile, profile_key)?;
+                Ok(profile)
+            })
+            .collect::<LakeCatResult<Vec<_>>>()?
+            .into_iter()
             .filter(|profile| profile.warehouse == *warehouse)
             .cloned()
             .collect::<Vec<_>>();
         profiles.sort_by(|left, right| left.profile_id.cmp(&right.profile_id));
-        for profile in &profiles {
-            profile.validate()?;
-        }
         Ok(profiles)
     }
 
@@ -2440,10 +2443,14 @@ impl CatalogStore for MemoryCatalogStore {
         table: &TableRecord,
     ) -> LakeCatResult<StorageProfile> {
         let state = self.state.read().await;
-        let profiles = state.storage_profiles.values().collect::<Vec<_>>();
-        for profile in &profiles {
-            profile.validate()?;
-        }
+        let profiles = state
+            .storage_profiles
+            .iter()
+            .map(|(profile_key, profile)| {
+                validate_storage_profile_map_scope(profile, profile_key)?;
+                Ok(profile)
+            })
+            .collect::<LakeCatResult<Vec<_>>>()?;
         Ok(storage_profile_match(profiles.into_iter(), table)?
             .unwrap_or_else(|| StorageProfile::inferred_for_table(table)))
     }
@@ -2680,6 +2687,19 @@ fn validate_policy_binding_scope(
     {
         return Err(LakeCatError::Internal(
             "policy binding row scope does not match binding identity".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_storage_profile_map_scope(
+    profile: &StorageProfile,
+    profile_key: &str,
+) -> LakeCatResult<()> {
+    profile.validate()?;
+    if storage_profile_key(&profile.warehouse, &profile.profile_id) != profile_key {
+        return Err(LakeCatError::Internal(
+            "storage profile row scope does not match profile identity".to_string(),
         ));
     }
     Ok(())
@@ -3668,6 +3688,58 @@ mod memory_tests {
         let message = err.to_string();
         assert!(message.contains("storage-profile-id-hash=sha256:"));
         assert!(!message.contains("token=secret"));
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_storage_profile_map_scope_drift() {
+        let store = MemoryCatalogStore::new();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let table = TableRecord::new(
+            TableIdent::new(
+                warehouse.clone(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            ),
+            "s3://lakecat-demo/events/table".to_string(),
+            None,
+            serde_json::json!({"format-version": 3}),
+            Principal::anonymous(),
+        );
+        let profile = StorageProfile::new(
+            "s3-events",
+            warehouse.clone(),
+            "s3://lakecat-demo/events",
+            StorageProvider::S3,
+            CredentialIssuanceMode::ShortLivedSecretRef,
+            Some("typesec://lakecat/local/s3-events".to_string()),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        store.upsert_storage_profile(profile).await.unwrap();
+
+        let key = storage_profile_key(&warehouse, "s3-events");
+        store
+            .state
+            .write()
+            .await
+            .storage_profiles
+            .get_mut(&key)
+            .unwrap()
+            .profile_id = "other-profile".to_string();
+
+        let err = store.list_storage_profiles(&warehouse).await.unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("storage profile row scope does not match")
+        ));
+
+        let err = store.storage_profile_for_table(&table).await.unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("storage profile row scope does not match")
+        ));
     }
 
     #[tokio::test]

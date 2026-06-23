@@ -4332,9 +4332,9 @@ evidence around a standard catalog that happens to serve Iceberg tables.
 
 Storage-profile roots now follow the same row/content proof rule. Iceberg
 clients still see ordinary table metadata locations and catalog credentials,
-but LakeCat's Turso store refuses to list a storage profile or match a table to
-a credential root unless the decoded `profile_json` agrees with the selected
-warehouse row and profile id. A durable row for one credential root therefore
+but LakeCat refuses to list a storage profile or match a table to a credential
+root unless the decoded profile agrees with the selected memory map key or
+Turso warehouse/profile row. A durable row for one credential root therefore
 cannot carry the location prefix, issuance mode, provider, or secret-reference
 posture from another profile and still become QGLake proof.
 
@@ -7609,10 +7609,11 @@ flag before a binding can be returned or matched to a table. That keeps a
 corrupted row index from silently changing which TypeSec-style policy anchors
 apply to a governed read.
 Storage-profile reads follow the same rule for credential-root evidence: the
-decoded profile must match the row's warehouse, profile id, location prefix,
-provider, and issuance mode before LakeCat can return it or match it to a
-table. That prevents durable row-column drift from changing the storage scope
-used by credential vending or QGLake management proof.
+decoded profile must match the memory map key or Turso row's warehouse,
+profile id, location prefix, provider, and issuance mode before LakeCat can
+return it or match it to a table. That prevents durable row-column drift from
+changing the storage scope used by credential vending or QGLake management
+proof.
 
 Outbox draining is intentionally strict. LakeCat projects a batch to graph and
 lineage sinks first, then acknowledges the whole projected batch in the store.
