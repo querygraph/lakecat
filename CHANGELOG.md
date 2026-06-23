@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Aligned release-facing docs with the Grust Turso matched-node boundary. The
+  README and release checklist now call out that `grust-turso-local` proves
+  Grust-owned matched-node mutation plans over projected LakeCat table nodes,
+  keeping QueryGraph readiness graph updates outside the catalog core.
 - Expanded the book's graph workflow narrative. The LakeCat book now explains
   how `grust-turso-local` keeps graph persistence, traversal, matched-node
   patches, and Cypher-facing behavior in Grust while LakeCat emits only

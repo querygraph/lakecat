@@ -54,10 +54,11 @@ scripts/check-release-version-contract.sh
 
 This contract is part of the release. It proves that LakeCat's Grust feature
 surface follows the active local Grust 0.10 path checkout, including the
-`grust-turso-local` durable graph sink, TypeSec stays on the published TypeSec
-crate, local Sail paths and patch bridge remain explicit, manual workflow
-triggers remain intentional, and the local QueryGraph handoff verifier stays
-aligned with the same active Grust path checkout.
+`grust-turso-local` durable graph sink and Grust-owned matched-node mutation
+plan over projected LakeCat table nodes, TypeSec stays on the published
+TypeSec crate, local Sail paths and patch bridge remain explicit, manual
+workflow triggers remain intentional, and the local QueryGraph handoff verifier
+stays aligned with the same active Grust path checkout.
 
 ## Required Local Gate
 

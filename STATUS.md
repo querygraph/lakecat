@@ -5,6 +5,16 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-doc alignment slice:
+  `Name Grust Turso matched-node proof in release docs`.
+  `README.md` and `RELEASE.md` now explicitly describe the
+  `grust-turso-local` matched-node mutation-plan proof over projected LakeCat
+  table nodes, so top-level release guidance matches the graph boundary test
+  and the book's QueryGraph/Grust Turso workflow narrative.
+- Local verification for this release-doc slice is green:
+  `scripts/check-local-dependency-contract.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed; `git diff --check`
+  passed.
 - Latest book workflow slice:
   `Document Grust Turso graph boundary workflow`.
   The LakeCat book now includes a concrete QueryGraph/Grust Turso workflow:

@@ -64,7 +64,10 @@ keeps that harness aligned with the active local Grust graph implementation
 while graph persistence, traversal, and Cypher-over-Turso work remain
 Grust-owned. LakeCat's `grust-turso-local` graph tests cover writing catalog
 events, traversing the projection, and querying/mutating it through Grust
-Cypher over the same Turso-backed store.
+Cypher over the same Turso-backed store. They also prove Grust's matched-node
+mutation plan can patch a projected LakeCat table node in Turso, keeping
+QueryGraph readiness updates in Grust rather than turning LakeCat into a graph
+database.
 
 Useful local checks:
 
