@@ -63,6 +63,9 @@ candidate. It covers shell syntax, dependency contracts, manual workflow trigger
 contracts, formatting, default workspace tests, explicit Turso/Sail/TypeSec/
 Grust feature tests, all-features CLI and workspace tests, book rebuild, QGLake
 handoff replay verification, and `git diff --check`.
+The QGLake handoff proof must run QueryGraph `lakecat-verify` and
+`lakecat-import` through `cargo run --locked` against the local `qg-rust`
+manifest, then persist both outputs in the saved handoff summary.
 
 Use the quick gate only while preparing a narrow slice:
 

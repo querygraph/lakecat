@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Made the locked QueryGraph handoff commands part of the executable local
+  dependency contract. The contract now requires the QGLake handoff harness to
+  run QueryGraph `lakecat-verify` and `lakecat-import` through
+  `cargo run --locked` against the local `qg-rust` manifest and to persist
+  both verifier outputs in the saved handoff summary.
 - Refreshed the full local release-readiness proof after the Grust Turso
   handoff proof work. `scripts/check-release-readiness.sh` now passes from the
   current tree, including explicit Grust Turso graph projection tests, rebuilt

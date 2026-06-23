@@ -201,6 +201,14 @@ require_pattern 'LAKECAT_GRUST_TURSO_PATH="\$GRUST_TURSO_PATH"' scripts/qglake-h
   "local QGLake handoff must configure a dedicated Grust Turso graph database"
 require_pattern 'cargo run -p lakecat-service --features sail-local,grust-turso-local,typesec-local,turso-local' scripts/qglake-handoff-local.sh \
   "local QGLake handoff must exercise Grust Turso graph projection end to end"
+require_pattern 'cargo run --locked --manifest-path "\$QUERYGRAPH_RUST_DIR/Cargo.toml" -- lakecat-verify' scripts/qglake-handoff-local.sh \
+  "local QGLake handoff must run QueryGraph lakecat-verify with the checked lockfile"
+require_pattern 'cargo run --locked --manifest-path "\$QUERYGRAPH_RUST_DIR/Cargo.toml" -- lakecat-import' scripts/qglake-handoff-local.sh \
+  "local QGLake handoff must run QueryGraph lakecat-import with the checked lockfile"
+require_pattern 'querygraphVerification' scripts/qglake-handoff-local.sh \
+  "local QGLake handoff summary must persist QueryGraph verification evidence"
+require_pattern 'querygraphImportVerification' scripts/qglake-handoff-local.sh \
+  "local QGLake handoff summary must persist QueryGraph import evidence"
 require_pattern '"graphProjectionProof"' scripts/qglake-handoff-local.sh \
   "local QGLake handoff must write machine-readable graph projection proof"
 require_pattern 'require_graph_projection_proof' crates/lakecat-cli/src/main.rs \

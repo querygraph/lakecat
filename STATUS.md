@@ -5,6 +5,14 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-contract slice:
+  `Guard locked QueryGraph handoff commands`.
+  The local dependency contract now requires `scripts/qglake-handoff-local.sh`
+  to run QueryGraph `lakecat-verify` and `lakecat-import` through
+  `cargo run --locked` against the local `qg-rust` manifest, and to persist
+  both QueryGraph verifier outputs in the saved handoff summary. This makes the
+  first-release "QueryGraph locked verify/import" rule executable instead of
+  relying on release prose alone.
 - Latest release-engineering slice:
   `Refresh full release gate after Grust Turso proof`.
   The full local `scripts/check-release-readiness.sh` gate passed on
