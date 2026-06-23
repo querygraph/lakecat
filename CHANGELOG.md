@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened live QGLake storage-profile proof hashing. The local handoff script
+  now requires storage-profile location, replay, OpenLineage, and optional
+  related proof hash fields to be full `sha256:<64 hex>` digests and keeps
+  hash arrays duplicate-free before summarizing management evidence.
 - Hardened required QGLake handoff replay proof hashes. The live handoff script
   now requires request-identity authorization, QueryGraph bootstrap
   authorization, delegation, and summary-signature proof fields to be full

@@ -381,8 +381,90 @@ if (!evidence.issuanceMode) {
   console.error("LakeCat storage-profile upsert evidence is missing issuanceMode");
   process.exit(1);
 }
-if (!evidence.locationPrefixHash) {
-  console.error("LakeCat storage-profile upsert evidence is missing locationPrefixHash");
+function requireHash(value, label) {
+  if (typeof value !== "string" || !/^sha256:[0-9a-fA-F]{64}$/.test(value)) {
+    console.error(`LakeCat storage-profile upsert evidence ${label} must be a full sha256 hash`);
+    process.exit(1);
+  }
+}
+function requireHashArray(value, label) {
+  if (!Array.isArray(value) || value.length === 0) {
+    console.error(`LakeCat storage-profile upsert evidence is missing ${label}`);
+    process.exit(1);
+  }
+  const seen = new Set();
+  for (const item of value) {
+    requireHash(item, label);
+    if (seen.has(item)) {
+      console.error(`LakeCat storage-profile upsert evidence ${label} must be duplicate-free`);
+      process.exit(1);
+    }
+    seen.add(item);
+  }
+}
+requireHash(evidence.locationPrefixHash, "locationPrefixHash");
+if (evidence.authorizationReceiptHash != null) {
+  requireHash(evidence.authorizationReceiptHash, "authorizationReceiptHash");
+}
+if (evidence.policyHash != null) {
+  requireHash(evidence.policyHash, "policyHash");
+}
+if (evidence.graphHash != null) {
+  requireHash(evidence.graphHash, "graphHash");
+}
+if (evidence.replayHash != null) {
+  requireHash(evidence.replayHash, "replayHash");
+}
+if (evidence.openLineageHash != null) {
+  requireHash(evidence.openLineageHash, "openLineageHash");
+}
+if (evidence.secretRefHash != null) {
+  requireHash(evidence.secretRefHash, "secretRefHash");
+}
+if (evidence.issuerConfigHash != null) {
+  requireHash(evidence.issuerConfigHash, "issuerConfigHash");
+}
+if (evidence.publicConfigHash != null) {
+  requireHash(evidence.publicConfigHash, "publicConfigHash");
+}
+if (evidence.storageRootHash != null) {
+  requireHash(evidence.storageRootHash, "storageRootHash");
+}
+if (evidence.credentialRootHash != null) {
+  requireHash(evidence.credentialRootHash, "credentialRootHash");
+}
+if (evidence.providerConfigHash != null) {
+  requireHash(evidence.providerConfigHash, "providerConfigHash");
+}
+if (evidence.secretRefProviderHash != null) {
+  requireHash(evidence.secretRefProviderHash, "secretRefProviderHash");
+}
+if (evidence.locationPrefixHashes != null) {
+  requireHashArray(evidence.locationPrefixHashes, "locationPrefixHashes");
+}
+if (evidence.secretRefHashes != null) {
+  requireHashArray(evidence.secretRefHashes, "secretRefHashes");
+}
+if (evidence.credentialPrefixHashes != null) {
+  requireHashArray(evidence.credentialPrefixHashes, "credentialPrefixHashes");
+}
+if (evidence.authorizationReceiptHashes != null) {
+  requireHashArray(evidence.authorizationReceiptHashes, "authorizationReceiptHashes");
+}
+if (evidence.graphEventHashes != null) {
+  requireHashArray(evidence.graphEventHashes, "graphEventHashes");
+}
+if (evidence.lineageEventHashes != null) {
+  requireHashArray(evidence.lineageEventHashes, "lineageEventHashes");
+}
+if (evidence.replayEventHashes != null) {
+  requireHashArray(evidence.replayEventHashes, "replayEventHashes");
+}
+if (evidence.openLineageHashes != null) {
+  requireHashArray(evidence.openLineageHashes, "openLineageHashes");
+}
+if (!Array.isArray(evidence.replayEventHashes) || evidence.replayEventHashes.length === 0) {
+  console.error("LakeCat storage-profile upsert evidence is missing replayEventHashes");
   process.exit(1);
 }
 if (typeof evidence.secretRefPresent !== "boolean") {
@@ -403,10 +485,6 @@ if (!evidence.secretRefPresent && evidence.secretRefProvider != null) {
 }
 if (!evidence.secretRefPresent && evidence.secretRefHash != null) {
   console.error("LakeCat storage-profile upsert evidence has secretRefHash without secretRefPresent");
-  process.exit(1);
-}
-if (!Array.isArray(evidence.replayEventHashes) || evidence.replayEventHashes.length === 0) {
-  console.error("LakeCat storage-profile upsert evidence is missing replayEventHashes");
   process.exit(1);
 }
 if (!Array.isArray(evidence.openLineageHashes) || evidence.openLineageHashes.length === 0) {

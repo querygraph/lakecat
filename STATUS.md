@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Harden QGLake storage-profile proof hashes`.
+  The live QGLake handoff helper now requires storage-profile location,
+  replay, OpenLineage, and optional related proof hash fields to be full
+  `sha256:<64 hex>` digests, and keeps hash arrays duplicate-free before
+  writing compact management evidence for handoff verification/import.
+- Local verification for this storage-profile handoff slice is green:
+  `bash -n scripts/qglake-handoff-local.sh` passed;
+  `scripts/check-local-dependency-contract.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `scripts/qglake-handoff-local.sh` passed after QueryGraph commit
+  `0c5c1bd Refresh Grust 0.10 path dependency` updated the local Grust path
+  contract used by QueryGraph verify/import;
+  `git diff --check` passed.
+- Latest implementation/testing slice:
   `Harden required QGLake proof hashes`.
   The live QGLake handoff helper now requires request-identity authorization
   and QueryGraph bootstrap authorization/delegation/summary-signature replay
