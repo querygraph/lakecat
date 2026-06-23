@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bound raw credential exception summaries to authorization receipt context.
+  Raw lineage-drain credential summaries now reject top-level-only,
+  receipt-context-only, or drifted `lakecat:raw-credential-exception` evidence
+  before compact QGLake proof can inherit a weaker path than service outbox
+  admission.
 - Closed raw credential exception summaries. Raw lineage-drain credential
   summaries now reject unknown fields inside `lakecat:raw-credential-exception`,
   matching service outbox admission before QGLake proof can inherit unverified

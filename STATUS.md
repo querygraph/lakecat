@@ -5,6 +5,17 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw credential exception receipt-binding summary hardening:
+  raw lineage-drain credential summaries now reject top-level-only,
+  authorization-receipt-context-only, or drifted
+  `lakecat:raw-credential-exception` evidence before compact QGLake proof is
+  built. This keeps the summary-only replay path aligned with service outbox
+  admission for blocked-agent denials and audited trusted-human raw credential
+  exceptions.
+- Local verification for this raw credential exception receipt-binding slice
+  passed: `cargo fmt -p lakecat-service -- --check`; and
+  `cargo test -p lakecat-service lineage_drain_summary_rejects_malformed_raw_credential_exception -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest raw credential exception summary closure:
   raw lineage-drain credential summaries now reject unknown fields inside
   `lakecat:raw-credential-exception`, matching service outbox admission before

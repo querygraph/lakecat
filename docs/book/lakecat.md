@@ -7759,10 +7759,14 @@ evidence inside the durable receipt. Raw credential exceptions follow the same
 rule: the top-level `lakecat:raw-credential-exception` object must match
 `authorization-receipt.context.lakecat:raw-credential-exception` exactly, so
 trusted-human exceptions and blocked-agent denials cannot drift during replay.
-Replay admission also closes both raw-credential exception objects over the
-fields LakeCat actually verifies: requested posture, allowed/blocked posture,
-and reason. Extra raw-credential claims are rejected before acknowledgement,
-graph projection, OpenLineage projection, or QGLake credential proof.
+Replay admission and raw lineage-drain summary construction both enforce this
+binding; a compact QGLake proof cannot accept a top-level-only exception, a
+receipt-context-only exception, or two raw-credential exception objects that
+disagree. Replay admission also closes both raw-credential exception objects
+over the fields LakeCat actually verifies: requested posture, allowed/blocked
+posture, and reason. Extra raw-credential claims are rejected before
+acknowledgement, graph projection, OpenLineage projection, or QGLake credential
+proof.
 
 ## Rust-First Engines And The V3 To V4 Path
 

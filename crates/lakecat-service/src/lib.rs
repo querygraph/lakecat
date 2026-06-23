@@ -8372,6 +8372,7 @@ fn lineage_summary_credential_exception_fields(
         payload,
         "lakecat:credential-block-reason",
     )?;
+    validate_raw_credential_exception_receipt_match(event, payload)?;
     let Some(raw_exception) = payload.get("lakecat:raw-credential-exception") else {
         return Ok((None, None, block_reason));
     };
@@ -53976,6 +53977,70 @@ mod tests {
                 event.payload["event-type"] = json!("credentials.summary-only");
                 event.payload["payload"]["event-type"] = json!("credentials.summary-only");
             }
+            let err = lineage_drain_event_summary(&event, &receipt)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains(expected_message), "{err}");
+        }
+
+        let raw_exception = json!({
+            "allowed": false,
+            "reason": "fine-grained read restriction requires Sail-planned reads"
+        });
+        let drifted_raw_exception = json!({
+            "allowed": true,
+            "reason": "trusted human principal may use audited raw credential vending"
+        });
+        let receipt_cases = [
+            (
+                "evt-summary-raw-exception-missing-receipt-context",
+                Some(raw_exception.clone()),
+                None,
+                "raw-credential exception must be captured in authorization receipt context",
+            ),
+            (
+                "evt-summary-raw-exception-receipt-only",
+                None,
+                Some(raw_exception.clone()),
+                "authorization receipt raw-credential exception must match top-level evidence",
+            ),
+            (
+                "evt-summary-raw-exception-receipt-drift",
+                Some(raw_exception.clone()),
+                Some(drifted_raw_exception),
+                "raw-credential exception must match authorization receipt context",
+            ),
+        ];
+
+        for (event_id, top_level_exception, receipt_exception, expected_message) in receipt_cases {
+            let mut event = valid_lineage_summary_credential_event(event_id);
+            event.event_type = "credentials.summary-only".to_string();
+            event.payload["event-type"] = json!("credentials.summary-only");
+            event.payload["payload"]["event-type"] = json!("credentials.summary-only");
+            event.payload["payload"]["credential-count"] = json!(0);
+            event.payload["payload"]["credential-response-evidence"] = json!([]);
+            event.payload["payload"]["lakecat:credential-block-reason"] =
+                json!("fine-grained read restriction requires Sail-planned reads");
+            event.payload["payload"]["authorization-receipt"]["context"] = json!({});
+            if let Some(raw_exception) = top_level_exception {
+                event.payload["payload"]["lakecat:raw-credential-exception"] =
+                    raw_exception.clone();
+            } else {
+                event.payload["payload"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("lakecat:raw-credential-exception");
+            }
+            if let Some(raw_exception) = receipt_exception {
+                event.payload["payload"]["authorization-receipt"]["context"]["lakecat:raw-credential-exception"] =
+                    raw_exception;
+            } else {
+                event.payload["payload"]["authorization-receipt"]["context"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("lakecat:raw-credential-exception");
+            }
+
             let err = lineage_drain_event_summary(&event, &receipt)
                 .unwrap_err()
                 .to_string();
