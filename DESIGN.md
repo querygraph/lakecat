@@ -627,7 +627,7 @@ visible, data columns are narrowed to none, and the receipt proves the decision.
 | --- | --- | --- |
 | F1 governed reads gate but must narrow | Started | Restrictions now flow through governed planning/fetch proof, but Sail should own more read execution. |
 | F2 ODRL transported but not fully interpreted | Started | Enforceable ODRL subset is becoming restriction input; unsupported constraint operators, missing right operands, blank purposes, and empty/blank allowed-column lists now fail closed across camel, kebab, prefixed JSON-LD operand keys, and compact JSON-LD terms; broader composition stays in TypeSec/QueryGraph. |
-| F3 REST commit idempotency | Started | Store support exists; REST-visible behavior needs continued hardening. |
+| F3 REST commit idempotency | Started | Store support exists; conventional `Idempotency-Key` and `x-lakecat-idempotency-key` both feed exact retry, while duplicate or conflicting headers fail before authorization, Sail validation, or side effects. Continue object-store/generalized retry hardening. |
 | F4 metadata write before CAS orphan handling | Started | Commit hardening exists; cleanup and proof paths still matter. |
 | F5 scans bypass in-process provider | Started | Plan/fetch paths are guarded; reusable Sail planner integration remains the target. |
 | F6 graph projection still shallow | Started | Catalog graph events are bounded and expanding; reusable taxonomy/query behavior belongs in Grust. |
@@ -1215,9 +1215,10 @@ projection, so replay cannot drop or rewrite the actor associated with a
 committed pointer transition.
 The commit replay envelope must also include full SHA-256 request and response
 hash evidence before projection; an idempotency-key hash is optional for
-standard Iceberg commits that did not supply LakeCat's retry key, but must be
-full SHA-256 evidence whenever present. The policy hash remains optional when
-no policy participated. It must also carry
+standard Iceberg commits that did not supply `Idempotency-Key` or
+`x-lakecat-idempotency-key`, but must be full SHA-256 evidence whenever
+present. The policy hash remains optional when no policy participated. It must
+also carry
 positive Iceberg format-version evidence and non-negative snapshot-id evidence,
 so graph and OpenLineage projections cannot lose the table-format summary that
 the pointer-log path exposes later. The replay verifier may accept either

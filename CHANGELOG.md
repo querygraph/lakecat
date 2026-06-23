@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Accepted the conventional `Idempotency-Key` header for REST table commits
+  alongside `x-lakecat-idempotency-key`. Matching dual headers share the same
+  exact-retry path, while duplicate or conflicting idempotency headers fail
+  before authorization, Sail validation, table loading, metadata-object writes,
+  or graph/lineage side effects.
 - Closed the archived QGLake captured-output root schemas. The CLI captured
   output semantic verifier now rejects unexpected root fields inside saved
   LakeCat replay output and QueryGraph verify/import output, so matching hashes

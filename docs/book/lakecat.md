@@ -5797,10 +5797,12 @@ This is LakeCat implementation today and a plausible future catalog profile.
 Iceberg clients retry commits, but the table format does not define every
 catalog's idempotency-key semantics. LakeCat treats idempotency as part of
 catalog safety: exact retry returns the stored response, drift under the same
-key conflicts, and replay does not duplicate graph or lineage side effects. It
-should not be written into table metadata. If standardized later, it should be
-an optional catalog behavior profile that ordinary clients can adopt without
-changing table files.
+key conflicts, and replay does not duplicate graph or lineage side effects.
+LakeCat accepts the conventional `Idempotency-Key` header and the
+LakeCat-prefixed compatibility header for the same retry path. It should not be
+written into table metadata. If standardized later, it should be an optional
+catalog behavior profile that ordinary clients can adopt without changing table
+files.
 
 Pointer logs:
 This is LakeCat management evidence around standard pointer movement. Iceberg
@@ -7475,10 +7477,12 @@ return the stored response even after the table has advanced beyond the
 original commit requirements. Reusing the same key for a different body must
 conflict. LakeCat persists a normalized request hash and stores only audit-safe
 evidence, not raw secrets or raw idempotency keys. REST idempotency keys are
-intentionally narrow: `x-lakecat-idempotency-key` must be 1 to 128 ASCII
-characters and may use only letters, digits, `-`, `_`, `.`, or `:`. Invalid
-keys, including non-ASCII or invalid header bytes, fail before LakeCat performs
-authorization, Sail validation, table loading, or metadata-object writes.
+intentionally narrow: `Idempotency-Key` and `x-lakecat-idempotency-key` must be
+1 to 128 ASCII characters and may use only letters, digits, `-`, `_`, `.`, or
+`:`. If both headers are present they must match exactly. Invalid, duplicate,
+or conflicting keys, including non-ASCII or invalid header bytes, fail before
+LakeCat performs authorization, Sail validation, table loading, or
+metadata-object writes.
 When a reused key is attached to a different commit body, the conflict response
 also stays redacted: it does not echo the raw key or the mismatched metadata
 object location. The Turso spine pins the same redaction for both commit-time

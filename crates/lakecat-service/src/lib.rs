@@ -12886,36 +12886,55 @@ fn request_identity(headers: &HeaderMap) -> Result<RequestIdentity, LakeCatHttpE
 }
 
 fn request_idempotency_key(headers: &HeaderMap) -> Result<Option<String>, LakeCatHttpError> {
-    let mut values = headers.get_all("x-lakecat-idempotency-key").iter();
+    let lakecat_key = single_idempotency_header(headers, "x-lakecat-idempotency-key")?;
+    let standard_key = single_idempotency_header(headers, "idempotency-key")?;
+    match (lakecat_key, standard_key) {
+        (Some(lakecat_key), Some(standard_key)) => {
+            if lakecat_key != standard_key {
+                return Err(LakeCatError::InvalidArgument(
+                    "Idempotency-Key and x-lakecat-idempotency-key must match when both are present"
+                        .to_string(),
+                )
+                .into());
+            }
+            Ok(Some(lakecat_key))
+        }
+        (Some(key), None) | (None, Some(key)) => Ok(Some(key)),
+        (None, None) => Ok(None),
+    }
+}
+
+fn single_idempotency_header(
+    headers: &HeaderMap,
+    header_name: &str,
+) -> Result<Option<String>, LakeCatHttpError> {
+    let mut values = headers.get_all(header_name).iter();
     let Some(value) = values.next() else {
         return Ok(None);
     };
     if values.next().is_some() {
-        return Err(LakeCatError::InvalidArgument(
-            "x-lakecat-idempotency-key must appear at most once".to_string(),
-        )
+        return Err(LakeCatError::InvalidArgument(format!(
+            "{header_name} must appear at most once"
+        ))
         .into());
     }
     let key_bytes = value.as_bytes();
     if key_bytes.is_empty() || key_bytes.len() > 128 || !key_bytes.iter().all(u8::is_ascii) {
-        return Err(LakeCatError::InvalidArgument(
-            "x-lakecat-idempotency-key must be 1..=128 ASCII characters".to_string(),
-        )
+        return Err(LakeCatError::InvalidArgument(format!(
+            "{header_name} must be 1..=128 ASCII characters"
+        ))
         .into());
     }
     let key = std::str::from_utf8(key_bytes).map_err(|_| {
-        LakeCatError::InvalidArgument(
-            "x-lakecat-idempotency-key must be 1..=128 ASCII characters".to_string(),
-        )
+        LakeCatError::InvalidArgument(format!("{header_name} must be 1..=128 ASCII characters"))
     })?;
     if !key
         .chars()
         .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | ':'))
     {
-        return Err(LakeCatError::InvalidArgument(
-            "x-lakecat-idempotency-key may only contain A-Z, a-z, 0-9, '-', '_', '.', or ':'"
-                .to_string(),
-        )
+        return Err(LakeCatError::InvalidArgument(format!(
+            "{header_name} may only contain A-Z, a-z, 0-9, '-', '_', '.', or ':'"
+        ))
         .into());
     }
     Ok(Some(key.to_string()))
@@ -45358,6 +45377,102 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn commit_replays_standard_rest_idempotency_key() {
+        let store = MemoryCatalogStore::new();
+        let app = app(LakeCatState::new(
+            WarehouseName::new("local").unwrap(),
+            store.clone(),
+        ));
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"name":"events","location":"file:///tmp/events","metadata-location":"file:///tmp/events/metadata/00000.json","metadata":{"format-version":3,"table-uuid":"11111111-1111-1111-1111-111111111111","location":"file:///tmp/events","last-sequence-number":7,"last-updated-ms":1710000000000,"last-column-id":1,"schemas":[{"type":"struct","schema-id":1,"fields":[{"id":1,"name":"id","type":"string","required":true}]}],"current-schema-id":1,"partition-specs":[{"spec-id":0,"fields":[]}],"default-spec-id":0,"current-snapshot-id":42,"snapshots":[{"snapshot-id":42,"sequence-number":7,"timestamp-ms":1710000000000,"summary":{"operation":"append"},"schema-id":1}],"snapshot-log":[{"timestamp-ms":1710000000000,"snapshot-id":42}]}}"#,
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        for _ in 0..2 {
+            let commit = Request::builder()
+                .method(Method::POST)
+                .uri("/catalog/v1/namespaces/default/tables/events/commit")
+                .header("content-type", "application/json")
+                .header("Idempotency-Key", "commit:events:standard")
+                .body(Body::from(r#"{"requirements":[],"updates":[]}"#))
+                .unwrap();
+            let response = app.clone().oneshot(commit).await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(
+                payload["metadata-location"],
+                serde_json::json!("file:///tmp/events/metadata/00000.json")
+            );
+        }
+
+        let ident = table_ident("local", "default".to_string(), "events".to_string()).unwrap();
+        let records = store.table_commit_records(&ident, 0, None).await.unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(
+            records[0].idempotency_key_sha256.as_deref(),
+            Some(content_hash_bytes("commit:events:standard".as_bytes()).as_str())
+        );
+        let pending = store
+            .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+            .await
+            .unwrap();
+        assert_eq!(
+            pending
+                .iter()
+                .filter(|event| event.event_type == "table.commit")
+                .count(),
+            1,
+            "standard Idempotency-Key replay must not enqueue extra commit outbox events"
+        );
+    }
+
+    #[tokio::test]
+    async fn commit_accepts_matching_standard_and_lakecat_idempotency_headers() {
+        let store = MemoryCatalogStore::new();
+        let app = app(LakeCatState::new(
+            WarehouseName::new("local").unwrap(),
+            store.clone(),
+        ));
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"name":"events","location":"file:///tmp/events","metadata-location":"file:///tmp/events/metadata/00000.json","metadata":{"format-version":3,"table-uuid":"11111111-1111-1111-1111-111111111111","location":"file:///tmp/events","last-sequence-number":7,"last-updated-ms":1710000000000,"last-column-id":1,"schemas":[{"type":"struct","schema-id":1,"fields":[{"id":1,"name":"id","type":"string","required":true}]}],"current-schema-id":1,"partition-specs":[{"spec-id":0,"fields":[]}],"default-spec-id":0,"current-snapshot-id":42,"snapshots":[{"snapshot-id":42,"sequence-number":7,"timestamp-ms":1710000000000,"summary":{"operation":"append"},"schema-id":1}],"snapshot-log":[{"timestamp-ms":1710000000000,"snapshot-id":42}]}}"#,
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let commit = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables/events/commit")
+            .header("content-type", "application/json")
+            .header("Idempotency-Key", "commit:events:dual")
+            .header("x-lakecat-idempotency-key", "commit:events:dual")
+            .body(Body::from(r#"{"requirements":[],"updates":[]}"#))
+            .unwrap();
+        let response = app.clone().oneshot(commit).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let ident = table_ident("local", "default".to_string(), "events".to_string()).unwrap();
+        let records = store.table_commit_records(&ident, 0, None).await.unwrap();
+        assert_eq!(
+            records[0].idempotency_key_sha256.as_deref(),
+            Some(content_hash_bytes("commit:events:dual".as_bytes()).as_str())
+        );
+    }
+
+    #[tokio::test]
     async fn commit_without_rest_idempotency_key_still_drains_replay_evidence() {
         let store = MemoryCatalogStore::new();
         let graph = Arc::new(RecordingGraph::default());
@@ -45503,6 +45618,50 @@ mod tests {
         let message = String::from_utf8_lossy(&body);
         assert!(
             message.contains("x-lakecat-idempotency-key must appear at most once"),
+            "{message}"
+        );
+        assert!(!message.contains("commit:events:0001"));
+        assert!(!message.contains("commit:events:0002"));
+
+        let duplicate_standard = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables/events/commit")
+            .header("content-type", "application/json")
+            .header("Idempotency-Key", "commit:events:0001")
+            .header("Idempotency-Key", "commit:events:0002")
+            .body(Body::from(r#"{"requirements":[],"updates":[]}"#))
+            .unwrap();
+        let response = app.clone().oneshot(duplicate_standard).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let message = String::from_utf8_lossy(&body);
+        assert!(
+            message.contains("idempotency-key must appear at most once"),
+            "{message}"
+        );
+        assert!(!message.contains("commit:events:0001"));
+        assert!(!message.contains("commit:events:0002"));
+
+        let conflicting_headers = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables/events/commit")
+            .header("content-type", "application/json")
+            .header("Idempotency-Key", "commit:events:0001")
+            .header("x-lakecat-idempotency-key", "commit:events:0002")
+            .body(Body::from(r#"{"requirements":[],"updates":[]}"#))
+            .unwrap();
+        let response = app.clone().oneshot(conflicting_headers).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let message = String::from_utf8_lossy(&body);
+        assert!(
+            message.contains(
+                "Idempotency-Key and x-lakecat-idempotency-key must match when both are present"
+            ),
             "{message}"
         );
         assert!(!message.contains("commit:events:0001"));

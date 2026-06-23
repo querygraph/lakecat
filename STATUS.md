@@ -5,6 +5,21 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest REST commit idempotency compatibility slice:
+  table commit retry now accepts the conventional `Idempotency-Key` header
+  alongside `x-lakecat-idempotency-key`. Matching dual headers feed the same
+  exact-retry record; duplicate standard headers and conflicting standard vs.
+  LakeCat-prefixed headers fail before authorization, Sail validation, table
+  loading, metadata-object writes, or graph/lineage side effects.
+- Local verification for this REST idempotency compatibility slice passed:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service commit_replays_standard_rest_idempotency_key -- --test-threads=1`;
+  `cargo test -p lakecat-service commit_accepts_matching_standard_and_lakecat_idempotency_headers -- --test-threads=1`;
+  `cargo test -p lakecat-service commit_rejects_invalid_rest_idempotency_keys -- --test-threads=1`;
+  `cargo test -p lakecat-service commit_replays_rest_idempotency_key -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick` (which correctly reported that
+  executable changes after the prior release proof require a fresh
+  release-candidate run before final proof refresh); and `git diff --check`.
 - Latest archived QGLake captured-output root closure:
   captured output semantic verification now rejects unexpected root fields
   inside saved LakeCat replay output and QueryGraph verify/import output, so

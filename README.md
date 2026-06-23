@@ -169,6 +169,9 @@ First-release scope is intentionally narrower than the long-term architecture:
 standard Iceberg REST behavior, the Rust/Turso catalog spine, CAS/idempotency,
 audit/outbox replay, governed Sail-planned access, redacted credentials,
 OpenLineage/Grust projection boundaries, and QGLake handoff proof are in scope.
+REST commit exact retry accepts `Idempotency-Key` and
+`x-lakecat-idempotency-key`, with duplicate/conflict guards before
+authorization, Sail validation, or side effects.
 Typed Iceberg v4 semantics, richer reusable graph mechanics, cloud SDK secret
 managers, and full QueryGraph product semantics remain Sail, Grust, TypeSec, and
 QueryGraph follow-on work rather than release blockers for LakeCat's catalog
