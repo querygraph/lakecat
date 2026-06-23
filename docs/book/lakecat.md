@@ -6339,6 +6339,12 @@ replay evidence. LakeCat also closes the nested `commit` object over those
 verified fields before projection, so an outbox event cannot attach an
 unverified pointer-transition, policy, storage, or graph claim beside an
 otherwise valid table commit.
+Older saved sidecars may spell the same commit evidence with snake_case or
+kebab-case field names. LakeCat accepts either spelling for the verified
+`table.commit` envelope, but it rejects an event that carries both aliases for
+one semantic field before acknowledgement, graph projection, or OpenLineage
+projection. That keeps a replay sidecar from hiding a conflicting pointer,
+hash, timestamp, format, or snapshot claim beside the field LakeCat verifies.
 
 Operators and QueryGraph can read that pointer-log evidence through a governed
 management endpoint:
@@ -8814,6 +8820,9 @@ binding. The nested `commit` object is also closed over the exact fields
 LakeCat verifies, so replay cannot smuggle an extra unverified commit, policy,
 storage, graph, or QueryGraph claim into the sidecar before QGLake proof is
 generated.
+The verifier also normalizes the legacy alias boundary: snake_case and
+kebab-case commit fields are both accepted, but duplicate aliases for the same
+semantic value are rejected before acknowledgement or projection.
 Credential-vend replay gets the same treatment: `credentials.vend-attempted`
 must carry a
 matching credential count, full duplicate-free credential-response prefix

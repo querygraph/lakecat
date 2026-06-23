@@ -1,6 +1,6 @@
 # LakeCat Design
 
-Updated: 2026-06-22
+Updated: 2026-06-23
 
 Status: living design. This document supersedes the OPUS review/design notes
 that are now archived under `docs/completed/`.
@@ -250,7 +250,7 @@ The current working plan is:
    back to the selected warehouse row and namespace path before returning or
    dropping standard namespace state. Turso
    policy-binding reads must bind decoded JSON back to the row/query warehouse
-   policy id, namespace path, table name, and enforced flag before matching
+   and policy id, namespace path, table name, and enforced flag before matching
    policies for tables. Turso storage-profile reads must likewise bind decoded
    JSON back to the row/query warehouse, profile id, location prefix, provider,
    and issuance mode before credential-root matching. Guarded view mutations
@@ -937,9 +937,14 @@ full SHA-256 evidence whenever present. The policy hash remains optional when
 no policy participated. It must also carry
 positive Iceberg format-version evidence and non-negative snapshot-id evidence,
 so graph and OpenLineage projections cannot lose the table-format summary that
-the pointer-log path exposes later. Service replay admission must also close
-the top-level `table.commit` payload over checked table scope, authorization
-receipt, and nested commit evidence, and close the nested `commit` object over
+the pointer-log path exposes later. The replay verifier may accept either
+snake_case or kebab-case field aliases for this legacy commit envelope, but a
+single event must not carry both aliases for the same semantic field, so
+archived sidecars cannot hide conflicting pointer, hash, timestamp, format, or
+snapshot claims behind an otherwise valid `table.commit` event. Service replay
+admission must also close the top-level `table.commit` payload over checked
+table scope, authorization receipt, and nested commit evidence, and close the
+nested `commit` object over
 the pointer-transition, identity, authorization, hash, format, snapshot, and
 timestamp fields LakeCat actually verifies. A durable `table.commit` event
 cannot append unverified commit, policy, storage, graph, lineage, QueryGraph,

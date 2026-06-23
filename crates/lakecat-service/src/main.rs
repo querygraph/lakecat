@@ -1,6 +1,8 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use lakecat_core::{WarehouseName, content_hash_bytes};
+use lakecat_core::WarehouseName;
+#[cfg(feature = "typesec-local")]
+use lakecat_core::content_hash_bytes;
 use lakecat_graph::CatalogGraphSink;
 #[cfg(not(feature = "grust-local"))]
 use lakecat_graph::NoopCatalogGraphSink;

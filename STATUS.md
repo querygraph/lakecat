@@ -6,6 +6,20 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Harden table commit replay aliases`.
+  Service `table.commit` replay admission now accepts either snake_case or
+  kebab-case aliases for the verified commit envelope while rejecting duplicate
+  aliases for the same semantic field before acknowledgement, graph projection,
+  or OpenLineage projection.
+- Local verification for this table commit replay-alias slice is green:
+  `cargo test -p lakecat-service table_commit_alias -- --test-threads=1` passed;
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/testing slice:
   `Harden Turso warehouse row scope`.
   Turso warehouse reads now bind decoded JSON back to the selecting row's
   project id and storage root columns as well as warehouse name, so corrupted

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened service table-commit replay alias admission. `table.commit` replay
+  now accepts either snake_case or kebab-case evidence aliases for the verified
+  commit envelope, while rejecting duplicate aliases before acknowledgement,
+  graph projection, or OpenLineage projection.
 - Hardened Turso warehouse row scope validation. Warehouse reads now bind
   decoded JSON back to the row's project id and storage root columns as well as
   the warehouse name before tenant-root inventory can be returned for

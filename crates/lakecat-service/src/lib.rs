@@ -2215,11 +2215,14 @@ fn validate_table_commit_hash_evidence(event: &OutboxEvent) -> Result<(), LakeCa
             "table commit principal does not match authorization receipt principal",
         ));
     }
-    let Some(sequence_number) = commit
-        .get("sequence_number")
-        .or_else(|| commit.get("sequence-number"))
-        .and_then(Value::as_u64)
-    else {
+    let Some(sequence_number) = aliased_evidence_field(
+        event,
+        commit,
+        "sequence_number",
+        "sequence-number",
+        "table commit",
+    )?
+    .and_then(Value::as_u64) else {
         return Err(outbox_evidence_error(
             event,
             "table commit evidence must contain unsigned sequence number",
@@ -2231,11 +2234,14 @@ fn validate_table_commit_hash_evidence(event: &OutboxEvent) -> Result<(), LakeCa
             "table commit evidence sequence number must be positive",
         ));
     }
-    let Some(format_version) = commit
-        .get("format_version")
-        .or_else(|| commit.get("format-version"))
-        .and_then(Value::as_u64)
-    else {
+    let Some(format_version) = aliased_evidence_field(
+        event,
+        commit,
+        "format_version",
+        "format-version",
+        "table commit",
+    )?
+    .and_then(Value::as_u64) else {
         return Err(outbox_evidence_error(
             event,
             "table commit evidence must contain unsigned format version",
@@ -2247,10 +2253,9 @@ fn validate_table_commit_hash_evidence(event: &OutboxEvent) -> Result<(), LakeCa
             "table commit evidence format version must be positive",
         ));
     }
-    let Some(snapshot_id) = commit
-        .get("snapshot_id")
-        .or_else(|| commit.get("snapshot-id"))
-        .and_then(Value::as_i64)
+    let Some(snapshot_id) =
+        aliased_evidence_field(event, commit, "snapshot_id", "snapshot-id", "table commit")?
+            .and_then(Value::as_i64)
     else {
         return Err(outbox_evidence_error(
             event,
@@ -2263,17 +2268,22 @@ fn validate_table_commit_hash_evidence(event: &OutboxEvent) -> Result<(), LakeCa
             "table commit evidence snapshot id must be non-negative",
         ));
     }
-    validate_required_rfc3339_string(
+    validate_required_aliased_rfc3339_string(
         event,
         commit,
-        &["committed_at", "committed-at"],
+        "committed_at",
+        "committed-at",
         "table commit evidence committed_at timestamp",
     )?;
-    if !commit
-        .get("new_metadata_location")
-        .or_else(|| commit.get("new-metadata-location"))
-        .and_then(Value::as_str)
-        .is_some_and(|location| !location.trim().is_empty())
+    if !aliased_evidence_field(
+        event,
+        commit,
+        "new_metadata_location",
+        "new-metadata-location",
+        "table commit",
+    )?
+    .and_then(Value::as_str)
+    .is_some_and(|location| !location.trim().is_empty())
     {
         return Err(outbox_evidence_error(
             event,
@@ -2282,20 +2292,27 @@ fn validate_table_commit_hash_evidence(event: &OutboxEvent) -> Result<(), LakeCa
     }
     validate_optional_location_evidence(
         event,
-        commit
-            .get("new_metadata_location")
-            .or_else(|| commit.get("new-metadata-location")),
+        aliased_evidence_field(
+            event,
+            commit,
+            "new_metadata_location",
+            "new-metadata-location",
+            "table commit",
+        )?,
         "table commit new metadata location",
     )?;
-    if commit
-        .get("previous_metadata_location")
-        .or_else(|| commit.get("previous-metadata-location"))
-        .is_some_and(|location| {
-            !location
-                .as_str()
-                .is_some_and(|location| !location.trim().is_empty())
-        })
-    {
+    if aliased_evidence_field(
+        event,
+        commit,
+        "previous_metadata_location",
+        "previous-metadata-location",
+        "table commit",
+    )?
+    .is_some_and(|location| {
+        !location
+            .as_str()
+            .is_some_and(|location| !location.trim().is_empty())
+    }) {
         return Err(outbox_evidence_error(
             event,
             "table commit evidence previous metadata location must be non-empty when present",
@@ -2303,16 +2320,111 @@ fn validate_table_commit_hash_evidence(event: &OutboxEvent) -> Result<(), LakeCa
     }
     validate_optional_location_evidence(
         event,
-        commit
-            .get("previous_metadata_location")
-            .or_else(|| commit.get("previous-metadata-location")),
+        aliased_evidence_field(
+            event,
+            commit,
+            "previous_metadata_location",
+            "previous-metadata-location",
+            "table commit",
+        )?,
         "table commit previous metadata location",
     )?;
-    for field in ["request_hash", "response_hash"] {
-        validate_required_full_hash_field(event, commit, field)?;
+    validate_required_aliased_full_hash_field(event, commit, "request_hash", "request-hash")?;
+    validate_required_aliased_full_hash_field(event, commit, "response_hash", "response-hash")?;
+    validate_optional_aliased_full_hash_field(
+        event,
+        commit,
+        "idempotency_key_sha256",
+        "idempotency-key-sha256",
+    )?;
+    validate_optional_aliased_full_hash_field(event, commit, "policy_hash", "policy-hash")?;
+    Ok(())
+}
+
+fn aliased_evidence_field<'a>(
+    event: &OutboxEvent,
+    object: &'a Value,
+    snake_case: &str,
+    kebab_case: &str,
+    label: &str,
+) -> Result<Option<&'a Value>, LakeCatError> {
+    let snake_value = object.get(snake_case);
+    let kebab_value = object.get(kebab_case);
+    match (snake_value, kebab_value) {
+        (Some(_), Some(_)) => Err(outbox_evidence_error(
+            event,
+            &format!("{label} must not carry both {snake_case} and {kebab_case} evidence fields"),
+        )),
+        (Some(value), None) | (None, Some(value)) => Ok(Some(value)),
+        (None, None) => Ok(None),
     }
-    validate_optional_full_hash_field(event, commit, "idempotency_key_sha256")?;
-    validate_optional_full_hash_field(event, commit, "policy_hash")?;
+}
+
+fn validate_required_aliased_full_hash_field(
+    event: &OutboxEvent,
+    object: &Value,
+    snake_case: &str,
+    kebab_case: &str,
+) -> Result<(), LakeCatError> {
+    if aliased_evidence_field(event, object, snake_case, kebab_case, "table commit")?
+        .and_then(Value::as_str)
+        .is_some_and(is_full_sha256_digest_evidence)
+    {
+        return Ok(());
+    }
+    Err(outbox_evidence_error(
+        event,
+        &format!("{snake_case}/{kebab_case} must contain full SHA-256 digest evidence"),
+    ))
+}
+
+fn validate_optional_aliased_full_hash_field(
+    event: &OutboxEvent,
+    object: &Value,
+    snake_case: &str,
+    kebab_case: &str,
+) -> Result<(), LakeCatError> {
+    let Some(value) =
+        aliased_evidence_field(event, object, snake_case, kebab_case, "table commit")?
+    else {
+        return Ok(());
+    };
+    if value.is_null() {
+        return Ok(());
+    }
+    if value.as_str().is_some_and(is_full_sha256_digest_evidence) {
+        return Ok(());
+    }
+    Err(outbox_evidence_error(
+        event,
+        &format!("{snake_case}/{kebab_case} must contain full SHA-256 digest evidence"),
+    ))
+}
+
+fn validate_required_aliased_rfc3339_string(
+    event: &OutboxEvent,
+    object: &Value,
+    snake_case: &str,
+    kebab_case: &str,
+    label: &str,
+) -> Result<(), LakeCatError> {
+    let Some(timestamp) =
+        aliased_evidence_field(event, object, snake_case, kebab_case, "table commit")?
+            .and_then(Value::as_str)
+    else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} must be present"),
+        ));
+    };
+    if timestamp.trim().is_empty() {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} must be non-empty"),
+        ));
+    }
+    chrono::DateTime::parse_from_rfc3339(timestamp)
+        .map_err(|err| outbox_evidence_error(event, &format!("{label} must be RFC3339: {err}")))?;
     Ok(())
 }
 
@@ -2565,33 +2677,6 @@ fn validate_authorization_receipt_checked_at(
             &format!("{label} authorization receipt checked_at timestamp must be RFC3339: {err}"),
         )
     })?;
-    Ok(())
-}
-
-fn validate_required_rfc3339_string(
-    event: &OutboxEvent,
-    value: &Value,
-    field_names: &[&str],
-    label: &str,
-) -> Result<(), LakeCatError> {
-    let Some(timestamp) = field_names
-        .iter()
-        .find_map(|field_name| value.get(*field_name))
-        .and_then(Value::as_str)
-    else {
-        return Err(outbox_evidence_error(
-            event,
-            &format!("{label} must be present"),
-        ));
-    };
-    if timestamp.trim().is_empty() {
-        return Err(outbox_evidence_error(
-            event,
-            &format!("{label} must be non-empty"),
-        ));
-    }
-    chrono::DateTime::parse_from_rfc3339(timestamp)
-        .map_err(|err| outbox_evidence_error(event, &format!("{label} must be RFC3339: {err}")))?;
     Ok(())
 }
 
@@ -18976,6 +19061,168 @@ mod tests {
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_accepts_kebab_case_table_commit_alias_evidence() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-kebab-commit-aliases".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.commit".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-kebab-commit-aliases",
+                    "event-type": "table.commit",
+                    "table": table,
+                    "commit": {
+                        "table": table,
+                        "previous-metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "new-metadata-location": "file:///tmp/events/metadata/00001.json",
+                        "sequence-number": 7,
+                        "principal": principal,
+                        "format-version": 3,
+                        "snapshot-id": 42,
+                        "policy-hash": null,
+                        "request-hash": content_hash_json(&json!({"request": "commit"})).unwrap(),
+                        "response-hash": content_hash_json(&json!({"response": "commit"})).unwrap(),
+                        "idempotency-key-sha256": content_hash_bytes("commit:events:0001".as_bytes()),
+                        "committed-at": chrono::Utc::now(),
+                    },
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-commit",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let summary = drain_outbox_once(&state, 10)
+            .await
+            .expect("kebab-case table commit aliases should be accepted");
+
+        assert_eq!(summary.delivered, 1);
+        assert_eq!(store.delivered.lock().await.len(), 1);
+        assert!(
+            graph.events.lock().await.iter().any(|event| {
+                event.label == GraphNodeLabel::Commit && event.action == GraphAction::Committed
+            }),
+            "kebab-case commit evidence should still project graph commit proof"
+        );
+        assert!(
+            lineage
+                .events
+                .lock()
+                .await
+                .iter()
+                .any(|event| event.event_type == LineageEventType::TableCommitted),
+            "kebab-case commit evidence should still project lineage commit proof"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_duplicate_table_commit_alias_evidence() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-duplicate-commit-aliases".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.commit".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-duplicate-commit-aliases",
+                    "event-type": "table.commit",
+                    "table": table,
+                    "commit": {
+                        "table": table,
+                        "previous_metadata_location": "file:///tmp/events/metadata/00000.json",
+                        "new_metadata_location": "file:///tmp/events/metadata/00001.json",
+                        "new-metadata-location": "file:///tmp/events/metadata/00002.json",
+                        "sequence_number": 7,
+                        "principal": principal,
+                        "format_version": 3,
+                        "snapshot_id": 42,
+                        "policy_hash": null,
+                        "request_hash": content_hash_json(&json!({"request": "commit"})).unwrap(),
+                        "response_hash": content_hash_json(&json!({"response": "commit"})).unwrap(),
+                        "idempotency_key_sha256": content_hash_bytes("commit:events:0001".as_bytes()),
+                        "committed_at": chrono::Utc::now(),
+                    },
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-commit",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("duplicate table commit aliases should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("table.commit"));
+        assert!(
+            message.contains(
+                "table commit must not carry both new_metadata_location and new-metadata-location"
+            ),
+            "{message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-duplicate-commit-aliases"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "duplicate commit aliases must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "duplicate commit aliases must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "duplicate commit aliases must fail before lineage projection"
+        );
     }
 
     #[tokio::test]
