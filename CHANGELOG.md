@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added Turso soft-delete row-column restore coverage. The Turso store
+  regression suite now corrupts `soft_deletes` row scope, metadata-location,
+  version, and timestamp columns after a valid delete and proves restore rejects
+  the tombstone before reopening the table.
 - Added dependency-tree proof for the Grust Turso graph route. The local
   dependency contract now runs `cargo tree -i turso` for `lakecat-graph` and
   `lakecat-service` under `grust-turso-local` and requires Turso to appear only

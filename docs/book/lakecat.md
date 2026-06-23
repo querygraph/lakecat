@@ -450,7 +450,8 @@ back to the durable `metadata_pointer_log` table key and principal row evidence
 before commit history can be returned to operators, replay validators, or
 QueryGraph handoff code.
 Soft-delete tombstones follow it too: restore validates the durable tombstone
-row key and decoded tombstone identity before a hidden table can reappear.
+row scope, metadata-location, version, timestamp, and decoded tombstone
+identity before a hidden table can reappear.
 
 Commit CAS is the bridge between standard Iceberg and LakeCat hardening. In
 Iceberg parlance, optimistic commit means the writer proposes a new metadata
@@ -13884,9 +13885,11 @@ claims one namespace but whose durable row key belongs to another namespace is
 not an oddity to tolerate; it is corrupt evidence. A pointer-log row whose
 decoded commit record does not match the stored table key is not an operator
 story to polish; it is a proof failure. A tombstone whose durable key and
-decoded table identity disagree must not be restored. Those row/content checks
-are LakeCat hardening, and the neutral standards idea is database-independent
-catalog evidence binding.
+decoded table identity disagree must not be restored; neither should a
+tombstone whose row metadata-location, version, or timestamp drifts away from
+the decoded tombstone record. Those row/content checks are LakeCat hardening,
+and the neutral standards idea is database-independent catalog evidence
+binding.
 
 Idempotency is part of the LakeCat proof spine. It is easy to say "HTTP retry,"
 but a catalog retry is only safe when the same idempotency key cannot be reused

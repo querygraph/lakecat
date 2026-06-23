@@ -10671,6 +10671,111 @@ pub mod turso_store {
         }
 
         #[tokio::test]
+        async fn turso_store_rejects_soft_delete_row_column_drift_on_restore() {
+            async fn soft_deleted_table() -> (std::sync::Arc<TursoCatalogStore>, TableIdent) {
+                let store = TursoCatalogStore::in_memory().await.unwrap();
+                let warehouse = WarehouseName::new("local").unwrap();
+                let namespace = "default".parse::<Namespace>().unwrap();
+                let ident = TableIdent::new(
+                    warehouse.clone(),
+                    namespace.clone(),
+                    TableName::new("events").unwrap(),
+                );
+                store
+                    .create_namespace(&warehouse, namespace.clone())
+                    .await
+                    .unwrap();
+                store
+                    .create_table(TableRecord::new(
+                        ident.clone(),
+                        "file:///tmp/events".to_string(),
+                        Some("file:///tmp/events/metadata/00000.json".to_string()),
+                        serde_json::json!({"format-version": 3}),
+                        Principal::anonymous(),
+                    ))
+                    .await
+                    .unwrap();
+                store
+                    .soft_delete_table(&ident, Principal::anonymous(), None)
+                    .await
+                    .unwrap();
+                (store, ident)
+            }
+
+            let (store, ident) = soft_deleted_table().await;
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update soft_deletes set warehouse = ?2 where table_key = ?1",
+                (table_key(&ident), "other"),
+            )
+            .await
+            .unwrap();
+            let err = store
+                .restore_table(&ident, Principal::anonymous(), None)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("soft-delete row scope does not match record identity")
+            ));
+
+            let (store, ident) = soft_deleted_table().await;
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update soft_deletes set metadata_location = ?2 where table_key = ?1",
+                (table_key(&ident), "file:///tmp/events/metadata/99999.json"),
+            )
+            .await
+            .unwrap();
+            let err = store
+                .restore_table(&ident, Principal::anonymous(), None)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("soft-delete metadata location does not match row")
+            ));
+
+            let (store, ident) = soft_deleted_table().await;
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update soft_deletes set version = ?2 where table_key = ?1",
+                (table_key(&ident), 9_i64),
+            )
+            .await
+            .unwrap();
+            let err = store
+                .restore_table(&ident, Principal::anonymous(), None)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("soft-delete version does not match row")
+            ));
+
+            let (store, ident) = soft_deleted_table().await;
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update soft_deletes set deleted_at = ?2 where table_key = ?1",
+                (table_key(&ident), "2026-01-01T00:00:00Z"),
+            )
+            .await
+            .unwrap();
+            let err = store
+                .restore_table(&ident, Principal::anonymous(), None)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("soft-delete timestamp does not match row")
+            ));
+        }
+
+        #[tokio::test]
         async fn turso_store_rejects_table_idempotency_response_scope_drift() {
             let store = TursoCatalogStore::in_memory().await.unwrap();
             let warehouse = WarehouseName::new("local").unwrap();

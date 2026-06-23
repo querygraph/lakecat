@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest Turso soft-delete restore row-column coverage:
+  `turso_store_rejects_soft_delete_row_column_drift_on_restore` now tampers
+  `soft_deletes` row scope, metadata-location, version, and timestamp columns
+  after a valid soft delete and proves restore rejects the corrupted tombstone
+  before removing the marker or reopening the table.
+- Local verification for this Turso soft-delete restore slice passed:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --features turso-local --lib turso_store_rejects_soft_delete_row_column_drift_on_restore -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local --lib -- --test-threads=1`.
 - Latest Grust Turso dependency-tree proof:
   the local dependency contract now runs `cargo tree -i turso` for
   `lakecat-graph` and `lakecat-service` under `grust-turso-local` and requires
