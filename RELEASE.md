@@ -61,8 +61,9 @@ scripts/check-release-readiness.sh
 The full gate must pass without `--skip-book` or `--skip-handoff` for a release
 candidate. It covers shell syntax, dependency contracts, manual workflow trigger
 contracts, formatting, default workspace tests, explicit Turso/Sail/TypeSec/
-Grust feature tests, all-features CLI and workspace tests, book rebuild, QGLake
-handoff replay verification, and `git diff --check`.
+Grust feature tests, all-features CLI and workspace tests, book rebuild, EPUB
+metadata and PDF layout validation, QGLake handoff replay verification, and
+`git diff --check`.
 The QGLake handoff proof must run QueryGraph `lakecat-verify` and
 `lakecat-import` through `cargo run --locked` against the local `qg-rust`
 manifest, then persist both outputs in the saved handoff summary.
@@ -84,6 +85,7 @@ the artifact contract before tagging:
 docs/book/build.sh
 expected_title=$(awk -F': ' '/^kindle_name:/ { print $2 }' docs/book/dist/VERSION.md)
 docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "$expected_title"
+docs/book/check_pdf_layout.sh docs/book/dist/lakecat.pdf
 readlink "docs/book/dist/$(awk -F': ' '/^kindle_link:/ { print $2 }' docs/book/dist/VERSION.md)"
 ```
 

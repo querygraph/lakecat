@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added an executable PDF layout check to the LakeCat book build. The build now
+  validates that the generated PDF starts with an unnumbered cover page and
+  that page 2 is the contents/body page with numbering started, moving the
+  release book artifact contract out of the manual checklist.
 - Made the locked QueryGraph handoff commands part of the executable local
   dependency contract. The contract now requires the QGLake handoff harness to
   run QueryGraph `lakecat-verify` and `lakecat-import` through

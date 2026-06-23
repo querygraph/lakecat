@@ -5,6 +5,13 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-artifact slice:
+  `Validate book PDF layout in build`.
+  The LakeCat book build now runs `docs/book/check_pdf_layout.sh` after merging
+  the cover and body PDF. The validator proves the release PDF starts with an
+  unnumbered cover page and that page 2 is the contents/body page with
+  numbering started, so the book artifact contract no longer relies on a
+  manual `pdftotext` inspection step.
 - Latest release-contract slice:
   `Guard locked QueryGraph handoff commands`.
   The local dependency contract now requires `scripts/qglake-handoff-local.sh`

@@ -102,6 +102,7 @@ require_file DESIGN.md
 require_file README.md
 require_file RELEASE.md
 require_file docs/book/lakecat.md
+require_file docs/book/check_pdf_layout.sh
 
 require_pattern 'workflow_dispatch:' .github/workflows/ci.yml \
   "CI must remain manual-only through workflow_dispatch"
@@ -143,6 +144,8 @@ require_pattern 'scripts/check-local-dependency-contract\.sh' RELEASE.md \
   "RELEASE.md must name the dependency contract preflight"
 require_pattern 'without `--skip-book` or `--skip-handoff`' RELEASE.md \
   "RELEASE.md must forbid skipped book/handoff checks for release candidates"
+require_pattern 'docs/book/check_pdf_layout\.sh' RELEASE.md \
+  "RELEASE.md must include the PDF layout artifact check"
 require_pattern 'git tag -a v0\.1\.0' RELEASE.md \
   "RELEASE.md must document the current workspace release tag"
 require_pattern 'Typed Iceberg v4 support belongs in Sail' RELEASE.md \
@@ -172,6 +175,10 @@ require_pattern '## First Release Readiness' docs/book/lakecat.md \
   "LakeCat book must keep the first-release readiness section"
 require_pattern 'typed-sail=unavailable' docs/book/lakecat.md \
   "LakeCat book must preserve the honest typed Sail v4 posture"
+require_pattern 'docs/book/check_pdf_layout\.sh docs/book/dist/lakecat\.pdf' docs/book/PUBLISH.md \
+  "LakeCat book publishing runbook must include the PDF layout validator"
+require_pattern 'docs/book/check_pdf_layout\.sh docs/book/dist/lakecat\.pdf' docs/book/build.sh \
+  "LakeCat book build must run the PDF layout validator"
 
 require_pattern 'grust-graph = \{ package = "grust-graph", version = "0\.10\.0", path = "../grust/crates/grust"' Cargo.toml \
   "grust-graph must use the active local Grust 0.10 path while grust-turso is ahead of the published facade line"

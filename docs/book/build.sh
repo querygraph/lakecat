@@ -69,6 +69,7 @@ pandoc docs/book/lakecat.md \
   --number-sections
 
 pdfunite "$tmpdir/cover.pdf" "$tmpdir/body.pdf" docs/book/dist/lakecat.pdf
+docs/book/check_pdf_layout.sh docs/book/dist/lakecat.pdf
 
 pandoc "$tmpdir/cover.md" docs/book/lakecat.md \
   -o docs/book/dist/lakecat.epub \

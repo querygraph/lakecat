@@ -124,7 +124,8 @@ The build script:
 10. Runs `fix_epub_layout.sh` to repair Pandoc EPUB defaults.
 11. Creates the versioned EPUB symlink.
 12. Runs `check_epub_metadata.sh`.
-13. Converts the EPUB to `docs/book/dist/lakecat.mobi`.
+13. Runs `check_pdf_layout.sh`.
+14. Converts the EPUB to `docs/book/dist/lakecat.mobi`.
 
 Calibre is expected at:
 
@@ -154,6 +155,7 @@ After every build, run:
 ```sh
 expected_title=$(awk -F': ' '/^kindle_name:/ { print $2 }' docs/book/dist/VERSION.md)
 docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "$expected_title"
+docs/book/check_pdf_layout.sh docs/book/dist/lakecat.pdf
 ```
 
 The validator rejects:
@@ -173,17 +175,12 @@ The validator rejects:
 - A versioned symlink that does not point to `lakecat.epub`.
 - A missing or incomplete `VERSION.md`.
 
-Also verify the PDF cover numbering:
+The PDF validator rejects:
 
-```sh
-pdftotext -f 1 -l 1 docs/book/dist/lakecat.pdf -
-pdftotext -f 2 -l 2 docs/book/dist/lakecat.pdf -
-```
-
-Expected result:
-
-- Page 1 extracts cover text and no standalone page number.
-- Page 2 contains Contents and the body numbering starts at `1`.
+- A cover page without the visible title, versioned catalog title, or author.
+- A cover page that includes body contents.
+- A cover page with a standalone page number.
+- A page 2 that is not Contents or does not show body numbering started at `1`.
 
 Check the versioned EPUB link:
 
