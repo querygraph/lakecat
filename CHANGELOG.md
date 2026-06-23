@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added saved handoff verifier short service-log hash coverage. The archived
+  `lakecat-handoff-verify.json` self-verification artifact now explicitly
+  rejects short placeholder `artifactFiles.serviceLogHash` values, matching the
+  missing, null, and drift checks for the same saved sidecar field.
 - Rechecked the Grust Turso graph route after the new `grust-turso` crate
   update. LakeCat graph operations over Turso still run through
   `grust_turso::TursoGraphStore`: the dependency tree resolves

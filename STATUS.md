@@ -5,6 +5,20 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest saved handoff verifier short service-log hash coverage:
+  the CLI artifact verifier now explicitly proves saved
+  `lakecat-handoff-verify.json` output cannot use a short placeholder
+  `artifactFiles.serviceLogHash` while keeping the verifier-output artifact
+  hash valid.
+- Local verification for this saved handoff verifier short service-log hash
+  slice passed: `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_short_service_log_hash -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_null_service_log_hash -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_requires_handoff_verify_output_service_log_hash -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_service_log_hash_drift -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff -- --test-threads=1`;
+  `docs/book/build.sh`; `scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`; `git diff --check`.
 - Current Grust Turso graph-route recheck:
   LakeCat already routes graph operations over Turso through Grust's dedicated
   `grust-turso` crate rather than a LakeCat-owned Turso graph store. The

@@ -17480,6 +17480,33 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_short_service_log_hash() {
+        let temp = qglake_temp_dir("handoff-artifacts-self-verify-short-service-log-hash");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        output["artifactFiles"]["serviceLogHash"] = json!("sha256:service-log");
+        let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+        fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+            .expect("write drifted handoff verify output");
+        summary["artifacts"]["lakecatHandoffVerifyOutputHash"] = json!(content_hash_bytes(&bytes));
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject short handoff verifier service-log hash");
+        let err = err.to_string();
+
+        assert!(err.contains("lakecatHandoffVerifyOutput"), "{err}");
+        assert!(err.contains("artifactFiles"), "{err}");
+        assert!(err.contains("serviceLogHash"), "{err}");
+        assert!(err.contains("full SHA-256"), "{err}");
+    }
+
+    #[test]
     fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_extra_artifact_hash() {
         let temp = qglake_temp_dir("handoff-artifacts-self-verify-extra-artifact-hash");
         let summary_path = temp.join("handoff-summary.json");

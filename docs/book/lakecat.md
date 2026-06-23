@@ -10499,6 +10499,9 @@ captured-output, and service-log hashes against the summary's artifact
 manifest. The saved output cannot keep a valid verifier-output hash while
 rewriting `artifactFiles.serviceLogHash`; that operational log digest must
 still be present, non-null, full-length, and match the compact handoff summary.
+The regression suite covers each saved-sidecar shape explicitly: missing,
+`null`, short placeholder, and drifted service-log hashes all fail before the
+archived handoff proof is accepted.
 Artifact paths are checked before hashing as well: every path must
 resolve under the handoff summary directory, so an archived summary cannot
 splice in an absolute path or `..` traversal to matching bytes outside the
