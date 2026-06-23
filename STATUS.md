@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest compact QGLake standards proof closure:
+  handoff verification now rejects non-string, blank, duplicate, or unsupported
+  standards entries and requires the exact expected standards set, so saved
+  handoffs cannot append future-looking or local-only standards claims beside
+  accepted compact proof.
+- Local verification for this compact QGLake standards proof closure slice
+  passed: `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_malformed_standards -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest compact catalog-config entry proof closure:
   QGLake handoff verification now rejects unverified fields inside
   `catalogConfigProof` default/override entries, so saved handoffs cannot

@@ -1004,9 +1004,11 @@ malform, or duplicate `prefix-hash` evidence, so redacted credential replay
 cannot lose malformed prefix proof. Returned entries that claim zero issuer
 config entries must also carry the canonical empty issuer-config hash before
 summary proof can be accepted.
-QueryGraph bootstrap standards summary extraction must also fail closed when
-`standards` evidence is not a string array or carries blank/duplicate entries,
-so corrupted bootstrap standards claims cannot disappear from raw QGLake proof.
+QueryGraph bootstrap standards summary extraction and compact QGLake handoff
+verification must also fail closed when `standards` evidence is not the exact
+expected string set or carries blank, non-string, duplicate, or unsupported
+entries, so corrupted or future-looking bootstrap standards claims cannot
+disappear from raw QGLake proof or ride beside accepted compact proof.
 Compact QGLake storage-profile and credential secret-reference proof must
 mirror service replay admission: present secret refs require nonblank providers
 and full SHA-256 hashes, while absent secret refs may omit provider/hash fields

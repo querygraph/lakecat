@@ -13859,11 +13859,15 @@ OpenLineage claim, QueryGraph claim, or application claim and have it flow into
 Grust, OpenLineage, QGLake, or QueryGraph import proof.
 The raw lineage-drain summary follows the same posture for bootstrap standards:
 if `standards` is present, it must be a string-array-shaped claim without
-blank, non-string, or duplicate entries. Malformed standards evidence now
-rejects the summary instead of disappearing from the QGLake proof that
-QueryGraph later compares. The same summary path treats `table-artifacts` and
-`view-artifacts` as evidence arrays: malformed non-array artifact fields are
-rejected rather than summarized as zero artifact counts.
+blank, non-string, duplicate, or unsupported entries. Compact QGLake handoff
+verification applies the same exact expected standards set, so an archived
+handoff cannot append a future-looking or local-only standards claim beside the
+accepted Iceberg, Croissant, CDIF, OSI, Grust, OpenLineage, and ODRL evidence.
+Malformed standards evidence now rejects the summary instead of disappearing
+from the QGLake proof that QueryGraph later compares. The same summary path
+treats `table-artifacts` and `view-artifacts` as evidence arrays: malformed
+non-array artifact fields are rejected rather than summarized as zero artifact
+counts.
 
 ## Catalog Vocabulary For The Release
 

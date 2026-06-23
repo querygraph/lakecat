@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Closed compact QGLake standards proof. Handoff verification now rejects
+  non-string, blank, duplicate, or unsupported standards entries and requires
+  the exact expected standards set, so saved handoffs cannot append
+  future-looking or local-only standards claims beside accepted compact proof.
 - Closed compact catalog-config entry proof schemas. QGLake handoff
   verification now rejects unverified fields inside `catalogConfigProof`
   default/override entries, so saved handoffs cannot append stale v4,

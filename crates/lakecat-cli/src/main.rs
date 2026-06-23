@@ -3694,11 +3694,35 @@ fn require_qglake_standards_value(value: &Value, label: &str) -> lakecat_core::L
     let standards = value.as_array().ok_or_else(|| {
         lakecat_core::LakeCatError::InvalidArgument(format!("{label} must be an array"))
     })?;
+    let expected = QGLAKE_BOOTSTRAP_STANDARDS
+        .iter()
+        .copied()
+        .collect::<BTreeSet<_>>();
+    let mut seen = BTreeSet::new();
+    for (index, standard) in standards.iter().enumerate() {
+        let standard = standard.as_str().ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label}[{index}] must be a string"
+            ))
+        })?;
+        if standard.trim().is_empty() {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label} must contain non-empty strings"
+            )));
+        }
+        if !expected.contains(standard) {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label} contains unsupported QGLake standard {standard}"
+            )));
+        }
+        if !seen.insert(standard) {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label} must be duplicate-free"
+            )));
+        }
+    }
     for expected in QGLAKE_BOOTSTRAP_STANDARDS {
-        if !standards
-            .iter()
-            .any(|standard| standard.as_str() == Some(*expected))
-        {
+        if !seen.contains(expected) {
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
                 "{label} did not include required QGLake standard {expected}"
             )));
@@ -13921,6 +13945,67 @@ mod tests {
 
         assert!(err.to_string().contains("querygraphVerification.standards"));
         assert!(err.to_string().contains("ODRL"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_malformed_standards() {
+        let cases = [
+            (json!(["Iceberg REST", "Iceberg REST"]), "duplicate-free"),
+            (
+                json!([
+                    "Iceberg REST",
+                    "Croissant",
+                    "CDIF",
+                    "OSI handoff",
+                    "Grust catalog graph",
+                    "OpenLineage",
+                    "ODRL",
+                    "Unverified local standard"
+                ]),
+                "unsupported QGLake standard",
+            ),
+            (
+                json!([
+                    "Iceberg REST",
+                    "Croissant",
+                    "CDIF",
+                    "OSI handoff",
+                    "Grust catalog graph",
+                    "OpenLineage",
+                    "ODRL",
+                    42
+                ]),
+                "must be a string",
+            ),
+            (
+                json!([
+                    "Iceberg REST",
+                    "Croissant",
+                    "CDIF",
+                    "OSI handoff",
+                    "Grust catalog graph",
+                    "OpenLineage",
+                    "ODRL",
+                    " "
+                ]),
+                "must contain non-empty strings",
+            ),
+        ];
+
+        for (standards, expected_message) in cases {
+            let mut summary = qglake_handoff_summary_json();
+            summary["querygraphVerification"]["standards"] = standards.clone();
+            summary["querygraphImportVerification"]["standards"] = standards.clone();
+            summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["standards"] =
+                standards;
+
+            let err = verify_qglake_handoff_summary_value(&summary)
+                .expect_err("handoff summary should reject malformed QGLake standards");
+            let err = err.to_string();
+
+            assert!(err.contains("querygraphVerification.standards"), "{err}");
+            assert!(err.contains(expected_message), "{err}");
+        }
     }
 
     #[test]
