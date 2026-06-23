@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Re-verified the Grust Turso catalog graph boundary after the new
+  `grust-turso` crate landed. Focused local tests prove
+  `lakecat-graph` writes LakeCat catalog-event projections through
+  `grust_turso::TursoGraphStore`, then reads, traverses, runs Cypher mutation,
+  and applies matched-node patches over that Grust-owned Turso backend; the
+  service `grust-turso-local` sink also persists catalog events to the same
+  `lakecat_graph` table prefix and redacts raw graph-store paths on backend
+  errors.
 - Added saved handoff verifier non-bundle artifact hash-shape coverage. The
   archived `lakecat-handoff-verify.json` self-verification artifact now
   explicitly rejects short placeholder hashes and unverified extra hash fields

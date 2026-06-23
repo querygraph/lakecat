@@ -4400,6 +4400,13 @@ configuration failures follow the same evidence rule: LakeCat reports
 `graph-store-path-hash` and `backend-error-hash`, not raw graph database paths
 or backend text that came back from the Turso layer.
 
+That means the current answer to "are we doing graph operations over the Turso
+store?" is yes, but the ownership is intentionally Grust-shaped. LakeCat emits
+catalog graph events and configures the sink. Grust stores the nodes and edges,
+executes traversals, runs Cypher mutation/query, and owns the matched-node patch
+path over Turso. LakeCat's tests prove that handoff without creating a second
+LakeCat graph database API.
+
 A local QueryGraph acceptance run therefore has three distinct graph stages:
 
 1. LakeCat drains replay-validated catalog events from the transactional

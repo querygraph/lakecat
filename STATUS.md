@@ -5,6 +5,18 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest Grust Turso graph boundary verification: LakeCat graph operations over
+  a Turso-backed graph store run through Grust's dedicated
+  `grust_turso::TursoGraphStore`, not through local LakeCat Turso graph code.
+  The focused graph tests now prove persistence, read-back, traversal,
+  Cypher-over-Turso mutation/query, and matched-node patching through the Grust
+  backend; the service sink test proves `grust-turso-local` persists catalog
+  graph events to the configured `lakecat_graph` table prefix and keeps
+  connect/bootstrap errors path-hash-only.
+- Local verification for this Grust Turso graph boundary check passed:
+  `cargo test -p lakecat-graph --features grust-turso-local --lib grust_turso_store -- --test-threads=1`;
+  `cargo test -p lakecat-service --features grust-turso-local --bin lakecat-service configured_grust_turso_graph_sink_projects_catalog_events_to_turso_store -- --test-threads=1`;
+  `cargo test -p lakecat-service --features grust-turso-local --bin lakecat-service configured_grust_turso_graph_sink_redacts_backend_path_errors -- --test-threads=1`.
 - Latest saved handoff verifier non-bundle artifact hash-shape coverage:
   the CLI artifact verifier now explicitly proves saved
   `lakecat-handoff-verify.json` output cannot use short placeholder hashes or
