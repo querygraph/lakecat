@@ -7196,19 +7196,13 @@ fn lineage_drain_event_summary(
             .and_then(|count| usize::try_from(count).ok()),
         table_commit_sequence_numbers: payload
             .get("sequence-numbers")
-            .and_then(Value::as_array)
-            .map(|numbers| numbers.iter().filter_map(Value::as_u64).collect())
+            .map(|_| lineage_summary_u64_array_field(event, payload, "sequence-numbers"))
+            .transpose()?
             .unwrap_or_default(),
         table_commit_hashes: payload
             .get("commit-hashes")
-            .and_then(Value::as_array)
-            .map(|hashes| {
-                hashes
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(str::to_string)
-                    .collect()
-            })
+            .map(|_| lineage_summary_full_hash_array_field(event, payload, "commit-hashes"))
+            .transpose()?
             .unwrap_or_default(),
         scan_task_count: payload
             .get("scan-task-count")
@@ -7424,6 +7418,37 @@ fn lineage_summary_required_hashes_from_objects(
     let hash_refs = hashes.iter().map(String::as_str).collect::<Vec<_>>();
     validate_unique_hash_array(event, &hash_refs, label)?;
     Ok(hashes)
+}
+
+fn lineage_summary_u64_array_field(
+    event: &OutboxEvent,
+    object: &Value,
+    field: &str,
+) -> Result<Vec<u64>, LakeCatError> {
+    let values =
+        optional_array_field(event, object, field)?.expect("field presence was checked by caller");
+    let mut numbers = Vec::with_capacity(values.len());
+    for value in values {
+        let Some(number) = value.as_u64() else {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{field} must contain unsigned integers"),
+            ));
+        };
+        numbers.push(number);
+    }
+    Ok(numbers)
+}
+
+fn lineage_summary_full_hash_array_field(
+    event: &OutboxEvent,
+    object: &Value,
+    field: &str,
+) -> Result<Vec<String>, LakeCatError> {
+    let hashes = validate_required_full_hash_array_field(event, object, field)?;
+    let hash_refs = hashes.to_vec();
+    validate_unique_hash_array(event, &hash_refs, field)?;
+    Ok(hashes.into_iter().map(str::to_string).collect())
 }
 
 fn config_entries_summary(value: Option<&Value>) -> Vec<ConfigEntry> {
@@ -48164,6 +48189,48 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("chain-hashes must contain full SHA-256 digest evidence"));
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_commit_history_fields() {
+        let receipt = OutboxProjectionReceipt::default();
+        let malformed_sequence = OutboxEvent {
+            event_id: "evt-bad-summary-sequence".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.commits-listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "commit-count": 1,
+                    "sequence-numbers": [1, "two"],
+                    "commit-hashes": [content_hash_bytes(b"commit-one")]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&malformed_sequence, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("sequence-numbers must contain unsigned integers"));
+
+        let malformed_commit_hash = OutboxEvent {
+            event_id: "evt-bad-summary-commit-hash".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.commits-listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "commit-count": 1,
+                    "sequence-numbers": [1],
+                    "commit-hashes": ["sha256:not-full"]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&malformed_commit_hash, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("commit-hashes must contain full SHA-256 digest evidence"));
     }
 
     #[test]

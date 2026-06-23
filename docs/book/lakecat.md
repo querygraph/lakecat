@@ -9300,7 +9300,10 @@ sections, so a source replay or archived handoff cannot make an evidence set
 look larger by repeating an already accepted digest. The service applies the
 first version of that rule before a drain summary is returned at all:
 projection receipt hash arrays must match the lineage-event count and must not
-contain malformed or repeated replay or OpenLineage hashes.
+contain malformed or repeated replay or OpenLineage hashes. Commit-history
+summary construction now applies the same fail-closed posture to
+`sequence-numbers` and `commit-hashes`, so malformed commit-history entries
+cannot disappear from raw QGLake replay proof.
 The verifier
 also compares those QueryGraph import-plan graph node and edge counts with the
 verified bootstrap bundle graph counts, so an import plan cannot keep the

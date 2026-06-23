@@ -6,6 +6,22 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Harden lineage-drain table commit-history summaries`.
+  Raw lineage-drain summary construction now rejects malformed
+  `sequence-numbers` and `commit-hashes` instead of silently dropping invalid
+  entries, so a future validation bypass cannot return QGLake commit-history
+  proof with omitted malformed sequence or commit hash evidence.
+- Local verification for this lineage-drain commit-history summary slice is
+  green:
+  `cargo test -p lakecat-service lineage_drain_summary_rejects_malformed_commit_history_fields -- --test-threads=1`
+  passed;
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/testing slice:
   `Harden lineage-drain view receipt summary hashes`.
   Raw lineage-drain summary construction now rejects malformed top-level or
   nested view receipt and receipt-chain hashes instead of silently dropping

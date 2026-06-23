@@ -855,6 +855,9 @@ Lineage-drain summary construction should also fail closed over top-level and
 nested view receipt / receipt-chain hash evidence, so malformed receipt or
 chain hashes cannot be silently omitted from raw QGLake replay summaries if a
 future internal path bypasses replay admission.
+The same fail-closed summary rule applies to table commit-history
+`sequence-numbers` and `commit-hashes`, so malformed sequence or commit hash
+evidence cannot disappear from raw commit-history proof.
 Compact QGLake storage-profile and credential secret-reference proof must
 mirror service replay admission: present secret refs require nonblank providers
 and full SHA-256 hashes, while absent secret refs may omit provider/hash fields

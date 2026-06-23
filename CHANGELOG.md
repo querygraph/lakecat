@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened service lineage-drain table commit-history summaries. Raw
+  lineage-drain summary construction now rejects malformed
+  `sequence-numbers` and `commit-hashes` instead of silently dropping invalid
+  entries, so a future validation bypass cannot return QGLake commit-history
+  proof with omitted malformed sequence or commit hash evidence.
 - Hardened service lineage-drain view receipt summary hashes. Raw
   lineage-drain summary construction now rejects malformed top-level or nested
   view receipt and receipt-chain hashes instead of silently dropping them, so
