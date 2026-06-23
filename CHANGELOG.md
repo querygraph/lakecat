@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added a canonical release-vocabulary chapter to the LakeCat book. The new
+  chapter thoroughly separates standard Iceberg parlance from LakeCat
+  catalog-control concepts, TypeSec governed-access extensions,
+  QueryGraph/QGLake product surfaces, and future neutral proposal candidates,
+  while making the detailed correctness and performance case for pushing
+  table-format and planning work into Sail.
 - Hardened lineage-drain authorization identity string summaries. Raw replay
   summary construction now rejects malformed or blank authorization principal,
   receipt action, and request-identity state/source string evidence instead of

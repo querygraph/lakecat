@@ -5,6 +5,14 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest documentation/book slice:
+  `Expand release vocabulary and Sail engine argument`.
+  The LakeCat book now has a canonical release-vocabulary chapter that
+  distinguishes standard Iceberg terms from LakeCat catalog-control concepts,
+  TypeSec governed-access extensions, QueryGraph/QGLake product surfaces, and
+  future neutral proposal candidates, with a detailed argument for pushing
+  table-format, planning, metadata-as-data, delete, and typed v4 work into
+  Sail.
 - Latest implementation/testing slice:
   `Harden authorization identity summaries`.
   Raw lineage-drain summaries now fail closed when authorization principal,
