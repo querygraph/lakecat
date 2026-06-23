@@ -95,6 +95,7 @@ fi
 run bash -n scripts/check-local-dependency-contract.sh
 run bash -n scripts/check-workflow-trigger-contract.sh
 run bash -n scripts/qglake-handoff-local.sh
+run bash -n scripts/check-book-artifact-contract.sh
 run bash -n scripts/check-release-version-contract.sh
 run bash -n scripts/check-release-readiness.sh
 run scripts/check-local-dependency-contract.sh
@@ -148,8 +149,10 @@ if [[ "$mode" == "full" ]]; then
       book_tmpdir="$(mktemp -d)"
       cleanup_dirs+=("$book_tmpdir")
       run env LAKECAT_BOOK_DIST_DIR="$book_tmpdir/book-dist" docs/book/build.sh
+      run scripts/check-book-artifact-contract.sh "$book_tmpdir/book-dist"
     else
       run docs/book/build.sh
+      run scripts/check-book-artifact-contract.sh docs/book/dist
     fi
   fi
   if [[ "$skip_handoff" -eq 0 ]]; then

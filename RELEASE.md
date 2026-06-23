@@ -109,6 +109,7 @@ tagging:
 
 ```sh
 docs/book/build.sh
+scripts/check-book-artifact-contract.sh docs/book/dist
 scripts/check-release-version-contract.sh
 expected_title=$(awk -F': ' '/^kindle_name:/ { print $2 }' docs/book/dist/VERSION.md)
 docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "$expected_title"

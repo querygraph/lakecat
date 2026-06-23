@@ -89,3 +89,5 @@ docs/book/check_epub_metadata.sh "$dist_dir/lakecat.epub" "$kindle_name"
 /Applications/calibre.app/Contents/MacOS/ebook-convert \
   "$dist_dir/lakecat.epub" \
   "$dist_dir/lakecat.mobi"
+
+scripts/check-book-artifact-contract.sh "$dist_dir"

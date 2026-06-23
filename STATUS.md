@@ -5,6 +5,13 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-process hardening:
+  `scripts/check-book-artifact-contract.sh` now validates the generated book
+  dist marker, stable EPUB/PDF/MOBI files, versioned Kindle symlink, EPUB
+  metadata, and PDF layout for both tracked `docs/book/dist` and temporary
+  release-candidate dist directories. `docs/book/build.sh` and the full release
+  gate run it after book generation, so the manual book artifact checklist is
+  now executable local evidence.
 - Latest release-candidate proof:
   `scripts/check-release-readiness.sh --release-candidate` passed locally on
   June 23, 2026 from clean head `0fd1482e`. The gate covered shell syntax

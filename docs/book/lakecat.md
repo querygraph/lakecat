@@ -13631,6 +13631,7 @@ The release evidence is concrete:
 scripts/check-release-readiness.sh --release-candidate
 scripts/qglake-handoff-local.sh
 docs/book/build.sh
+scripts/check-book-artifact-contract.sh docs/book/dist
 scripts/check-local-dependency-contract.sh
 ```
 

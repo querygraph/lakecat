@@ -154,6 +154,7 @@ After every build, run:
 
 ```sh
 scripts/check-release-version-contract.sh
+scripts/check-book-artifact-contract.sh docs/book/dist
 expected_title=$(awk -F': ' '/^kindle_name:/ { print $2 }' docs/book/dist/VERSION.md)
 docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "$expected_title"
 docs/book/check_pdf_layout.sh docs/book/dist/lakecat.pdf
@@ -163,6 +164,9 @@ The release version contract rejects drift between `[workspace.package].version`
 in `Cargo.toml`, all `crates/lakecat-*` package versions resolved by Cargo
 metadata, the `RELEASE.md` tag command, `docs/book/dist/VERSION.md`, and the
 versioned Kindle EPUB symlink.
+The book artifact contract accepts an optional dist directory and validates the
+same stable EPUB/PDF/MOBI files, marker fields, versioned Kindle symlink, EPUB
+metadata, and PDF layout that release-candidate mode generates out of tree.
 
 The validator rejects:
 

@@ -350,6 +350,9 @@ Authoritative first-release evidence:
   artifacts. `scripts/check-release-readiness.sh --release-candidate` builds
   the book into a temporary `LAKECAT_BOOK_DIST_DIR` so EPUB/PDF/MOBI
   validation does not dirty a clean candidate commit.
+- `scripts/check-book-artifact-contract.sh` proves the generated book marker,
+  stable EPUB/PDF/MOBI artifacts, versioned Kindle symlink, EPUB metadata, and
+  PDF layout agree in either tracked or temporary dist directories.
 - `scripts/check-local-dependency-contract.sh` proves the Grust/TypeSec/Sail,
   QueryGraph, and CI-trigger assumptions still match the current repo.
 
