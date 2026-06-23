@@ -5,6 +5,22 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw storage-profile upsert summary hardening slice:
+  `Validate raw storage-profile upsert summaries`.
+  Raw lineage-drain summary construction now reuses the service replay
+  validator for `storage-profile.upserted` evidence, rejecting malformed
+  wrapped payloads, authorization receipts, profile ids, warehouse binding,
+  redacted location-prefix hashes, provider/issuance-mode pairs, secret-ref
+  posture, and public-config entries before compact QGLake credential-root
+  proof can inherit them.
+- Local verification for this raw storage-profile upsert summary slice passed:
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_storage_profile_secret_ref_evidence -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib lineage_drain_summary -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_storage_profile -- --test-threads=1`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`; `git diff --check`.
 - Latest raw QueryGraph bootstrap summary hardening slice:
   `Validate raw querygraph bootstrap summaries`.
   Raw lineage-drain summary construction now reuses the service replay

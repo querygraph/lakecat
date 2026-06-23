@@ -7275,6 +7275,10 @@ fn lineage_drain_event_summary(
         let payload = event.payload.get("payload").unwrap_or(&event.payload);
         validate_catalog_config_read_event_evidence(event, payload)?;
     }
+    if event.event_type == "storage-profile.upserted" {
+        let payload = event.payload.get("payload").unwrap_or(&event.payload);
+        validate_storage_profile_upsert_event_evidence(event, payload)?;
+    }
     if event.event_type == "querygraph.bootstrap" {
         let payload = event.payload.get("payload").unwrap_or(&event.payload);
         validate_querygraph_bootstrap_event_evidence(event, payload)?;
@@ -52358,6 +52362,45 @@ mod tests {
         }
     }
 
+    fn valid_lineage_summary_storage_profile_upsert_event(event_id: &str) -> OutboxEvent {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        OutboxEvent {
+            event_id: event_id.to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "storage-profile.upserted".to_string(),
+            payload: json!({
+                "audit-event-id": format!("audit-envelope-{event_id}"),
+                "event-type": "storage-profile.upserted",
+                "payload": {
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "storage-profile-manage",
+                        "allowed": true,
+                        "engine": "lakecat-test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now().to_rfc3339()
+                    },
+                    "warehouse": "local",
+                    "storage-profile": {
+                        "profile-id": "s3-events",
+                        "warehouse": "local",
+                        "provider": "s3",
+                        "issuance-mode": "short-lived-secret-ref",
+                        "location-prefix-hash": content_hash_bytes(b"storage-profile-prefix"),
+                        "secret-ref-present": true,
+                        "secret-ref-provider": "typesec",
+                        "secret-ref-hash": content_hash_bytes(b"storage-profile-secret-ref"),
+                        "public-config": {
+                            "region": "us-west-2"
+                        }
+                    }
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        }
+    }
+
     #[test]
     fn lineage_drain_summary_rejects_malformed_raw_credential_exception() {
         let receipt = OutboxProjectionReceipt::default();
@@ -52501,62 +52544,32 @@ mod tests {
             "{err}"
         );
 
-        let short_location_hash = OutboxEvent {
-            event_id: "evt-summary-storage-profile-short-prefix".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "storage-profile.upserted".to_string(),
-            payload: json!({
-                "payload": {
-                    "storage-profile": {
-                        "profile-id": "s3-events",
-                        "warehouse": "local",
-                        "provider": "s3",
-                        "issuance-mode": "short-lived-secret-ref",
-                        "location-prefix-hash": "sha256:short",
-                        "secret-ref-present": true,
-                        "secret-ref-provider": "typesec",
-                        "secret-ref-hash": valid_secret_hash
-                    }
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut short_location_hash = valid_lineage_summary_storage_profile_upsert_event(
+            "evt-summary-storage-profile-short-prefix",
+        );
+        short_location_hash.payload["payload"]["storage-profile"]["location-prefix-hash"] =
+            json!("sha256:short");
         let err = lineage_drain_event_summary(&short_location_hash, &receipt)
             .unwrap_err()
             .to_string();
         assert!(err.contains("location-prefix-hash must contain full SHA-256 digest evidence"));
 
-        let reserved_public_config_key = OutboxEvent {
-            event_id: "evt-summary-storage-profile-reserved-public-config".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "storage-profile.upserted".to_string(),
-            payload: json!({
-                "payload": {
-                    "storage-profile": {
-                        "profile-id": "s3-events",
-                        "warehouse": "local",
-                        "provider": "s3",
-                        "issuance-mode": "short-lived-secret-ref",
-                        "location-prefix-hash": valid_location_hash,
-                        "secret-ref-present": true,
-                        "secret-ref-provider": "typesec",
-                        "secret-ref-hash": valid_secret_hash,
-                        "public-config": {
-                            "lakecat.storage-profile-id": "shadow-profile"
-                        }
-                    }
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut reserved_public_config_key = valid_lineage_summary_storage_profile_upsert_event(
+            "evt-summary-storage-profile-reserved-public-config",
+        );
+        reserved_public_config_key.payload["payload"]["storage-profile"]["location-prefix-hash"] =
+            json!(valid_location_hash);
+        reserved_public_config_key.payload["payload"]["storage-profile"]["secret-ref-hash"] =
+            json!(valid_secret_hash);
+        reserved_public_config_key.payload["payload"]["storage-profile"]["public-config"] = json!({
+            "lakecat.storage-profile-id": "shadow-profile"
+        });
         let err = lineage_drain_event_summary(&reserved_public_config_key, &receipt)
             .unwrap_err()
             .to_string();
         assert!(
             err.contains(
-                "lineage drain storage-profile summary public-config key is reserved for LakeCat credential evidence"
+                "storage-profile upsert storage-profile public-config key is reserved for LakeCat credential evidence"
             ),
             "{err}"
         );
@@ -52632,33 +52645,22 @@ mod tests {
             "{err}"
         );
 
-        let invalid_secret_ref_mode = OutboxEvent {
-            event_id: "evt-summary-storage-profile-invalid-secret-mode".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "storage-profile.upserted".to_string(),
-            payload: json!({
-                "payload": {
-                    "storage-profile": {
-                        "profile-id": "file-secret",
-                        "warehouse": "local",
-                        "provider": "file",
-                        "issuance-mode": "short-lived-secret-ref",
-                        "location-prefix-hash": valid_location_hash,
-                        "secret-ref-present": true,
-                        "secret-ref-provider": "typesec",
-                        "secret-ref-hash": valid_secret_hash
-                    }
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut invalid_secret_ref_mode = valid_lineage_summary_storage_profile_upsert_event(
+            "evt-summary-storage-profile-invalid-secret-mode",
+        );
+        invalid_secret_ref_mode.payload["payload"]["storage-profile"]["profile-id"] =
+            json!("file-secret");
+        invalid_secret_ref_mode.payload["payload"]["storage-profile"]["provider"] = json!("file");
+        invalid_secret_ref_mode.payload["payload"]["storage-profile"]["location-prefix-hash"] =
+            json!(valid_location_hash);
+        invalid_secret_ref_mode.payload["payload"]["storage-profile"]["secret-ref-hash"] =
+            json!(valid_secret_hash);
         let err = lineage_drain_event_summary(&invalid_secret_ref_mode, &receipt)
             .unwrap_err()
             .to_string();
         assert!(
             err.contains(
-                "lineage drain storage-profile summary short-lived-secret-ref issuance mode requires cloud object provider"
+                "storage-profile upsert short-lived-secret-ref issuance mode requires cloud object provider"
             ),
             "{err}"
         );

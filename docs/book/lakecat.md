@@ -8594,6 +8594,17 @@ artifacts, so a saved handoff cannot turn a local file credential root into an
 S3 root, or claim a secret-reference mode on a file provider, without being
 rejected before import. That means a saved handoff can prove the credential
 root was configured without handing the next system a secret path.
+Raw storage-profile summaries now use the same service replay validator before
+the compact proof is built. That matters because `storage-profile.upserted` is
+a LakeCat/TypeSec credential-root management event, not an Iceberg metadata
+extension. Standard Iceberg clients do not need it to load a table, but agents
+and QueryGraph need it to know which redacted storage root and secret-reference
+posture were admitted by the catalog. A raw lineage drain can no longer keep a
+storage-profile upsert while dropping the authorization receipt, drifting the
+top-level warehouse from the nested profile, using a malformed profile id,
+turning a file provider into a secret-ref profile, adding a raw
+`location-prefix`, or sneaking LakeCat-reserved public-config keys beside an
+otherwise hash-shaped credential-root proof.
 
 ### A PySpark User Reads Iceberg
 

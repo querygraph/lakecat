@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Hardened raw storage-profile upsert summary extraction. Raw lineage-drain
+  summary construction now reuses the service replay validator for
+  `storage-profile.upserted` evidence, so malformed wrapped payloads,
+  authorization receipts, profile ids, warehouse binding, redacted
+  location-prefix hashes, provider/issuance-mode pairs, secret-ref posture, and
+  public-config entries cannot bypass replay admission before compact QGLake
+  credential-root proof inherits them.
 - Hardened raw QueryGraph bootstrap summary extraction. Raw lineage-drain
   summary construction now reuses the service replay validator for
   `querygraph.bootstrap` evidence, so malformed bootstrap warehouses, counts,
