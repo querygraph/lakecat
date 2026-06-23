@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Hardened lineage-drain management summary count parsing. Raw management
+  replay summary construction now rejects malformed present `project-count`,
+  `server-count`, `warehouse-count`, `storage-profile-count`, and
+  `policy-binding-count`/`policy-count` evidence even when no matching ID array
+  is present, preventing compact QGLake/QueryGraph proof from silently dropping
+  corrupted inventory totals.
 - Hardened lineage-drain response manifest proof. Drain responses now validate
   that the delivered count, top-level event-type sequence, replay summary
   sequence, and aggregate graph/lineage event counts all reconcile before the

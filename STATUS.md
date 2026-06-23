@@ -6,6 +6,13 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Harden management summary count parsing`.
+  Raw lineage-drain management summaries now fail closed when present
+  `project-count`, `server-count`, `warehouse-count`, `storage-profile-count`,
+  or `policy-binding-count`/`policy-count` evidence is malformed, even if a
+  future internal path reaches summary construction without the corresponding
+  ID array.
+- Latest implementation/testing slice:
   `Harden lineage-drain response manifest proof`.
   Lineage-drain responses now fail closed if the acknowledged delivered count,
   top-level event-type manifest, replay summary sequence, or aggregate

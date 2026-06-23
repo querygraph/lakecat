@@ -7133,12 +7133,12 @@ fn lineage_drain_event_summary(
         view_stable_id,
         view_version,
         expected_view_version,
-        policy_binding_count: payload
-            .get("policy-binding-count")
-            .or_else(|| payload.get("policy-count"))
-            .and_then(Value::as_u64)
-            .and_then(|count| usize::try_from(count).ok())
-            .unwrap_or_default(),
+        policy_binding_count: lineage_summary_optional_count_alias_field(
+            event,
+            payload,
+            &["policy-binding-count", "policy-count"],
+        )?
+        .unwrap_or_default(),
         policy_ids: payload
             .get("policy-ids")
             .map(|_| {
@@ -7159,10 +7159,11 @@ fn lineage_drain_event_summary(
             .and_then(|policy| policy.get("odrl-hash"))
             .and_then(Value::as_str)
             .map(str::to_string),
-        project_count: payload
-            .get("project-count")
-            .and_then(Value::as_u64)
-            .and_then(|count| usize::try_from(count).ok()),
+        project_count: lineage_summary_optional_count_alias_field(
+            event,
+            payload,
+            &["project-count"],
+        )?,
         project_ids: payload
             .get("project-ids")
             .map(|_| {
@@ -7175,10 +7176,11 @@ fn lineage_drain_event_summary(
             })
             .transpose()?
             .unwrap_or_default(),
-        server_count: payload
-            .get("server-count")
-            .and_then(Value::as_u64)
-            .and_then(|count| usize::try_from(count).ok()),
+        server_count: lineage_summary_optional_count_alias_field(
+            event,
+            payload,
+            &["server-count"],
+        )?,
         server_ids: payload
             .get("server-ids")
             .map(|_| {
@@ -7191,10 +7193,11 @@ fn lineage_drain_event_summary(
             })
             .transpose()?
             .unwrap_or_default(),
-        storage_profile_count: payload
-            .get("storage-profile-count")
-            .and_then(Value::as_u64)
-            .and_then(|count| usize::try_from(count).ok()),
+        storage_profile_count: lineage_summary_optional_count_alias_field(
+            event,
+            payload,
+            &["storage-profile-count"],
+        )?,
         storage_profile_ids: payload
             .get("storage-profile-ids")
             .map(|_| {
@@ -7228,10 +7231,11 @@ fn lineage_drain_event_summary(
         storage_profile_secret_ref_hash: storage_profile
             .as_ref()
             .and_then(|profile| profile.secret_ref_hash.clone()),
-        warehouse_count: payload
-            .get("warehouse-count")
-            .and_then(Value::as_u64)
-            .and_then(|count| usize::try_from(count).ok()),
+        warehouse_count: lineage_summary_optional_count_alias_field(
+            event,
+            payload,
+            &["warehouse-count"],
+        )?,
         warehouse_names: payload
             .get("warehouse-names")
             .map(|_| {
@@ -7688,6 +7692,41 @@ fn lineage_summary_string_array_field(
     }
     validate_unique_string_array(event, &strings, field)?;
     Ok(strings)
+}
+
+fn lineage_summary_optional_count_alias_field(
+    event: &OutboxEvent,
+    object: &Value,
+    fields: &[&str],
+) -> Result<Option<usize>, LakeCatError> {
+    for field in fields {
+        if object.get(*field).is_some() {
+            return lineage_summary_optional_count_field(event, object, field);
+        }
+    }
+    Ok(None)
+}
+
+fn lineage_summary_optional_count_field(
+    event: &OutboxEvent,
+    object: &Value,
+    field: &str,
+) -> Result<Option<usize>, LakeCatError> {
+    let Some(value) = object.get(field) else {
+        return Ok(None);
+    };
+    let Some(count) = value.as_u64() else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{field} must be an unsigned integer when present"),
+        ));
+    };
+    usize::try_from(count).map(Some).map_err(|_| {
+        outbox_evidence_error(
+            event,
+            &format!("{field} is too large to summarize on this platform"),
+        )
+    })
 }
 
 fn lineage_summary_counted_string_array_field(
@@ -49298,6 +49337,108 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("policy-ids count must match policy-binding-count"));
+
+        let malformed_project_count = OutboxEvent {
+            event_id: "evt-malformed-summary-project-count".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "project.listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "project-count": "2"
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&malformed_project_count, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("project-count must be an unsigned integer when present"));
+
+        let malformed_server_count = OutboxEvent {
+            event_id: "evt-malformed-summary-server-count".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "server.listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "server-count": -1
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&malformed_server_count, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("server-count must be an unsigned integer when present"));
+
+        let malformed_warehouse_count = OutboxEvent {
+            event_id: "evt-malformed-summary-warehouse-count".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "warehouse.listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "warehouse-count": "3"
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&malformed_warehouse_count, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("warehouse-count must be an unsigned integer when present"));
+
+        let malformed_storage_profile_count = OutboxEvent {
+            event_id: "evt-malformed-summary-storage-profile-count".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "storage-profile.listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "storage-profile-count": "1"
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&malformed_storage_profile_count, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("storage-profile-count must be an unsigned integer when present"));
+
+        let malformed_policy_binding_count = OutboxEvent {
+            event_id: "evt-malformed-summary-policy-binding-count".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "policy-binding.listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "policy-binding-count": "1"
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&malformed_policy_binding_count, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("policy-binding-count must be an unsigned integer when present"));
+
+        let malformed_legacy_policy_count = OutboxEvent {
+            event_id: "evt-malformed-summary-legacy-policy-count".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "policy-binding.listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "policy-count": "1"
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&malformed_legacy_policy_count, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("policy-count must be an unsigned integer when present"));
     }
 
     #[test]
