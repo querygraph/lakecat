@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book with a dedicated catalog concept reference. The
+  new section walks the Rust service spine, Turso local store, Iceberg REST
+  paths, commit CAS/proof spine, governed scan and credential receipts,
+  QueryGraph/QGLake surfaces, and typed Iceberg v4 direction as standard
+  Iceberg parlance, LakeCat/TypeSec/QueryGraph behavior, or possible future
+  neutral profiles, then reinforces why table-format work belongs in Sail.
 - Tightened the local QGLake handoff secret-reference verifier. Compact
   storage-profile upsert proof and credential storage-profile proof now require
   nonblank `secretRefProvider` evidence whenever `secretRefPresent` is true.
