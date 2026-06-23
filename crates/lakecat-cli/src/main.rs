@@ -685,6 +685,7 @@ fn verify_qglake_handoff_verify_output_artifact(
             "verifiedTables",
             "verifiedViews",
             "standards",
+            "graphProjectionProof",
             "requestIdentityProof",
             "queryGraphBootstrapProof",
             "artifactFiles",
@@ -734,6 +735,12 @@ fn require_qglake_handoff_verify_output_matches_summary(
             "lakecatHandoffVerifyOutput",
         )?;
     }
+    require_value_match(
+        output,
+        "graphProjectionProof",
+        required_value(summary, "graphProjectionProof", "handoff summary")?,
+        "lakecatHandoffVerifyOutput",
+    )?;
     let lakecat = required_object(summary, "lakecatReplayVerification", "handoff summary")?;
     for field in ["requestIdentityProof", "queryGraphBootstrapProof"] {
         require_value_match(
@@ -3075,6 +3082,7 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
     require_string_eq(summary, "status", "verified", "handoff summary")?;
     let principal = require_non_blank_str(summary, "principal", "handoff summary")?;
     let scope = require_handoff_scope(summary)?;
+    let graph_projection = require_graph_projection_proof(summary)?;
     let querygraph = required_object(summary, "querygraphVerification", "handoff summary")?;
     let import = required_object(summary, "querygraphImportVerification", "handoff summary")?;
     if required_bool(import, "matchesVerify", "querygraphImportVerification")? != true {
@@ -3509,9 +3517,35 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "verifiedTables": required_value(querygraph, "verifiedTables", "querygraphVerification")?,
         "verifiedViews": required_value(querygraph, "verifiedViews", "querygraphVerification")?,
         "standards": required_value(querygraph, "standards", "querygraphVerification")?,
+        "graphProjectionProof": graph_projection,
         "queryGraphBootstrapProof": bootstrap,
         "requestIdentityProof": request_identity,
     }))
+}
+
+const GRAPH_PROJECTION_PROOF_FIELDS: &[&str] =
+    &["backend", "feature", "pathHash", "catalogGraphSink"];
+
+fn require_graph_projection_proof(
+    summary: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<Value> {
+    let proof = required_object(summary, "graphProjectionProof", "handoff summary")?;
+    require_only_fields(proof, GRAPH_PROJECTION_PROOF_FIELDS, "graphProjectionProof")?;
+    require_string_eq(proof, "backend", "grust-turso", "graphProjectionProof")?;
+    require_string_eq(
+        proof,
+        "feature",
+        "grust-turso-local",
+        "graphProjectionProof",
+    )?;
+    require_full_hash_str(proof, "pathHash", "graphProjectionProof")?;
+    require_string_eq(
+        proof,
+        "catalogGraphSink",
+        "GrustCatalogGraphSink<TursoGraphStore>",
+        "graphProjectionProof",
+    )?;
+    Ok(Value::Object(proof.clone()))
 }
 
 const REQUEST_IDENTITY_PROOF_FIELDS: &[&str] = &[
@@ -12157,6 +12191,12 @@ mod tests {
                 "replayEvidence": {}
             }
         });
+        summary["graphProjectionProof"] = json!({
+            "backend": "grust-turso",
+            "feature": "grust-turso-local",
+            "pathHash": qglake_fixture_hash("grust-turso-path"),
+            "catalogGraphSink": "GrustCatalogGraphSink<TursoGraphStore>"
+        });
         summary["lakecatReplayVerification"]["catalogConfigProof"] =
             qglake_catalog_config_proof_json();
         qglake_add_management_receipt_hashes(
@@ -12876,6 +12916,8 @@ mod tests {
                 "standards": summary["querygraphVerification"]["standards"].clone()
             },
         });
+        let mut output = output;
+        output["graphProjectionProof"] = summary["graphProjectionProof"].clone();
         let bytes = serde_json::to_vec_pretty(&output).expect("handoff verify JSON bytes");
         fs::write(dir.join("lakecat-handoff-verify.json"), &bytes)
             .expect("write handoff verify output");
@@ -13338,6 +13380,53 @@ mod tests {
             verification["queryGraphBootstrapProof"]["bundleHash"],
             json!(qglake_fixture_hash("bundle"))
         );
+        assert_eq!(
+            verification["graphProjectionProof"]["backend"],
+            json!("grust-turso")
+        );
+        assert_eq!(
+            verification["graphProjectionProof"]["feature"],
+            json!("grust-turso-local")
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_graph_projection_proof() {
+        let mut summary = qglake_handoff_summary_json();
+        summary
+            .as_object_mut()
+            .unwrap()
+            .remove("graphProjectionProof");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should require graph projection proof");
+
+        assert!(err.to_string().contains("graphProjectionProof"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_graph_projection_backend_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["graphProjectionProof"]["backend"] = json!("grust-memory");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject graph projection backend drift");
+
+        assert!(err.to_string().contains("graphProjectionProof"));
+        assert!(err.to_string().contains("backend"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_graph_projection_path_hash_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["graphProjectionProof"]["pathHash"] = json!("sha256:short");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject malformed graph projection path hash");
+
+        assert!(err.to_string().contains("graphProjectionProof"));
+        assert!(err.to_string().contains("pathHash"));
+        assert!(err.to_string().contains("full SHA-256"));
     }
 
     #[test]
@@ -16994,6 +17083,30 @@ mod tests {
 
         assert!(err.to_string().contains("lakecatHandoffVerifyOutput"));
         assert!(err.to_string().contains("table mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_graph_projection_drift() {
+        let temp = qglake_temp_dir("handoff-artifacts-self-verify-graph-projection-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        output["graphProjectionProof"]["backend"] = json!("grust-memory");
+        let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+        fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+            .expect("write drifted handoff verify output");
+        summary["artifacts"]["lakecatHandoffVerifyOutputHash"] = json!(content_hash_bytes(&bytes));
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject handoff verifier graph proof drift");
+
+        assert!(err.to_string().contains("lakecatHandoffVerifyOutput"));
+        assert!(err.to_string().contains("graphProjectionProof mismatch"));
     }
 
     #[test]

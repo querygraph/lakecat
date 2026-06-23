@@ -383,8 +383,11 @@ boundary cleanup rather than new architecture:
   graph projection. The live `scripts/qglake-handoff-local.sh` harness should
   run the service with `grust-turso-local` and `LAKECAT_GRUST_TURSO_PATH`, so
   the QGLake/QueryGraph acceptance path exercises the same durable Grust Turso
-  backend. Graph persistence, traversal, and future Cypher-over-Turso behavior
-  remain Grust-owned.
+  backend. The handoff summary must carry hash-only `graphProjectionProof`
+  evidence for that backend, and the Rust handoff verifier must reject missing
+  or drifted graph-backend proof before accepting saved artifacts. Graph
+  persistence, traversal, and future Cypher-over-Turso behavior remain
+  Grust-owned.
 - Refresh README, book artifacts, `STATUS.md`, and version/release notes from
   the same commit that passes the full gate.
 - Cut a release tag only after the broad local gate, QGLake handoff,

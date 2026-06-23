@@ -6,6 +6,25 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Bind QGLake graph projection backend proof`.
+  QGLake handoff summaries now carry machine-readable
+  `graphProjectionProof` evidence for the Grust Turso graph projection path:
+  backend `grust-turso`, feature `grust-turso-local`, a hash-only graph
+  database path anchor, and the Grust `TursoGraphStore` sink type. The Rust
+  handoff verifier rejects missing, malformed, or drifted graph-backend proof
+  before accepting saved QGLake/QueryGraph artifacts, and saved
+  `lakecat-handoff-verify.json` output must match the summary proof exactly.
+- Local verification for this graph projection proof slice is green:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli graph_projection -- --test-threads=1` passed;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_accepts_compact_proofs -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_accepts_matching_files -- --test-threads=1`
+  passed; `scripts/qglake-handoff-local.sh` passed with
+  `graphProjectionProof.backend = grust-turso`; `docs/book/build.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed; `git diff --check`
+  passed.
+- Latest implementation/testing slice:
   `Run QGLake handoff over Grust Turso graph projection`.
   The live `scripts/qglake-handoff-local.sh` harness now starts LakeCat with
   `grust-turso-local` and a dedicated `LAKECAT_GRUST_TURSO_PATH`, so the

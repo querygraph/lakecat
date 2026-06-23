@@ -57,9 +57,12 @@ The local QueryGraph handoff path has a separate compatibility contract:
 checkout for `lakecat-verify` and `lakecat-import`. The handoff harness starts
 LakeCat with `grust-turso-local` plus `LAKECAT_GRUST_TURSO_PATH`, so the
 end-to-end QueryGraph acceptance path exercises Grust's Turso-backed catalog
-graph sink. The dependency contract keeps that harness aligned with the active
-local Grust graph implementation while graph persistence, traversal, and future
-Cypher-over-Turso work remain Grust-owned.
+graph sink. The handoff summary carries hash-only `graphProjectionProof`
+evidence for that backend, and the Rust verifier rejects missing or drifted
+graph-backend proof before accepting saved artifacts. The dependency contract
+keeps that harness aligned with the active local Grust graph implementation
+while graph persistence, traversal, and future Cypher-over-Turso work remain
+Grust-owned.
 
 Useful local checks:
 

@@ -87,6 +87,10 @@ sha256_file() {
   shasum -a 256 "$1" | awk '{print $1}'
 }
 
+sha256_text() {
+  printf '%s' "$1" | shasum -a 256 | awk '{print $1}'
+}
+
 json_string() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
@@ -1449,7 +1453,7 @@ for (const [index, view] of (evidence.views || []).entries()) {
 }
 
 write_summary() {
-  local bundle_sha drain_sha import_plan_sha lakecat_replay_sha querygraph_verify_sha querygraph_import_sha service_log_sha
+  local bundle_sha drain_sha import_plan_sha lakecat_replay_sha querygraph_verify_sha querygraph_import_sha service_log_sha grust_turso_path_sha
   local verified_tables verified_views verified_table_ids verified_view_ids verified_warehouse bundle_hash graph_hash open_lineage_hash querygraph_import_hash
   local verified_standards
   local lakecat_schema lakecat_status lakecat_tables lakecat_views lakecat_bundle_hash lakecat_graph_hash lakecat_open_lineage_hash lakecat_querygraph_import_hash lakecat_standards lakecat_replay_evidence
@@ -1464,6 +1468,7 @@ write_summary() {
   querygraph_verify_sha="$(sha256_file "$QUERYGRAPH_VERIFY_OUTPUT")"
   querygraph_import_sha="$(sha256_file "$QUERYGRAPH_IMPORT_OUTPUT")"
   service_log_sha="$(sha256_file "$SERVICE_LOG")"
+  grust_turso_path_sha="$(sha256_text "$GRUST_TURSO_PATH")"
   lakecat_schema="$(json_field "$LAKECAT_REPLAY_OUTPUT" "schema-version")"
   lakecat_status="$(json_field "$LAKECAT_REPLAY_OUTPUT" "status")"
   lakecat_tables="$(json_field "$LAKECAT_REPLAY_OUTPUT" "table-count")"
@@ -1575,6 +1580,12 @@ write_summary() {
   "warehouse": "$(json_string "$WAREHOUSE")",
   "namespace": "$(json_string "$NAMESPACE")",
   "table": "$(json_string "$TABLE")",
+  "graphProjectionProof": {
+    "backend": "grust-turso",
+    "feature": "grust-turso-local",
+    "pathHash": "sha256:$grust_turso_path_sha",
+    "catalogGraphSink": "GrustCatalogGraphSink<TursoGraphStore>"
+  },
   "querygraphVerification": {
     "tableCount": $verified_tables,
     "viewCount": $verified_views,
@@ -1714,6 +1725,7 @@ const output = {
   verifiedTables: querygraph.verifiedTables,
   verifiedViews: querygraph.verifiedViews,
   standards: querygraph.standards,
+  graphProjectionProof: summary.graphProjectionProof,
   requestIdentityProof: lakecat.requestIdentityProof,
   queryGraphBootstrapProof: lakecat.queryGraphBootstrapProof,
   artifactFiles: {

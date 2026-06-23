@@ -201,6 +201,10 @@ require_pattern 'LAKECAT_GRUST_TURSO_PATH="\$GRUST_TURSO_PATH"' scripts/qglake-h
   "local QGLake handoff must configure a dedicated Grust Turso graph database"
 require_pattern 'cargo run -p lakecat-service --features sail-local,grust-turso-local,typesec-local,turso-local' scripts/qglake-handoff-local.sh \
   "local QGLake handoff must exercise Grust Turso graph projection end to end"
+require_pattern '"graphProjectionProof"' scripts/qglake-handoff-local.sh \
+  "local QGLake handoff must write machine-readable graph projection proof"
+require_pattern 'require_graph_projection_proof' crates/lakecat-cli/src/main.rs \
+  "LakeCat handoff verifier must require graph projection proof"
 
 for sibling in ../sail/crates/sail-catalog ../sail/crates/sail-common-datafusion; do
   require_dir "$sibling"

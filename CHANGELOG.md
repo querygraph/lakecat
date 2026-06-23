@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added machine-readable Grust Turso graph projection proof to QGLake handoff
+  summaries. The handoff harness now records a hash-only
+  `graphProjectionProof` for the `grust-turso` backend, and the Rust handoff
+  verifier rejects missing, malformed, or drifted backend proof before
+  accepting saved QGLake/QueryGraph artifacts.
 - Moved the live QGLake handoff harness onto Grust Turso graph projection.
   `scripts/qglake-handoff-local.sh` now starts the service with
   `grust-turso-local` and a dedicated `LAKECAT_GRUST_TURSO_PATH`, so the
