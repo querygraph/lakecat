@@ -5,6 +5,20 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest Grust Turso boundary tightening:
+  the local dependency contract now forbids direct `turso::` graph-store wiring
+  in both `lakecat-graph` and `lakecat-service/src/main.rs`. LakeCat still uses
+  Turso directly for the catalog store spine in `lakecat-store`, but durable
+  catalog graph persistence, traversal, Cypher, and matched-node mutation stay
+  behind Grust's `grust-turso` crate and `grust_turso::TursoGraphStore`.
+- Local verification for this Grust Turso boundary tightening passed:
+  `cargo fmt -p lakecat-service -p lakecat-graph -- --check`;
+  `cargo test -p lakecat-service --features grust-turso-local --bin lakecat-service configured_grust_turso_graph_sink_projects_catalog_events_to_turso_store -- --test-threads=1`;
+  `cargo test -p lakecat-graph --features grust-turso-local --lib grust_turso_store -- --test-threads=1`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `cargo test --manifest-path /Users/alexy/src/grust/Cargo.toml -p grust-turso`;
+  `scripts/check-release-readiness.sh --quick`.
 - Latest QGLake self-verifier closure slice:
   `qglake_handoff_artifact_verifier_rejects_handoff_verify_output_extra_import_plan_semantics`
   now proves a saved `lakecatHandoffVerifyOutput` sidecar cannot append

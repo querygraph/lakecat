@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Tightened the Grust Turso graph boundary contract. The local dependency
+  contract now forbids direct `turso::` graph-store wiring in both
+  `lakecat-graph` and `lakecat-service/src/main.rs`, while keeping Turso catalog
+  state in `lakecat-store` and durable graph persistence behind
+  `grust_turso::TursoGraphStore`.
 - Added saved QGLake self-verifier import-plan semantics closure coverage. A
   saved `lakecatHandoffVerifyOutput` sidecar that appends unverified
   `querygraphImportPlanSemantics` proof claims now has focused regression
