@@ -5,6 +5,22 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest storage-profile credential-root hardening slice:
+  `Reject secret refs without secret-ref issuance mode`.
+  Store-level storage-profile validation now rejects secret references unless
+  the issuance mode is `short-lived-secret-ref`, including deserialized memory
+  and Turso upserts that bypass the constructor. The regressions assert
+  hash-only secret-reference diagnostics and prove rejected rows do not persist
+  before credential evidence can become graph, OpenLineage, QGLake, or
+  QueryGraph replay state.
+- Local verification for this storage-profile slice is green:
+  `cargo test -p lakecat-store --features turso-local --lib storage_profiles_reject_secret_refs_without_secret_ref_issuance_mode -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-store --features turso-local --lib storage_profile_upsert_rejects_deserialized_secret_refs_without_secret_mode -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local` passed;
+  `scripts/check-release-readiness.sh --quick` passed; `git diff --check`
+  passed.
 - Latest commit-history pointer hardening slice:
   `Reject decorated commit history metadata pointers`.
   Store-level commit-history validation now rejects decorated or

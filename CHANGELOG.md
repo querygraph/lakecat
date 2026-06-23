@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened storage-profile secret-reference issuance validation. Storage
+  profiles now reject secret references unless the issuance mode is
+  `short-lived-secret-ref`, including deserialized memory and Turso upserts,
+  with hash-only secret-reference diagnostics and no durable profile rows.
 - Hardened commit-history metadata pointer replay at the store boundary. Memory
   and Turso commit-history tests now reject decorated or credential-bearing
   previous/new metadata locations in stored commit records with hash-only

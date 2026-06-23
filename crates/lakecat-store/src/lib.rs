@@ -1330,6 +1330,7 @@ impl StorageProfile {
         if let Some(secret_ref) = secret_ref.as_deref() {
             validate_secret_ref(secret_ref)?;
         }
+        validate_secret_ref_issuance_mode(secret_ref.as_deref(), issuance_mode)?;
         if matches!(issuance_mode, CredentialIssuanceMode::ShortLivedSecretRef)
             && secret_ref.is_none()
         {
@@ -1357,6 +1358,7 @@ impl StorageProfile {
         if let Some(secret_ref) = self.secret_ref.as_deref() {
             validate_secret_ref(secret_ref)?;
         }
+        validate_secret_ref_issuance_mode(self.secret_ref.as_deref(), self.issuance_mode)?;
         if matches!(
             self.issuance_mode,
             CredentialIssuanceMode::ShortLivedSecretRef
@@ -3125,6 +3127,21 @@ fn validate_issuance_mode_provider(
         }
         _ => Ok(()),
     }
+}
+
+fn validate_secret_ref_issuance_mode(
+    secret_ref: Option<&str>,
+    issuance_mode: CredentialIssuanceMode,
+) -> LakeCatResult<()> {
+    if let Some(secret_ref) = secret_ref
+        && !matches!(issuance_mode, CredentialIssuanceMode::ShortLivedSecretRef)
+    {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "storage profile secret reference requires short-lived-secret-ref issuance mode; {}",
+            secret_ref_hash_context(secret_ref)
+        )));
+    }
+    Ok(())
 }
 
 fn validate_project_id(project_id: &str) -> LakeCatResult<()> {
@@ -13053,6 +13070,29 @@ pub mod turso_store {
         }
 
         #[test]
+        fn storage_profiles_reject_secret_refs_without_secret_ref_issuance_mode() {
+            let secret_ref = "typesec://lakecat/local/s3-events";
+            let err = StorageProfile::new(
+                "governed-with-secret-ref",
+                WarehouseName::new("local").unwrap(),
+                "s3://lakecat-demo/events",
+                StorageProvider::S3,
+                CredentialIssuanceMode::GovernedReadRequired,
+                Some(secret_ref.to_string()),
+                BTreeMap::new(),
+            )
+            .unwrap_err();
+
+            assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+            let message = err.to_string();
+            assert!(message.contains(
+                "storage profile secret reference requires short-lived-secret-ref issuance mode"
+            ));
+            assert!(message.contains("secret-ref-hash=sha256:"));
+            assert!(!message.contains(secret_ref));
+        }
+
+        #[test]
         fn storage_profiles_reject_public_config_secret_values() {
             let warehouse = WarehouseName::new("local").unwrap();
             let err = StorageProfile::new(
@@ -13182,6 +13222,52 @@ pub mod turso_store {
             assert!(turso_message.contains("public-config-key-hash=sha256:"));
             assert!(!turso_message.contains("lakecat.endpoint"));
             assert!(!turso_message.contains("raw-secret"));
+            assert_eq!(
+                turso.list_storage_profiles(&warehouse).await.unwrap(),
+                vec![]
+            );
+        }
+
+        #[tokio::test]
+        async fn storage_profile_upsert_rejects_deserialized_secret_refs_without_secret_mode() {
+            let warehouse = WarehouseName::new("local").unwrap();
+            let secret_ref = "typesec://lakecat/local/s3-events";
+            let profile = StorageProfile {
+                profile_id: "governed-with-secret-ref".to_string(),
+                warehouse: warehouse.clone(),
+                location_prefix: "s3://lakecat-demo/events".to_string(),
+                provider: StorageProvider::S3,
+                issuance_mode: CredentialIssuanceMode::GovernedReadRequired,
+                secret_ref: Some(secret_ref.to_string()),
+                public_config: BTreeMap::new(),
+            };
+
+            let memory = MemoryCatalogStore::new();
+            let memory_err = memory
+                .upsert_storage_profile(profile.clone())
+                .await
+                .unwrap_err();
+            assert!(matches!(memory_err, LakeCatError::InvalidArgument(_)));
+            let memory_message = memory_err.to_string();
+            assert!(memory_message.contains(
+                "storage profile secret reference requires short-lived-secret-ref issuance mode"
+            ));
+            assert!(memory_message.contains("secret-ref-hash=sha256:"));
+            assert!(!memory_message.contains(secret_ref));
+            assert_eq!(
+                memory.list_storage_profiles(&warehouse).await.unwrap(),
+                vec![]
+            );
+
+            let turso = TursoCatalogStore::in_memory().await.unwrap();
+            let turso_err = turso.upsert_storage_profile(profile).await.unwrap_err();
+            assert!(matches!(turso_err, LakeCatError::InvalidArgument(_)));
+            let turso_message = turso_err.to_string();
+            assert!(turso_message.contains(
+                "storage profile secret reference requires short-lived-secret-ref issuance mode"
+            ));
+            assert!(turso_message.contains("secret-ref-hash=sha256:"));
+            assert!(!turso_message.contains(secret_ref));
             assert_eq!(
                 turso.list_storage_profiles(&warehouse).await.unwrap(),
                 vec![]
