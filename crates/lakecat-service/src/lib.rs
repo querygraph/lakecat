@@ -4020,6 +4020,7 @@ fn validate_policy_binding_upsert_event_evidence(
             "policy-binding upsert evidence must contain policy-id",
         ));
     };
+    validate_management_id_evidence(event, policy_id, "policy-binding upsert", "policy-id")?;
     let Some(warehouse_name) = policy
         .get("warehouse")
         .or_else(|| payload.get("warehouse"))
@@ -4178,6 +4179,7 @@ fn validate_project_upsert_event_evidence(
             "project upsert evidence must contain project-id",
         ));
     };
+    validate_management_id_evidence(event, project_id, "project upsert", "project-id")?;
     if let Some(payload_project_id) = payload.get("project-id").and_then(Value::as_str) {
         if payload_project_id != project_id {
             return Err(outbox_evidence_error(
@@ -4187,6 +4189,9 @@ fn validate_project_upsert_event_evidence(
         }
     }
     let server_id = optional_string_field(event, project_record, "server-id", "project upsert")?;
+    if let Some(server_id) = server_id.as_deref() {
+        validate_management_id_evidence(event, server_id, "project upsert", "server-id")?;
+    }
     let display_name =
         optional_string_field(event, project_record, "display-name", "project upsert")?;
     let properties =
@@ -4248,6 +4253,7 @@ fn validate_server_upsert_event_evidence(
             "server upsert evidence must contain server-id",
         ));
     };
+    validate_management_id_evidence(event, server_id, "server upsert", "server-id")?;
     if let Some(payload_server_id) = payload.get("server-id").and_then(Value::as_str) {
         if payload_server_id != server_id {
             return Err(outbox_evidence_error(
@@ -4353,6 +4359,7 @@ fn validate_warehouse_upsert_event_evidence(
             "warehouse upsert evidence must contain project-id",
         ));
     };
+    validate_management_id_evidence(event, project_id, "warehouse upsert", "project-id")?;
     let storage_root =
         optional_string_field(event, warehouse_record, "storage-root", "warehouse upsert")?;
     if storage_root.is_some() {
@@ -6835,6 +6842,27 @@ fn validate_storage_profile_id_evidence(
         &format!(
             "{label} profile-id contains unsupported characters; storage-profile-id-hash={}",
             content_hash_bytes(profile_id.as_bytes())
+        ),
+    ))
+}
+
+fn validate_management_id_evidence(
+    event: &OutboxEvent,
+    identifier: &str,
+    label: &str,
+    field: &str,
+) -> Result<(), LakeCatError> {
+    if identifier
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
+    {
+        return Ok(());
+    }
+    Err(outbox_evidence_error(
+        event,
+        &format!(
+            "{label} {field} contains unsupported characters; {field}-hash={}",
+            content_hash_bytes(identifier.as_bytes())
         ),
     ))
 }
@@ -18650,6 +18678,77 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_policy_binding_upsert_invalid_policy_ids() {
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let invalid_policy_id = "agent-read?token=secret";
+        let odrl = json!({
+            "uid": "policy:agent-read",
+            "lakecat:read-restriction": {
+                "allowed-columns": ["event_id"]
+            }
+        });
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-policy-invalid-id".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "policy-binding.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-policy-invalid-id",
+                    "event-type": "policy-binding.upserted",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "policy-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "policy": {
+                            "policy-id": invalid_policy_id,
+                            "warehouse": "local",
+                            "namespace": ["default"],
+                            "table": "events",
+                            "enforced": true,
+                            "odrl-hash": content_hash_json(&odrl).unwrap(),
+                            "odrl": odrl,
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("invalid policy id should fail before delivery");
+        let message = err.to_string();
+        assert!(message.contains("policy-binding.upserted"));
+        assert!(
+            message.contains("policy-binding upsert policy-id contains unsupported characters")
+        );
+        assert!(message.contains("policy-id-hash=sha256:"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains(invalid_policy_id));
+        assert!(!message.contains("token=secret"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_extra_policy_binding_upsert_fields() {
         let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
         let odrl = json!({
@@ -18858,6 +18957,65 @@ mod tests {
         assert!(message.contains("project.upserted"));
         assert!(message.contains("project-id must match"));
         assert!(message.contains("event-id-hash=sha256:"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_project_upsert_invalid_project_ids() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let invalid_project_id = "default?token=secret";
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-project-invalid-id".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "project.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-project-invalid-id",
+                    "event-type": "project.upserted",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "project-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "project-id": invalid_project_id,
+                        "project-record": {
+                            "project-id": invalid_project_id,
+                            "display-name": "Default Project",
+                            "properties": {"owner": "querygraph"}
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("invalid project id should fail before delivery");
+        let message = err.to_string();
+        assert!(message.contains("project.upserted"));
+        assert!(message.contains("project upsert project-id contains unsupported characters"));
+        assert!(message.contains("project-id-hash=sha256:"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains(invalid_project_id));
+        assert!(!message.contains("token=secret"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());

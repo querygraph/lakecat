@@ -5,6 +5,24 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest management replay hardening slice:
+  `Hash invalid management identifiers at replay`.
+  Service outbox replay now validates policy, project, server, and
+  warehouse-project identifiers before reconstructing management records, and
+  emits hash-only field diagnostics for invalid identifiers. The store
+  policy-id validator now follows the same hash-only rule instead of echoing
+  raw invalid policy ids.
+- Local verification for this management replay slice is green:
+  `cargo test -p lakecat-store --lib policy_bindings_redact_invalid_policy_ids -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_policy_binding_upsert_invalid_policy_ids -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_project_upsert_invalid_project_ids -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-store -p lakecat-service -- --check`
+  passed; `cargo test -p lakecat-store --features turso-local` passed;
+  `cargo test -p lakecat-service` passed;
+  `scripts/check-release-readiness.sh --quick` passed; `git diff --check`
+  passed.
 - Latest storage-profile replay hardening slice:
   `Reject invalid storage profile ids at service replay`.
   Service outbox replay now rejects invalid or decorated storage-profile ids in

@@ -3394,10 +3394,18 @@ fn validate_policy_id(policy_id: &str) -> LakeCatResult<()> {
         .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
     {
         return Err(LakeCatError::InvalidArgument(format!(
-            "policy id contains unsupported characters: {policy_id}"
+            "policy id contains unsupported characters; {}",
+            policy_id_hash_context(policy_id)
         )));
     }
     Ok(())
+}
+
+fn policy_id_hash_context(policy_id: &str) -> String {
+    format!(
+        "policy-id-hash={}",
+        content_hash_bytes(policy_id.as_bytes())
+    )
 }
 
 fn policy_bindings_for_table<'a>(
@@ -3877,6 +3885,27 @@ mod memory_tests {
             store.list_policy_bindings(&warehouse).await.unwrap(),
             vec![]
         );
+    }
+
+    #[test]
+    fn policy_bindings_redact_invalid_policy_ids() {
+        let invalid_policy_id = "table-policy?token=secret";
+        let err = PolicyBinding::new(
+            invalid_policy_id,
+            WarehouseName::new("local").unwrap(),
+            Some("default".parse::<Namespace>().unwrap()),
+            Some(TableName::new("events").unwrap()),
+            true,
+            serde_json::json!({"uid": "policy:table-policy"}),
+        )
+        .unwrap_err();
+
+        assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+        let message = err.to_string();
+        assert!(message.contains("policy id contains unsupported characters"));
+        assert!(message.contains("policy-id-hash=sha256:"));
+        assert!(!message.contains(invalid_policy_id));
+        assert!(!message.contains("token=secret"));
     }
 
     #[tokio::test]

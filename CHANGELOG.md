@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened management identifier replay diagnostics. Policy-binding,
+  project, server, and warehouse management replay now validates policy,
+  project, and server-style identifiers before record reconstruction, returning
+  hash-only field diagnostics; the store policy-id validator also no longer
+  echoes raw invalid policy ids.
 - Hardened storage-profile replay identity admission. Service outbox replay now
   rejects invalid or decorated storage-profile ids in both
   `storage-profile.upserted` and `credentials.vend-attempted` evidence with
