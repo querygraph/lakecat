@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened raw view receipt-chain summary extraction. Lineage-drain summary
+  construction now rejects decoded `view-version-receipt-chains` entries whose
+  `chain-verified` flag is false, so raw QGLake replay proof cannot inherit an
+  unverified structural view-history chain even if an internal path bypasses
+  service replay admission.
 - Hardened view receipt-chain replay admission. Service outbox replay now
   rejects any `view.version-receipt-chains-listed` nested chain whose
   `chain-verified` flag is not true, so unverified view-history identity/count

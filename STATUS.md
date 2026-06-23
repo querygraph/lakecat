@@ -15,6 +15,19 @@ Updated: 2026-06-23
   `scripts/check-local-dependency-contract.sh` passed;
   `scripts/check-release-readiness.sh --quick` passed; `git diff --check`
   passed.
+- Latest raw lineage summary hardening slice:
+  `Reject unverified view chains in summaries`.
+  Lineage-drain summary construction now rejects decoded
+  `view-version-receipt-chains` entries whose `chain-verified` flag is false,
+  so raw QGLake replay summaries cannot carry unverified structural
+  view-history proof even if a future internal path bypasses service replay
+  admission.
+- Local verification for this raw lineage summary slice is green:
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_view_receipt_chain_objects -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service` passed;
+  `scripts/check-release-readiness.sh --quick` passed; `git diff --check`
+  passed.
 - Latest view-history replay hardening slice:
   `Reject unverified view receipt chains`.
   Service outbox admission now rejects any

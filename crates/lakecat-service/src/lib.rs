@@ -7729,18 +7729,24 @@ fn lineage_summary_view_receipt_chains(
     };
     let mut decoded = Vec::with_capacity(chains.len());
     for (index, chain) in chains.iter().enumerate() {
-        decoded.push(
-            serde_json::from_value::<ViewVersionReceiptChainResponse>(chain.clone()).map_err(
-                |err| {
-                    outbox_evidence_error(
-                        event,
-                        &format!(
-                            "lineage drain view-version-receipt-chains entry {index} must match ViewVersionReceiptChainResponse JSON shape: {err}"
-                        ),
-                    )
-                },
-            )?,
-        );
+        let chain = serde_json::from_value::<ViewVersionReceiptChainResponse>(chain.clone())
+            .map_err(|err| {
+                outbox_evidence_error(
+                    event,
+                    &format!(
+                        "lineage drain view-version-receipt-chains entry {index} must match ViewVersionReceiptChainResponse JSON shape: {err}"
+                    ),
+                )
+            })?;
+        if !chain.chain_verified {
+            return Err(outbox_evidence_error(
+                event,
+                &format!(
+                    "lineage drain view-version-receipt-chains entry {index} must be structurally verified"
+                ),
+            ));
+        }
+        decoded.push(chain);
     }
     Ok(decoded)
 }
@@ -51548,6 +51554,56 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("chain-verified-count must match verified view receipt chains"));
+
+        let unverified_chain = OutboxEvent {
+            event_id: "evt-unverified-summary-view-chain".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "view.version-receipt-chains-listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view-version-receipt-chains": [{
+                        "stable-id": "lakecat:view:local:default:events_view",
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "name": "events_view",
+                        "chain-hash": chain_hash,
+                        "chain-verified": false,
+                        "latest-view-version": 1,
+                        "latest-operation": "upsert",
+                        "tombstoned": false,
+                        "receipt-count": 1,
+                        "receipts": [{
+                            "stable-id": "lakecat:view:local:default:events_view",
+                            "warehouse": "local",
+                            "namespace": ["default"],
+                            "name": "events_view",
+                            "view-version": 1,
+                            "previous-view-version": null,
+                            "previous-receipt-hash": null,
+                            "operation": "upsert",
+                            "view-hash": content_hash_bytes(b"view-v1"),
+                            "receipt-hash": receipt_hash,
+                            "principal-subject": "agent:operator",
+                            "principal-kind": "agent",
+                            "recorded-at": "2026-06-20T00:00:00Z"
+                        }]
+                    }]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&unverified_chain, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains(
+                "lineage drain view-version-receipt-chains entry 0 must be structurally verified"
+            ),
+            "{err}"
+        );
     }
 
     #[test]
