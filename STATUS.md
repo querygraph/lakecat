@@ -5,6 +5,20 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest saved handoff verifier QueryGraph import-plan artifact manifest
+  coverage:
+  the CLI artifact verifier now explicitly proves saved
+  `lakecat-handoff-verify.json` output cannot omit its nested
+  `artifactFiles.querygraphImportPlan` hash object while keeping the
+  verifier-output artifact hash valid.
+- Local verification for this saved handoff verifier QueryGraph import-plan
+  artifact manifest slice passed: `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_requires_handoff_verify_output_import_plan_artifact -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_requires_handoff_verify_output_lineage_drain_artifact -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_requires_handoff_verify_output_bundle_artifact -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff -- --test-threads=1`;
+  `docs/book/build.sh`; `scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`; `git diff --check`.
 - Latest saved handoff verifier lineage-drain artifact manifest coverage:
   the CLI artifact verifier now explicitly proves saved
   `lakecat-handoff-verify.json` output cannot omit its nested
