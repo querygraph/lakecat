@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed service outbox admission over wrapped governed scan replay payloads.
+  `table.scan-planned` and `table.scan-tasks-fetched` wrapper payloads now
+  reject extra unverified fields before acknowledgement, graph projection, or
+  OpenLineage projection, so archived scan events cannot smuggle lineage,
+  QueryGraph, or application claims beside otherwise valid scan proof.
 - Added a front-loaded LakeCat book concept boundary map and engine-boundary
   argument. The new section classifies the Rust service spine, Turso local
   store, Iceberg REST paths, commit CAS, proof spine, governed scan/credential

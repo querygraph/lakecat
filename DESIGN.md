@@ -651,7 +651,7 @@ non-empty engine, and RFC3339 `checked_at` timestamp before acknowledgement,
 graph projection, or OpenLineage projection. Valid-but-wrong actions such as
 table load or commit actions must fail before governed scan proof reaches graph
 or lineage sinks.
-Service replay must also close the top-level `table.scan-planned` and
+Service replay now closes the wrapped `table.scan-planned` and
 `table.scan-tasks-fetched` payload schemas over the fields current producers
 emit, so an archived governed read cannot append unverified scan, lineage,
 graph, QueryGraph, or application claims beside otherwise valid restriction,

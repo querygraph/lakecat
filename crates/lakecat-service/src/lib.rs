@@ -1586,6 +1586,8 @@ const SCAN_PLANNED_EVIDENCE_FIELDS: &[&str] = &[
     "required-projection",
     "required-filters",
 ];
+const SCAN_PLANNED_OUTBOX_PAYLOAD_FIELDS: &[&str] =
+    &["audit-event-id", "event-type", "table", "payload"];
 const SCAN_TASKS_FETCHED_EVIDENCE_FIELDS: &[&str] = &[
     "event-type",
     "table",
@@ -1606,6 +1608,8 @@ const SCAN_TASKS_FETCHED_EVIDENCE_FIELDS: &[&str] = &[
     "stats-fields",
     "required-filters",
 ];
+const SCAN_TASKS_FETCHED_OUTBOX_PAYLOAD_FIELDS: &[&str] =
+    &["audit-event-id", "event-type", "table", "payload"];
 const CREDENTIAL_RESPONSE_EVIDENCE_FIELDS: &[&str] = &[
     "prefix-hash",
     "storage-profile-id",
@@ -3079,6 +3083,14 @@ fn validate_scan_planned_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    if event.payload.get("payload").is_some() {
+        validate_object_evidence_schema(
+            event,
+            &event.payload,
+            "scan-planned outbox payload",
+            SCAN_PLANNED_OUTBOX_PAYLOAD_FIELDS,
+        )?;
+    }
     validate_object_evidence_schema(event, payload, "scan-planned", SCAN_PLANNED_EVIDENCE_FIELDS)?;
     let table = validate_required_outbox_table_identity(event, "scan-planned")?;
     validate_required_payload_table_hint(event, payload, &table, "scan-planned")?;
@@ -3178,6 +3190,14 @@ fn validate_scan_tasks_fetched_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    if event.payload.get("payload").is_some() {
+        validate_object_evidence_schema(
+            event,
+            &event.payload,
+            "scan-tasks-fetched outbox payload",
+            SCAN_TASKS_FETCHED_OUTBOX_PAYLOAD_FIELDS,
+        )?;
+    }
     validate_object_evidence_schema(
         event,
         payload,
@@ -32317,6 +32337,94 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_extra_scan_planned_outbox_payload_fields() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let ident = table_ident("local", "default", "events").unwrap();
+        let read_restriction = json!({
+            "allowed-columns": ["event_id"],
+            "purpose": "qglake-agent-demo",
+            "max-credential-ttl-seconds": 300,
+            "policy-hashes": [
+                content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                    .unwrap()
+            ]
+        });
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-scan-plan-extra-wrapper-field".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.scan-planned".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-scan-plan-extra-wrapper-field",
+                    "event-type": "table.scan-planned",
+                    "table": ident,
+                    "payload": {
+                        "table": ident,
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-plan-scan",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": "sha256:policy",
+                            "context": {
+                                "read-restriction": read_restriction
+                            },
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "read-restriction": read_restriction,
+                        "requested-projection": ["event_id"],
+                        "effective-projection": ["event_id"],
+                        "requested-stats-fields": ["event_id"],
+                        "effective-stats-fields": ["event_id"],
+                        "scan-task-count": 1
+                    },
+                    "unverified-querygraph-claim": "accepted"
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("extra scan-plan wrapper fields should fail closed");
+
+        let message = err.to_string();
+        assert!(
+            message.contains(
+                "outbox event table.scan-planned (lakecat.lineage-and-graph) has invalid"
+            )
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(message.contains(
+            "scan-planned outbox payload contains unexpected field unverified-querygraph-claim"
+        ));
+        assert!(!message.contains("evt-scan-plan-extra-wrapper-field"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "extra scan-plan wrapper proof must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "extra scan-plan wrapper proof must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "extra scan-plan wrapper proof must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_scan_planned_empty_effective_stats_fields() {
         let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
         let ident = table_ident("local", "default", "events").unwrap();
@@ -34393,6 +34501,106 @@ mod tests {
         assert!(
             lineage.events.lock().await.is_empty(),
             "duplicate effective projection replay must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_scan_fetch_outbox_payload_fields() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let ident = table_ident("local", "default", "events").unwrap();
+        let read_restriction = json!({
+            "allowed-columns": ["event_id"],
+            "row-predicate": {
+                "type": "not-eq",
+                "term": "severity",
+                "value": "debug"
+            },
+            "purpose": "qglake-agent-demo",
+            "max-credential-ttl-seconds": 300,
+            "policy-hashes": [
+                content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                    .unwrap()
+            ]
+        });
+        let required_filter = json!({
+            "type": "not-eq",
+            "term": "severity",
+            "value": "debug"
+        });
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-scan-fetch-extra-wrapper-field".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.scan-tasks-fetched".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-scan-fetch-extra-wrapper-field",
+                    "event-type": "table.scan-tasks-fetched",
+                    "table": ident,
+                    "payload": {
+                        "table": ident,
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-plan-scan",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": "sha256:policy",
+                            "context": {
+                                "read-restriction": read_restriction
+                            },
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "read-restriction": read_restriction,
+                        "required-projection": ["event_id"],
+                        "effective-projection": ["event_id"],
+                        "requested-stats-fields": ["event_id"],
+                        "effective-stats-fields": ["event_id"],
+                        "stats-fields": ["event_id"],
+                        "required-filters": [required_filter],
+                        "file-scan-task-count": 1,
+                        "delete-file-count": 0,
+                        "child-plan-task-count": 0
+                    },
+                    "unverified-lineage-claim": "already-projected"
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("extra scan-fetch wrapper fields should fail closed");
+
+        let message = err.to_string();
+        assert!(message.contains(
+            "outbox event table.scan-tasks-fetched (lakecat.lineage-and-graph) has invalid"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(message.contains(
+            "scan-tasks-fetched outbox payload contains unexpected field unverified-lineage-claim"
+        ));
+        assert!(!message.contains("evt-scan-fetch-extra-wrapper-field"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "extra scan-fetch wrapper proof must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "extra scan-fetch wrapper proof must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "extra scan-fetch wrapper proof must fail before lineage projection"
         );
     }
 

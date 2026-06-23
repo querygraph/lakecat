@@ -13399,7 +13399,10 @@ standard names, short hashes, decorated locations, raw-secret claims, malformed
 view versions, malformed credential exceptions, malformed QueryGraph hashes,
 malformed TypeSec-style identity fields, and malformed scalar scope anchors
 such as view, management, policy, and policy ODRL evidence fail closed rather
-than disappearing from a compact proof summary.
+than disappearing from a compact proof summary. Governed scan replay also
+closes the wrapped `table.scan-planned` and `table.scan-tasks-fetched` payload
+schemas, so an archived scan event cannot attach unverified lineage, graph,
+QueryGraph, or application claims beside otherwise valid Sail-planned proof.
 
 These concepts are LakeCat extensions today. The future proposal candidates
 inside them are the neutral pieces: exact retry, pointer-history proof,

@@ -5,6 +5,13 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/testing slice:
+  `Close wrapped scan replay payloads`.
+  Service outbox admission now closes wrapped `table.scan-planned` and
+  `table.scan-tasks-fetched` payloads over the fields current producers emit,
+  rejecting extra unverified lineage, graph, QueryGraph, or application claims
+  before acknowledgement, graph projection, or OpenLineage projection. Focused
+  service regressions cover both planned and fetched governed scan wrappers.
 - Latest documentation/book slice:
   `Clarify concept boundaries and Sail engine ownership`.
   The book now opens its concept guidance with a boundary map for the Rust
