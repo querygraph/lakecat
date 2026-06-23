@@ -49,6 +49,7 @@ lakecat-security = { path = "crates/lakecat-security" }
 lakecat-store = { path = "crates/lakecat-store" }
 
 grust-graph = { package = "grust-graph", version = "0.10.0", path = "../grust/crates/grust", default-features = false }
+grust-turso = { package = "grust-turso", version = "0.10.0", path = "../grust/crates/grust-turso", default-features = false }
 typesec = { version = "0.8.0", default-features = false }
 sail-catalog = { path = "../sail/crates/sail-catalog" }
 sail-common-datafusion = { path = "../sail/crates/sail-common-datafusion" }

@@ -44,13 +44,13 @@ history, audit/outbox rows, and idempotent commit replay; without it the binary
 keeps the in-memory store.
 
 The Grust feature gate follows the local Grust 0.10 path checkout so LakeCat
-can use `grust-turso` for durable catalog graph projection. Plain
-`grust-local` keeps the fast memory-backed Grust sink; `grust-turso-local`
-constructs a bootstrapped `TursoGraphStore`, using `LAKECAT_GRUST_TURSO_PATH`
-when set and an in-memory Turso graph database otherwise. TypeSec remains on
-the published `typesec` 0.8.0 crate, and Sail integration still uses local Sail
-paths plus the checked-in helper patch bridge until the required Sail APIs are
-published.
+can use the dedicated `grust-turso` crate for durable catalog graph projection.
+Plain `grust-local` keeps the fast memory-backed Grust sink;
+`grust-turso-local` constructs a bootstrapped `grust_turso::TursoGraphStore`,
+using `LAKECAT_GRUST_TURSO_PATH` when set and an in-memory Turso graph database
+otherwise. TypeSec remains on the published `typesec` 0.8.0 crate, and Sail
+integration still uses local Sail paths plus the checked-in helper patch bridge
+until the required Sail APIs are published.
 
 The local QueryGraph handoff path has a separate compatibility contract:
 `/Users/alexy/src/querygraph/qg-rust` follows the local Grust 0.10.0 path

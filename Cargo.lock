@@ -2747,7 +2747,6 @@ dependencies = [
  "grust-core 0.10.0",
  "grust-cypher 0.10.0",
  "grust-memory",
- "grust-turso",
  "serde_json",
 ]
 
@@ -3869,6 +3868,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "grust-graph 0.10.0",
+ "grust-turso",
  "lakecat-core",
  "serde",
  "serde_json",
@@ -3943,6 +3943,7 @@ dependencies = [
  "axum",
  "chrono",
  "grust-graph 0.10.0",
+ "grust-turso",
  "http",
  "lakecat-api",
  "lakecat-core",

@@ -1014,7 +1014,7 @@ pub mod grust_integration {
             )
             .with_event_id("lakecat:outbox:evt-turso");
             let graph = graph_event_to_grust(&event);
-            let store = grust_graph::TursoGraphStore::in_memory()
+            let store = grust_turso::TursoGraphStore::in_memory()
                 .await
                 .expect("Grust Turso graph store");
             store.bootstrap().await.expect("Grust Turso bootstrap");
@@ -1053,7 +1053,7 @@ pub mod grust_integration {
             )
             .with_event_id("lakecat:outbox:evt-turso-sink");
             let store = Arc::new(
-                grust_graph::TursoGraphStore::in_memory()
+                grust_turso::TursoGraphStore::in_memory()
                     .await
                     .expect("Grust Turso graph store"),
             );
@@ -1093,7 +1093,7 @@ pub mod grust_integration {
             )
             .with_event_id("lakecat:outbox:evt-turso-cypher");
             let graph = graph_event_to_grust(&event);
-            let store = grust_graph::TursoGraphStore::in_memory()
+            let store = grust_turso::TursoGraphStore::in_memory()
                 .await
                 .expect("Grust Turso graph store");
             store.bootstrap().await.expect("Grust Turso bootstrap");
@@ -1136,7 +1136,7 @@ pub mod grust_integration {
             )
             .with_event_id("lakecat:outbox:evt-turso-cypher-query");
             let graph = graph_event_to_grust(&event);
-            let store = grust_graph::TursoGraphStore::in_memory()
+            let store = grust_turso::TursoGraphStore::in_memory()
                 .await
                 .expect("Grust Turso graph store");
             store.bootstrap().await.expect("Grust Turso bootstrap");
@@ -1178,7 +1178,7 @@ pub mod grust_integration {
             )
             .with_event_id("lakecat:outbox:evt-turso-matched-node");
             let graph = graph_event_to_grust(&event);
-            let store = grust_graph::TursoGraphStore::in_memory()
+            let store = grust_turso::TursoGraphStore::in_memory()
                 .await
                 .expect("Grust Turso graph store");
             store.bootstrap().await.expect("Grust Turso bootstrap");

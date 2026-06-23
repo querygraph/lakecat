@@ -4370,11 +4370,11 @@ The Grust Turso workflow is the concrete graph version of that boundary. A
 LakeCat table event is not a request for LakeCat to become a graph database.
 It is a catalog fact with a stable subject, table identity, action, event id,
 and redacted properties. With the `grust-turso-local` feature enabled, the
-service configures `GrustCatalogGraphSink<TursoGraphStore>` and emits the same
-catalog event through the sink that production outbox replay uses. Grust owns
-the Turso graph tables, persistence behavior, traversal semantics, and Cypher
-mutation semantics. LakeCat owns only the catalog-facing projection boundary
-and the proof that the boundary was exercised.
+service configures `GrustCatalogGraphSink<grust_turso::TursoGraphStore>` and
+emits the same catalog event through the sink that production outbox replay
+uses. Grust owns the Turso graph tables, persistence behavior, traversal
+semantics, and Cypher mutation semantics. LakeCat owns only the catalog-facing
+projection boundary and the proof that the boundary was exercised.
 
 A local QueryGraph acceptance run therefore has three distinct graph stages:
 
@@ -4391,11 +4391,11 @@ The current boundary regression mirrors that workflow in small form:
 ```text
 catalog event:  lakecat:outbox:evt-turso-matched-node
 subject:        lakecat:table:local:default:events
-sink:           GrustCatalogGraphSink<TursoGraphStore>
+sink:           GrustCatalogGraphSink<grust_turso::TursoGraphStore>
 store:          grust-turso
 operation:      PatchMatchingNodes(label = Table, id = subject)
 patch:          querygraph_ready = true
-read-back:      TursoGraphStore.get_node(subject)
+read-back:      grust_turso::TursoGraphStore.get_node(subject)
 ```
 
 That example is intentionally not an Iceberg proposal. Iceberg clients do not
@@ -4408,10 +4408,10 @@ for that graph state, including matched-node patches and Cypher-facing
 mutation behavior. The release contract now makes that rule executable by
 failing if `lakecat-graph` imports `turso::` directly: catalog durability may
 use the Rust Turso crate in the store spine, but durable graph persistence over
-Turso must enter through Grust's `TursoGraphStore`. If the graph operation
-becomes reusable, it belongs in Grust; if the proof of catalog emission
-changes, it belongs in LakeCat; if the meaning of `querygraph_ready` changes,
-it belongs in QueryGraph.
+Turso must enter through Grust's dedicated `grust-turso` crate and
+`TursoGraphStore`. If the graph operation becomes reusable, it belongs in
+Grust; if the proof of catalog emission changes, it belongs in LakeCat; if the
+meaning of `querygraph_ready` changes, it belongs in QueryGraph.
 
 ### Catalog Concepts As A Contract
 
@@ -7934,11 +7934,12 @@ A test that claims to validate TypeSec should enable `typesec-local` and call
 TypeSec.
 
 The dependency contract is executable because LakeCat has active sibling
-bridges. Grust now follows the local 0.10 path checkout so LakeCat can use
-`grust-turso` for durable catalog graph projection. The graph boundary is still
-Grust-owned: LakeCat emits catalog graph events, `grust-local` keeps a
-memory-backed Grust sink for fast tests, and `grust-turso-local` bootstraps a
-Grust `TursoGraphStore` when durable graph persistence is being exercised.
+bridges. Grust now follows the local 0.10 path checkout so LakeCat can use the
+dedicated `grust-turso` crate for durable catalog graph projection. The graph
+boundary is still Grust-owned: LakeCat emits catalog graph events,
+`grust-local` keeps a memory-backed Grust sink for fast tests, and
+`grust-turso-local` bootstraps `grust_turso::TursoGraphStore` when durable
+graph persistence is being exercised.
 Focused graph regressions now write LakeCat catalog events into that Turso
 store, traverse the resulting catalog graph, and run Grust Cypher mutation/query
 over the same Turso-backed projection. The live QGLake handoff harness uses that
@@ -13493,13 +13494,13 @@ keep that gate green after each dependency-boundary change and rerun it from
 the final release commit. The temporary Sail helper bridge is release-explicit:
 LakeCat depends on local Sail paths plus checked-in helper patches until the
 required Sail APIs are published. The Grust contract is likewise explicit:
-LakeCat and QueryGraph follow the active local Grust 0.10 path checkout while
-`grust-turso` is ahead of the published facade line. `grust-local` keeps fast
-memory-backed projection tests, while `grust-turso-local` proves durable graph
-projection through a bootstrapped Grust `TursoGraphStore`. QueryGraph's
-`qg-rust` checkout uses the same local Grust path for `lakecat-verify` and
-`lakecat-import`, keeping the end-to-end graph import path aligned with the
-catalog graph sink.
+LakeCat and QueryGraph follow the active local Grust 0.10 path checkout, and
+LakeCat binds Turso-backed graph projection to the dedicated `grust-turso`
+crate. `grust-local` keeps fast memory-backed projection tests, while
+`grust-turso-local` proves durable graph projection through a bootstrapped
+`grust_turso::TursoGraphStore`. QueryGraph's `qg-rust` checkout uses the same
+local Grust path for `lakecat-verify` and `lakecat-import`, keeping the
+end-to-end graph import path aligned with the catalog graph sink.
 
 README, status, changelog, book artifacts, and version notes must be refreshed
 from the same clean commit, and the release should be tagged only after the

@@ -383,12 +383,13 @@ boundary cleanup rather than new architecture:
   helper behavior is published upstream. The local dependency contract already
   proves the expected Sail path dependencies and patch files.
 - Keep LakeCat and QueryGraph aligned with the active local Grust 0.10 path
-  checkout while `grust-turso` is ahead of the published facade line. LakeCat's
-  `grust-local` feature keeps the fast memory-backed projection sink, and
-  `grust-turso-local` bootstraps a Grust `TursoGraphStore` for durable catalog
-  graph projection. The live `scripts/qglake-handoff-local.sh` harness should
-  run the service with `grust-turso-local` and `LAKECAT_GRUST_TURSO_PATH`, so
-  the QGLake/QueryGraph acceptance path exercises the same durable Grust Turso
+  checkout and bind Turso-backed catalog graph projection to Grust's dedicated
+  `grust-turso` crate. LakeCat's `grust-local` feature keeps the fast
+  memory-backed projection sink, and `grust-turso-local` bootstraps
+  `grust_turso::TursoGraphStore` for durable catalog graph projection. The live
+  `scripts/qglake-handoff-local.sh` harness should run the service with
+  `grust-turso-local` and `LAKECAT_GRUST_TURSO_PATH`, so the
+  QGLake/QueryGraph acceptance path exercises the same durable Grust Turso
   backend. The handoff summary must carry hash-only `graphProjectionProof`
   evidence for that backend, including the configured `lakecat_graph` table
   prefix, and the Rust handoff verifier must reject missing or drifted

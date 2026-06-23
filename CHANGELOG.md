@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Bound Turso-backed graph projection to Grust's dedicated `grust-turso`
+  crate. The `grust-turso-local` feature now depends on `grust-turso`
+  directly, service startup constructs `grust_turso::TursoGraphStore`, graph
+  regressions exercise the same backend crate for persistence, traversal,
+  Cypher, and matched-node patches, and the dependency contract keeps
+  LakeCat from routing durable graph work through direct `turso::` calls or
+  only the Grust facade feature.
 - Refreshed the full local release-candidate proof from clean head `0167d442`.
   `scripts/check-release-readiness.sh --release-candidate` passed locally,
   covering dependency and workflow contracts, release-version checks,

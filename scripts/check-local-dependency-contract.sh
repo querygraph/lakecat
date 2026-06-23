@@ -244,11 +244,17 @@ require_pattern 'docs/book/check_pdf_layout\.sh "\$dist_dir/lakecat\.pdf"' docs/
   "LakeCat book build must run the PDF layout validator"
 
 require_pattern 'grust-graph = \{ package = "grust-graph", version = "0\.10\.0", path = "../grust/crates/grust"' Cargo.toml \
-  "grust-graph must use the active local Grust 0.10 path while grust-turso is ahead of the published facade line"
-require_pattern 'grust-turso-local = \["grust-local", "grust-graph/turso"' crates/lakecat-service/Cargo.toml \
+  "grust-graph must use the active local Grust 0.10 path for graph traits, memory projection, and Cypher helpers"
+require_pattern 'grust-turso = \{ package = "grust-turso", version = "0\.10\.0", path = "../grust/crates/grust-turso"' Cargo.toml \
+  "grust-turso must use the active local Grust 0.10 path for Turso-backed graph projection"
+require_pattern 'grust-turso-local = \["grust-local", "dep:grust-turso"' crates/lakecat-service/Cargo.toml \
   "lakecat-service must expose the Grust Turso graph sink behind an explicit feature"
-require_pattern 'grust-turso-local = \["grust-local", "grust-graph/turso"\]' crates/lakecat-graph/Cargo.toml \
+require_pattern 'grust-turso-local = \["grust-local", "dep:grust-turso"\]' crates/lakecat-graph/Cargo.toml \
   "lakecat-graph must expose Turso-backed Grust projection behind an explicit feature"
+require_pattern 'grust_turso::TursoGraphStore' crates/lakecat-service/src/main.rs \
+  "lakecat-service must configure Turso graph projection through the dedicated grust-turso crate"
+require_pattern 'grust_turso::TursoGraphStore' crates/lakecat-graph/src/lib.rs \
+  "LakeCat graph tests must exercise the dedicated grust-turso backend crate"
 require_pattern 'typesec = \{ version = "0\.8\.0",' Cargo.toml \
   "typesec must use the published 0.8.0 crate"
 require_pattern 'name = "grust-turso"' Cargo.lock \

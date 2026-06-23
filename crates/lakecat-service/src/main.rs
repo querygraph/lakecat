@@ -138,7 +138,7 @@ async fn configured_graph_sink() -> lakecat_core::LakeCatResult<Arc<dyn CatalogG
 async fn configured_grust_turso_graph_sink_for_path(
     path: impl Into<String>,
 ) -> lakecat_core::LakeCatResult<Arc<dyn CatalogGraphSink>> {
-    let store = grust_graph::TursoGraphStore::connect(grust_graph::TursoConfig {
+    let store = grust_turso::TursoGraphStore::connect(grust_turso::TursoConfig {
         path: path.into(),
         table_prefix: "lakecat_graph".to_string(),
         ..Default::default()
@@ -202,7 +202,7 @@ mod grust_turso_tests {
             .expect("service graph sink should write through Grust Turso");
         drop(sink);
 
-        let store = grust_graph::TursoGraphStore::connect(grust_graph::TursoConfig {
+        let store = grust_turso::TursoGraphStore::connect(grust_turso::TursoConfig {
             path: path_string,
             table_prefix: "lakecat_graph".to_string(),
             ..Default::default()

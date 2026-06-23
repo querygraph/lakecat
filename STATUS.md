@@ -5,6 +5,23 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest Grust Turso crate boundary slice:
+  `Use dedicated grust-turso dependency`.
+  The `grust-turso-local` feature now binds LakeCat graph projection to
+  Grust's dedicated local `grust-turso` crate instead of relying only on the
+  `grust-graph/turso` facade feature. Service startup constructs
+  `grust_turso::TursoGraphStore` for `LAKECAT_GRUST_TURSO_PATH`, and the graph
+  crate regressions exercise the same backend crate for durable persistence,
+  traversal, Cypher-over-Turso, and matched-node mutation while LakeCat still
+  keeps graph semantics in Grust.
+- Local verification for this Grust Turso crate boundary slice passed:
+  `cargo fmt -p lakecat-graph -p lakecat-service -- --check`;
+  `cargo test -p lakecat-graph --features grust-turso-local grust_turso_store --lib -- --test-threads=1`;
+  `cargo test -p lakecat-service --features grust-turso-local --bin lakecat-service configured_grust_turso_graph_sink_projects_catalog_events_to_turso_store -- --test-threads=1`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest release-candidate proof:
   `scripts/check-release-readiness.sh --release-candidate` passed locally from
   clean head `0167d442`. The run covered dependency and workflow trigger
