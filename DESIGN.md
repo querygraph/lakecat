@@ -373,14 +373,15 @@ logs, audit/outbox, replay admission, governed scan/fetch, credential receipt
 proof, management surfaces, view receipt chains, QueryGraph bootstrap,
 OpenLineage replay, and QGLake handoff/import proof.
 The broad local release gate was refreshed on June 23, 2026 from clean head
-`45468f0d`. `scripts/check-release-readiness.sh --release-candidate` passed
+`ba419db0`. `scripts/check-release-readiness.sh --release-candidate` passed
 locally, including shell-contract checks, dependency-contract checks, manual CI
 trigger contract checks, tracked book artifact validation, formatter checks,
 default and all-features workspace tests, explicit Turso/Sail/TypeSec/Grust
 feature gates, Grust Turso graph projection tests, explicit Rust
-`lakecat-cli qglake_handoff` verifier tests, out-of-tree book artifact
-validation plus the executable book artifact contract, local QGLake handoff
-replay verification with QueryGraph locked verify/import,
+`lakecat-cli qglake_handoff` verifier tests, the checked-in release-proof
+contract, out-of-tree book artifact validation plus the executable book
+artifact contract, local QGLake handoff replay verification with QueryGraph
+locked verify/import,
 `graphProjectionProof.backend = grust-turso` and
 `graphProjectionProof.tablePrefix = lakecat_graph`, and `git diff --check`.
 This remains local release evidence; automatic cloud CI stays manual/disabled

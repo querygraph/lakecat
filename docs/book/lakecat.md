@@ -13636,10 +13636,10 @@ scripts/check-local-dependency-contract.sh
 ```
 
 The current full local release-candidate proof was refreshed on June 23, 2026
-from clean head `45468f0d`. It passed with tracked book artifact validation,
-the temporary book build, executable book artifact contract, QueryGraph locked
-verify/import, Grust Turso graph projection proof, and the final clean-tree
-check.
+from clean head `ba419db0`. It passed with tracked book artifact validation,
+the checked-in release-proof contract, temporary book build, executable book
+artifact contract, QueryGraph locked verify/import, Grust Turso graph
+projection proof, and the final clean-tree check.
 
 LakeCat also carries a smaller proof-freshness contract for the release docs
 themselves:

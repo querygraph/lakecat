@@ -29,14 +29,15 @@
   and PDF layout for either tracked `docs/book/dist` or a temporary
   release-candidate dist directory; `docs/book/build.sh` and the full release
   gate now run it after book generation.
-- Refreshed the full local release-candidate proof from clean head `45468f0d`.
+- Refreshed the full local release-candidate proof from clean head `ba419db0`.
   `scripts/check-release-readiness.sh --release-candidate` passed locally,
   covering shell syntax checks, dependency and workflow contracts,
   release-version checks, tracked book artifact validation, formatting,
   default and all-features workspace tests, Turso/Sail/TypeSec/Grust and Grust
-  Turso feature rows, explicit Rust handoff verifier tests, out-of-tree book
-  artifact validation plus the executable book artifact contract, QGLake
-  handoff replay through QueryGraph locked verify/import with
+  Turso feature rows, explicit Rust handoff verifier tests, the checked-in
+  release-proof contract, out-of-tree book artifact validation plus the
+  executable book artifact contract, QGLake handoff replay through QueryGraph
+  locked verify/import with
   `graphProjectionProof.backend = grust-turso` and
   `graphProjectionProof.tablePrefix = lakecat_graph`, and `git diff --check`.
 - Added compact handoff summary non-bundle artifact hash-shape coverage. The
