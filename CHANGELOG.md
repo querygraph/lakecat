@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Re-verified the current Grust Turso graph boundary against Grust commit
+  `107bbf9`. LakeCat still performs durable catalog graph projection through
+  `GrustCatalogGraphSink<TursoGraphStore>` via the `grust-turso-local` feature,
+  while direct `turso::` usage remains limited to the catalog store spine and
+  graph persistence, traversal, Cypher, and matched-node mutation behavior stay
+  in Grust's `grust-turso` crate.
 - Added Turso pending outbox event-id drift coverage. Durable Turso pending-row
   validation now has a regression matching the embedded memory store: if a
   stored pending outbox row's `event_id` no longer matches its payload hash,

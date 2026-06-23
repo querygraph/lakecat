@@ -5,6 +5,24 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest Grust Turso boundary verification:
+  `Re-verify current grust-turso graph operations`.
+  The active local Grust checkout is `107bbf9 Add Turso Cypher matched-node
+  patches`. LakeCat's graph path resolves as
+  `lakecat-graph -> grust-graph -> grust-turso`, and the only direct
+  `turso::` imports in LakeCat remain in `lakecat-store` for the durable
+  catalog spine. Durable graph persistence, traversal, Cypher, and matched-node
+  mutation continue to run through Grust's `TursoGraphStore`, while LakeCat
+  configures `GrustCatalogGraphSink<TursoGraphStore>` and emits catalog-facing
+  graph events.
+- Local verification for this Grust Turso boundary check passed:
+  `cargo tree -p lakecat-graph --features grust-turso-local -i grust-turso`;
+  `cargo test -p lakecat-graph --features grust-turso-local grust_turso_store -- --test-threads=1`;
+  `cargo test -p lakecat-service --features grust-turso-local --bin lakecat-service configured_grust_turso_graph_sink_projects_catalog_events_to_turso_store -- --test-threads=1`;
+  `scripts/check-local-dependency-contract.sh`;
+  `/Users/alexy/src/grust: cargo test -p grust-turso`;
+  `cargo fmt -p lakecat-graph -p lakecat-service -- --check`;
+  `git diff --check`.
 - Latest Turso pending outbox durability slice:
   `Cover Turso pending outbox event-id drift`.
   Durable Turso pending-row validation now has explicit regression coverage
