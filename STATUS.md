@@ -5,6 +5,21 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest tenant-parent upsert admission hardening:
+  memory and Turso stores now validate parent server records before project
+  upserts and parent project records before warehouse upserts, so corrupted
+  tenant-root parents cannot be used as foundations for new management
+  children.
+- Local verification for this tenant-parent upsert admission slice passed:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_rejects_corrupt_server_parent_before_project_upsert -- --test-threads=1`;
+  `cargo test -p lakecat-store memory_store_rejects_corrupt_project_parent_before_warehouse_upsert -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_corrupt_server_parent_before_project_upsert -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_corrupt_project_parent_before_warehouse_upsert -- --test-threads=1`;
+  `cargo test -p lakecat-store record_map_scope_drift -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local record_json_scope_drift -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local row_column_scope_drift -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest tenant-root upsert admission hardening:
   memory and Turso stores now validate existing server, project, and warehouse
   rows before replacing them, so management-root scope drift cannot be hidden

@@ -283,7 +283,10 @@ The current working plan is:
    tenant-root inventory for QueryGraph bootstrap or management proof;
    memory/Turso server, project, and warehouse upserts must also validate any
    existing row before replacing it so same-key management writes cannot erase
-   tenant-root scope drift. The Turso server/project regression suite now covers
+   tenant-root scope drift. Project and warehouse upserts must also validate
+   their parent server/project records before extending the management
+   hierarchy, so corrupted tenant-root parents cannot seed new child state. The
+   Turso server/project regression suite now covers
    both decoded JSON identity drift and durable `servers.server_id` /
    `projects.project_id` row-column drift for tenant-root list paths. Turso
    namespace reads must bind decoded JSON

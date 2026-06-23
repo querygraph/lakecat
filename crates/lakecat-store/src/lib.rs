@@ -2172,13 +2172,14 @@ impl CatalogStore for MemoryCatalogStore {
     async fn upsert_project(&self, project: ProjectRecord) -> LakeCatResult<ProjectRecord> {
         project.validate()?;
         let mut state = self.state.write().await;
-        if let Some(server_id) = project.server_id.as_deref()
-            && !state.servers.contains_key(server_id)
-        {
-            return Err(LakeCatError::NotFound {
-                object: "server",
-                name: server_id.to_string(),
-            });
+        if let Some(server_id) = project.server_id.as_deref() {
+            let Some(server) = state.servers.get(server_id) else {
+                return Err(LakeCatError::NotFound {
+                    object: "server",
+                    name: server_id.to_string(),
+                });
+            };
+            validate_server_record_map_scope(server, server_id)?;
         }
         if let Some(existing) = state.projects.get(&project.project_id) {
             validate_project_record_map_scope(existing, &project.project_id)?;
@@ -2206,12 +2207,13 @@ impl CatalogStore for MemoryCatalogStore {
     async fn upsert_warehouse(&self, warehouse: WarehouseRecord) -> LakeCatResult<WarehouseRecord> {
         warehouse.validate()?;
         let mut state = self.state.write().await;
-        if !state.projects.contains_key(&warehouse.project_id) {
+        let Some(project) = state.projects.get(&warehouse.project_id) else {
             return Err(LakeCatError::NotFound {
                 object: "project",
                 name: warehouse.project_id.clone(),
             });
-        }
+        };
+        validate_project_record_map_scope(project, &warehouse.project_id)?;
         let warehouse_key = warehouse.warehouse.as_str().to_string();
         if let Some(existing) = state.warehouses.get(&warehouse_key) {
             validate_warehouse_record_map_scope(existing, &warehouse_key)?;
@@ -4003,6 +4005,44 @@ mod memory_tests {
     }
 
     #[tokio::test]
+    async fn memory_store_rejects_corrupt_project_parent_before_warehouse_upsert() {
+        let store = MemoryCatalogStore::new();
+        let project = ProjectRecord::new(
+            "default",
+            None,
+            Some("Default Project".to_string()),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        store.upsert_project(project).await.unwrap();
+
+        store
+            .state
+            .write()
+            .await
+            .projects
+            .get_mut("default")
+            .unwrap()
+            .project_id = "other-project".to_string();
+
+        let warehouse = WarehouseRecord::new(
+            WarehouseName::new("local").unwrap(),
+            "default",
+            Some("file:///tmp/lakecat".to_string()),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        let err = store.upsert_warehouse(warehouse).await.unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("project row scope does not match")
+        ));
+    }
+
+    #[tokio::test]
     async fn memory_store_rejects_corrupt_warehouse_records_on_read() {
         let store = MemoryCatalogStore::new();
         let project = ProjectRecord::new(
@@ -4347,6 +4387,48 @@ mod memory_tests {
             store.upsert_project(missing_server).await,
             Err(LakeCatError::NotFound { object, name })
                 if object == "server" && name == "missing-server"
+        ));
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_corrupt_server_parent_before_project_upsert() {
+        let store = MemoryCatalogStore::new();
+        store
+            .upsert_server(
+                ServerRecord::new(
+                    "lakecat-local",
+                    Some("Local LakeCat".to_string()),
+                    None,
+                    BTreeMap::new(),
+                    Principal::anonymous(),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        store
+            .state
+            .write()
+            .await
+            .servers
+            .get_mut("lakecat-local")
+            .unwrap()
+            .server_id = "lakecat-other".to_string();
+
+        let project = ProjectRecord::new(
+            "default",
+            Some("lakecat-local".to_string()),
+            Some("QueryGraph Project".to_string()),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        let err = store.upsert_project(project).await.unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("server row scope does not match")
         ));
     }
 
@@ -8644,17 +8726,19 @@ pub mod turso_store {
             if let Some(server_id) = project.server_id.as_deref() {
                 let mut rows = tx
                     .query(
-                        "select 1 from servers where server_id = ?1 limit 1",
+                        "select record_json, server_id from servers where server_id = ?1 limit 1",
                         (server_id,),
                     )
                     .await
                     .map_err(turso_error)?;
-                if rows.next().await.map_err(turso_error)?.is_none() {
+                let Some(row) = rows.next().await.map_err(turso_error)? else {
                     return Err(LakeCatError::NotFound {
                         object: "server",
                         name: server_id.to_string(),
                     });
-                }
+                };
+                let parent: ServerRecord = decode_json(row_string(&row, 0)?)?;
+                crate::validate_server_record_scope(&parent, &row_string(&row, 1)?)?;
             }
             let mut rows = tx
                 .query(
@@ -8715,21 +8799,22 @@ pub mod turso_store {
             warehouse.validate()?;
             let mut conn = self.connect()?;
             let tx = conn.transaction().await.map_err(turso_error)?;
-            let project_exists = {
+            {
                 let mut rows = tx
                     .query(
-                        "select 1 from projects where project_id = ?1 limit 1",
+                        "select record_json, project_id from projects where project_id = ?1 limit 1",
                         (warehouse.project_id.as_str(),),
                     )
                     .await
                     .map_err(turso_error)?;
-                rows.next().await.map_err(turso_error)?.is_some()
-            };
-            if !project_exists {
-                return Err(LakeCatError::NotFound {
-                    object: "project",
-                    name: warehouse.project_id.clone(),
-                });
+                let Some(row) = rows.next().await.map_err(turso_error)? else {
+                    return Err(LakeCatError::NotFound {
+                        object: "project",
+                        name: warehouse.project_id.clone(),
+                    });
+                };
+                let parent: ProjectRecord = decode_json(row_string(&row, 0)?)?;
+                crate::validate_project_record_scope(&parent, &row_string(&row, 1)?)?;
             }
             let mut rows = tx
                 .query(
@@ -10205,6 +10290,44 @@ pub mod turso_store {
         }
 
         #[tokio::test]
+        async fn turso_store_rejects_corrupt_project_parent_before_warehouse_upsert() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let mut project = ProjectRecord::new(
+                "default",
+                None,
+                Some("Default Project".to_string()),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_project(project.clone()).await.unwrap();
+            project.project_id = "other-project".to_string();
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update projects set record_json = ?2 where project_id = ?1",
+                ("default", encode_json(&project).unwrap()),
+            )
+            .await
+            .unwrap();
+
+            let warehouse = WarehouseRecord::new(
+                WarehouseName::new("local").unwrap(),
+                "default",
+                Some("file:///tmp/lakecat".to_string()),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            let err = store.upsert_warehouse(warehouse).await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("project row scope does not match")
+            ));
+        }
+
+        #[tokio::test]
         async fn turso_store_rejects_corrupt_warehouse_records_on_read() {
             let store = TursoCatalogStore::in_memory().await.unwrap();
             let project = ProjectRecord::new(
@@ -10464,6 +10587,44 @@ pub mod turso_store {
                 store.upsert_project(missing_server).await,
                 Err(LakeCatError::NotFound { object, name })
                     if object == "server" && name == "missing-server"
+            ));
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_corrupt_server_parent_before_project_upsert() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let mut server = ServerRecord::new(
+                "lakecat-local",
+                Some("Local LakeCat".to_string()),
+                None,
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_server(server.clone()).await.unwrap();
+            server.server_id = "lakecat-other".to_string();
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update servers set record_json = ?2 where server_id = ?1",
+                ("lakecat-local", encode_json(&server).unwrap()),
+            )
+            .await
+            .unwrap();
+
+            let project = ProjectRecord::new(
+                "default",
+                Some("lakecat-local".to_string()),
+                Some("QueryGraph Project".to_string()),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            let err = store.upsert_project(project).await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("server row scope does not match")
             ));
         }
 

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened tenant-parent upsert admission. Memory and Turso stores now validate
+  parent server records before project upserts and parent project records
+  before warehouse upserts, so corrupted tenant-root parents cannot be used as
+  foundations for new management children.
 - Hardened tenant-root upsert admission. Memory and Turso stores now validate
   existing server, project, and warehouse rows before replacing them, so
   management-root scope drift cannot be hidden by same-key upserts.

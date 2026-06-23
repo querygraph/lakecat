@@ -7610,6 +7610,11 @@ Warehouse reads bind decoded records to the Turso row's warehouse, project id,
 and storage-root columns before returning tenant-root inventory. That keeps
 management and QueryGraph bootstrap proof from inheriting a row index that
 points a valid JSON warehouse at a different project or storage root.
+Child management writes use the same evidence rule. A project upsert that
+names a parent server validates the decoded server record before accepting the
+project, and a warehouse upsert validates the decoded parent project before
+accepting the warehouse. A tenant tree is therefore not allowed to grow from a
+corrupted parent row merely because the row key still exists.
 Namespace reads use the same decoded-row binding. A namespace list, load, or
 drop operation must reconcile the decoded namespace with the selected warehouse
 and durable `namespaces.namespace_path` row column before standard namespace
@@ -10102,6 +10107,11 @@ OpenLineage, or QueryGraph to trust the mismatched tenant-root evidence. Raw
 lineage-drain summaries apply the same redaction-hash check before compact
 handoff proof is built, so the archived summary path cannot become weaker than
 delivery replay.
+The write side also checks ancestry before extending the tenant tree. Project
+upserts validate their parent server record, and warehouse upserts validate
+their parent project record. In proof terms, the child record does not inherit
+authority from a mere key lookup; it inherits from a decoded, scoped, valid
+parent management record.
 The QGLake acceptance workflow now
 establishes its server/project/warehouse tenant spine, performs governed
 server, project, warehouse, policy-list, policy-upsert, storage-profile-list,
