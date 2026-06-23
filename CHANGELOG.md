@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Hardened Turso storage-profile row scope validation. Storage-profile reads
+  now bind decoded JSON back to the row's location prefix, provider, and
+  issuance mode before a credential root can be returned or matched to a table.
 - Hardened Turso policy-binding row scope validation. Policy-binding reads now
   bind decoded JSON back to the row's namespace, table, and enforced columns,
   so corrupted row indexes cannot silently change which policies match a table.

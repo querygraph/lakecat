@@ -6395,6 +6395,11 @@ back to the row's warehouse, policy id, namespace path, table name, and enforced
 flag before a binding can be returned or matched to a table. That keeps a
 corrupted row index from silently changing which TypeSec-style policy anchors
 apply to a governed read.
+Storage-profile reads follow the same rule for credential-root evidence: the
+decoded profile must match the row's warehouse, profile id, location prefix,
+provider, and issuance mode before LakeCat can return it or match it to a
+table. That prevents durable row-column drift from changing the storage scope
+used by credential vending or QGLake management proof.
 
 Outbox draining is intentionally strict. LakeCat projects a batch to graph and
 lineage sinks first, then acknowledges the whole projected batch in the store.
