@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Refreshed the full local release-candidate proof after the Grust Turso Cypher
+  reconciliation. `scripts/check-release-readiness.sh --release-candidate`
+  passed from clean head `db50150b`, including the `grust-turso-local`
+  persistence, traversal, and Cypher graph rows, all-features workspace tests,
+  out-of-tree book artifact validation, live QGLake handoff verification with
+  `graphProjectionProof.backend = grust-turso`, and final `git diff --check`.
 - Reconciled the Grust Turso graph guidance and local dependency contract after
   Cypher-over-Turso landed in Grust. README, DESIGN, GOAL, AGENTS, and the
   contract check now describe persistence, traversal, and Cypher as Grust-owned

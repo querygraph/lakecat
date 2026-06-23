@@ -25,16 +25,16 @@ Updated: 2026-06-23
   LakeCat still only emits bounded catalog events; graph persistence, traversal,
   and Cypher behavior remain in Grust.
 - Latest release evidence:
-  `scripts/check-release-readiness.sh --release-candidate` passed from a clean
-  release-candidate head on 2026-06-23 before the latest Grust Turso Cypher
-  reconciliation commits. That proof covered shell syntax checks,
-  isolated dependency-contract metadata checks, manual workflow trigger checks,
-  release version consistency, formatter checks, default workspace tests,
-  explicit Turso/Sail/TypeSec/Grust feature rows, Grust Turso graph persistence
-  and traversal tests, all-features CLI and workspace tests, out-of-tree book
-  artifact validation, live QGLake handoff verification, and final
-  `git diff --check` with a clean tree. The final release-candidate proof must
-  be refreshed from the then-current head.
+  `scripts/check-release-readiness.sh --release-candidate` passed from clean
+  head `db50150b` on 2026-06-23 after the latest Grust Turso Cypher
+  reconciliation. That proof covered shell syntax checks, isolated
+  dependency-contract metadata checks, manual workflow trigger checks, release
+  version consistency, formatter checks, default workspace tests, explicit
+  Turso/Sail/TypeSec/Grust feature rows, Grust Turso graph persistence,
+  traversal, and Cypher tests, all-features CLI and workspace tests,
+  out-of-tree book artifact validation, live QGLake handoff verification with
+  `graphProjectionProof.backend = grust-turso`, and final `git diff --check`
+  with a clean tree.
 - Latest release-contract slice:
   `Isolate dependency-contract metadata temp files`.
   `scripts/check-local-dependency-contract.sh` now writes Cargo metadata
