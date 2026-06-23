@@ -5,6 +5,16 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest documentation/book slice:
+  `Expand release concept maturity ledger`.
+  The LakeCat book now directly maps the current release claims for the Rust
+  service spine, Turso local store, Iceberg REST paths, commit CAS and
+  idempotent proof spine, governed scan/credential receipts, and
+  QueryGraph/QGLake/OpenLineage handoff surfaces to their correct layer:
+  standard Iceberg, LakeCat/TypeSec/QueryGraph product behavior, or a possible
+  future neutral profile. The new text also sharpens the case that Sail should
+  own reusable table-format and planning semantics instead of LakeCat growing a
+  shadow Iceberg engine.
 - Latest implementation/testing slice:
   `Harden lineage-drain scope scalar summaries`.
   Raw lineage-drain summaries now fail closed when view warehouse/name/namespace,

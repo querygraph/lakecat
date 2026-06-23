@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's release vocabulary with a current-maturity
+  ledger for the Rust service spine, Turso local store direction, Iceberg REST
+  paths, commit CAS/idempotency/pointer/audit/outbox/replay hardening,
+  TypeSec-style governed scan and credential receipts, and broad
+  QueryGraph/QGLake/OpenLineage proof surfaces. The new material explicitly
+  classifies each claim as standard Iceberg parlance, LakeCat/TypeSec/
+  QueryGraph product behavior, or a possible future neutral profile, and
+  reinforces why table-format work should move into Sail.
 - Hardened lineage-drain scope scalar summaries. Raw replay summary
   construction now rejects malformed or blank view scope, management scope,
   policy id, and policy ODRL hash evidence instead of silently dropping those
