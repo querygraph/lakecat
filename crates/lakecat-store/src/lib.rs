@@ -11005,27 +11005,20 @@ pub mod turso_store {
                 ))
                 .await
                 .unwrap();
-            store
-                .commit_table(
-                    &ident,
-                    TableCommit {
-                        requirements: vec![],
-                        updates: vec![serde_json::json!({"action": "noop"})],
-                        expected_previous_metadata_location: Some(
-                            "file:///tmp/events/metadata/00000.json".to_string(),
-                        ),
-                        new_metadata_location: Some(
-                            "file:///tmp/events/metadata/00001.json".to_string(),
-                        ),
-                        new_metadata: Some(serde_json::json!({"format-version": 3})),
-                        idempotency_key: Some("commit-1".to_string()),
-                        idempotency_request_hash: None,
-                        principal: Principal::anonymous(),
-                        authorization_receipt: None,
-                    },
-                )
-                .await
-                .unwrap();
+            let commit = TableCommit {
+                requirements: vec![],
+                updates: vec![serde_json::json!({"action": "noop"})],
+                expected_previous_metadata_location: Some(
+                    "file:///tmp/events/metadata/00000.json".to_string(),
+                ),
+                new_metadata_location: Some("file:///tmp/events/metadata/00001.json".to_string()),
+                new_metadata: Some(serde_json::json!({"format-version": 3})),
+                idempotency_key: Some("commit-1".to_string()),
+                idempotency_request_hash: None,
+                principal: Principal::anonymous(),
+                authorization_receipt: None,
+            };
+            store.commit_table(&ident, commit.clone()).await.unwrap();
             let record = store
                 .table_commit_records(&ident, 1, Some(1))
                 .await
@@ -11053,6 +11046,12 @@ pub mod turso_store {
                 .replay_table_commit(&ident, "commit-1", &record.request_hash)
                 .await
                 .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("table record row scope does not match")
+            ));
+            let err = store.commit_table(&ident, commit).await.unwrap_err();
             assert!(matches!(
                 err,
                 LakeCatError::Internal(message)

@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest Turso idempotent commit retry coverage:
+  Turso store tests now prove a corrupted idempotency response whose decoded
+  table identity drifts is rejected both by explicit replay and by an
+  idempotent `commit_table` retry, keeping retry responses bound to the
+  requested REST table scope.
+- Local verification for this Turso idempotent commit retry slice passed:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_table_idempotency_response_scope_drift -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest compact Grust Turso graph-proof schema coverage:
   QGLake handoff verification now has focused regression coverage proving
   `graphProjectionProof` rejects extra unverified backend claims, so saved

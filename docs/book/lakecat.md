@@ -445,6 +445,10 @@ warehouse, namespace, and table-name columns before table list, load, commit,
 soft-delete, or restore paths can return or mutate REST-visible table state.
 That prevents a damaged local store row from quietly remapping a standard
 Iceberg table operation while leaving the JSON payload looking plausible.
+Idempotent commit retries use the same rule: a replay response is decoded and
+checked against the requested table both when an operator asks for explicit
+replay and when the normal `commit_table` path short-circuits to a stored
+idempotent response.
 Pointer-history proof follows the same rule: decoded commit records are bound
 back to the durable `metadata_pointer_log` table key and principal row evidence
 before commit history can be returned to operators, replay validators, or

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened Turso idempotent commit retry coverage. Turso store tests now prove
+  a corrupted idempotency response whose decoded table identity drifts is
+  rejected both by explicit replay and by an idempotent `commit_table` retry,
+  keeping retry responses bound to the requested REST table scope.
 - Added compact Grust Turso graph-proof schema coverage. QGLake handoff
   verification now has focused regression coverage proving `graphProjectionProof`
   rejects extra unverified backend claims, so saved handoffs can only describe
