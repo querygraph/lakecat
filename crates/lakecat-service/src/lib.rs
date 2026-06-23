@@ -7131,7 +7131,11 @@ fn lineage_drain_event_summary(
             .and_then(Value::as_u64)
             .and_then(|count| usize::try_from(count).ok())
             .unwrap_or_default(),
-        policy_ids: string_array_summary(payload.get("policy-ids")),
+        policy_ids: payload
+            .get("policy-ids")
+            .map(|_| lineage_summary_string_array_field(event, payload, "policy-ids"))
+            .transpose()?
+            .unwrap_or_default(),
         policy_id: policy
             .and_then(|policy| policy.get("policy-id"))
             .and_then(Value::as_str)
@@ -7144,17 +7148,29 @@ fn lineage_drain_event_summary(
             .get("project-count")
             .and_then(Value::as_u64)
             .and_then(|count| usize::try_from(count).ok()),
-        project_ids: string_array_summary(payload.get("project-ids")),
+        project_ids: payload
+            .get("project-ids")
+            .map(|_| lineage_summary_string_array_field(event, payload, "project-ids"))
+            .transpose()?
+            .unwrap_or_default(),
         server_count: payload
             .get("server-count")
             .and_then(Value::as_u64)
             .and_then(|count| usize::try_from(count).ok()),
-        server_ids: string_array_summary(payload.get("server-ids")),
+        server_ids: payload
+            .get("server-ids")
+            .map(|_| lineage_summary_string_array_field(event, payload, "server-ids"))
+            .transpose()?
+            .unwrap_or_default(),
         storage_profile_count: payload
             .get("storage-profile-count")
             .and_then(Value::as_u64)
             .and_then(|count| usize::try_from(count).ok()),
-        storage_profile_ids: string_array_summary(payload.get("storage-profile-ids")),
+        storage_profile_ids: payload
+            .get("storage-profile-ids")
+            .map(|_| lineage_summary_string_array_field(event, payload, "storage-profile-ids"))
+            .transpose()?
+            .unwrap_or_default(),
         storage_profile_id: storage_profile
             .and_then(|profile| profile.get("profile-id"))
             .and_then(Value::as_str)
@@ -7182,7 +7198,11 @@ fn lineage_drain_event_summary(
             .get("warehouse-count")
             .and_then(Value::as_u64)
             .and_then(|count| usize::try_from(count).ok()),
-        warehouse_names: string_array_summary(payload.get("warehouse-names")),
+        warehouse_names: payload
+            .get("warehouse-names")
+            .map(|_| lineage_summary_string_array_field(event, payload, "warehouse-names"))
+            .transpose()?
+            .unwrap_or_default(),
         table_commit_count: payload
             .get("commit-count")
             .and_then(Value::as_u64)
@@ -48543,6 +48563,100 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("standards must not contain duplicate values"));
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_management_ids() {
+        let receipt = OutboxProjectionReceipt::default();
+        let malformed_project_ids = OutboxEvent {
+            event_id: "evt-bad-summary-project-ids".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "management.projects-listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "project-count": 2,
+                    "project-ids": ["analytics", 42]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&malformed_project_ids, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("project-ids must contain strings"));
+
+        let blank_server_id = OutboxEvent {
+            event_id: "evt-blank-summary-server-id".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "management.servers-listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "server-count": 2,
+                    "server-ids": ["primary", " "]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&blank_server_id, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("server-ids must not contain blank strings"));
+
+        let duplicate_warehouse_name = OutboxEvent {
+            event_id: "evt-duplicate-summary-warehouse-name".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "management.warehouses-listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "warehouse-count": 2,
+                    "warehouse-names": ["local", "local"]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&duplicate_warehouse_name, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("warehouse-names must not contain duplicate values"));
+
+        let duplicate_policy_id = OutboxEvent {
+            event_id: "evt-duplicate-summary-policy-id".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "policy.bindings-listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "policy-binding-count": 2,
+                    "policy-ids": ["agent-read", "agent-read"]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&duplicate_policy_id, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("policy-ids must not contain duplicate values"));
+
+        let malformed_storage_profile_ids = OutboxEvent {
+            event_id: "evt-bad-summary-storage-profile-ids".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "management.storage-profiles-listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "storage-profile-count": 1,
+                    "storage-profile-ids": {"profile-id": "local-file"}
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&malformed_storage_profile_ids, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("storage-profile-ids must be an array when present"));
     }
 
     #[test]

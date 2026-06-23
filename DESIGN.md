@@ -883,6 +883,10 @@ repeating valid control-plane identities. It must also preserve warehouse-list
 project scope as compact `warehouseProjectId` evidence and reject malformed or
 unlisted scopes, so archived QGLake management proof cannot detach a
 project-filtered warehouse inventory from the project list it claims.
+Raw lineage-drain management ID summary arrays must match that posture:
+`project-ids`, `server-ids`, `warehouse-names`, `policy-ids`, and
+`storage-profile-ids` are malformed when they are not string arrays, carry blank
+entries, or repeat identities.
 Service replay admission must also close the top-level payload schema for
 `namespace.listed`, `view.listed`, and management list events, so an archived
 inventory read cannot append unverified namespace, view, management,

@@ -8555,7 +8555,11 @@ hashes, and OpenLineage hashes that LakeCat verifies. QueryGraph should treat
 any extra credential-root claim as untrusted until it is promoted into that
 closed proof contract and backed by replay evidence. This is a LakeCat/TypeSec
 governance extension around Iceberg access, not an Iceberg table-metadata
-extension. It also compares
+extension. Raw lineage-drain management summaries now apply the same
+inventory posture to control-plane ID arrays: project ids, server ids,
+warehouse names, policy ids, and storage-profile ids must be string-shaped,
+nonblank, and duplicate-free before QGLake proof can inherit them. It also
+compares
 the captured `replay-evidence.credentials` restricted-agent and trusted-human
 branches with the compact `credentialVendingProof`, so a saved handoff cannot
 claim that agents were blocked onto Sail-planned reads or that humans used an
