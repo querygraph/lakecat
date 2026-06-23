@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Refreshed the full local release-candidate proof from clean head `4f7ac153`.
+  `scripts/check-release-readiness.sh --release-candidate` passed locally with
+  the release-proof contract in clean candidate mode, the full workspace and
+  feature-gate matrix, out-of-tree book artifact validation, Grust Turso QGLake
+  handoff, QueryGraph locked verify/import, bundle hash
+  `sha256:d0f6c4217dd2b47158f7616656794d3eeda413fc2158704392d3f0524dd03ef3`,
+  OpenLineage hash
+  `sha256:f67297a40fe04623dbfac97078b6fcb0398c8d9a1d7c2a734b45a88f86ca7922`,
+  QueryGraph import hash
+  `sha256:48d2cad226546186b18408bc90d58b0d5970889b9f276484514ef3de0596da40`,
+  and `git diff --check`.
 - Accepted the conventional `Idempotency-Key` header for REST table commits
   alongside `x-lakecat-idempotency-key`. Matching dual headers share the same
   exact-retry path, while duplicate or conflicting idempotency headers fail
