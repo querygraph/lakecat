@@ -5,6 +5,19 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest Sail helper patch-bridge hardening:
+  the checked-in `ci/sail-patches/0003-Expose-Iceberg-generated-model-module.patch`
+  now matches local Sail helper commit `a6964906` (`Expose Iceberg REST models
+  for LakeCat`). `scripts/check-local-dependency-contract.sh` now verifies all
+  three checked-in Sail helper patches against local Sail commits `68631016`,
+  `fdb3b657`, and `a6964906` with stable `git patch-id` evidence, so manual CI
+  cannot silently drift away from the local Sail helper API surface LakeCat is
+  proving.
+- Local verification for this Sail helper patch-bridge hardening slice passed:
+  `docs/book/build.sh`; `bash -n scripts/check-local-dependency-contract.sh`;
+  `scripts/check-local-dependency-contract.sh`; explicit `git patch-id --stable`
+  comparison for the three checked-in Sail patches and local Sail commits;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest release-posture contract hardening:
   `scripts/check-release-version-contract.sh` and
   `scripts/check-local-dependency-contract.sh` now require the release docs to

@@ -1,17 +1,22 @@
-From 087a24198aa843d55149ddcafaf7cf6f5a9bb4db Mon Sep 17 00:00:00 2001
+From a69649060b09f53be5c308410a5cb6a80bbf6c0a Mon Sep 17 00:00:00 2001
 From: Alexy Khrabrov <deliverable@gmail.com>
-Date: Wed, 17 Jun 2026 14:57:35 -0700
-Subject: [PATCH] Expose Iceberg generated model module
+Date: Fri, 19 Jun 2026 09:48:33 -0700
+Subject: [PATCH] Expose Iceberg REST models for LakeCat
 
 ---
- crates/sail-catalog-iceberg/src/lib.rs | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
+ crates/sail-catalog-iceberg/src/lib.rs | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/crates/sail-catalog-iceberg/src/lib.rs b/crates/sail-catalog-iceberg/src/lib.rs
-index 0b072401..95980f73 100644
+index 0b072401..0d46fe39 100644
 --- a/crates/sail-catalog-iceberg/src/lib.rs
 +++ b/crates/sail-catalog-iceberg/src/lib.rs
-@@ -15,7 +15,7 @@
+@@ -11,11 +11,11 @@
+ // limitations under the License.
+ 
+ #![expect(unused_imports)]
+-#![expect(dead_code)]
++#![allow(dead_code)]
  #![expect(clippy::all)]
  
  pub mod apis;
@@ -22,4 +27,3 @@ index 0b072401..95980f73 100644
  
 -- 
 2.52.0
-

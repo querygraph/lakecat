@@ -402,7 +402,9 @@ boundary cleanup rather than new architecture:
   every dependency-boundary change and rerun it from the final release commit.
 - Keep the temporary Sail helper bridge release-explicit until the required
   helper behavior is published upstream. The local dependency contract already
-  proves the expected Sail path dependencies and patch files.
+  proves the expected Sail path dependencies, concrete helper exports, and
+  checked-in patch files against the corresponding local Sail helper commits
+  with stable `git patch-id` evidence.
 - Keep LakeCat and QueryGraph aligned with the active local Grust 0.10 path
   checkout and bind Turso-backed catalog graph projection to Grust's dedicated
   `grust-turso` crate. LakeCat's `grust-local` feature keeps the fast

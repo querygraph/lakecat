@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened the Sail helper patch bridge. The third checked-in Sail patch now
+  matches the local `a6964906` REST-model helper commit, and the local
+  dependency contract verifies all three Sail helper patches against their
+  corresponding local Sail commits with stable `git patch-id` evidence.
 - Refreshed the full local release-candidate proof from clean head `1ea1e1c3`.
   `scripts/check-release-readiness.sh --release-candidate` passed locally with
   the strengthened post-tag release-posture contract, full workspace and

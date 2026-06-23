@@ -62,6 +62,30 @@ forbid_cargo_dependency() {
   fi
 }
 
+require_patch_matches_commit() {
+  local patch_file="$1"
+  local sail_commit="$2"
+  local description="$3"
+
+  require_file "$patch_file"
+  git -C ../sail rev-parse -q --verify "$sail_commit^{commit}" >/dev/null || \
+    fail "$description: missing Sail commit $sail_commit"
+
+  local patch_id
+  local commit_patch_id
+  patch_id="$(git patch-id --stable < "$patch_file" | awk '{ print $1; exit }')"
+  commit_patch_id="$(
+    git -C ../sail show --format=email --no-renames "$sail_commit" \
+      | git patch-id --stable \
+      | awk '{ print $1; exit }'
+  )"
+
+  [[ -n "$patch_id" ]] || fail "$description: could not compute patch id for $patch_file"
+  [[ -n "$commit_patch_id" ]] || fail "$description: could not compute patch id for Sail commit $sail_commit"
+  [[ "$patch_id" == "$commit_patch_id" ]] || \
+    fail "$description: $patch_file patch-id $patch_id does not match Sail commit $sail_commit patch-id $commit_patch_id"
+}
+
 require_manual_only_workflows() {
   local workflow
   local workflow_files=()
@@ -161,6 +185,8 @@ require_pattern 'LAKECAT_RELEASE_PROOF_CANDIDATE=1' scripts/check-release-readin
   "release-candidate gate must run the release proof contract in candidate mode"
 require_pattern 'LAKECAT_RELEASE_PROOF_CANDIDATE' scripts/check-release-proof-contract.sh \
   "release proof contract must support clean candidate mode"
+require_pattern 'ci/sail-patches/\*\.patch -whitespace' .gitattributes \
+  "Sail patch bridge files must be marked as patch artifacts for git diff whitespace checks"
 require_pattern 'scripts/check-book-artifact-contract.sh docs/book/dist' scripts/check-release-readiness.sh \
   "release-readiness gate must run the tracked book artifact contract"
 require_pattern 'require_file CHANGELOG\.md' scripts/check-release-version-contract.sh \
@@ -391,6 +417,18 @@ for patch in \
 do
   require_file "$patch"
 done
+require_patch_matches_commit \
+  ci/sail-patches/0001-Expose-Iceberg-table-status-conversion.patch \
+  68631016 \
+  "Sail table-status helper patch bridge must match the local helper commit"
+require_patch_matches_commit \
+  ci/sail-patches/0002-Expose-Iceberg-planning-result-helpers.patch \
+  fdb3b657 \
+  "Sail planning helper patch bridge must match the local helper commit"
+require_patch_matches_commit \
+  ci/sail-patches/0003-Expose-Iceberg-generated-model-module.patch \
+  a6964906 \
+  "Sail generated-model helper patch bridge must match the local helper commit"
 
 require_file ../sail/crates/sail-catalog-iceberg/src/lib.rs
 require_file ../sail/crates/sail-catalog-iceberg/src/planning.rs

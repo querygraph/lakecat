@@ -8008,8 +8008,10 @@ scripts/check-local-dependency-contract.sh
 The script checks the manual-only CI trigger, scans every GitHub workflow file
 for forbidden automatic cloud triggers, verifies the local Grust 0.10/Turso
 graph feature surface, verifies the published TypeSec version, checks the local
-Sail path bridge, checks the Sail patch files manual CI applies, and checks the
-concrete Sail helper API surface LakeCat uses:
+Sail path bridge, checks the Sail patch files manual CI applies, verifies those
+patches against the corresponding local Sail helper commits with stable
+`git patch-id` evidence, and checks the concrete Sail helper API surface
+LakeCat uses:
 generated Iceberg REST models, typed metadata inputs, planning result helpers,
 fetchScanTasks result helpers, and table-status conversion. It also checks the
 local QueryGraph Rust importer for the LakeCat view receipt-chain contract:
