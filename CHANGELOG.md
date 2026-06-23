@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened Turso audit/outbox atomicity. Standalone audit recording now writes
+  the audit row and lineage/graph outbox row in one Turso transaction, with
+  regression coverage proving an outbox insert failure rolls back the audit
+  row instead of leaving unreplayable evidence behind.
 - Hardened Turso metadata pointer-log principal row validation.
   Commit-history reads now bind decoded commit records back to the durable
   `metadata_pointer_log.principal_json` row evidence as well as table scope

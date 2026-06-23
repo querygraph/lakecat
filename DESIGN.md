@@ -137,8 +137,8 @@ The durable OPUS guidance now collapses to these operating rules:
   the server from TypeSec/ODRL policy, carried by capabilities and receipts,
   applied by Sail plan/fetch paths, and replayed into QGLake evidence.
 - Keep the catalog spine durable and auditable: pointer CAS, idempotency,
-  metadata-object handling, audit, outbox, redaction, and replay proof are
-  LakeCat-owned responsibilities.
+  metadata-object handling, audit, transactional outbox, redaction, and replay
+  proof are LakeCat-owned responsibilities.
 - Keep the repo boundaries active. Reusable Iceberg/planning work goes to Sail;
   reusable graph taxonomy/query/storage work goes to Grust; reusable governance,
   TypeDID, capability, and secure-agent semantics go to TypeSec.
@@ -245,9 +245,10 @@ The current working plan is:
    to Grust.
 5. Keep tenancy and credentials replayable. Durable server/project/warehouse,
    namespace, view, policy, storage-profile, and credential-root changes should
-   create audit/outbox evidence. Secret references and storage roots must stay
-   redacted in replay, represented by provider labels, presence flags, and
-   content hashes such as `location-prefix-hash`; validation failures should
+   create transactionally paired audit/outbox evidence. Secret references and
+   storage roots must stay redacted in replay, represented by provider labels,
+   presence flags, and content hashes such as `location-prefix-hash`;
+   validation failures should
    follow the same hash-only rule for storage roots, secret references,
    public-config keys, and production resolver parse failures. Turso
    server/project/warehouse reads must bind decoded JSON back to the selecting
@@ -548,7 +549,7 @@ whether an old OPUS item still needs work.
 | OPUS1 F7 plan and implementation drift | Review Gate, STATUS.md, CHANGELOG.md | Guarded by this consolidated design, status updates, and local dependency-contract checks. |
 | OPUS1 F8 placeholder graph emission | P4 Semantic Catalog Graph | Started; LakeCat emits bounded catalog-domain events and Grust owns graph mechanics, taxonomy, stores, traversal, and Cypher. |
 | OPUS1 F9 fabricated default namespace | P5 Tenancy And Credentials | Started; durable namespace and warehouse-prefixed routing exist. Continue tightening view/history and full tenancy semantics. |
-| OPUS1 F10 side effects coupled to request path | P3, P4 | Started; audit/outbox and replayable lineage/graph evidence are core catalog state-change companions. Move remaining side effects toward transactional outbox paths. |
+| OPUS1 F10 side effects coupled to request path | P3, P4 | Started; audit/outbox and replayable lineage/graph evidence are core catalog state-change companions. The standalone Turso audit path now writes audit and outbox rows transactionally; keep moving any remaining side effects toward transactional outbox paths. |
 | OPUS1 F11 unauthenticated plan-task tokens / path exposure | P1 QGLake Acceptance | Started; plan/fetch tokens are table-bound and revalidated with server-derived restrictions. Keep path and token evidence audit-safe. |
 | OPUS1 F12 v4 JSON passthrough | P6 Reproducibility And V4 | Open by design; JSON passthrough is a bridge until typed Sail v4 support lands. |
 | OPUS2 F1 governed read gates but does not narrow | P1 Restriction End To End | Started; restrictions now narrow plan/fetch evidence. Continue pushing reusable read execution into Sail. |

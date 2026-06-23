@@ -6824,7 +6824,8 @@ pub mod turso_store {
 
         async fn record_audit_event(&self, event: CatalogAuditEvent) -> LakeCatResult<()> {
             event.validate_recordable()?;
-            let conn = self.connect()?;
+            let mut conn = self.connect()?;
+            let tx = conn.transaction().await.map_err(turso_error)?;
             let event_id = content_hash_json(&serde_json::json!({
                 "event-type": &event.event_type,
                 "table": &event.table,
@@ -6833,7 +6834,7 @@ pub mod turso_store {
                 "payload": &event.payload,
                 "created-at": event.created_at.to_rfc3339(),
             }))?;
-            conn.execute(
+            tx.execute(
                 "insert into audit_events (
                     event_id, event_type, table_key, principal_json,
                     request_hash, event_json, created_at
@@ -6858,7 +6859,8 @@ pub mod turso_store {
                 "table": event.table,
                 "payload": event.payload,
             });
-            tx_insert_outbox_event(&conn, &outbox_payload, event.created_at).await?;
+            tx_insert_outbox_event(&tx, &outbox_payload, event.created_at).await?;
+            tx.commit().await.map_err(turso_error)?;
             Ok(())
         }
 
@@ -7455,11 +7457,11 @@ pub mod turso_store {
     }
 
     async fn tx_insert_outbox_event(
-        conn: &Connection,
+        tx: &turso::transaction::Transaction<'_>,
         payload: &JsonValue,
         created_at: chrono::DateTime<Utc>,
     ) -> LakeCatResult<()> {
-        conn.execute(
+        tx.execute(
             "insert into outbox_events (
                 event_id, sink, event_type, payload_json, created_at
              )
@@ -10310,6 +10312,61 @@ pub mod turso_store {
                 .unwrap();
             assert_eq!(pending.len(), 1);
             assert!(pending[0].delivered_at.is_none());
+        }
+
+        #[tokio::test]
+        async fn turso_store_rolls_back_audit_when_outbox_insert_fails() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let ident = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let mut event = CatalogAuditEvent::new(
+                "querygraph.bootstrap",
+                Some(ident.clone()),
+                Principal::anonymous(),
+                serde_json::json!({
+                    "event-type": "querygraph.bootstrap",
+                    "table": ident,
+                    "manifest-hash": "lakecat:test"
+                }),
+            )
+            .unwrap();
+            event.created_at = "2026-01-01T00:00:00Z".parse().unwrap();
+            let audit_event_id = crate::audit_event_id(&event).unwrap();
+            let outbox_payload = crate::audit_outbox_payload(&audit_event_id, &event);
+            let outbox_event = crate::outbox_event_from_payload(&outbox_payload, event.created_at)
+                .expect("test event should produce an outbox event");
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "insert into outbox_events (
+                    event_id, sink, event_type, payload_json, created_at
+                 )
+                 values (?1, ?2, ?3, ?4, ?5)",
+                (
+                    outbox_event.event_id.as_str(),
+                    outbox_event.sink.as_str(),
+                    outbox_event.event_type.as_str(),
+                    encode_json(&outbox_event.payload).unwrap(),
+                    outbox_event.created_at.to_rfc3339(),
+                ),
+            )
+            .await
+            .unwrap();
+
+            let err = store.record_audit_event(event).await.unwrap_err();
+            assert!(
+                matches!(&err, LakeCatError::Internal(message) if message.contains("UNIQUE") || message.contains("PRIMARY KEY")),
+                "unexpected error: {err:?}"
+            );
+            assert_eq!(
+                store.count_rows("audit_events").await.unwrap(),
+                0,
+                "audit insert must roll back when transactional outbox insert fails"
+            );
+            assert_eq!(store.count_rows("outbox_events").await.unwrap(), 1);
         }
 
         #[tokio::test]
