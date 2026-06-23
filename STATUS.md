@@ -5,6 +5,21 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest Grust Turso graph-sink startup redaction:
+  service graph-sink configuration and bootstrap failures now share one
+  hash-only formatter for operator-facing errors. Coverage proves the error
+  includes `graph-store-path-hash` and `backend-error-hash` while excluding raw
+  graph database paths and backend text.
+- Local verification for this Grust Turso graph-sink startup redaction slice
+  passed: `cargo test -p lakecat-service --features grust-turso-local --bin
+  lakecat-service grust_turso_graph_sink_error_redacts_backend_text --
+  --test-threads=1`; `cargo test -p lakecat-service --features
+  grust-turso-local --bin lakecat-service
+  configured_grust_turso_graph_sink_redacts_backend_path_errors --
+  --test-threads=1`; `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --features grust-turso-local --bin
+  lakecat-service grust_turso_tests -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest release-candidate proof refresh:
   `scripts/check-release-readiness.sh --release-candidate` passed locally on
   June 23, 2026 from clean head `1992d9b0`. The gate covered shell syntax and

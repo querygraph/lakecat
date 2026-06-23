@@ -8162,6 +8162,15 @@ so a handoff cannot carry extra digest claims that are not backed by ordered
 view-history objects. That lets QueryGraph trust view history as replayed
 catalog evidence instead of treating it as an opaque bag of digests.
 
+The same hash-only discipline applies before a handoff can even start. When
+LakeCat is configured with the `grust-turso-local` feature, the service opens a
+Grust-owned Turso graph store for catalog projection. If graph-store
+configuration or bootstrap fails, the operator-facing error carries only
+`graph-store-path-hash` and `backend-error-hash`. The raw graph database path
+and raw backend error text stay out of the message, so a failed local or
+agentic run still leaves replayable evidence without leaking filesystem
+layout, secret-bearing paths, or backend diagnostics.
+
 As of the current local reconciliation, the Sail helper work is not an
 anonymous dirty tree. `/Users/alexy/src/sail` has scoped local commits on
 `codex/graph` for exposing Iceberg REST models to LakeCat, preserving Iceberg

@@ -466,7 +466,9 @@ boundary cleanup rather than new architecture:
   LakeCat only proves the catalog projection boundary. Grust Turso graph-sink
   connect/bootstrap failures are operator-facing LakeCat errors and must expose
   only `graph-store-path-hash` and `backend-error-hash` evidence, never raw graph
-  database paths or backend text.
+  database paths or backend text. The service binary now routes both
+  configuration and bootstrap failures through a shared redaction helper, with
+  local regression coverage for raw path and backend-text suppression.
 - Refresh README, book artifacts, `STATUS.md`, and version/release notes from
   the same commit that passes the full gate. Tracked book artifacts should be
   refreshed deliberately with `docs/book/build.sh`; the clean release-candidate

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened Grust Turso graph-sink startup redaction. Service configuration and
+  bootstrap failures now share one hash-only formatter and regression coverage
+  proves operator-facing errors expose `graph-store-path-hash` and
+  `backend-error-hash` without raw graph database paths or backend text.
 - Refreshed the full local release-candidate proof from clean head `1992d9b0`.
   `scripts/check-release-readiness.sh --release-candidate` passed locally with
   the release-proof contract in clean candidate mode, the full workspace and

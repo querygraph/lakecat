@@ -145,23 +145,25 @@ async fn configured_grust_turso_graph_sink_for_path(
         ..Default::default()
     })
     .await
-    .map_err(|err| {
-        lakecat_core::LakeCatError::Internal(format!(
-            "failed to configure Grust Turso graph sink; graph-store-path-hash={}; backend-error-hash={}",
-            content_hash_bytes(path.as_bytes()),
-            content_hash_bytes(err.to_string().as_bytes())
-        ))
-    })?;
+    .map_err(|err| redacted_grust_turso_graph_sink_error("configure", &path, err))?;
     grust_graph::GraphAdminStore::bootstrap(&store)
         .await
-        .map_err(|err| {
-            lakecat_core::LakeCatError::Internal(format!(
-                "failed to bootstrap Grust Turso graph sink; graph-store-path-hash={}; backend-error-hash={}",
-                content_hash_bytes(path.as_bytes()),
-                content_hash_bytes(err.to_string().as_bytes())
-            ))
-        })?;
+        .map_err(|err| redacted_grust_turso_graph_sink_error("bootstrap", &path, err))?;
     Ok(lakecat_graph::grust_integration::GrustCatalogGraphSink::new(Arc::new(store)))
+}
+
+#[cfg(feature = "grust-turso-local")]
+fn redacted_grust_turso_graph_sink_error(
+    phase: &str,
+    path: &str,
+    err: impl std::fmt::Display,
+) -> lakecat_core::LakeCatError {
+    let backend_error = err.to_string();
+    lakecat_core::LakeCatError::Internal(format!(
+        "failed to {phase} Grust Turso graph sink; graph-store-path-hash={}; backend-error-hash={}",
+        content_hash_bytes(path.as_bytes()),
+        content_hash_bytes(backend_error.as_bytes())
+    ))
 }
 
 #[cfg(not(feature = "grust-local"))]
@@ -266,6 +268,41 @@ mod grust_turso_tests {
         );
 
         let _ = std::fs::remove_dir(path);
+    }
+
+    #[test]
+    fn grust_turso_graph_sink_error_redacts_backend_text() {
+        let raw_path = "/tmp/lakecat-grust-turso-secret/catalog-graph.db";
+        let raw_backend = format!(
+            "backend exploded while opening {raw_path} with token super-secret-graph-token"
+        );
+        let error = redacted_grust_turso_graph_sink_error("bootstrap", raw_path, &raw_backend);
+        let message = error.to_string();
+
+        assert!(
+            message.contains("failed to bootstrap Grust Turso graph sink"),
+            "unexpected error: {message}"
+        );
+        assert!(
+            message.contains("graph-store-path-hash=sha256:"),
+            "error should include graph path hash evidence: {message}"
+        );
+        assert!(
+            message.contains("backend-error-hash=sha256:"),
+            "error should include backend error hash evidence: {message}"
+        );
+        assert!(
+            !message.contains(raw_path),
+            "error must not expose raw graph Turso path: {message}"
+        );
+        assert!(
+            !message.contains("super-secret-graph-token"),
+            "error must not expose raw backend text: {message}"
+        );
+        assert!(
+            !message.contains("backend exploded"),
+            "error must not expose raw backend text: {message}"
+        );
     }
 }
 
