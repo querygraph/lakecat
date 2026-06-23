@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Refreshed the first-release dependency-boundary documentation from live
+  registry evidence. README, design, status, and book text now record that
+  `cargo search` still shows `grust-cypher`/`grust-core` at 0.9.1 and
+  `typesec` at 0.8.0 while `grust-graph` 0.9.2 is visible, so LakeCat keeps
+  its published Grust 0.9.1 and TypeSec 0.8.0 release contract until the
+  companion Grust crates publish as a consistent newer set.
 - Expanded the LakeCat book's release vocabulary with a current-maturity
   ledger for the Rust service spine, Turso local store direction, Iceberg REST
   paths, commit CAS/idempotency/pointer/audit/outbox/replay hardening,

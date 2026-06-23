@@ -52,6 +52,12 @@ current LakeCat feature set still relies on published `grust-cypher`,
 still uses local Sail paths plus the checked-in helper patch bridge until the
 required Sail APIs are published.
 
+This dependency posture was refreshed on June 23, 2026 from live `cargo search`
+evidence: `grust-graph` reports 0.9.2, `grust-cypher` reports 0.9.1,
+`grust-core` reports 0.9.1, and `typesec` reports 0.8.0. LakeCat should not
+raise the Grust requirement until the facade, core, memory, and Sail companion
+crates needed by `grust-local` are published as the same newer release line.
+
 The local QueryGraph handoff path has a separate compatibility contract:
 `/Users/alexy/src/querygraph/qg-rust` follows the local Grust 0.10.0 path
 checkout for `lakecat-verify` and `lakecat-import`. The dependency contract

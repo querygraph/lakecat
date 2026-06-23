@@ -12961,6 +12961,11 @@ LakeCat depends on local Sail paths plus checked-in helper patches until the
 required Sail APIs are published. The Grust contract is likewise explicit:
 LakeCat should stay on the published 0.9.1 crate set until the companion crates
 needed by `grust-local` publish consistently for a newer Grust release.
+That is a current release choice, not stale inertia. Live registry evidence on
+June 23, 2026 still shows `grust-graph` ahead at 0.9.2 while
+`grust-cypher` and `grust-core` remain 0.9.1, and `typesec` remains 0.8.0.
+LakeCat should take the newer Grust line only when the facade, core, memory,
+and Sail companion crates used by `grust-local` publish as a coherent set.
 
 QueryGraph's local handoff verifier is a different contract. The QueryGraph
 `qg-rust` checkout follows the active local Grust path, currently

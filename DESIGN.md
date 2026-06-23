@@ -381,6 +381,9 @@ boundary cleanup rather than new architecture:
   release. As of this ledger update, `grust-graph` 0.9.2 is visible, but the
   LakeCat feature set still resolves through published `grust-cypher`,
   `grust-core`, `grust-memory`, and `grust-sail` 0.9.1 crates.
+  This was rechecked with live `cargo search` evidence on June 23, 2026:
+  `grust-graph` reports 0.9.2, `grust-cypher` reports 0.9.1, `grust-core`
+  reports 0.9.1, and `typesec` reports 0.8.0.
 - Keep the QueryGraph handoff verifier aligned with the active local Grust path
   checkout. QueryGraph `qg-rust` now uses local `grust-graph` 0.10.0 for
   `lakecat-verify` and `lakecat-import`; this is an end-to-end acceptance

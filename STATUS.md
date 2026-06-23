@@ -5,6 +5,14 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-boundary slice:
+  `Refresh dependency posture evidence`.
+  Live `cargo search` checks on June 23, 2026 still show `grust-graph` at
+  0.9.2 while `grust-cypher` and `grust-core` remain 0.9.1, and `typesec`
+  remains 0.8.0. README, design, and book text now preserve the first-release
+  choice to keep LakeCat's `grust-local` published-crate contract on the
+  coherent Grust 0.9.1 set and TypeSec 0.8.0 until the companion Grust crates
+  publish as a consistent newer release line.
 - Latest documentation/book slice:
   `Expand release concept maturity ledger`.
   The LakeCat book now directly maps the current release claims for the Rust
