@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened view receipt-chain replay admission. Service outbox replay now
+  rejects any `view.version-receipt-chains-listed` nested chain whose
+  `chain-verified` flag is not true, so unverified view-history identity/count
+  evidence cannot reach graph or lineage projection beside otherwise
+  hash-shaped receipt arrays.
 - Added service-level Grust Turso graph sink verification. The
   `grust-turso-local` service binary tests now configure
   `GrustCatalogGraphSink<TursoGraphStore>` with the same Turso path/prefix used

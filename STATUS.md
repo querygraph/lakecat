@@ -15,6 +15,19 @@ Updated: 2026-06-23
   `scripts/check-local-dependency-contract.sh` passed;
   `scripts/check-release-readiness.sh --quick` passed; `git diff --check`
   passed.
+- Latest view-history replay hardening slice:
+  `Reject unverified view receipt chains`.
+  Service outbox admission now rejects any
+  `view.version-receipt-chains-listed` nested chain whose `chain-verified`
+  flag is not true, so archived view-history replay cannot carry unverified
+  receipt-chain identity or count evidence into graph, OpenLineage, QGLake, or
+  QueryGraph proof surfaces.
+- Local verification for this view-history slice is green:
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_malformed_view_receipt_chain_scope_and_counts -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service` passed;
+  `scripts/check-release-readiness.sh --quick` passed; `git diff --check`
+  passed.
 - Latest planned-scan replay hardening slice:
   `Shape-check planned required-filter proof`.
   Service outbox replay now rejects present `table.scan-planned`

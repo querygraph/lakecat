@@ -6069,7 +6069,10 @@ fn validate_view_receipt_chain_event_evidence(
             .and_then(Value::as_bool)
             .unwrap_or(false);
         if !chain_verified {
-            continue;
+            return Err(outbox_evidence_error(
+                event,
+                "view receipt-chain chain must be structurally verified",
+            ));
         }
         verified_count = verified_count.saturating_add(1);
         validate_view_receipt_chain_hash_evidence(event, chain)?;
@@ -42302,6 +42305,14 @@ mod tests {
             "evt-view-chain-tombstone-count-drift",
             "view receipt-chain tombstone-count does not match chains",
             tombstone_count_drift,
+        ));
+
+        let mut unverified_chain = base_payload.clone();
+        unverified_chain["view-version-receipt-chains"][0]["chain-verified"] = json!(false);
+        cases.push((
+            "evt-view-chain-unverified",
+            "view receipt-chain chain must be structurally verified",
+            unverified_chain,
         ));
 
         let mut chain_receipt_count_missing = base_payload.clone();
