@@ -5,6 +5,13 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest documentation slice:
+  `Expand book catalog concept taxonomy`.
+  The book now opens the catalog-concepts discussion with a current-state
+  reading guide that distinguishes standard Iceberg vocabulary, LakeCat
+  implementation choices, LakeCat reliability/governance extensions,
+  TypeSec/Sail proof paths, and QueryGraph/QGLake product surfaces before
+  arguing why table interpretation and governed planning belong in Sail.
 - Latest implementation/testing slice:
   `Close view lifecycle replay wrappers`.
   Service outbox admission now closes wrapped `view.upserted`, `view.loaded`,

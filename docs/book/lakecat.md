@@ -13338,6 +13338,60 @@ agent path. LakeCat's design is to keep the authority spine narrow, typed, and
 durable while pushing table work into Sail and semantic workflow work into
 QueryGraph.
 
+### Current-State Reading Guide
+
+This chapter uses words from several layers of the stack. The important thing
+for a reader is not only what each word means, but whether it is standard
+Iceberg vocabulary, LakeCat implementation architecture, a LakeCat extension, a
+TypeSec/Sail proof path, or QueryGraph product surface.
+
+```text
+Already standard Iceberg:
+  namespace and table identifiers, REST-compatible catalog paths, table
+  metadata, snapshots, manifests, schemas, partition specs, sort orders,
+  commit requirements, and optimistic metadata-pointer commits.
+
+LakeCat implementation choices:
+  the Rust service/catalog spine, the `CatalogStore` trait seam, the
+  Turso-backed local durable store direction, the embedded memory store for
+  tests, and the local proof-oriented service layout.
+
+LakeCat catalog extensions:
+  exact idempotency binding, durable pointer logs, row/content evidence checks,
+  redacted audit evidence, transactional outbox evidence, replay admission,
+  redacted conflict proof, management inventory proof, view receipt chains, and
+  commit-history proof.
+
+TypeSec/Sail governed-access path:
+  TypeSec-style capabilities, TypeDID context, policy and ODRL-derived
+  restrictions, purpose binding, credential TTL posture, raw-credential
+  exception evidence, Sail-planned scans, Sail fetch-task proof, field-id
+  projection, predicate binding, manifest pruning, delete handling, and
+  typed Iceberg v4 interpretation.
+
+QueryGraph and QGLake product surface:
+  bootstrap bundles, OpenLineage hashes, Grust graph/import anchors,
+  Croissant/CDIF/OSI/ODRL composition, agent workflow context, management
+  views, and QGLake acceptance artifacts.
+```
+
+That split also describes what could become an Iceberg proposal. Rust, Turso,
+TypeSec, QueryGraph, QGLake, and Grust are not themselves Iceberg proposals;
+they are this stack's implementation and product choices. The portable ideas
+inside them are narrower: exact retry semantics, proof-carrying catalog
+events, replay-admissible lineage, redacted credential posture, pointer-history
+proof, and engine-verifiable governed scans. Those may be worth standardizing
+as optional profiles if they can be described without requiring any particular
+database, policy engine, graph database, or product workflow.
+
+The same rule keeps LakeCat honest. A PySpark job should be able to use the
+REST namespace and table paths without knowing anything about QueryGraph. An
+agentic workflow should be able to consume richer QGLake evidence without
+making that evidence mandatory for ordinary Iceberg clients. A governed scan
+should be narrowed by TypeSec and proven by LakeCat, but the table work must be
+planned by Sail because only the engine can make field ids, predicates,
+manifests, deletes, and typed v4 semantics real.
+
 ### Standard Iceberg Parlance
 
 Iceberg already gives us the portable vocabulary for table access. When the

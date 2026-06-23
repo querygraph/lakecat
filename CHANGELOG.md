@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's catalog-concepts chapter with a current-state
+  reading guide that separates standard Iceberg parlance, LakeCat
+  implementation choices, LakeCat extensions, TypeSec/Sail governed-access
+  proof paths, and QueryGraph/QGLake product surfaces.
 - Closed service outbox admission over wrapped view lifecycle replay payloads.
   `view.upserted`, `view.loaded`, and `view.dropped` wrappers now reject extra
   unverified view lifecycle, lineage, graph, QGLake, QueryGraph, or
