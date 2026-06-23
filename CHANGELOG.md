@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book with worked catalog examples that show the same
+  accepted state through standard PySpark Iceberg access, optimistic commit
+  CAS, operator audit/replay inspection, TypeSec-governed agent scans,
+  redacted credential exceptions, and QueryGraph bootstrap handoff. The new
+  examples explicitly classify which parts are standard Iceberg behavior,
+  LakeCat control-plane extensions, TypeSec governance, Sail engine-owned
+  table work, QueryGraph product integration, or future neutral proposal
+  candidates.
 - Hardened Turso view-version receipt row-column validation. Receipt reads and
   mutation-chain lookups now bind decoded receipt JSON to durable receipt row
   warehouse, namespace, and view columns before returning receipt chains or

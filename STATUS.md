@@ -5,6 +5,20 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest documentation/book slice:
+  `Expand worked catalog examples`.
+  The book now shows the same accepted LakeCat catalog state through standard
+  PySpark Iceberg access, optimistic commit CAS, operator audit/replay
+  inspection, TypeSec-governed agent scans, redacted credential exceptions,
+  and QueryGraph bootstrap handoff. The examples explicitly separate standard
+  Iceberg behavior from LakeCat control-plane extensions, TypeSec governance,
+  Sail engine-owned table interpretation, QueryGraph product integration, and
+  future neutral proposal candidates.
+- Local verification for this documentation/book slice is green:
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed; `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest implementation/testing slice:
   `Harden Turso view receipt row-column scope`.
   Turso view-version receipt reads and mutation-chain lookups now bind decoded
