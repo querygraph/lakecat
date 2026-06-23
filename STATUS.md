@@ -5,6 +5,21 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest QGLake lineage-drain request/bootstrap proof hardening:
+  raw QGLake lineage-drain verification now requires full SHA-256 digest
+  evidence for the lineage-read authorization receipt, core QueryGraph
+  bundle/graph/OpenLineage/import hashes, bootstrap authorization, agent
+  delegation/signature hashes, and TypeDID envelope/proof hashes. Short
+  `sha256:` placeholders are rejected before request identity or QueryGraph
+  bootstrap proof can feed compact handoff evidence.
+- Local verification for this QGLake lineage-drain request/bootstrap proof
+  slice passed:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_rejects_short -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_lineage_drain -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick` (which correctly reports that
+  executable changes after `6d923feb` require a fresh release-candidate run
+  before final proof refresh); and `git diff --check`.
 - Latest QGLake lineage-drain receipt-shape hardening:
   raw QGLake lineage-drain verification now requires full SHA-256 digest
   evidence for bootstrap accepted-view receipt hashes, credential replay sink

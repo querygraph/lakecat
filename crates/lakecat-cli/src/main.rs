@@ -8812,10 +8812,11 @@ fn verify_qglake_lineage_drain(
     if drain
         .authorization_receipt_hash
         .as_deref()
-        .map_or(true, |hash| !is_sha256_hash(hash))
+        .map_or(true, |hash| !is_full_sha256_hash(hash))
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
-            "qglake lineage drain read is missing SHA-256 authorization receipt hash".to_string(),
+            "qglake lineage drain read is missing full SHA-256 authorization receipt hash"
+                .to_string(),
         ));
     }
     if drain.authorization_receipt_action.as_deref() != Some("lineage-read") {
@@ -8859,22 +8860,23 @@ fn verify_qglake_lineage_drain(
     if bootstrap
         .bundle_hash
         .as_deref()
-        .map_or(true, |hash| !is_sha256_hash(hash))
+        .map_or(true, |hash| !is_full_sha256_hash(hash))
         || bootstrap
             .graph_hash
             .as_deref()
-            .map_or(true, |hash| !is_sha256_hash(hash))
+            .map_or(true, |hash| !is_full_sha256_hash(hash))
         || bootstrap
             .open_lineage_hash
             .as_deref()
-            .map_or(true, |hash| !is_sha256_hash(hash))
+            .map_or(true, |hash| !is_full_sha256_hash(hash))
         || bootstrap
             .querygraph_import_hash
             .as_deref()
-            .map_or(true, |hash| !is_sha256_hash(hash))
+            .map_or(true, |hash| !is_full_sha256_hash(hash))
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
-            "qglake lineage drain replay evidence is missing SHA-256 QueryGraph hashes".to_string(),
+            "qglake lineage drain replay evidence is missing full SHA-256 QueryGraph hashes"
+                .to_string(),
         ));
     }
     if bootstrap.principal_subject.as_deref() != Some(expected_principal) {
@@ -8890,11 +8892,10 @@ fn verify_qglake_lineage_drain(
     if bootstrap
         .authorization_receipt_hash
         .as_deref()
-        .map_or(true, |hash| !is_sha256_hash(hash))
+        .map_or(true, |hash| !is_full_sha256_hash(hash))
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
-            "qglake lineage drain replay evidence is missing SHA-256 authorization receipt hash"
-                .to_string(),
+            "qglake lineage drain replay evidence is missing full SHA-256 authorization receipt hash".to_string(),
         ));
     }
     if bootstrap
@@ -8920,21 +8921,19 @@ fn verify_qglake_lineage_drain(
         if bootstrap
             .agent_delegation_hash
             .as_deref()
-            .map_or(true, |hash| !is_sha256_hash(hash))
+            .map_or(true, |hash| !is_full_sha256_hash(hash))
         {
             return Err(lakecat_core::LakeCatError::InvalidArgument(
-                "qglake lineage drain replay evidence is missing SHA-256 agent delegation hash"
-                    .to_string(),
+                "qglake lineage drain replay evidence is missing full SHA-256 agent delegation hash".to_string(),
             ));
         }
         if bootstrap
             .agent_summary_signature_hash
             .as_deref()
-            .map_or(true, |hash| !is_sha256_hash(hash))
+            .map_or(true, |hash| !is_full_sha256_hash(hash))
         {
             return Err(lakecat_core::LakeCatError::InvalidArgument(
-                "qglake lineage drain replay evidence is missing SHA-256 agent summary signature hash"
-                    .to_string(),
+                "qglake lineage drain replay evidence is missing full SHA-256 agent summary signature hash".to_string(),
             ));
         }
     }
@@ -10694,14 +10693,14 @@ fn verify_qglake_typedid_hash_pair(
     proof_hash: Option<&str>,
     label: &str,
 ) -> lakecat_core::LakeCatResult<()> {
-    if envelope_hash.is_some_and(|hash| !is_sha256_hash(hash)) {
+    if envelope_hash.is_some_and(|hash| !is_full_sha256_hash(hash)) {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "{label} TypeDID envelope hash must be SHA-256-shaped"
+            "{label} TypeDID envelope hash must be full SHA-256-shaped"
         )));
     }
-    if proof_hash.is_some_and(|hash| !is_sha256_hash(hash)) {
+    if proof_hash.is_some_and(|hash| !is_full_sha256_hash(hash)) {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "{label} TypeDID proof hash must be SHA-256-shaped"
+            "{label} TypeDID proof hash must be full SHA-256-shaped"
         )));
     }
     if proof_hash.is_some() && envelope_hash.is_none() {
@@ -13196,10 +13195,10 @@ mod tests {
                 "lakecat:view:local:default:active_customers_view".to_string(),
                 qglake_fixture_hash("view-receipt-chain"),
             )]),
-            bundle_hash: "sha256:bundle".to_string(),
-            graph_hash: "sha256:graph".to_string(),
-            open_lineage_hash: "sha256:openlineage".to_string(),
-            querygraph_import_hash: "sha256:querygraph-import".to_string(),
+            bundle_hash: qglake_fixture_hash("bundle"),
+            graph_hash: qglake_fixture_hash("graph"),
+            open_lineage_hash: qglake_fixture_hash("openlineage"),
+            querygraph_import_hash: qglake_fixture_hash("querygraph-import"),
             standards: qglake_lineage_standards(),
         }
     }
@@ -13236,7 +13235,7 @@ mod tests {
             lineage_events: 14,
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
-            authorization_receipt_hash: Some("sha256:identity".to_string()),
+            authorization_receipt_hash: Some(qglake_fixture_hash("identity")),
             authorization_receipt_action: Some("lineage-read".to_string()),
             request_identity_state: Some("unverified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -13285,7 +13284,7 @@ mod tests {
             lineage_events: events.iter().map(|event| event.lineage_events).sum(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
-            authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+            authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
             authorization_receipt_action: Some("lineage-read".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -21644,7 +21643,7 @@ mod tests {
             lineage_events: events.iter().map(|event| event.lineage_events).sum(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
-            authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+            authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
             authorization_receipt_action: Some("lineage-read".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -21786,7 +21785,7 @@ mod tests {
             lineage_events: 16,
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
-            authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+            authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
             authorization_receipt_action: Some("lineage-read".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -23348,7 +23347,7 @@ mod tests {
             lineage_events: 1,
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
-            authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+            authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
             authorization_receipt_action: Some("lineage-read".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -23379,7 +23378,7 @@ mod tests {
             lineage_events: 2,
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
-            authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+            authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
             authorization_receipt_action: Some("lineage-read".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -23614,7 +23613,7 @@ mod tests {
             lineage_events: 6,
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
-            authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+            authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
             authorization_receipt_action: Some("lineage-read".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -23654,7 +23653,7 @@ mod tests {
                 lineage_events: 5,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -23693,7 +23692,7 @@ mod tests {
                 lineage_events: 5,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -23734,7 +23733,7 @@ mod tests {
                 lineage_events: 5,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -23814,7 +23813,7 @@ mod tests {
                 lineage_events: 2,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -23859,7 +23858,7 @@ mod tests {
                 lineage_events: 2,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -23901,7 +23900,7 @@ mod tests {
                 lineage_events: 2,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -23929,7 +23928,7 @@ mod tests {
                 lineage_events: 0,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -23958,7 +23957,7 @@ mod tests {
                 lineage_events: 0,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -23987,7 +23986,7 @@ mod tests {
                 lineage_events: 1,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -24013,7 +24012,7 @@ mod tests {
                 lineage_events: 1,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -24071,11 +24070,9 @@ mod tests {
             1,
         )
         .expect_err("QGLake lineage drain should require read authorization proof");
-        assert!(
-            err.to_string().contains(
-                "qglake lineage drain read is missing SHA-256 authorization receipt hash"
-            )
-        );
+        assert!(err.to_string().contains(
+            "qglake lineage drain read is missing full SHA-256 authorization receipt hash"
+        ));
 
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
@@ -24085,7 +24082,7 @@ mod tests {
                 lineage_events: 1,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: None,
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -24112,7 +24109,7 @@ mod tests {
                 lineage_events: 1,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -24139,7 +24136,7 @@ mod tests {
                 lineage_events: 1,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -24153,20 +24150,20 @@ mod tests {
                     catalog_config_endpoints: Vec::new(),
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
-                    authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    authorization_receipt_hash: Some(qglake_fixture_hash("authorization")),
                     authorization_receipt_action: Some("graph-read".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     request_identity_source: Some("x-lakecat-agent-did".to_string()),
                     typedid_envelope_hash: None,
                     typedid_proof_hash: None,
-                    agent_delegation_hash: Some("sha256:delegation".to_string()),
-                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
+                    agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
+                    agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
                     graph_events: 1,
                     lineage_events: 1,
-                    bundle_hash: Some("sha256:bundle".to_string()),
-                    graph_hash: Some("sha256:graph".to_string()),
-                    open_lineage_hash: Some("sha256:openlineage".to_string()),
-                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
+                    bundle_hash: Some(qglake_fixture_hash("bundle")),
+                    graph_hash: Some(qglake_fixture_hash("graph")),
+                    open_lineage_hash: Some(qglake_fixture_hash("openlineage")),
+                    querygraph_import_hash: Some(qglake_fixture_hash("querygraph-import")),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
                     view_version_receipt_hashes: Vec::new(),
@@ -24221,7 +24218,7 @@ mod tests {
                     raw_credential_exception_allowed: None,
                     raw_credential_exception_reason: None,
                     replay_event_hashes: Vec::new(),
-                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                    replay_open_lineage_hashes: vec![qglake_fixture_hash("replay-openlineage")],
                 }],
             },
             &verification,
@@ -24243,7 +24240,7 @@ mod tests {
                 lineage_events: 1,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -24257,19 +24254,19 @@ mod tests {
                     catalog_config_endpoints: Vec::new(),
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
-                    authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    authorization_receipt_hash: Some(qglake_fixture_hash("authorization")),
                     authorization_receipt_action: Some("graph-read".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     request_identity_source: Some("x-lakecat-agent-did".to_string()),
                     typedid_envelope_hash: None,
                     typedid_proof_hash: None,
-                    agent_delegation_hash: Some("sha256:delegation".to_string()),
-                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
+                    agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
+                    agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
                     graph_events: 1,
                     lineage_events: 1,
-                    bundle_hash: Some("sha256:bundle".to_string()),
-                    graph_hash: Some("sha256:graph".to_string()),
-                    open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    bundle_hash: Some(qglake_fixture_hash("bundle")),
+                    graph_hash: Some(qglake_fixture_hash("graph")),
+                    open_lineage_hash: Some(qglake_fixture_hash("openlineage")),
                     querygraph_import_hash: None,
                     table_artifact_count: 1,
                     view_artifact_count: 0,
@@ -24324,8 +24321,8 @@ mod tests {
                     credential_block_reason: None,
                     raw_credential_exception_allowed: None,
                     raw_credential_exception_reason: None,
-                    replay_event_hashes: vec!["sha256:replay-event".to_string()],
-                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                    replay_event_hashes: vec![qglake_fixture_hash("replay-event")],
+                    replay_open_lineage_hashes: vec![qglake_fixture_hash("replay-openlineage")],
                 }],
             },
             &verification,
@@ -24333,11 +24330,9 @@ mod tests {
             1,
         )
         .expect_err("QGLake lineage drain should require QueryGraph import replay hash");
-        assert!(
-            err.to_string().contains(
-                "qglake lineage drain replay evidence is missing SHA-256 QueryGraph hashes"
-            )
-        );
+        assert!(err.to_string().contains(
+            "qglake lineage drain replay evidence is missing full SHA-256 QueryGraph hashes"
+        ));
 
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
@@ -24347,7 +24342,7 @@ mod tests {
                 lineage_events: 1,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -24361,20 +24356,20 @@ mod tests {
                     catalog_config_endpoints: Vec::new(),
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
-                    authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    authorization_receipt_hash: Some(qglake_fixture_hash("authorization")),
                     authorization_receipt_action: Some("graph-read".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     request_identity_source: Some("x-lakecat-agent-did".to_string()),
                     typedid_envelope_hash: None,
                     typedid_proof_hash: None,
-                    agent_delegation_hash: Some("sha256:delegation".to_string()),
-                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
+                    agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
+                    agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
                     graph_events: 1,
                     lineage_events: 1,
-                    bundle_hash: Some("sha256:other-bundle".to_string()),
-                    graph_hash: Some("sha256:graph".to_string()),
-                    open_lineage_hash: Some("sha256:openlineage".to_string()),
-                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
+                    bundle_hash: Some(qglake_fixture_hash("other-bundle")),
+                    graph_hash: Some(qglake_fixture_hash("graph")),
+                    open_lineage_hash: Some(qglake_fixture_hash("openlineage")),
+                    querygraph_import_hash: Some(qglake_fixture_hash("querygraph-import")),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
                     view_version_receipt_hashes: Vec::new(),
@@ -24428,8 +24423,8 @@ mod tests {
                     credential_block_reason: None,
                     raw_credential_exception_allowed: None,
                     raw_credential_exception_reason: None,
-                    replay_event_hashes: vec!["sha256:replay-event".to_string()],
-                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                    replay_event_hashes: vec![qglake_fixture_hash("replay-event")],
+                    replay_open_lineage_hashes: vec![qglake_fixture_hash("replay-openlineage")],
                 }],
             },
             &verification,
@@ -24449,7 +24444,7 @@ mod tests {
                 lineage_events: 1,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -24463,20 +24458,20 @@ mod tests {
                     catalog_config_endpoints: Vec::new(),
                     principal_subject: Some("did:example:other".to_string()),
                     principal_kind: Some("agent".to_string()),
-                    authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    authorization_receipt_hash: Some(qglake_fixture_hash("authorization")),
                     authorization_receipt_action: Some("graph-read".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     request_identity_source: Some("x-lakecat-agent-did".to_string()),
                     typedid_envelope_hash: None,
                     typedid_proof_hash: None,
-                    agent_delegation_hash: Some("sha256:delegation".to_string()),
-                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
+                    agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
+                    agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
                     graph_events: 1,
                     lineage_events: 1,
-                    bundle_hash: Some("sha256:bundle".to_string()),
-                    graph_hash: Some("sha256:graph".to_string()),
-                    open_lineage_hash: Some("sha256:openlineage".to_string()),
-                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
+                    bundle_hash: Some(qglake_fixture_hash("bundle")),
+                    graph_hash: Some(qglake_fixture_hash("graph")),
+                    open_lineage_hash: Some(qglake_fixture_hash("openlineage")),
+                    querygraph_import_hash: Some(qglake_fixture_hash("querygraph-import")),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
                     view_version_receipt_hashes: Vec::new(),
@@ -24530,8 +24525,8 @@ mod tests {
                     credential_block_reason: None,
                     raw_credential_exception_allowed: None,
                     raw_credential_exception_reason: None,
-                    replay_event_hashes: vec!["sha256:replay-event".to_string()],
-                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                    replay_event_hashes: vec![qglake_fixture_hash("replay-event")],
+                    replay_open_lineage_hashes: vec![qglake_fixture_hash("replay-openlineage")],
                 }],
             },
             &verification,
@@ -24551,7 +24546,7 @@ mod tests {
                 lineage_events: 1,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -24565,20 +24560,20 @@ mod tests {
                     catalog_config_endpoints: Vec::new(),
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("human".to_string()),
-                    authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    authorization_receipt_hash: Some(qglake_fixture_hash("authorization")),
                     authorization_receipt_action: Some("graph-read".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     request_identity_source: Some("x-lakecat-agent-did".to_string()),
                     typedid_envelope_hash: None,
                     typedid_proof_hash: None,
-                    agent_delegation_hash: Some("sha256:delegation".to_string()),
-                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
+                    agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
+                    agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
                     graph_events: 1,
                     lineage_events: 1,
-                    bundle_hash: Some("sha256:bundle".to_string()),
-                    graph_hash: Some("sha256:graph".to_string()),
-                    open_lineage_hash: Some("sha256:openlineage".to_string()),
-                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
+                    bundle_hash: Some(qglake_fixture_hash("bundle")),
+                    graph_hash: Some(qglake_fixture_hash("graph")),
+                    open_lineage_hash: Some(qglake_fixture_hash("openlineage")),
+                    querygraph_import_hash: Some(qglake_fixture_hash("querygraph-import")),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
                     view_version_receipt_hashes: Vec::new(),
@@ -24632,8 +24627,8 @@ mod tests {
                     credential_block_reason: None,
                     raw_credential_exception_allowed: None,
                     raw_credential_exception_reason: None,
-                    replay_event_hashes: vec!["sha256:replay-event".to_string()],
-                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                    replay_event_hashes: vec![qglake_fixture_hash("replay-event")],
+                    replay_open_lineage_hashes: vec![qglake_fixture_hash("replay-openlineage")],
                 }],
             },
             &verification,
@@ -24653,7 +24648,7 @@ mod tests {
                 lineage_events: 1,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -24673,14 +24668,14 @@ mod tests {
                     request_identity_source: Some("x-lakecat-agent-did".to_string()),
                     typedid_envelope_hash: None,
                     typedid_proof_hash: None,
-                    agent_delegation_hash: Some("sha256:delegation".to_string()),
-                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
+                    agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
+                    agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
                     graph_events: 1,
                     lineage_events: 1,
-                    bundle_hash: Some("sha256:bundle".to_string()),
-                    graph_hash: Some("sha256:graph".to_string()),
-                    open_lineage_hash: Some("sha256:openlineage".to_string()),
-                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
+                    bundle_hash: Some(qglake_fixture_hash("bundle")),
+                    graph_hash: Some(qglake_fixture_hash("graph")),
+                    open_lineage_hash: Some(qglake_fixture_hash("openlineage")),
+                    querygraph_import_hash: Some(qglake_fixture_hash("querygraph-import")),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
                     view_version_receipt_hashes: Vec::new(),
@@ -24734,8 +24729,8 @@ mod tests {
                     credential_block_reason: None,
                     raw_credential_exception_allowed: None,
                     raw_credential_exception_reason: None,
-                    replay_event_hashes: vec!["sha256:replay-event".to_string()],
-                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                    replay_event_hashes: vec![qglake_fixture_hash("replay-event")],
+                    replay_open_lineage_hashes: vec![qglake_fixture_hash("replay-openlineage")],
                 }],
             },
             &verification,
@@ -24744,7 +24739,7 @@ mod tests {
         )
         .expect_err("QGLake lineage drain should reject missing authorization receipt proof");
         assert!(err.to_string().contains(
-            "qglake lineage drain replay evidence is missing SHA-256 authorization receipt hash"
+            "qglake lineage drain replay evidence is missing full SHA-256 authorization receipt hash"
         ));
 
         let err = verify_qglake_lineage_drain(
@@ -24755,7 +24750,7 @@ mod tests {
                 lineage_events: 1,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -24769,20 +24764,20 @@ mod tests {
                     catalog_config_endpoints: Vec::new(),
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
-                    authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    authorization_receipt_hash: Some(qglake_fixture_hash("authorization")),
                     authorization_receipt_action: Some("graph-read".to_string()),
                     request_identity_state: None,
                     request_identity_source: Some("x-lakecat-agent-did".to_string()),
                     typedid_envelope_hash: None,
                     typedid_proof_hash: None,
-                    agent_delegation_hash: Some("sha256:delegation".to_string()),
-                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
+                    agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
+                    agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
                     graph_events: 1,
                     lineage_events: 1,
-                    bundle_hash: Some("sha256:bundle".to_string()),
-                    graph_hash: Some("sha256:graph".to_string()),
-                    open_lineage_hash: Some("sha256:openlineage".to_string()),
-                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
+                    bundle_hash: Some(qglake_fixture_hash("bundle")),
+                    graph_hash: Some(qglake_fixture_hash("graph")),
+                    open_lineage_hash: Some(qglake_fixture_hash("openlineage")),
+                    querygraph_import_hash: Some(qglake_fixture_hash("querygraph-import")),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
                     view_version_receipt_hashes: Vec::new(),
@@ -24836,8 +24831,8 @@ mod tests {
                     credential_block_reason: None,
                     raw_credential_exception_allowed: None,
                     raw_credential_exception_reason: None,
-                    replay_event_hashes: vec!["sha256:replay-event".to_string()],
-                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                    replay_event_hashes: vec![qglake_fixture_hash("replay-event")],
+                    replay_open_lineage_hashes: vec![qglake_fixture_hash("replay-openlineage")],
                 }],
             },
             &verification,
@@ -24857,7 +24852,7 @@ mod tests {
                 lineage_events: 1,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -24871,20 +24866,20 @@ mod tests {
                     catalog_config_endpoints: Vec::new(),
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
-                    authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    authorization_receipt_hash: Some(qglake_fixture_hash("authorization")),
                     authorization_receipt_action: Some("graph-read".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     request_identity_source: Some("x-lakecat-agent-did".to_string()),
                     typedid_envelope_hash: None,
                     typedid_proof_hash: None,
                     agent_delegation_hash: None,
-                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
+                    agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
                     graph_events: 1,
                     lineage_events: 1,
-                    bundle_hash: Some("sha256:bundle".to_string()),
-                    graph_hash: Some("sha256:graph".to_string()),
-                    open_lineage_hash: Some("sha256:openlineage".to_string()),
-                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
+                    bundle_hash: Some(qglake_fixture_hash("bundle")),
+                    graph_hash: Some(qglake_fixture_hash("graph")),
+                    open_lineage_hash: Some(qglake_fixture_hash("openlineage")),
+                    querygraph_import_hash: Some(qglake_fixture_hash("querygraph-import")),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
                     view_version_receipt_hashes: Vec::new(),
@@ -24938,8 +24933,8 @@ mod tests {
                     credential_block_reason: None,
                     raw_credential_exception_allowed: None,
                     raw_credential_exception_reason: None,
-                    replay_event_hashes: vec!["sha256:replay-event".to_string()],
-                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                    replay_event_hashes: vec![qglake_fixture_hash("replay-event")],
+                    replay_open_lineage_hashes: vec![qglake_fixture_hash("replay-openlineage")],
                 }],
             },
             &verification,
@@ -24948,7 +24943,7 @@ mod tests {
         )
         .expect_err("QGLake lineage drain should reject missing agent delegation proof");
         assert!(err.to_string().contains(
-            "qglake lineage drain replay evidence is missing SHA-256 agent delegation hash"
+            "qglake lineage drain replay evidence is missing full SHA-256 agent delegation hash"
         ));
 
         let err = verify_qglake_lineage_drain(
@@ -24959,7 +24954,7 @@ mod tests {
                 lineage_events: 1,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -24973,20 +24968,20 @@ mod tests {
                     catalog_config_endpoints: Vec::new(),
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
-                    authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    authorization_receipt_hash: Some(qglake_fixture_hash("authorization")),
                     authorization_receipt_action: Some("graph-read".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     request_identity_source: Some("x-lakecat-agent-did".to_string()),
                     typedid_envelope_hash: None,
                     typedid_proof_hash: None,
-                    agent_delegation_hash: Some("sha256:delegation".to_string()),
+                    agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
                     agent_summary_signature_hash: None,
                     graph_events: 1,
                     lineage_events: 1,
-                    bundle_hash: Some("sha256:bundle".to_string()),
-                    graph_hash: Some("sha256:graph".to_string()),
-                    open_lineage_hash: Some("sha256:openlineage".to_string()),
-                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
+                    bundle_hash: Some(qglake_fixture_hash("bundle")),
+                    graph_hash: Some(qglake_fixture_hash("graph")),
+                    open_lineage_hash: Some(qglake_fixture_hash("openlineage")),
+                    querygraph_import_hash: Some(qglake_fixture_hash("querygraph-import")),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
                     view_version_receipt_hashes: Vec::new(),
@@ -25040,8 +25035,8 @@ mod tests {
                     credential_block_reason: None,
                     raw_credential_exception_allowed: None,
                     raw_credential_exception_reason: None,
-                    replay_event_hashes: vec!["sha256:replay-event".to_string()],
-                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                    replay_event_hashes: vec![qglake_fixture_hash("replay-event")],
+                    replay_open_lineage_hashes: vec![qglake_fixture_hash("replay-openlineage")],
                 }],
             },
             &verification,
@@ -25050,7 +25045,7 @@ mod tests {
         )
         .expect_err("QGLake lineage drain should reject missing agent summary proof");
         assert!(err.to_string().contains(
-            "qglake lineage drain replay evidence is missing SHA-256 agent summary signature hash"
+            "qglake lineage drain replay evidence is missing full SHA-256 agent summary signature hash"
         ));
 
         let err = verify_qglake_lineage_drain(
@@ -25061,7 +25056,7 @@ mod tests {
                 lineage_events: 1,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -25075,20 +25070,20 @@ mod tests {
                     catalog_config_endpoints: Vec::new(),
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
-                    authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    authorization_receipt_hash: Some(qglake_fixture_hash("authorization")),
                     authorization_receipt_action: Some("graph-read".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     request_identity_source: Some("x-lakecat-agent-did".to_string()),
                     typedid_envelope_hash: None,
                     typedid_proof_hash: None,
-                    agent_delegation_hash: Some("sha256:delegation".to_string()),
-                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
+                    agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
+                    agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
                     graph_events: 1,
                     lineage_events: 1,
-                    bundle_hash: Some("sha256:bundle".to_string()),
-                    graph_hash: Some("sha256:graph".to_string()),
-                    open_lineage_hash: Some("sha256:openlineage".to_string()),
-                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
+                    bundle_hash: Some(qglake_fixture_hash("bundle")),
+                    graph_hash: Some(qglake_fixture_hash("graph")),
+                    open_lineage_hash: Some(qglake_fixture_hash("openlineage")),
+                    querygraph_import_hash: Some(qglake_fixture_hash("querygraph-import")),
                     table_artifact_count: 2,
                     view_artifact_count: 0,
                     view_version_receipt_hashes: Vec::new(),
@@ -25142,8 +25137,8 @@ mod tests {
                     credential_block_reason: None,
                     raw_credential_exception_allowed: None,
                     raw_credential_exception_reason: None,
-                    replay_event_hashes: vec!["sha256:replay-event".to_string()],
-                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                    replay_event_hashes: vec![qglake_fixture_hash("replay-event")],
+                    replay_open_lineage_hashes: vec![qglake_fixture_hash("replay-openlineage")],
                 }],
             },
             &verification,
@@ -25163,7 +25158,7 @@ mod tests {
                 lineage_events: 1,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -25177,20 +25172,20 @@ mod tests {
                     catalog_config_endpoints: Vec::new(),
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
-                    authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    authorization_receipt_hash: Some(qglake_fixture_hash("authorization")),
                     authorization_receipt_action: Some("graph-read".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     request_identity_source: Some("x-lakecat-agent-did".to_string()),
                     typedid_envelope_hash: None,
                     typedid_proof_hash: None,
-                    agent_delegation_hash: Some("sha256:delegation".to_string()),
-                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
+                    agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
+                    agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
                     graph_events: 1,
                     lineage_events: 1,
-                    bundle_hash: Some("sha256:bundle".to_string()),
-                    graph_hash: Some("sha256:graph".to_string()),
-                    open_lineage_hash: Some("sha256:openlineage".to_string()),
-                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
+                    bundle_hash: Some(qglake_fixture_hash("bundle")),
+                    graph_hash: Some(qglake_fixture_hash("graph")),
+                    open_lineage_hash: Some(qglake_fixture_hash("openlineage")),
+                    querygraph_import_hash: Some(qglake_fixture_hash("querygraph-import")),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
                     view_version_receipt_hashes: Vec::new(),
@@ -25244,8 +25239,8 @@ mod tests {
                     credential_block_reason: None,
                     raw_credential_exception_allowed: None,
                     raw_credential_exception_reason: None,
-                    replay_event_hashes: vec!["sha256:replay-event".to_string()],
-                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                    replay_event_hashes: vec![qglake_fixture_hash("replay-event")],
+                    replay_open_lineage_hashes: vec![qglake_fixture_hash("replay-openlineage")],
                 }],
             },
             &verification,
@@ -25265,7 +25260,7 @@ mod tests {
                 lineage_events: 1,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -25279,20 +25274,20 @@ mod tests {
                     catalog_config_endpoints: Vec::new(),
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
-                    authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    authorization_receipt_hash: Some(qglake_fixture_hash("authorization")),
                     authorization_receipt_action: Some("graph-read".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     request_identity_source: Some("x-lakecat-agent-did".to_string()),
                     typedid_envelope_hash: None,
                     typedid_proof_hash: None,
-                    agent_delegation_hash: Some("sha256:delegation".to_string()),
-                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
+                    agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
+                    agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
                     graph_events: 1,
                     lineage_events: 1,
-                    bundle_hash: Some("sha256:bundle".to_string()),
-                    graph_hash: Some("sha256:graph".to_string()),
-                    open_lineage_hash: Some("sha256:openlineage".to_string()),
-                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
+                    bundle_hash: Some(qglake_fixture_hash("bundle")),
+                    graph_hash: Some(qglake_fixture_hash("graph")),
+                    open_lineage_hash: Some(qglake_fixture_hash("openlineage")),
+                    querygraph_import_hash: Some(qglake_fixture_hash("querygraph-import")),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
                     view_version_receipt_hashes: Vec::new(),
@@ -25346,8 +25341,8 @@ mod tests {
                     credential_block_reason: None,
                     raw_credential_exception_allowed: None,
                     raw_credential_exception_reason: None,
-                    replay_event_hashes: vec!["sha256:replay-event".to_string()],
-                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                    replay_event_hashes: vec![qglake_fixture_hash("replay-event")],
+                    replay_open_lineage_hashes: vec![qglake_fixture_hash("replay-openlineage")],
                 }],
             },
             &verification,
@@ -25370,7 +25365,7 @@ mod tests {
                 lineage_events: 1,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -25385,20 +25380,20 @@ mod tests {
                         catalog_config_endpoints: Vec::new(),
                         principal_subject: Some("did:example:agent".to_string()),
                         principal_kind: Some("agent".to_string()),
-                        authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                        authorization_receipt_hash: Some(qglake_fixture_hash("authorization")),
                         authorization_receipt_action: Some("graph-read".to_string()),
                         request_identity_state: Some("verified".to_string()),
                         request_identity_source: Some("x-lakecat-agent-did".to_string()),
                         typedid_envelope_hash: None,
                         typedid_proof_hash: None,
-                        agent_delegation_hash: Some("sha256:delegation".to_string()),
-                        agent_summary_signature_hash: Some("sha256:summary".to_string()),
+                        agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
+                        agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
                         graph_events: 0,
                         lineage_events: 0,
-                        bundle_hash: Some("sha256:bundle".to_string()),
-                        graph_hash: Some("sha256:graph".to_string()),
-                        open_lineage_hash: Some("sha256:openlineage".to_string()),
-                        querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
+                        bundle_hash: Some(qglake_fixture_hash("bundle")),
+                        graph_hash: Some(qglake_fixture_hash("graph")),
+                        open_lineage_hash: Some(qglake_fixture_hash("openlineage")),
+                        querygraph_import_hash: Some(qglake_fixture_hash("querygraph-import")),
                         table_artifact_count: 1,
                         view_artifact_count: 0,
                         view_version_receipt_hashes: Vec::new(),
@@ -25452,8 +25447,8 @@ mod tests {
                         credential_block_reason: None,
                         raw_credential_exception_allowed: None,
                         raw_credential_exception_reason: None,
-                        replay_event_hashes: vec!["sha256:replay-event".to_string()],
-                        replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                        replay_event_hashes: vec![qglake_fixture_hash("replay-event")],
+                        replay_open_lineage_hashes: vec![qglake_fixture_hash("replay-openlineage")],
                     },
                     qglake_scan_planned_lineage_summary(),
                 ],
@@ -25489,11 +25484,9 @@ mod tests {
             1,
         )
         .expect_err("QGLake lineage drain should reject malformed read authorization hash");
-        assert!(
-            err.to_string().contains(
-                "qglake lineage drain read is missing SHA-256 authorization receipt hash"
-            )
-        );
+        assert!(err.to_string().contains(
+            "qglake lineage drain read is missing full SHA-256 authorization receipt hash"
+        ));
 
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
@@ -25503,12 +25496,12 @@ mod tests {
                 lineage_events: 1,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
-                typedid_proof_hash: Some("sha256:typedid-proof".to_string()),
+                typedid_proof_hash: Some(qglake_fixture_hash("typedid-proof")),
                 events: vec![qglake_scan_planned_lineage_summary()],
             },
             &verification,
@@ -25533,7 +25526,7 @@ mod tests {
                 lineage_events: 1,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -25547,13 +25540,13 @@ mod tests {
         )
         .expect_err("QGLake lineage drain should reject malformed bootstrap agent delegation hash");
         assert!(err.to_string().contains(
-            "qglake lineage drain replay evidence is missing SHA-256 agent delegation hash"
+            "qglake lineage drain replay evidence is missing full SHA-256 agent delegation hash"
         ));
 
         let mut bootstrap_typedid_without_envelope = qglake_bootstrap_lineage_summary();
         bootstrap_typedid_without_envelope.graph_events = 1;
         bootstrap_typedid_without_envelope.typedid_proof_hash =
-            Some("sha256:typedid-proof".to_string());
+            Some(qglake_fixture_hash("typedid-proof"));
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
                 delivered: 1,
@@ -25562,7 +25555,7 @@ mod tests {
                 lineage_events: 1,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -25786,7 +25779,7 @@ mod tests {
                 lineage_events: 4,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -25833,7 +25826,7 @@ mod tests {
                 lineage_events: 4,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -25880,7 +25873,7 @@ mod tests {
                 lineage_events: 4,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -25917,7 +25910,7 @@ mod tests {
                 lineage_events: 4,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -25957,7 +25950,7 @@ mod tests {
                 lineage_events: 4,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -25999,7 +25992,7 @@ mod tests {
                 lineage_events: 4,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -26042,7 +26035,7 @@ mod tests {
                 lineage_events: 4,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -26080,7 +26073,7 @@ mod tests {
                 lineage_events: 4,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -26122,7 +26115,7 @@ mod tests {
                 lineage_events: 4,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -26169,7 +26162,7 @@ mod tests {
                 lineage_events: 10,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -26223,7 +26216,7 @@ mod tests {
                 lineage_events: 10,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -26277,7 +26270,7 @@ mod tests {
                 lineage_events: 10,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -26329,7 +26322,7 @@ mod tests {
                 lineage_events: 10,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -26372,7 +26365,7 @@ mod tests {
                 lineage_events: 4,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -26410,7 +26403,7 @@ mod tests {
                 lineage_events: 5,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -26447,7 +26440,7 @@ mod tests {
                 lineage_events: 5,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -26515,7 +26508,7 @@ mod tests {
                 lineage_events: 7,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -26568,7 +26561,7 @@ mod tests {
                 lineage_events: 7,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -26627,7 +26620,7 @@ mod tests {
                 lineage_events: 7,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -26677,7 +26670,7 @@ mod tests {
                 lineage_events: 7,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -26725,7 +26718,7 @@ mod tests {
                 lineage_events: 7,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -26783,7 +26776,7 @@ mod tests {
                 lineage_events: 7,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -26828,7 +26821,7 @@ mod tests {
                 lineage_events: 6,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -26877,7 +26870,7 @@ mod tests {
                 lineage_events: 10,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -26985,7 +26978,7 @@ mod tests {
                 lineage_events: 13,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -27044,7 +27037,7 @@ mod tests {
                 lineage_events: 13,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -27104,7 +27097,7 @@ mod tests {
                 lineage_events: 13,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -27165,7 +27158,7 @@ mod tests {
                 lineage_events: 16,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -27225,7 +27218,7 @@ mod tests {
                 lineage_events: 14,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -27289,7 +27282,7 @@ mod tests {
                 lineage_events: 14,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -27349,7 +27342,7 @@ mod tests {
                 lineage_events: 14,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -27410,7 +27403,7 @@ mod tests {
                 lineage_events: 14,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -27471,7 +27464,7 @@ mod tests {
                 lineage_events: 14,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -27532,7 +27525,7 @@ mod tests {
                 lineage_events: 14,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -27592,7 +27585,7 @@ mod tests {
                 lineage_events: 14,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -27652,7 +27645,7 @@ mod tests {
                 lineage_events: 14,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -27718,7 +27711,7 @@ mod tests {
                 lineage_events: 14,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -27782,7 +27775,7 @@ mod tests {
                 lineage_events: 14,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -27842,7 +27835,7 @@ mod tests {
                 lineage_events: 15,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -27901,7 +27894,7 @@ mod tests {
                 lineage_events: 15,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -27973,7 +27966,7 @@ mod tests {
                 lineage_events: 16,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -28041,7 +28034,7 @@ mod tests {
                 lineage_events: 16,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -28102,7 +28095,7 @@ mod tests {
                 lineage_events: 17,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -28157,7 +28150,7 @@ mod tests {
                 lineage_events: 14,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -28208,7 +28201,7 @@ mod tests {
                 lineage_events: 13,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_hash: Some(qglake_fixture_hash("lineage-read")),
                 authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -28554,6 +28547,68 @@ mod tests {
 
         assert!(err.to_string().contains("querygraph.bootstrap"));
         assert!(err.to_string().contains("replayEventHashes"));
+        assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_short_read_authorization_hashes() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        drain.authorization_receipt_hash = Some("sha256:lineage-read".to_string());
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject short read authorization hashes");
+
+        assert!(err.to_string().contains("lineage drain read"));
+        assert!(err.to_string().contains("full SHA-256 authorization"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_short_core_querygraph_hashes() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let bootstrap = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "querygraph.bootstrap")
+            .expect("bootstrap replay fixture");
+        bootstrap.bundle_hash = Some("sha256:bundle".to_string());
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject short core QueryGraph hashes");
+
+        assert!(err.to_string().contains("QueryGraph hashes"));
+        assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_short_typedid_hashes() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        drain.typedid_envelope_hash = Some("sha256:typedid-envelope".to_string());
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject short TypeDID hashes");
+
+        assert!(err.to_string().contains("TypeDID envelope hash"));
+        assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_short_agent_proof_hashes() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let bootstrap = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "querygraph.bootstrap")
+            .expect("bootstrap replay fixture");
+        bootstrap.agent_delegation_hash = Some("sha256:delegation".to_string());
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject short agent proof hashes");
+
+        assert!(err.to_string().contains("agent delegation hash"));
         assert!(err.to_string().contains("full SHA-256"));
     }
 
@@ -29372,10 +29427,10 @@ mod tests {
             verified_view_versions: BTreeMap::new(),
             verified_view_receipt_hashes: BTreeMap::new(),
             verified_view_receipt_chain_hashes: BTreeMap::new(),
-            bundle_hash: "sha256:bundle".to_string(),
-            graph_hash: "sha256:graph".to_string(),
-            open_lineage_hash: "sha256:openlineage".to_string(),
-            querygraph_import_hash: "sha256:querygraph-import".to_string(),
+            bundle_hash: qglake_fixture_hash("bundle"),
+            graph_hash: qglake_fixture_hash("graph"),
+            open_lineage_hash: qglake_fixture_hash("openlineage"),
+            querygraph_import_hash: qglake_fixture_hash("querygraph-import"),
             standards: vec![
                 "Iceberg REST".to_string(),
                 "Croissant".to_string(),
@@ -29422,20 +29477,20 @@ mod tests {
             catalog_config_endpoints: Vec::new(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
-            authorization_receipt_hash: Some("sha256:authorization".to_string()),
+            authorization_receipt_hash: Some(qglake_fixture_hash("authorization")),
             authorization_receipt_action: Some("graph-read".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
             typedid_proof_hash: None,
-            agent_delegation_hash: Some("sha256:delegation".to_string()),
-            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
+            agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
             graph_events: 0,
             lineage_events: 1,
-            bundle_hash: Some("sha256:bundle".to_string()),
-            graph_hash: Some("sha256:graph".to_string()),
-            open_lineage_hash: Some("sha256:openlineage".to_string()),
-            querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
+            bundle_hash: Some(qglake_fixture_hash("bundle")),
+            graph_hash: Some(qglake_fixture_hash("graph")),
+            open_lineage_hash: Some(qglake_fixture_hash("openlineage")),
+            querygraph_import_hash: Some(qglake_fixture_hash("querygraph-import")),
             table_artifact_count: 1,
             view_artifact_count: 0,
             view_version_receipt_hashes: Vec::new(),
@@ -29524,14 +29579,14 @@ mod tests {
             catalog_config_endpoints: CatalogConfigResponse::default().endpoints,
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
-            authorization_receipt_hash: Some("sha256:config-authorization".to_string()),
+            authorization_receipt_hash: Some(qglake_fixture_hash("config-authorization")),
             authorization_receipt_action: Some("catalog-config".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
             typedid_proof_hash: None,
-            agent_delegation_hash: Some("sha256:delegation".to_string()),
-            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
+            agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
             graph_events: 2,
             lineage_events: 1,
             bundle_hash: None,
@@ -29611,8 +29666,8 @@ mod tests {
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
             typedid_proof_hash: None,
-            agent_delegation_hash: Some("sha256:delegation".to_string()),
-            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
+            agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
             graph_events: 2,
             lineage_events: 1,
             bundle_hash: None,
@@ -29801,8 +29856,8 @@ mod tests {
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
             typedid_proof_hash: None,
-            agent_delegation_hash: Some("sha256:delegation".to_string()),
-            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
+            agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
             graph_events: 1,
             lineage_events: 1,
             bundle_hash: None,
@@ -29900,8 +29955,8 @@ mod tests {
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
             typedid_proof_hash: None,
-            agent_delegation_hash: Some("sha256:delegation".to_string()),
-            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
+            agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
             graph_events: 1,
             lineage_events: 1,
             bundle_hash: None,
@@ -29999,8 +30054,8 @@ mod tests {
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
             typedid_proof_hash: None,
-            agent_delegation_hash: Some("sha256:delegation".to_string()),
-            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
+            agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
             graph_events: 0,
             lineage_events: 1,
             bundle_hash: None,
@@ -30092,8 +30147,8 @@ mod tests {
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
             typedid_proof_hash: None,
-            agent_delegation_hash: Some("sha256:delegation".to_string()),
-            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
+            agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
             graph_events: 1,
             lineage_events: 1,
             bundle_hash: None,
@@ -30173,8 +30228,8 @@ mod tests {
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
             typedid_proof_hash: None,
-            agent_delegation_hash: Some("sha256:delegation".to_string()),
-            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
+            agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
             graph_events: 1,
             lineage_events: 1,
             bundle_hash: None,
@@ -30256,8 +30311,8 @@ mod tests {
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
             typedid_proof_hash: None,
-            agent_delegation_hash: Some("sha256:delegation".to_string()),
-            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
+            agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
             graph_events: 1,
             lineage_events: 1,
             bundle_hash: None,
@@ -30341,8 +30396,8 @@ mod tests {
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
             typedid_proof_hash: None,
-            agent_delegation_hash: Some("sha256:delegation".to_string()),
-            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
+            agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
             graph_events: 1,
             lineage_events: 1,
             bundle_hash: None,
@@ -30427,8 +30482,8 @@ mod tests {
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
             typedid_proof_hash: None,
-            agent_delegation_hash: Some("sha256:delegation".to_string()),
-            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
+            agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
             graph_events: 1,
             lineage_events: 1,
             bundle_hash: None,
@@ -30508,8 +30563,8 @@ mod tests {
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
             typedid_proof_hash: None,
-            agent_delegation_hash: Some("sha256:delegation".to_string()),
-            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
+            agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
             graph_events: 1,
             lineage_events: 1,
             bundle_hash: None,
@@ -30589,8 +30644,8 @@ mod tests {
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
             typedid_proof_hash: None,
-            agent_delegation_hash: Some("sha256:delegation".to_string()),
-            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
+            agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
             graph_events: 1,
             lineage_events: 1,
             bundle_hash: None,
@@ -30672,8 +30727,8 @@ mod tests {
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
             typedid_proof_hash: None,
-            agent_delegation_hash: Some("sha256:delegation".to_string()),
-            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            agent_delegation_hash: Some(qglake_fixture_hash("delegation")),
+            agent_summary_signature_hash: Some(qglake_fixture_hash("summary")),
             graph_events: 2,
             lineage_events: 1,
             bundle_hash: None,

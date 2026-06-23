@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened raw QGLake lineage-drain request/bootstrap proof hashes. The CLI
+  verifier now requires full SHA-256 digest evidence for the lineage-read
+  authorization receipt, core QueryGraph bundle/graph/OpenLineage/import hashes,
+  bootstrap authorization, agent delegation/signature hashes, and TypeDID
+  envelope/proof hashes.
 - Hardened raw QGLake lineage-drain sink receipt verification. The CLI
   verifier now requires full SHA-256 digest evidence for bootstrap accepted-view
   receipt hashes, credential replay sink receipts, and table commit-history

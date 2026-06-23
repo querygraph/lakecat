@@ -10493,6 +10493,12 @@ proof feeds the compact handoff summary. Raw lineage-drain verification also
 rejects short `sha256:` placeholders for credential replay sink receipts and
 table commit-history replay/OpenLineage receipts before those arrays can become
 compact QueryGraph proof.
+The raw request/bootstrap side follows the same rule: lineage-read
+authorization, bootstrap authorization, core QueryGraph
+bundle/graph/OpenLineage/import hashes, agent delegation and summary signature
+hashes, and TypeDID envelope/proof hashes must all be full SHA-256 digest
+evidence before request identity or QueryGraph bootstrap proof can feed the
+compact handoff.
 Raw lineage-drain summary construction now applies the structural shape rule
 too: every `view-version-receipt-chains` entry must decode as a
 `ViewVersionReceiptChainResponse`, and a present `chain-verified-count` must be
