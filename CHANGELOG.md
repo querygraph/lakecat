@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added compact handoff summary non-bundle artifact hash-shape coverage. The
+  `handoff-summary.json` artifact verifier now explicitly rejects short
+  placeholder hashes and unverified extra hash fields under
+  `artifacts.lineageDrain` and `artifacts.querygraphImportPlan`, with
+  artifact-object errors naming the malformed `artifacts.<name>` path.
 - Re-verified the Grust Turso catalog graph boundary after the new
   `grust-turso` crate landed. Focused local tests prove
   `lakecat-graph` writes LakeCat catalog-event projections through

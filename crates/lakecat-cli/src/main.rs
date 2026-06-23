@@ -1224,8 +1224,9 @@ fn verify_qglake_handoff_artifact_file(
     base_dir: &Path,
 ) -> lakecat_core::LakeCatResult<Value> {
     let artifact = required_object(artifacts, field, "handoff summary artifacts")?;
-    require_only_fields(artifact, &["path", "sha256"], "handoff summary artifact")?;
-    let expected_sha256 = require_full_hash_str(artifact, "sha256", field)?;
+    let artifact_label = format!("handoff summary artifacts.{field}");
+    require_only_fields(artifact, &["path", "sha256"], &artifact_label)?;
+    let expected_sha256 = require_full_hash_str(artifact, "sha256", &artifact_label)?;
     let resolved_path = required_resolved_artifact_path(artifact, "path", base_dir)?;
     let bytes = fs::read(&resolved_path).map_err(|err| {
         lakecat_core::LakeCatError::InvalidArgument(format!(
@@ -17045,6 +17046,26 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_artifact_verifier_rejects_short_non_bundle_summary_artifact_hashes() {
+        for (artifact, short_hash) in [
+            ("lineageDrain", "sha256:lineage-drain"),
+            ("querygraphImportPlan", "sha256:querygraph-import-plan"),
+        ] {
+            let temp = qglake_temp_dir(&format!("handoff-artifacts-short-{artifact}-hash"));
+            let summary_path = temp.join("handoff-summary.json");
+            let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+            summary["artifacts"][artifact]["sha256"] = json!(short_hash);
+
+            let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+                .expect_err("artifact verifier should reject short non-bundle artifact hashes");
+            let err = err.to_string();
+
+            assert!(err.contains(artifact), "{err}");
+            assert!(err.contains("full SHA-256"), "{err}");
+        }
+    }
+
+    #[test]
     fn qglake_handoff_artifact_verifier_rejects_short_service_log_hash() {
         let temp = qglake_temp_dir("handoff-artifacts-short-service-log-hash");
         let summary_path = temp.join("handoff-summary.json");
@@ -19299,6 +19320,30 @@ mod tests {
         let err = err.to_string();
         assert!(err.contains("handoff summary artifacts"), "{err}");
         assert!(err.contains("unexpected field unverifiedArtifact"), "{err}");
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_extra_non_bundle_summary_artifact_fields() {
+        for artifact in ["lineageDrain", "querygraphImportPlan"] {
+            let temp = qglake_temp_dir(&format!("handoff-extra-{artifact}-artifact-fields"));
+            let summary_path = temp.join("handoff-summary.json");
+            let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+            summary["artifacts"][artifact]["unverifiedMirrorHash"] =
+                json!(qglake_fixture_hash("unverified-non-bundle-mirror"));
+
+            let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+                .expect_err("artifact verifier should reject extra non-bundle artifact fields");
+            let err = err.to_string();
+
+            assert!(
+                err.contains(&format!("handoff summary artifacts.{artifact}")),
+                "{err}"
+            );
+            assert!(
+                err.contains("unexpected field unverifiedMirrorHash"),
+                "{err}"
+            );
+        }
     }
 
     #[test]
