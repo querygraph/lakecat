@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened Turso storage-profile row-key binding. Storage-profile reads now
+  verify the durable `profile_key` against the selected warehouse/profile id
+  before returning credential-root inventory or matching a table, with focused
+  regressions for remapped key drift.
 - Hardened storage-profile secret-reference issuance validation. Storage
   profiles now reject secret references unless the issuance mode is
   `short-lived-secret-ref`, including deserialized memory and Turso upserts,

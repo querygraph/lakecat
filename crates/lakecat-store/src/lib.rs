@@ -2678,6 +2678,7 @@ fn validate_policy_binding_scope(
 fn validate_storage_profile_scope(
     profile: &StorageProfile,
     warehouse: &WarehouseName,
+    profile_key: &str,
     profile_id: &str,
     row_location_prefix: &str,
     row_provider: &str,
@@ -2685,6 +2686,7 @@ fn validate_storage_profile_scope(
 ) -> LakeCatResult<()> {
     profile.validate()?;
     if profile.warehouse != *warehouse
+        || storage_profile_key(warehouse, profile_id) != profile_key
         || profile.profile_id != profile_id
         || profile.location_prefix != row_location_prefix
         || profile.provider.as_str() != row_provider
@@ -7419,7 +7421,7 @@ pub mod turso_store {
             let conn = self.connect()?;
             let mut rows = conn
                 .query(
-                    "select profile_json, profile_id, location_prefix, provider, issuance_mode
+                    "select profile_json, profile_key, profile_id, location_prefix, provider, issuance_mode
                      from storage_profiles
                      where warehouse = ?1
                      order by profile_id",
@@ -7437,6 +7439,7 @@ pub mod turso_store {
                     &row_string(&row, 2)?,
                     &row_string(&row, 3)?,
                     &row_string(&row, 4)?,
+                    &row_string(&row, 5)?,
                 )?;
                 profiles.push(profile);
             }
@@ -12195,6 +12198,59 @@ pub mod turso_store {
                     "s3://lakecat-demo/other",
                     "gcs",
                     "governed-read-required",
+                ),
+            )
+            .await
+            .unwrap();
+
+            let err = store.list_storage_profiles(&warehouse).await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("storage profile row scope does not match")
+            ));
+
+            let err = store.storage_profile_for_table(&table).await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("storage profile row scope does not match")
+            ));
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_storage_profile_key_scope_drift() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let table = TableRecord::new(
+                TableIdent::new(
+                    warehouse.clone(),
+                    "default".parse::<Namespace>().unwrap(),
+                    TableName::new("events").unwrap(),
+                ),
+                "s3://lakecat-demo/events/table".to_string(),
+                None,
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            );
+            let profile = StorageProfile::new(
+                "s3-events",
+                warehouse.clone(),
+                "s3://lakecat-demo/events",
+                StorageProvider::S3,
+                CredentialIssuanceMode::ShortLivedSecretRef,
+                Some("typesec://lakecat/local/s3-events".to_string()),
+                BTreeMap::new(),
+            )
+            .unwrap();
+            store.upsert_storage_profile(profile).await.unwrap();
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update storage_profiles set profile_key = ?2 where profile_key = ?1",
+                (
+                    storage_profile_key(&warehouse, "s3-events"),
+                    storage_profile_key(&warehouse, "other-profile"),
                 ),
             )
             .await

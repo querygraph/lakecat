@@ -5,6 +5,19 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest storage-profile row-scope hardening slice:
+  `Bind Turso storage profile keys on read`.
+  Turso storage-profile reads now verify the durable `profile_key` row value
+  against the selected warehouse/profile id before returning credential-root
+  inventory or matching a table. This keeps remapped storage-profile keys from
+  becoming accepted QueryGraph bootstrap, credential, graph, OpenLineage, or
+  QGLake replay evidence.
+- Local verification for this storage-profile row-scope slice is green:
+  `cargo test -p lakecat-store --features turso-local --lib turso_store_rejects_storage_profile_key_scope_drift -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local` passed;
+  `scripts/check-release-readiness.sh --quick` passed; `git diff --check`
+  passed.
 - Latest storage-profile credential-root hardening slice:
   `Reject secret refs without secret-ref issuance mode`.
   Store-level storage-profile validation now rejects secret references unless
