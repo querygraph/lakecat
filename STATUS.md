@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release evidence:
+  `scripts/check-release-readiness.sh --release-candidate` passed from a clean
+  current head on 2026-06-23. This refreshed proof covers shell syntax checks,
+  isolated dependency-contract metadata checks, manual workflow trigger checks,
+  release version consistency, formatter checks, default workspace tests,
+  explicit Turso/Sail/TypeSec/Grust feature rows, Grust Turso graph persistence
+  and traversal tests, all-features CLI and workspace tests, out-of-tree book
+  artifact validation, live QGLake handoff verification, and final
+  `git diff --check` with a clean tree.
 - Latest release-contract slice:
   `Isolate dependency-contract metadata temp files`.
   `scripts/check-local-dependency-contract.sh` now writes Cargo metadata

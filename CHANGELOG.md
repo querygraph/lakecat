@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Refreshed the full local release-candidate proof after release-gate
+  hardening. `scripts/check-release-readiness.sh --release-candidate` passed
+  from a clean current head with the isolated dependency metadata files, Grust
+  Turso persistence/traversal release row, out-of-tree book build, QGLake
+  handoff verification, and final clean-tree check.
 - Hardened the local dependency-contract metadata checks for parallel local
   runs. Cargo metadata snapshots now live in a per-run temporary directory
   instead of fixed `/tmp/lakecat-dependency-contract-*` files, avoiding false
