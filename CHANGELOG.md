@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book with a front-loaded detailed catalog concept
+  reference. The new section walks through the Rust service spine, Turso store,
+  Iceberg REST paths, commit CAS, idempotency/pointer-log/audit/outbox replay,
+  governed scan and credential paths, QueryGraph/QGLake/OpenLineage proof
+  surfaces, v4 direction, standardization posture, and Sail engine-push
+  argument with explicit standard-Iceberg versus LakeCat/QueryGraph/TypeSec
+  boundaries.
 - Hardened service lineage-drain catalog-config summaries. Raw lineage-drain
   summary construction now rejects malformed config defaults/overrides and
   malformed, blank, or duplicate endpoint evidence instead of silently dropping

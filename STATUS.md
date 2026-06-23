@@ -5,6 +5,18 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest documentation/book slice:
+  `Expand detailed catalog concept reference`.
+  The book now front-loads a detailed reference for the Rust service spine,
+  Turso-backed store, standard Iceberg REST paths, commit CAS,
+  idempotency/pointer-log/audit/outbox replay hardening, governed scan and
+  credential paths, QueryGraph/QGLake/OpenLineage proof surfaces, v4 direction,
+  standardization posture, and the Sail engine-push argument.
+- Local verification for this documentation/book slice is green:
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed; `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest implementation/testing slice:
   `Harden lineage-drain catalog-config summaries`.
   Raw lineage-drain summary construction now rejects malformed config
