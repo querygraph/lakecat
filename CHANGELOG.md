@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added saved handoff verifier service-log hash shape coverage. The
+  `lakecat-handoff-verify.json` self-verification artifact now explicitly
+  rejects missing or null `artifactFiles.serviceLogHash` values before archived
+  QGLake proof accepts the saved verifier output.
 - Added saved handoff verifier service-log hash drift coverage. The
   `lakecat-handoff-verify.json` self-verification artifact now has explicit
   regression coverage proving its internal `artifactFiles.serviceLogHash` must

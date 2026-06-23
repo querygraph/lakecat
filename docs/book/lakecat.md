@@ -10498,8 +10498,8 @@ self-verifier output's bundle, lineage-drain, QueryGraph import-plan,
 captured-output, and service-log hashes against the summary's artifact
 manifest. The saved output cannot keep a valid verifier-output hash while
 rewriting `artifactFiles.serviceLogHash`; that operational log digest must
-still match the compact handoff summary. Artifact paths are checked before
-hashing as well: every path must
+still be present, non-null, full-length, and match the compact handoff summary.
+Artifact paths are checked before hashing as well: every path must
 resolve under the handoff summary directory, so an archived summary cannot
 splice in an absolute path or `..` traversal to matching bytes outside the
 bundle. The semantic readers use the same bundle-local resolver, so parsing the
