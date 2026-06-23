@@ -171,6 +171,10 @@ require_file docs/book/check_pdf_layout.sh
 require_pattern 'workflow_dispatch:' .github/workflows/ci.yml \
   "CI must remain manual-only through workflow_dispatch"
 require_manual_only_workflows
+require_pattern 'scripts/check-workflow-trigger-contract\.sh' .github/workflows/ci.yml \
+  "manual CI must explicitly run the workflow trigger contract self-test"
+require_pattern 'scripts/check-release-version-contract\.sh' .github/workflows/ci.yml \
+  "manual CI must explicitly run the release version contract"
 require_pattern 'scripts/check-local-dependency-contract.sh' scripts/check-release-readiness.sh \
   "release-readiness gate must run the dependency contract"
 require_pattern 'tmpdir="\$\(mktemp -d\)"' scripts/check-local-dependency-contract.sh \

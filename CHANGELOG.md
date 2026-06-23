@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Aligned manual CI preflight with the local release contracts without
+  re-enabling automatic cloud runs. The manual GitHub Actions workflow now runs
+  the workflow-trigger self-test and release-version contract as explicit
+  preflight rows, and the local dependency contract requires those rows while
+  keeping release-proof freshness in the local clean release-candidate gate.
 - Refreshed the full local release-candidate proof from clean head `4f7ac153`.
   `scripts/check-release-readiness.sh --release-candidate` passed locally with
   the release-proof contract in clean candidate mode, the full workspace and

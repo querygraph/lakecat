@@ -5,6 +5,23 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest manual CI preflight alignment:
+  the manual GitHub Actions workflow still uses only `workflow_dispatch`, but
+  now runs `scripts/check-workflow-trigger-contract.sh` and
+  `scripts/check-release-version-contract.sh` as explicit preflight rows after
+  the local dependency contract. The dependency contract now requires those
+  manual rows, while the release-proof contract remains owned by the clean
+  local `scripts/check-release-readiness.sh --release-candidate` path so
+  ordinary executable hardening reports stale proof evidence locally instead of
+  creating a surprising failing cloud run.
+- Local verification for this manual CI preflight alignment slice passed:
+  `bash -n scripts/check-local-dependency-contract.sh scripts/check-workflow-trigger-contract.sh scripts/check-release-version-contract.sh`;
+  `scripts/check-workflow-trigger-contract.sh`;
+  `scripts/check-release-version-contract.sh`;
+  `scripts/check-local-dependency-contract.sh`; and
+  `scripts/check-release-readiness.sh --quick` (which correctly reported that
+  executable workflow/script changes after `4f7ac153` require a fresh
+  release-candidate proof before final release refresh).
 - Latest release-candidate proof refresh:
   `scripts/check-release-readiness.sh --release-candidate` passed locally on
   June 23, 2026 from clean head `4f7ac153`. The gate covered shell syntax and

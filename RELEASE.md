@@ -63,6 +63,12 @@ explicit, the checked-in Sail patch files match the local Sail helper commits
 by stable `git patch-id`, manual workflow triggers remain intentional, and the
 local QueryGraph handoff verifier stays aligned with the same active Grust path
 checkout.
+When manual GitHub Actions is intentionally triggered, it also runs the
+workflow-trigger self-test and release-version contract as explicit preflight
+rows. The release-proof contract remains part of the local clean
+release-candidate gate, because ordinary code hardening after the last recorded
+proof should report stale release evidence locally rather than create a
+surprising failing cloud run.
 
 ## Required Local Gate
 
