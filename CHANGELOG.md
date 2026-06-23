@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added saved handoff verifier service-log hash drift coverage. The
+  `lakecat-handoff-verify.json` self-verification artifact now has explicit
+  regression coverage proving its internal `artifactFiles.serviceLogHash` must
+  match the compact handoff summary before archived QGLake proof is accepted.
 - Added fetched-scan raw summary coverage for missing required filters. The
   lineage-drain summary regression suite now proves governed
   `table.scan-tasks-fetched` replay cannot omit `required-filters` when a
