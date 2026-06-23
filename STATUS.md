@@ -6,6 +6,13 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest handoff-script hardening slice:
+  `Tighten local scan proof string validation`.
+  The local QGLake handoff script now treats whitespace-only scan
+  projection/stat strings as invalid and applies the same nonblank,
+  duplicate-free string-array validation to planned and fetched
+  read-restriction `allowed-columns` before compact governed scan proof is
+  accepted.
+- Latest handoff-script hardening slice:
   `Reject duplicate scan proof arrays locally`.
   The local QGLake handoff script now applies the same duplicate-free
   string-array contract as the Rust verifier to planned/fetched projection and

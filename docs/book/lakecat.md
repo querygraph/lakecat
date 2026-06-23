@@ -12905,8 +12905,9 @@ handoff proof now preserves that fetched side as its own
 `fetchedRequestedStatsFields` and `fetchedEffectiveStatsFields` evidence, so a
 handoff cannot prove only the planned stats narrowing while silently dropping
 what the fetch path actually returned. The local handoff script applies the
-same duplicate-free array rule before it writes that compact proof into the
-summary.
+same nonblank, duplicate-free array rule to projection, stats-field, and
+read-restriction allowed-column evidence before it writes that compact proof
+into the summary.
 
 The QueryGraph handoff is release-blocking as an acceptance proof, not as a
 requirement for ordinary Iceberg clients. The local QGLake workflow must keep

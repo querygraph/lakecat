@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Tightened local QGLake scan-proof string validation. The handoff script now
+  treats whitespace-only scan projection/stat fields as invalid and applies the
+  same duplicate-free nonblank string-array validation to planned and fetched
+  read-restriction `allowed-columns` before compact proof is accepted.
 - Aligned local QGLake scan-proof extraction with the Rust verifier for
   projection and stats arrays. `scripts/qglake-handoff-local.sh` now rejects
   duplicate planned/fetched projection and stats-field arrays before writing

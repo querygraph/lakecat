@@ -842,7 +842,7 @@ function requireStringArray(value, label) {
   }
   const seen = new Set();
   for (const item of value) {
-    if (typeof item !== "string" || item.length === 0) {
+    if (typeof item !== "string" || item.trim().length === 0) {
       console.error(`LakeCat scan replay evidence has invalid ${label}`);
       process.exit(1);
     }
@@ -887,10 +887,7 @@ function requireRestriction(value, label) {
     console.error(`LakeCat scan replay evidence is missing ${label}`);
     process.exit(1);
   }
-  if (!Array.isArray(value["allowed-columns"]) || value["allowed-columns"].length === 0) {
-    console.error(`LakeCat scan replay evidence ${label} is missing allowed-columns`);
-    process.exit(1);
-  }
+  requireStringArray(value["allowed-columns"], `${label}.allowed-columns`);
   if (!value["row-predicate"] || typeof value["row-predicate"] !== "object") {
     console.error(`LakeCat scan replay evidence ${label} is missing row-predicate`);
     process.exit(1);
