@@ -5,6 +5,18 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw scan summary hardening slice:
+  `Validate scan plan-task summaries`.
+  Raw lineage-drain summary construction now rejects present fetched-scan
+  `plan-task` evidence unless it is a non-empty LakeCat-issued token without
+  decorated location material or credential markers, so compact QGLake scan
+  proof cannot inherit archived task tokens that service replay would reject.
+- Local verification for this raw scan summary slice passed:
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_scan_plan_task -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service` passed;
+  `scripts/check-release-readiness.sh --quick` passed; `git diff --check`
+  passed.
 - Latest Grust Turso boundary review:
   `Verify current grust-turso graph operations`.
   LakeCat does not issue direct Turso SQL for graph operations. The catalog

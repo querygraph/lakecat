@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened fetched-scan plan-task summary extraction. Raw lineage-drain summary
+  construction now rejects decorated, credential-bearing, or non-LakeCat
+  `plan-task` evidence before compact QGLake scan proof can inherit archived
+  scan-task tokens.
 - Re-verified the Grust Turso graph boundary against the current Grust checkout.
   LakeCat's graph path resolves through `/Users/alexy/src/grust/crates/grust-turso`;
   focused LakeCat tests cover `TursoGraphStore` persistence, traversal, Cypher

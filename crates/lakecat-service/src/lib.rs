@@ -7346,6 +7346,9 @@ fn lineage_drain_event_summary(
     let (principal_subject, principal_kind) =
         lineage_summary_authorization_principal_fields(event, authorization_receipt)?;
     let policy = payload.get("policy");
+    if payload.get("plan-task").is_some() {
+        validate_plan_task_evidence(event, payload.get("plan-task"), "lineage drain summary")?;
+    }
     let table_commit_count =
         lineage_summary_optional_count_alias_field(event, payload, &["commit-count"])?;
     let table_commit_sequence_numbers = payload
@@ -51391,6 +51394,84 @@ mod tests {
             ),
             "{err}"
         );
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_scan_plan_task() {
+        let receipt = OutboxProjectionReceipt::default();
+        let decorated_plan_task = OutboxEvent {
+            event_id: "evt-bad-summary-decorated-plan-task".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.scan-tasks-fetched".to_string(),
+            payload: json!({
+                "payload": {
+                    "plan-task": "lakecat:plan:abc?token=secret",
+                    "file-scan-task-count": 1,
+                    "delete-file-count": 0,
+                    "child-plan-task-count": 0
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&decorated_plan_task, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains(
+                "lineage drain summary plan-task must not contain decorated location material"
+            ),
+            "{err}"
+        );
+        assert!(!err.contains("lakecat:plan:abc?token=secret"));
+
+        let credential_bearing_plan_task = OutboxEvent {
+            event_id: "evt-bad-summary-credential-plan-task".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.scan-tasks-fetched".to_string(),
+            payload: json!({
+                "payload": {
+                    "plan-task": "lakecat:plan:abc:credential=secret",
+                    "file-scan-task-count": 1,
+                    "delete-file-count": 0,
+                    "child-plan-task-count": 0
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&credential_bearing_plan_task, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("lineage drain summary plan-task must not contain credential material"),
+            "{err}"
+        );
+        assert!(!err.contains("credential=secret"));
+
+        let foreign_plan_task = OutboxEvent {
+            event_id: "evt-bad-summary-foreign-plan-task".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.scan-tasks-fetched".to_string(),
+            payload: json!({
+                "payload": {
+                    "plan-task": "spark:plan:abc",
+                    "file-scan-task-count": 1,
+                    "delete-file-count": 0,
+                    "child-plan-task-count": 0
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&foreign_plan_task, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("lineage drain summary plan-task must be LakeCat-issued evidence"),
+            "{err}"
+        );
+        assert!(!err.contains("spark:plan:abc"));
     }
 
     #[test]
