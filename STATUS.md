@@ -5,6 +5,21 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest docs/book slice:
+  `Expand standards and engine-boundary decision record`.
+  The book now has a dedicated decision-record section that classifies the Rust
+  service spine, Turso local store, Iceberg REST namespace/table paths, commit
+  CAS, idempotency/pointer-log/audit/outbox replay hardening, governed scan and
+  credential receipts, QueryGraph/QGLake/OpenLineage proof surfaces, and typed
+  v4 work as standard Iceberg, LakeCat implementation, product extension, or
+  future optional-profile material. It also adds a concrete proper-noun test
+  and a Sail-first engine-boundary argument for PySpark, operator, governed
+  service, agent, and QueryGraph workflows.
+- Local verification for this docs/book slice is green:
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest implementation/testing slice:
   `Harden table commit-history graph hashes`.
   Internal table commit-history graph projection now rejects missing,

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book with a standards and engine-boundary decision
+  record. The new section classifies the Rust service spine, Turso store,
+  Iceberg REST paths, commit CAS, idempotency/pointer-log/audit/outbox replay
+  hardening, governed scan/credential receipts, QueryGraph/QGLake/OpenLineage
+  proof surfaces, and typed v4 behavior as standard Iceberg, LakeCat
+  implementation, product extension, or future optional-profile material, and
+  sharpens the argument that Sail should own table truth while LakeCat binds
+  authority and proof.
 - Hardened table commit-history graph projection. Internal commit-history
   graph projection now rejects missing, count-drifted, or non-string
   `commit-hashes` before emitting commit graph nodes, so projection cannot
