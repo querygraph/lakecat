@@ -61,8 +61,10 @@ graph sink. The handoff summary carries hash-only `graphProjectionProof`
 evidence for that backend, and the Rust verifier rejects missing or drifted
 graph-backend proof before accepting saved artifacts. The dependency contract
 keeps that harness aligned with the active local Grust graph implementation
-while graph persistence, traversal, and future Cypher-over-Turso work remain
-Grust-owned.
+while graph persistence, traversal, and Cypher-over-Turso work remain
+Grust-owned. LakeCat's `grust-turso-local` graph tests cover writing catalog
+events, traversing the projection, and querying/mutating it through Grust
+Cypher over the same Turso-backed store.
 
 Useful local checks:
 

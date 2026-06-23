@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Reconciled the Grust Turso graph guidance and local dependency contract after
+  Cypher-over-Turso landed in Grust. README, DESIGN, GOAL, AGENTS, and the
+  contract check now describe persistence, traversal, and Cypher as Grust-owned
+  behavior exercised through LakeCat's `grust-turso-local` boundary.
 - Added a Grust Turso Cypher regression for LakeCat catalog graph projection.
   The `grust-turso-local` graph tests now prove catalog events can be written,
   traversed, and queried/mutated through Grust's Turso-backed graph store, while

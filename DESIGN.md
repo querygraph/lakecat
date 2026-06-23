@@ -390,8 +390,8 @@ boundary cleanup rather than new architecture:
   backend. The handoff summary must carry hash-only `graphProjectionProof`
   evidence for that backend, and the Rust handoff verifier must reject missing
   or drifted graph-backend proof before accepting saved artifacts. Graph
-  persistence, traversal, and future Cypher-over-Turso behavior remain
-  Grust-owned.
+  persistence, traversal, and Cypher-over-Turso behavior remain Grust-owned;
+  LakeCat only proves the catalog projection boundary.
 - Refresh README, book artifacts, `STATUS.md`, and version/release notes from
   the same commit that passes the full gate. Tracked book artifacts should be
   refreshed deliberately with `docs/book/build.sh`; the clean release-candidate

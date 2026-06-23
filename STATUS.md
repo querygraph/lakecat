@@ -5,12 +5,18 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
-- Latest release-prep slice:
-  `Prepare v0.1.0 changelog heading`.
-  `CHANGELOG.md` now has an empty `Unreleased` section and a dated
-  `0.1.0 - 2026-06-23` release section for the current first-release notes.
-  `scripts/check-release-version-contract.sh` now verifies the workspace
-  release version also appears in that changelog heading.
+- Latest contract/docs slice:
+  `Reconcile Grust Turso Cypher guidance`.
+  README, DESIGN, GOAL, AGENTS, and the local dependency contract now describe
+  Grust Turso persistence, traversal, and Cypher as Grust-owned behavior
+  exercised through LakeCat's `grust-turso-local` projection boundary. The
+  release-readiness gate already uses the `grust_turso_store` filter, which now
+  includes the Turso-backed Cypher regression.
+- Local verification for this contract/docs slice is green:
+  `scripts/check-local-dependency-contract.sh` passed;
+  `cargo test -p lakecat-graph --features grust-turso-local --lib grust_turso_store -- --test-threads=1`
+  passed; `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest graph-integration slice:
   `Run Grust Turso Cypher over catalog projection`.
   LakeCat's `grust-turso-local` graph tests now prove catalog events can be
@@ -20,13 +26,15 @@ Updated: 2026-06-23
   and Cypher behavior remain in Grust.
 - Latest release evidence:
   `scripts/check-release-readiness.sh --release-candidate` passed from a clean
-  current head on 2026-06-23. This refreshed proof covers shell syntax checks,
+  release-candidate head on 2026-06-23 before the latest Grust Turso Cypher
+  reconciliation commits. That proof covered shell syntax checks,
   isolated dependency-contract metadata checks, manual workflow trigger checks,
   release version consistency, formatter checks, default workspace tests,
   explicit Turso/Sail/TypeSec/Grust feature rows, Grust Turso graph persistence
   and traversal tests, all-features CLI and workspace tests, out-of-tree book
   artifact validation, live QGLake handoff verification, and final
-  `git diff --check` with a clean tree.
+  `git diff --check` with a clean tree. The final release-candidate proof must
+  be refreshed from the then-current head.
 - Latest release-contract slice:
   `Isolate dependency-contract metadata temp files`.
   `scripts/check-local-dependency-contract.sh` now writes Cargo metadata
@@ -37,8 +45,8 @@ Updated: 2026-06-23
   `Run Grust Turso traversal in release gate`.
   `scripts/check-release-readiness.sh` now runs the `grust_turso_store` test
   filter for `lakecat-graph --features grust-turso-local`, so the authoritative
-  local gate covers both durable catalog graph persistence and traversal over
-  Grust's Turso backend.
+  local gate covers durable catalog graph persistence, traversal, and Cypher
+  mutation/query over Grust's Turso backend.
 - Latest release-contract slice:
   `Build release-candidate book artifacts out of tree`.
   `docs/book/build.sh` now honors `LAKECAT_BOOK_DIST_DIR`, and
@@ -173,7 +181,7 @@ Updated: 2026-06-23
   service graph sink, with `LAKECAT_GRUST_TURSO_PATH` selecting a durable graph
   database and an in-memory Turso graph store as the local fallback. Focused
   graph and service regressions prove LakeCat catalog projection over Grust
-  Turso while keeping graph persistence, traversal, and future Cypher-over-Turso
+  Turso while keeping graph persistence, traversal, and Cypher-over-Turso
   behavior in Grust.
 - Latest implementation/testing slice:
   `Omit unscoped audit outbox table wrappers`.

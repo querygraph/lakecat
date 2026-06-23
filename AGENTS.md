@@ -45,8 +45,9 @@ metadata-pointer state, policy gates, and integration events belong here.
   reusable catalog graph taxonomy belongs in Grust.
 - When LakeCat needs durable graph projection over a Turso store, use Grust's
   `grust-turso` backend through `grust-turso-local`. Keep graph persistence,
-  traversal, and future Cypher-over-Turso behavior in Grust; LakeCat should only
-  configure the sink and emit catalog graph events.
+  traversal, and Cypher-over-Turso behavior in Grust; LakeCat should only
+  configure the sink, emit catalog graph events, and prove the Grust-owned
+  projection boundary.
 - Keep feature gates honest. Default-feature tests should pass, and real
   integrations should be wired through explicit features such as `sail-local`,
   `typesec-local`, `grust-local`, `grust-turso-local`, and `qglake-fixture`.
