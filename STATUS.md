@@ -5,6 +5,17 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest generated table-commit audit request-hash binding:
+  memory and Turso commit producers now keep the commit request hash inside the
+  pointer-log record while storing the audit payload hash as generated audit
+  request evidence, so generated commit audit rows match the standalone audit
+  request-hash invariant.
+- Local verification for this generated table-commit audit request-hash slice
+  passed:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_commit_records_table_commit_outbox_event -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_round_trips_namespaces_tables_and_idempotent_commits -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest outbox delivery admission hardening:
   memory and Turso stores now validate a pending outbox event before marking it
   delivered, so malformed graph/lineage replay evidence cannot be hidden from

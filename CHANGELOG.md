@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound generated table-commit audit request hashes to their audit payloads.
+  Memory and Turso commit producers now keep the commit request hash inside the
+  pointer-log record while storing the audit payload hash as audit request
+  evidence.
 - Hardened outbox delivery admission. Memory and Turso stores now validate a
   pending outbox event before marking it delivered, so malformed graph/lineage
   replay evidence cannot be hidden from drains by delivery acknowledgement;

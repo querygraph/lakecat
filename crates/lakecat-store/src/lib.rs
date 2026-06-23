@@ -2008,9 +2008,9 @@ impl CatalogStore for MemoryCatalogStore {
             "commit": &record,
             "authorization-receipt": commit.authorization_receipt,
         });
-        let audit_event_id = content_hash_json(&audit_payload)?;
+        let audit_payload_hash = content_hash_json(&audit_payload)?;
         let outbox_payload = serde_json::json!({
-            "audit-event-id": audit_event_id,
+            "audit-event-id": audit_payload_hash,
             "event-type": "table.commit",
             "table": ident.clone(),
             "commit": &record,
@@ -2021,7 +2021,7 @@ impl CatalogStore for MemoryCatalogStore {
             event_type: "table.commit".to_string(),
             table: Some(ident.clone()),
             principal: commit.principal.clone(),
-            request_hash: Some(record.request_hash.clone()),
+            request_hash: Some(audit_payload_hash),
             payload: audit_payload,
             created_at: committed_at,
         });
@@ -6634,6 +6634,25 @@ mod memory_tests {
             pending[0].payload["authorization-receipt"]["engine"],
             serde_json::json!("typesec")
         );
+        let state = store.state.read().await;
+        let audit_event = state.audit_events.first().expect("commit audit event");
+        let audit_payload_hash = content_hash_json(&audit_event.payload).unwrap();
+        let commit_request_hash = state
+            .commits
+            .first()
+            .expect("commit pointer-log record")
+            .record
+            .request_hash
+            .clone();
+        assert_eq!(
+            audit_event.request_hash.as_deref(),
+            Some(audit_payload_hash.as_str())
+        );
+        assert_ne!(
+            audit_event.request_hash.as_deref(),
+            Some(commit_request_hash.as_str()),
+            "audit request hash must bind the audit payload, not the inner commit request"
+        );
         assert!(!pending[0].payload.to_string().contains("commit-1"));
     }
 
@@ -7632,7 +7651,7 @@ pub mod turso_store {
                 "commit": record,
                 "authorization-receipt": commit.authorization_receipt,
             });
-            let audit_event_id = content_hash_json(&audit_payload)?;
+            let audit_payload_hash = content_hash_json(&audit_payload)?;
             tx.execute(
                 "insert into audit_events (
                     event_id, event_type, table_key, principal_json,
@@ -7640,11 +7659,11 @@ pub mod turso_store {
                  )
                  values (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 (
-                    audit_event_id.as_str(),
+                    audit_payload_hash.as_str(),
                     "table.commit",
                     table_key(ident),
                     encode_json(&commit.principal)?,
-                    record.request_hash.as_str(),
+                    audit_payload_hash.as_str(),
                     encode_json(&audit_payload)?,
                     table.updated_at.to_rfc3339(),
                 ),
@@ -7653,7 +7672,7 @@ pub mod turso_store {
             .map_err(turso_error)?;
 
             let outbox_payload = serde_json::json!({
-                "audit-event-id": audit_event_id,
+                "audit-event-id": audit_payload_hash,
                 "event-type": "table.commit",
                 "table": ident,
                 "commit": record,
@@ -11231,6 +11250,23 @@ pub mod turso_store {
             );
             let audit_count = store.count_rows("audit_events").await.unwrap();
             assert_eq!(audit_count, 1);
+            let conn = store.connect().unwrap();
+            let mut audit_rows = conn
+                .query("select request_hash, event_json from audit_events", ())
+                .await
+                .unwrap();
+            let audit_row = audit_rows.next().await.unwrap().unwrap();
+            let audit_request_hash = row_string(&audit_row, 0).unwrap();
+            let audit_payload =
+                decode_json::<serde_json::Value>(row_string(&audit_row, 1).unwrap()).unwrap();
+            assert_eq!(
+                audit_request_hash,
+                content_hash_json(&audit_payload).unwrap()
+            );
+            assert_ne!(
+                audit_request_hash, commit_records[0].request_hash,
+                "audit request hash must bind the audit payload, not the inner commit request"
+            );
             let outbox_count = store.count_rows("outbox_events").await.unwrap();
             assert_eq!(outbox_count, 1);
 
