@@ -3523,8 +3523,14 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
     }))
 }
 
-const GRAPH_PROJECTION_PROOF_FIELDS: &[&str] =
-    &["backend", "feature", "pathHash", "catalogGraphSink"];
+const GRAPH_PROJECTION_PROOF_FIELDS: &[&str] = &[
+    "backend",
+    "feature",
+    "pathHash",
+    "tablePrefix",
+    "catalogGraphSink",
+];
+const QGLAKE_GRUST_TURSO_TABLE_PREFIX: &str = "lakecat_graph";
 
 fn require_graph_projection_proof(
     summary: &serde_json::Map<String, Value>,
@@ -3539,6 +3545,12 @@ fn require_graph_projection_proof(
         "graphProjectionProof",
     )?;
     require_full_hash_str(proof, "pathHash", "graphProjectionProof")?;
+    require_string_eq(
+        proof,
+        "tablePrefix",
+        QGLAKE_GRUST_TURSO_TABLE_PREFIX,
+        "graphProjectionProof",
+    )?;
     require_string_eq(
         proof,
         "catalogGraphSink",
@@ -12195,6 +12207,7 @@ mod tests {
             "backend": "grust-turso",
             "feature": "grust-turso-local",
             "pathHash": qglake_fixture_hash("grust-turso-path"),
+            "tablePrefix": QGLAKE_GRUST_TURSO_TABLE_PREFIX,
             "catalogGraphSink": "GrustCatalogGraphSink<TursoGraphStore>"
         });
         summary["lakecatReplayVerification"]["catalogConfigProof"] =
@@ -13435,6 +13448,10 @@ mod tests {
             verification["graphProjectionProof"]["feature"],
             json!("grust-turso-local")
         );
+        assert_eq!(
+            verification["graphProjectionProof"]["tablePrefix"],
+            json!(QGLAKE_GRUST_TURSO_TABLE_PREFIX)
+        );
     }
 
     #[test]
@@ -13474,6 +13491,18 @@ mod tests {
         assert!(err.to_string().contains("graphProjectionProof"));
         assert!(err.to_string().contains("pathHash"));
         assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_graph_projection_table_prefix_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["graphProjectionProof"]["tablePrefix"] = json!("other_graph");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject graph projection table prefix drift");
+
+        assert!(err.to_string().contains("graphProjectionProof"));
+        assert!(err.to_string().contains("tablePrefix"));
     }
 
     #[test]

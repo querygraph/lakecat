@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Bound QGLake graph projection proof to the configured Grust Turso table
+  prefix. Handoff summaries and saved verifier fixtures now include
+  `graphProjectionProof.tablePrefix = lakecat_graph`, the Rust verifier rejects
+  prefix drift, the dependency contract guards the live script and verifier
+  shape, and the README/release docs/book explain the stronger Grust-owned
+  Turso projection evidence.
 - Aligned the README release-gate summary with the explicit Rust QGLake handoff
   verifier row. The local dependency contract now guards the public release
   instructions so they name `lakecat-cli qglake_handoff` alongside the broader

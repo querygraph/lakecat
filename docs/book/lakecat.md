@@ -7946,10 +7946,11 @@ Turso-backed sink with an explicit `LAKECAT_GRUST_TURSO_PATH`, so the same
 end-to-end QueryGraph acceptance flow that validates replay and import also
 proves LakeCat is not doing graph storage or graph-query work locally. The
 handoff summary records this as hash-only
-`graphProjectionProof` evidence: the backend and feature are named, but the
-local graph database path is represented by a digest. The Rust verifier rejects
-missing, malformed, or drifted graph-backend proof before accepting saved
-artifacts. TypeSec still resolves from the published `typesec` 0.8.0 crate.
+`graphProjectionProof` evidence: the backend, feature, and configured
+`lakecat_graph` table prefix are named, but the local graph database path is
+represented by a digest. The Rust verifier rejects missing, malformed, or
+drifted graph-backend proof before accepting saved artifacts. TypeSec still
+resolves from the published `typesec` 0.8.0 crate.
 
 Sail is different today: LakeCat still uses local Sail paths plus a checked-in
 patch bridge for helper APIs that are not yet published. Before pushing a slice

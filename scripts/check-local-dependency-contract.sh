@@ -281,6 +281,12 @@ require_pattern 'querygraphImportVerification' scripts/qglake-handoff-local.sh \
   "local QGLake handoff summary must persist QueryGraph import evidence"
 require_pattern '"graphProjectionProof"' scripts/qglake-handoff-local.sh \
   "local QGLake handoff must write machine-readable graph projection proof"
+require_pattern '"tablePrefix": "lakecat_graph"' scripts/qglake-handoff-local.sh \
+  "local QGLake handoff graph projection proof must bind the Grust Turso table prefix"
+require_pattern '"tablePrefix",' crates/lakecat-cli/src/main.rs \
+  "Rust QGLake handoff verifier must preserve graph projection table-prefix proof"
+require_pattern 'const QGLAKE_GRUST_TURSO_TABLE_PREFIX: &str = "lakecat_graph";' crates/lakecat-cli/src/main.rs \
+  "Rust QGLake handoff verifier must reject Grust Turso table-prefix drift"
 require_pattern 'const graphNodes = graphCount\("graph-nodes"\)' scripts/qglake-handoff-local.sh \
   "local QGLake handoff verification artifact must derive graph node count from the QueryGraph import plan"
 require_pattern 'const graphEdges = graphCount\("graph-edges"\)' scripts/qglake-handoff-local.sh \

@@ -5,6 +5,24 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest QGLake graph projection proof slice:
+  `Bind graph projection table prefix`.
+  QGLake handoff summaries now carry
+  `graphProjectionProof.tablePrefix = lakecat_graph` beside the Grust Turso
+  backend, feature, path hash, and sink proof. The Rust verifier rejects table
+  prefix drift, the dependency contract guards the live handoff script and
+  verifier shape, and the README, release checklist, design, and book now
+  document that LakeCat proves the configured Grust-owned Turso projection
+  boundary without taking graph storage or query work back from Grust.
+- Local verification for this QGLake graph projection proof slice passed:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_graph_projection_table_prefix_drift -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff -- --test-threads=1`;
+  `bash -n scripts/qglake-handoff-local.sh scripts/check-local-dependency-contract.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest README release-gate alignment slice:
   `Name CLI handoff verifier in README gate`.
   README now names the explicit Rust `lakecat-cli qglake_handoff` verifier row

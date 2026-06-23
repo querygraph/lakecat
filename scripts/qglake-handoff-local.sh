@@ -1584,6 +1584,7 @@ write_summary() {
     "backend": "grust-turso",
     "feature": "grust-turso-local",
     "pathHash": "sha256:$grust_turso_path_sha",
+    "tablePrefix": "lakecat_graph",
     "catalogGraphSink": "GrustCatalogGraphSink<TursoGraphStore>"
   },
   "querygraphVerification": {
