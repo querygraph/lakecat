@@ -908,7 +908,9 @@ v4 bridge, endpoint, authorization, graph, replay, or OpenLineage compatibility
 claims beside checked config-read proof. The compact handoff verifier and the
 saved lineage-drain verifier must reject missing required endpoints from that
 proof, including the standard Iceberg REST plan endpoint as well as QueryGraph
-bootstrap.
+bootstrap. Default and warehouse-prefixed route forms are both part of this
+proof because warehouse routing is a standard LakeCat compatibility surface for
+Iceberg clients.
 Raw `catalog.config-read` and `querygraph.bootstrap` replay payloads must also
 stay closed over their checked service schemas before graph, OpenLineage,
 QGLake, or QueryGraph import proof can inherit them. A durable outbox row cannot

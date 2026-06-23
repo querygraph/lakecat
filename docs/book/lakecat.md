@@ -9308,7 +9308,9 @@ verifier's statement about the raw drain artifact to the config proof actually
 carried by that artifact. Both the compact summary verifier and the saved
 lineage-drain verifier reject a config proof that drops required routes,
 including the standard Iceberg REST plan endpoint and the QueryGraph bootstrap
-endpoint.
+endpoint. The same check covers the warehouse-prefixed plan route, so a saved
+handoff cannot keep default catalog discovery while silently weakening
+warehouse-scoped Iceberg planning.
 The lineage-drain replay summaries are bound back to the drain-level
 `eventTypes` manifest as well. A saved handoff cannot add a compact replay
 summary for `storage-profile.upserted`, `querygraph.bootstrap`, or any other

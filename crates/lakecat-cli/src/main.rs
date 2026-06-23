@@ -14455,6 +14455,7 @@ mod tests {
         for missing_endpoint in [
             "GET /querygraph/v1/bootstrap",
             "POST /catalog/v1/namespaces/{namespace}/tables/{table}/plan",
+            "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/plan",
         ] {
             let mut summary = qglake_handoff_summary_json();
             let endpoints = summary["lakecatReplayVerification"]["catalogConfigProof"]["endpoints"]
@@ -28415,6 +28416,7 @@ mod tests {
         for missing_endpoint in [
             "GET /querygraph/v1/bootstrap",
             "POST /catalog/v1/namespaces/{namespace}/tables/{table}/plan",
+            "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/plan",
         ] {
             let verification = qglake_handoff_lineage_verification();
             let mut drain = qglake_handoff_lineage_drain_with_config();

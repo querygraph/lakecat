@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Extended catalog-config endpoint-set coverage to the warehouse-prefixed
+  Iceberg REST plan route. Raw `catalog.config-read` summaries, compact
+  handoff summaries, and saved lineage-drain semantics now prove both default
+  and warehouse-scoped plan routes stay advertised.
 - Extended QGLake catalog-config endpoint verifier coverage. Compact handoff
   summaries and saved lineage-drain semantics now explicitly prove the standard
   Iceberg REST plan endpoint cannot be dropped from `catalogConfigProof`.
