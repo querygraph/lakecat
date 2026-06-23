@@ -1044,7 +1044,10 @@ nested `commit` object over the pointer-transition, identity, authorization,
 hash, format, snapshot, and
 timestamp fields LakeCat actually verifies. A durable `table.commit` event
 cannot append unverified commit, policy, storage, graph, lineage, QueryGraph,
-or application claims beside an otherwise valid pointer transition. The store
+or application claims beside an otherwise valid pointer transition. Service
+replay now also closes the wrapped `table.commit` envelope over the producer
+wrapper fields, so those claims cannot ride beside an otherwise valid checked
+inner commit payload. The store
 producer now rejects table and
 commit metadata that lacks positive `format-version` evidence before producing
 durable commit records, and it emits explicit `snapshot_id: 0` evidence for

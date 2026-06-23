@@ -9702,7 +9702,9 @@ in that envelope, because some standard commits do not pass through a policy
 binding. The nested `commit` object is also closed over the exact fields
 LakeCat verifies, so replay cannot smuggle an extra unverified commit, policy,
 storage, graph, or QueryGraph claim into the sidecar before QGLake proof is
-generated.
+generated. The wrapped `table.commit` outbox envelope is closed as well, so
+those claims cannot be placed beside an otherwise valid checked inner commit
+payload.
 The verifier also normalizes the legacy alias boundary: snake_case and
 kebab-case commit fields are both accepted, but duplicate aliases for the same
 semantic value are rejected before acknowledgement or projection.
