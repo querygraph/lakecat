@@ -295,7 +295,10 @@ The current working plan is:
    namespace path, table name, and enforced flag before matching policies for
    tables. Storage-profile reads must likewise bind decoded JSON back to the
    memory map key or Turso row/query warehouse, profile id, location prefix,
-   provider, and issuance mode before credential-root matching. Guarded view mutations
+   provider, and issuance mode before credential-root matching; memory/Turso
+   storage-profile upserts must also validate any existing row before replacing
+   it so same-key management writes cannot erase credential-root scope drift.
+   Guarded view mutations
    must reject invalid expected-version values before changing active view state
    or appending view-version receipts, and memory/Turso mutation paths must
    validate the existing receipt chain before appending a new view receipt so

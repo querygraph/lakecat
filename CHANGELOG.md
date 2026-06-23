@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Hardened storage-profile upsert admission. Memory and Turso stores now
+  validate an existing storage-profile row before replacing it, so credential
+  root scope drift cannot be hidden by a same-key upsert.
 - Hardened memory view-receipt scope binding. Memory view-version receipts now
   carry a private view-key anchor and validate it before receipt reads or
   mutation-chain extension, matching Turso's durable view receipt row binding.

@@ -2397,10 +2397,11 @@ impl CatalogStore for MemoryCatalogStore {
     ) -> LakeCatResult<StorageProfile> {
         profile.validate()?;
         let mut state = self.state.write().await;
-        state.storage_profiles.insert(
-            storage_profile_key(&profile.warehouse, &profile.profile_id),
-            profile.clone(),
-        );
+        let key = storage_profile_key(&profile.warehouse, &profile.profile_id);
+        if let Some(existing) = state.storage_profiles.get(&key) {
+            validate_storage_profile_map_scope(existing, &key)?;
+        }
+        state.storage_profiles.insert(key, profile.clone());
         Ok(profile)
     }
 
@@ -4141,6 +4142,57 @@ mod memory_tests {
         ));
 
         let err = store.storage_profile_for_table(&table).await.unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("storage profile row scope does not match")
+        ));
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_storage_profile_scope_drift_before_upsert() {
+        let store = MemoryCatalogStore::new();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let profile = StorageProfile::new(
+            "s3-events",
+            warehouse.clone(),
+            "s3://lakecat-demo/events",
+            StorageProvider::S3,
+            CredentialIssuanceMode::ShortLivedSecretRef,
+            Some("typesec://lakecat/local/s3-events".to_string()),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        store.upsert_storage_profile(profile).await.unwrap();
+
+        let key = storage_profile_key(&warehouse, "s3-events");
+        store
+            .state
+            .write()
+            .await
+            .storage_profiles
+            .get_mut(&key)
+            .unwrap()
+            .profile_id = "other-profile".to_string();
+
+        let replacement = StorageProfile::new(
+            "s3-events",
+            warehouse.clone(),
+            "s3://lakecat-demo/events/new",
+            StorageProvider::S3,
+            CredentialIssuanceMode::GovernedReadRequired,
+            None,
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let err = store.upsert_storage_profile(replacement).await.unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("storage profile row scope does not match")
+        ));
+
+        let err = store.list_storage_profiles(&warehouse).await.unwrap_err();
         assert!(matches!(
             err,
             LakeCatError::Internal(message)
@@ -9081,8 +9133,31 @@ pub mod turso_store {
             profile: StorageProfile,
         ) -> LakeCatResult<StorageProfile> {
             profile.validate()?;
-            let conn = self.connect()?;
-            conn.execute(
+            let mut conn = self.connect()?;
+            let tx = conn.transaction().await.map_err(turso_error)?;
+            let profile_key = storage_profile_key(&profile.warehouse, &profile.profile_id);
+            let mut rows = tx
+                .query(
+                    "select profile_json, profile_key, profile_id, location_prefix, provider, issuance_mode
+                     from storage_profiles
+                     where profile_key = ?1",
+                    (profile_key.as_str(),),
+                )
+                .await
+                .map_err(turso_error)?;
+            if let Some(row) = rows.next().await.map_err(turso_error)? {
+                let existing: StorageProfile = decode_json(row_string(&row, 0)?)?;
+                crate::validate_storage_profile_scope(
+                    &existing,
+                    &profile.warehouse,
+                    &row_string(&row, 1)?,
+                    &row_string(&row, 2)?,
+                    &row_string(&row, 3)?,
+                    &row_string(&row, 4)?,
+                    &row_string(&row, 5)?,
+                )?;
+            }
+            tx.execute(
                 "insert into storage_profiles (
                     profile_key, profile_id, warehouse, location_prefix,
                     provider, issuance_mode, profile_json, updated_at
@@ -9095,7 +9170,7 @@ pub mod turso_store {
                     profile_json = excluded.profile_json,
                     updated_at = excluded.updated_at",
                 (
-                    storage_profile_key(&profile.warehouse, &profile.profile_id),
+                    profile_key.as_str(),
                     profile.profile_id.as_str(),
                     profile.warehouse.as_str(),
                     profile.location_prefix.as_str(),
@@ -9107,6 +9182,7 @@ pub mod turso_store {
             )
             .await
             .map_err(turso_error)?;
+            tx.commit().await.map_err(turso_error)?;
             Ok(profile)
         }
 
@@ -14435,6 +14511,60 @@ pub mod turso_store {
             ));
 
             let err = store.storage_profile_for_table(&table).await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("storage profile row scope does not match")
+            ));
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_storage_profile_scope_drift_before_upsert() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let profile = StorageProfile::new(
+                "s3-events",
+                warehouse.clone(),
+                "s3://lakecat-demo/events",
+                StorageProvider::S3,
+                CredentialIssuanceMode::ShortLivedSecretRef,
+                Some("typesec://lakecat/local/s3-events".to_string()),
+                BTreeMap::new(),
+            )
+            .unwrap();
+            store.upsert_storage_profile(profile.clone()).await.unwrap();
+
+            let mut corrupt = profile;
+            corrupt.profile_id = "other-profile".to_string();
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update storage_profiles set profile_json = ?2 where profile_key = ?1",
+                (
+                    storage_profile_key(&warehouse, "s3-events"),
+                    encode_json(&corrupt).unwrap(),
+                ),
+            )
+            .await
+            .unwrap();
+
+            let replacement = StorageProfile::new(
+                "s3-events",
+                warehouse.clone(),
+                "s3://lakecat-demo/events/new",
+                StorageProvider::S3,
+                CredentialIssuanceMode::GovernedReadRequired,
+                None,
+                BTreeMap::new(),
+            )
+            .unwrap();
+            let err = store.upsert_storage_profile(replacement).await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("storage profile row scope does not match")
+            ));
+
+            let err = store.list_storage_profiles(&warehouse).await.unwrap_err();
             assert!(matches!(
                 err,
                 LakeCatError::Internal(message)
