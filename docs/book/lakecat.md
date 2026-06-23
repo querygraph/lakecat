@@ -13388,7 +13388,11 @@ catalog graph sink.
 README, status, changelog, book artifacts, and version notes must be refreshed
 from the same clean commit, and the release should be tagged only after the
 broad local gate, QGLake handoff, QueryGraph locked verify/import,
-dependency-contract check, and book build all pass together.
+dependency-contract check, and book validation all pass together. Tracked book
+artifacts are refreshed deliberately with `docs/book/build.sh`; the
+release-candidate gate validates a fresh EPUB/PDF/MOBI build in a temporary
+`LAKECAT_BOOK_DIST_DIR` so binary artifact metadata cannot dirty the candidate
+commit by itself.
 
 That leaves important work after the first release, but it should stay out of
 the first-release blocker list unless the scope changes. Typed Iceberg v4
@@ -13402,7 +13406,7 @@ foundation, not absorb every future system.
 The release evidence is concrete:
 
 ```sh
-scripts/check-release-readiness.sh
+scripts/check-release-readiness.sh --release-candidate
 scripts/qglake-handoff-local.sh
 docs/book/build.sh
 scripts/check-local-dependency-contract.sh
@@ -13417,10 +13421,10 @@ scripts/check-release-readiness.sh --quick
 The full gate is the first-release claim. It runs local dependency-contract
 checks, workflow-trigger checks, formatting, default workspace tests, feature
 matrix tests, Turso rows, Sail/TypeSec/Grust integration rows, all-features
-workspace tests, the book build, and the QGLake handoff proof. Cloud CI remains
-manual-only until that local proof is boring. A release should be cut from the
-state those commands prove, not from a hope that a remote runner will discover
-the truth later.
+workspace tests, an out-of-tree book build with artifact validators, and the
+QGLake handoff proof. Cloud CI remains manual-only until that local proof is
+boring. A release should be cut from the state those commands prove, not from a
+hope that a remote runner will discover the truth later.
 
 The handoff portion must stay locked in QueryGraph as well as in LakeCat. The
 local gate intentionally runs QueryGraph verification and import with Cargo's

@@ -8,6 +8,18 @@ mode="full"
 skip_handoff=0
 skip_book=0
 require_clean=0
+cleanup_dirs=()
+
+cleanup() {
+  local dir
+  if [[ "${#cleanup_dirs[@]}" -eq 0 ]]; then
+    return
+  fi
+  for dir in "${cleanup_dirs[@]}"; do
+    rm -rf "$dir"
+  done
+}
+trap cleanup EXIT
 
 usage() {
   cat <<'USAGE'
@@ -127,7 +139,13 @@ if [[ "$mode" == "full" ]]; then
   run cargo test --workspace --all-features
 
   if [[ "$skip_book" -eq 0 ]]; then
-    run docs/book/build.sh
+    if [[ "$require_clean" -ne 0 ]]; then
+      book_tmpdir="$(mktemp -d)"
+      cleanup_dirs+=("$book_tmpdir")
+      run env LAKECAT_BOOK_DIST_DIR="$book_tmpdir/book-dist" docs/book/build.sh
+    else
+      run docs/book/build.sh
+    fi
   fi
   if [[ "$skip_handoff" -eq 0 ]]; then
     run scripts/qglake-handoff-local.sh

@@ -135,6 +135,9 @@ Turso store row, service feature rows, Grust/TypeSec/Sail feature rows,
 explicit all-features CLI tests, all-features workspace tests, book rebuild
 with EPUB metadata and PDF layout validation, QGLake handoff proof, and
 `git diff --check`.
+In `--release-candidate` mode, book artifacts are built into a temporary dist
+directory through `LAKECAT_BOOK_DIST_DIR`; run `docs/book/build.sh` directly
+when intentionally refreshing tracked `docs/book/dist` artifacts.
 Use `--quick` for a faster script/contract smoke check while developing a
 narrow slice.
 

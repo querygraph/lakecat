@@ -155,6 +155,10 @@ require_pattern 'release-candidate' scripts/check-release-readiness.sh \
   "release-readiness help must document clean release-candidate mode"
 require_pattern 'release candidate gate requires a clean tree' scripts/check-release-readiness.sh \
   "release-readiness gate must enforce clean-tree release-candidate evidence"
+require_pattern 'LAKECAT_BOOK_DIST_DIR' scripts/check-release-readiness.sh \
+  "release-candidate gate must build book artifacts out of tree"
+require_pattern 'LAKECAT_BOOK_DIST_DIR' docs/book/build.sh \
+  "book build must support an explicit artifact dist directory"
 require_pattern 'partial[[:space:]]+evidence instead of release-candidate success' scripts/check-release-readiness.sh \
   "release-readiness help must describe skipped full runs as partial evidence"
 require_pattern 'docs/book/check_pdf_layout\.sh' RELEASE.md \
@@ -194,7 +198,7 @@ require_pattern 'typed-sail=unavailable' docs/book/lakecat.md \
   "LakeCat book must preserve the honest typed Sail v4 posture"
 require_pattern 'docs/book/check_pdf_layout\.sh docs/book/dist/lakecat\.pdf' docs/book/PUBLISH.md \
   "LakeCat book publishing runbook must include the PDF layout validator"
-require_pattern 'docs/book/check_pdf_layout\.sh docs/book/dist/lakecat\.pdf' docs/book/build.sh \
+require_pattern 'docs/book/check_pdf_layout\.sh "\$dist_dir/lakecat\.pdf"' docs/book/build.sh \
   "LakeCat book build must run the PDF layout validator"
 
 require_pattern 'grust-graph = \{ package = "grust-graph", version = "0\.10\.0", path = "../grust/crates/grust"' Cargo.toml \

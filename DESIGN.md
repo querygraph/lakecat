@@ -346,7 +346,10 @@ Authoritative first-release evidence:
 - `scripts/qglake-handoff-local.sh` is the end-to-end LakeCat to QueryGraph
   handoff proof.
 - `docs/book/build.sh` proves the reader-facing book artifacts match the
-  current source.
+  current source when deliberately refreshing tracked `docs/book/dist`
+  artifacts. `scripts/check-release-readiness.sh --release-candidate` builds
+  the book into a temporary `LAKECAT_BOOK_DIST_DIR` so EPUB/PDF/MOBI
+  validation does not dirty a clean candidate commit.
 - `scripts/check-local-dependency-contract.sh` proves the Grust/TypeSec/Sail,
   QueryGraph, and CI-trigger assumptions still match the current repo.
 
@@ -390,7 +393,9 @@ boundary cleanup rather than new architecture:
   persistence, traversal, and future Cypher-over-Turso behavior remain
   Grust-owned.
 - Refresh README, book artifacts, `STATUS.md`, and version/release notes from
-  the same commit that passes the full gate.
+  the same commit that passes the full gate. Tracked book artifacts should be
+  refreshed deliberately with `docs/book/build.sh`; the clean release-candidate
+  gate validates book generation out of tree.
 - Cut a release tag only after the broad local gate, QGLake handoff,
   QueryGraph locked verify/import, dependency-contract check, and book build
   pass from a clean tree.

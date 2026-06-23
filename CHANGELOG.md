@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Made the release-candidate book build clean-tree safe. `docs/book/build.sh`
+  now honors `LAKECAT_BOOK_DIST_DIR`, and `scripts/check-release-readiness.sh
+  --release-candidate` validates EPUB/PDF/MOBI artifacts in a temporary dist
+  directory so nondeterministic binary metadata does not dirty the candidate
+  commit. Deliberate tracked artifact refreshes still use `docs/book/build.sh`
+  without the override.
 - Recorded the release-candidate book artifact drift surfaced by the strict
   clean-tree gate. The tracked EPUB/MOBI/PDF artifacts were refreshed by the
   local book build, and `STATUS.md` now calls out that deterministic or

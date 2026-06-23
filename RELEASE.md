@@ -67,7 +67,10 @@ Grust feature tests, all-features CLI and workspace tests, book rebuild, EPUB
 metadata and PDF layout validation, QGLake handoff replay verification, and
 `git diff --check`.
 `--release-candidate` additionally requires the tree to be clean before and
-after the complete full gate.
+after the complete full gate. In release-candidate mode the book build writes
+to a temporary artifact directory via `LAKECAT_BOOK_DIST_DIR`, so the gate still
+validates EPUB/PDF/MOBI generation without letting nondeterministic binary
+metadata dirty the candidate commit.
 The QGLake handoff proof must run QueryGraph `lakecat-verify` and
 `lakecat-import` through `cargo run --locked` against the local `qg-rust`
 manifest, then persist both outputs in the saved handoff summary.
@@ -85,8 +88,10 @@ candidate.
 
 ## Book Artifacts
 
-The full gate rebuilds the book, but release preparation should still inspect
-the artifact contract before tagging:
+The release-candidate gate rebuilds the book into a temporary dist directory.
+Deliberate tracked artifact refreshes still use the default build path, and
+release preparation should inspect the tracked artifact contract before
+tagging:
 
 ```sh
 docs/book/build.sh
