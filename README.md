@@ -136,9 +136,10 @@ scripts/check-release-readiness.sh --release-candidate
 The full gate runs shell syntax checks, the local dependency contract, workflow
 trigger checks, release version consistency across all LakeCat crates and book
 artifacts, formatting, default workspace tests, integration feature tests, the
-Turso store row, service feature rows, Grust/TypeSec/Sail feature rows,
-explicit all-features CLI tests, all-features workspace tests, book rebuild
-with EPUB metadata and PDF layout validation, QGLake handoff proof, and
+Turso store row, service feature rows, Grust/TypeSec/Sail feature rows, the
+explicit Rust `lakecat-cli qglake_handoff` verifier row, explicit all-features
+CLI tests, all-features workspace tests, book rebuild with
+EPUB metadata and PDF layout validation, QGLake handoff proof, and
 `git diff --check`.
 In `--release-candidate` mode, book artifacts are built into a temporary dist
 directory through `LAKECAT_BOOK_DIST_DIR`; run `docs/book/build.sh` directly

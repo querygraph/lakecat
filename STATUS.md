@@ -5,6 +5,16 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest README release-gate alignment slice:
+  `Name CLI handoff verifier in README gate`.
+  README now names the explicit Rust `lakecat-cli qglake_handoff` verifier row
+  in the full local release-gate summary, and the local dependency contract
+  guards that public operator-facing claim.
+- Local verification for this README release-gate slice passed:
+  `bash -n scripts/check-local-dependency-contract.sh scripts/check-release-readiness.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest release-contract slice:
   `Run CLI handoff verifier in release gate`.
   The full local release gate now runs

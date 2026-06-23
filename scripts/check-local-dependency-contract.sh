@@ -226,6 +226,8 @@ require_pattern 'First-release scope is intentionally narrower' README.md \
   "README.md must preserve the first-release scope warning"
 require_pattern 'release version consistency across all LakeCat crates and book' README.md \
   "README.md must include the release version contract in the full-gate summary"
+require_pattern 'explicit Rust `lakecat-cli qglake_handoff` verifier row' README.md \
+  "README.md must include the focused Rust QGLake handoff verifier row in the full-gate summary"
 require_pattern 'EPUB metadata and PDF layout validation' README.md \
   "README.md must include book artifact validators in the full-gate summary"
 require_pattern '### Standard, Extension, Or Proposal\?' docs/book/lakecat.md \

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Aligned the README release-gate summary with the explicit Rust QGLake handoff
+  verifier row. The local dependency contract now guards the public release
+  instructions so they name `lakecat-cli qglake_handoff` alongside the broader
+  all-features CLI and QGLake handoff proof rows.
 - Added an explicit Rust QGLake handoff verifier row to the full local release
   gate. `scripts/check-release-readiness.sh` now runs
   `cargo test -p lakecat-cli qglake_handoff -- --test-threads=1` before the
