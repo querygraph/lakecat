@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened store-level pending outbox corruption diagnostics. Embedded and
+  Turso pending-row validation now includes hash-only event-type evidence in
+  every corrupt pending event error alongside event-id and payload hashes, so
+  operators can identify damaged outbox rows without exposing raw event ids,
+  event types, or payload strings before replay projection.
 - Hardened lineage-drain management summary count parsing. Raw management
   replay summary construction now rejects malformed present `project-count`,
   `server-count`, `warehouse-count`, `storage-profile-count`, and

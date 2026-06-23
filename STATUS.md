@@ -6,6 +6,12 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Harden pending outbox corruption diagnostics`.
+  Embedded and Turso store pending-row validation now includes hash-only
+  event-type evidence in every corrupt pending outbox error, alongside
+  event-id and payload hashes, without exposing raw event ids, event types, or
+  payload strings before replay projection.
+- Latest implementation/testing slice:
   `Harden management summary count parsing`.
   Raw lineage-drain management summaries now fail closed when present
   `project-count`, `server-count`, `warehouse-count`, `storage-profile-count`,
