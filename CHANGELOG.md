@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Verified the current Grust Turso graph boundary from clean head `44902932`.
+  `cargo tree -p lakecat-graph --features grust-turso-local -i grust-turso`
+  resolves LakeCat's graph path through `/Users/alexy/src/grust/crates/grust-turso`,
+  and the focused `grust-turso-local` graph tests pass for persistence,
+  traversal, and Cypher over the LakeCat catalog projection. LakeCat continues
+  to configure `GrustCatalogGraphSink<TursoGraphStore>` and emit catalog events
+  rather than owning Turso graph operations locally.
 - Clarified the post-`v0.1.0` release posture. `RELEASE.md` now records that
   `v0.1.0` is already tagged and pushed, warns not to retag it for follow-up
   hardening, and the release version contract verifies that the local release

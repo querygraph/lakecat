@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest graph-boundary verification:
+  `Verify grust-turso backed graph operations`.
+  `cargo tree -p lakecat-graph --features grust-turso-local -i grust-turso`
+  resolves LakeCat's `grust-turso-local` graph path through
+  `/Users/alexy/src/grust/crates/grust-turso`, via the local Grust facade.
+  Focused tests passed for persistence, traversal, and Cypher over the
+  Turso-backed LakeCat catalog projection. LakeCat's service only configures
+  `GrustCatalogGraphSink<TursoGraphStore>` with `LAKECAT_GRUST_TURSO_PATH`;
+  graph storage, traversal, and Cypher behavior remain Grust-owned.
 - Latest contract/docs slice:
   `Reconcile Grust Turso Cypher guidance`.
   README, DESIGN, GOAL, AGENTS, and the local dependency contract now describe
