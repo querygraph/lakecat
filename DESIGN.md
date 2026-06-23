@@ -839,7 +839,10 @@ stay closed over their checked service schemas before graph, OpenLineage,
 QGLake, or QueryGraph import proof can inherit them. A durable outbox row cannot
 attach unverified compatibility, endpoint, authorization, artifact, standards,
 graph, OpenLineage, QueryGraph, or application claims beside validated config
-evidence, tenant-root records, or bootstrap evidence.
+evidence, tenant-root records, or bootstrap evidence. Service replay now closes
+the wrapped `catalog.config-read` and `querygraph.bootstrap` envelopes over the
+fields current producers emit as well, so those unverified claims cannot ride
+beside an otherwise valid nested config or bootstrap payload.
 Saved `lakecatHandoffVerifyOutput` sidecars must bind their own
 `lineageDrainArtifactSemantics.catalogConfigProof` to the raw lineage-drain
 artifact too, so a self-verification artifact cannot claim verified drain

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed service outbox admission over wrapped catalog-config and QueryGraph
+  bootstrap replay payloads. `catalog.config-read` and `querygraph.bootstrap`
+  wrappers now reject extra unverified compatibility, endpoint, bootstrap,
+  artifact, standards, graph, lineage, QueryGraph, or application claims before
+  acknowledgement, graph projection, or OpenLineage projection.
 - Bound wrapped outbox replay `event-type` evidence to the durable outbox row.
   Service replay admission now rejects wrapper or inner payload `event-type`
   drift before acknowledgement, graph projection, or OpenLineage projection,

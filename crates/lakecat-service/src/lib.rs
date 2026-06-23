@@ -4322,6 +4322,14 @@ fn validate_catalog_config_read_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    if event.payload.get("payload").is_some() {
+        validate_object_evidence_schema(
+            event,
+            &event.payload,
+            "catalog config-read outbox payload",
+            LIST_OUTBOX_PAYLOAD_FIELDS,
+        )?;
+    }
     validate_object_evidence_schema(
         event,
         payload,
@@ -6057,6 +6065,14 @@ fn validate_querygraph_bootstrap_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    if event.payload.get("payload").is_some() {
+        validate_object_evidence_schema(
+            event,
+            &event.payload,
+            "querygraph bootstrap outbox payload",
+            LIST_OUTBOX_PAYLOAD_FIELDS,
+        )?;
+    }
     validate_object_evidence_schema(
         event,
         payload,
@@ -36076,6 +36092,94 @@ mod tests {
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_config_and_bootstrap_outbox_payload_fields() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let cases = vec![
+            (
+                "catalog.config-read",
+                "evt-config-extra-wrapper-field",
+                "catalog config-read outbox payload contains unexpected field unverified-wrapper-claim",
+                json!({
+                    "audit-event-id": "audit-config-extra-wrapper-field",
+                    "event-type": "catalog.config-read",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal.clone(),
+                            "action": "catalog-config",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "defaults": catalog_config_defaults_json(),
+                        "endpoints": catalog_config_endpoints_json()
+                    },
+                    "unverified-wrapper-claim": "shadow"
+                }),
+            ),
+            (
+                "querygraph.bootstrap",
+                "evt-bootstrap-extra-wrapper-field",
+                "querygraph bootstrap outbox payload contains unexpected field unverified-wrapper-claim",
+                {
+                    let mut payload = valid_querygraph_bootstrap_payload(principal);
+                    payload
+                        .as_object_mut()
+                        .expect("valid bootstrap wrapper should be an object")
+                        .insert("unverified-wrapper-claim".to_string(), json!("shadow"));
+                    payload
+                },
+            ),
+        ];
+
+        for (event_type, event_id, expected_message, payload) in cases {
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload,
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("extra config/bootstrap wrapper fields should fail before delivery");
+
+            let message = err.to_string();
+            assert!(message.contains(event_type), "{message}");
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(message.contains(expected_message), "{message}");
+            assert!(!message.contains(event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{event_type} extra wrapper fields must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{event_type} extra wrapper fields must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{event_type} extra wrapper fields must fail before lineage projection"
+            );
+        }
     }
 
     #[tokio::test]

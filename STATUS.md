@@ -6,6 +6,14 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Close config/bootstrap replay wrappers`.
+  Service outbox admission now closes wrapped `catalog.config-read` and
+  `querygraph.bootstrap` replay payloads over the fields current producers
+  emit, rejecting extra unverified compatibility, endpoint, bootstrap,
+  artifact, standards, graph, lineage, QueryGraph, or application claims before
+  acknowledgement, graph projection, or OpenLineage projection. A focused
+  regression covers both wrapper shapes.
+- Latest implementation/testing slice:
   `Bind wrapped replay event types`.
   Service outbox admission now binds any present wrapper or inner payload
   `event-type` evidence back to the durable outbox row event type before

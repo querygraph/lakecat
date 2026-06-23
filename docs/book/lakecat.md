@@ -13430,7 +13430,10 @@ application claims beside otherwise valid count and identity evidence. Replay
 also binds any present wrapper or inner payload `event-type` field back to the
 durable outbox row event type before projection, so a valid namespace,
 management, scan, credential, or QueryGraph body cannot be smuggled under a
-different catalog event name.
+different catalog event name. Catalog config and QueryGraph bootstrap wrappers
+are closed the same way, preventing compatibility, endpoint, standards,
+artifact, graph, lineage, or application claims from riding beside otherwise
+valid config-read or bootstrap payloads.
 
 These concepts are LakeCat extensions today. The future proposal candidates
 inside them are the neutral pieces: exact retry, pointer-history proof,
