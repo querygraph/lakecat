@@ -1436,6 +1436,12 @@ The nested table lifecycle `metadata-graph` summary must likewise be closed
 over the current schema/snapshot summary fields LakeCat emits for graph
 projection; reusable graph taxonomy and richer projection semantics remain
 Grust-owned.
+Raw lineage-drain summary extraction must apply the same table lifecycle
+validators before compact QGLake proof inherits archived replay evidence, so
+`table.created`, `table.loaded`, `table.deleted`, and `table.restored`
+summaries reject malformed wrappers, unverified metadata-graph claims,
+duplicate soft-delete format-version aliases, invalid locations, invalid
+format versions, and action-drifted receipts just as full service replay does.
 Create, load, and restore replay must also carry both the unsigned table
 version that current producers emit and positive Iceberg `format-version`
 evidence. Delete replay carries the same pointer-generation and table-format

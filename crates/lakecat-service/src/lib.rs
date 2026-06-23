@@ -7339,6 +7339,13 @@ fn lineage_drain_event_summary(
         let payload = event.payload.get("payload").unwrap_or(&event.payload);
         validate_namespace_lifecycle_event_evidence(event, payload)?;
     }
+    if matches!(
+        event.event_type.as_str(),
+        "table.created" | "table.loaded" | "table.deleted" | "table.restored"
+    ) {
+        let payload = event.payload.get("payload").unwrap_or(&event.payload);
+        validate_table_lifecycle_event_evidence(event, payload)?;
+    }
     if event.event_type == "view.listed" {
         let payload = event.payload.get("payload").unwrap_or(&event.payload);
         validate_view_list_event_evidence(event, payload)?;
@@ -53613,6 +53620,96 @@ mod tests {
                 !err.contains(event.event_id.as_str()),
                 "{event_type}: {err}"
             );
+        }
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_table_lifecycle_evidence() {
+        let receipt = OutboxProjectionReceipt::default();
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let authorization_receipt = |action: &str| {
+            json!({
+                "principal": principal,
+                "action": action,
+                "allowed": true,
+                "engine": "lakecat-test",
+                "policy_hash": null,
+                "checked_at": chrono::Utc::now().to_rfc3339()
+            })
+        };
+        let mut metadata_graph_with_extra = json!({
+            "current-schema-id": 1,
+            "fields": [{
+                "id": 1,
+                "name": "event_id",
+                "type": "string",
+                "required": true,
+            }],
+            "current-snapshot-id": null,
+            "current-snapshot": null,
+        });
+        metadata_graph_with_extra["unverified-metadata-graph-claim"] = json!(true);
+
+        let cases = vec![
+            (
+                "evt-summary-created-extra-metadata-graph",
+                "table.created",
+                "table lifecycle metadata-graph contains unexpected field unverified-metadata-graph-claim",
+                json!({
+                    "event-type": "table.created",
+                    "table": &table,
+                    "authorization-receipt": authorization_receipt("table-create"),
+                    "metadata-location": "file:///tmp/events/metadata/00000.json",
+                    "format-version": 3,
+                    "version": 1,
+                    "metadata-graph": metadata_graph_with_extra,
+                }),
+            ),
+            (
+                "evt-summary-deleted-duplicate-soft-delete-format-version",
+                "table.deleted",
+                "table lifecycle soft-delete must not carry both format-version and format_version evidence fields",
+                json!({
+                    "event-type": "table.deleted",
+                    "table": &table,
+                    "authorization-receipt": authorization_receipt("table-drop"),
+                    "soft-delete": {
+                        "table": &table,
+                        "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "version": 1,
+                        "format-version": 3,
+                        "format_version": 3,
+                    }
+                }),
+            ),
+        ];
+
+        for (event_id, event_type, expected_message, payload) in cases {
+            let event = OutboxEvent {
+                event_id: event_id.to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: event_type.to_string(),
+                payload: json!({
+                    "audit-event-id": format!("audit-envelope-{event_id}"),
+                    "event-type": event_type,
+                    "table": &table,
+                    "payload": payload
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            };
+            let err = lineage_drain_event_summary(&event, &receipt)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains(event_type), "{event_id}: {err}");
+            assert!(err.contains(expected_message), "{event_id}: {err}");
+            assert!(err.contains("event-id-hash=sha256:"), "{event_id}: {err}");
+            assert!(!err.contains(event_id), "{event_id}: {err}");
         }
     }
 

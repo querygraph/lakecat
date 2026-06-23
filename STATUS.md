@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw table lifecycle summary validation hardening:
+  raw lineage-drain summaries now reuse the full table lifecycle replay
+  validators for create/load/delete/restore events before compact QGLake proof
+  inherits archived evidence, with focused coverage for malformed
+  metadata-graph claims and duplicate soft-delete format-version aliases.
+- Local verification for this raw table lifecycle summary validation slice
+  passed: `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service lineage_drain_summary_rejects_malformed_table_lifecycle_evidence -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest generated management-root evidence redaction coverage:
   server and warehouse upsert producer helpers now explicitly prove
   route-generated audit/outbox evidence removes raw endpoint URLs and storage

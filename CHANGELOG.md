@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened raw table lifecycle summary validation. Raw lineage-drain summaries
+  now reuse the full table lifecycle replay validators for create/load/delete/
+  restore events, so compact QGLake proof rejects malformed metadata-graph
+  evidence, duplicate soft-delete format-version aliases, invalid lifecycle
+  evidence, and action-drifted receipts before inheriting archived events.
 - Added generated management-root evidence redaction coverage. Server and
   warehouse upsert producer helpers now have focused regression coverage proving
   route-generated audit/outbox evidence removes raw endpoint URLs and storage

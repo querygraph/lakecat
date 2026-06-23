@@ -494,6 +494,15 @@ hash-only before it is recorded. This is what LakeCat means by proof in the
 catalog-control sense: durable, replayable evidence that can verify a claim
 without copying sensitive operational material into every downstream graph or
 lineage surface.
+Table lifecycle evidence follows the same rule. Create, load, delete, and
+restore events carry table identity, pointer-generation version, Iceberg
+format-version, optional metadata/location evidence, and a small
+metadata-graph summary. Full service replay and raw lineage-drain summary
+extraction both apply the same validators before QGLake can inherit that
+evidence. An archived table event cannot add unverified metadata-graph facts,
+conflicting soft-delete format-version aliases, decorated locations, invalid
+format versions, or action-drifted authorization receipts and still become
+accepted compact proof.
 Even a catalog-config read is treated this way: the advertised defaults,
 overrides, endpoints, tenant records, and authorization receipt must pass the
 same replay schema before compact QGLake proof can treat that configuration as
