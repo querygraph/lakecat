@@ -5,6 +5,20 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest saved handoff verifier non-bundle artifact hash-drift coverage:
+  the CLI artifact verifier now explicitly proves saved
+  `lakecat-handoff-verify.json` output cannot drift
+  `artifactFiles.lineageDrain` or `artifactFiles.querygraphImportPlan` hashes
+  away from the compact handoff summary while keeping the verifier-output
+  artifact hash valid. Artifact hash errors now also name the malformed nested
+  artifact path.
+- Local verification for this saved handoff verifier non-bundle artifact
+  hash-drift slice passed: `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_non_bundle_artifact_hash_drift -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_artifact_hash_drift -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff -- --test-threads=1`;
+  `docs/book/build.sh`; `scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`; `git diff --check`.
 - Latest saved handoff verifier QueryGraph capture hash-drift coverage:
   the CLI artifact verifier now explicitly proves saved
   `lakecat-handoff-verify.json` output cannot drift

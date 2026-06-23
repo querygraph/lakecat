@@ -10500,7 +10500,10 @@ manifest. The saved sidecar must keep the core `artifactFiles.bundle`,
 `artifactFiles.lineageDrain`, and `artifactFiles.querygraphImportPlan` hash
 objects present, and it must keep the nested
 `artifactFiles.capturedOutputs` manifest present before any captured LakeCat or
-QueryGraph output hash is trusted. The saved sidecar must also keep the
+QueryGraph output hash is trusted. The lineage-drain and QueryGraph import-plan
+artifact hashes must still match the compact handoff summary; an archived
+sidecar cannot rewrite either nested artifact digest and then recompute only
+the outer verifier-output hash. The saved sidecar must also keep the
 `artifactFiles.capturedOutputs.lakecatReplay`,
 `artifactFiles.capturedOutputs.querygraphVerify`, and
 `artifactFiles.capturedOutputs.querygraphImport` hash objects present before

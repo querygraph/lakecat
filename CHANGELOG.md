@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added saved handoff verifier non-bundle artifact hash-drift coverage. The
+  archived `lakecat-handoff-verify.json` self-verification artifact now
+  explicitly rejects `artifactFiles.lineageDrain` and
+  `artifactFiles.querygraphImportPlan` hashes that drift from the compact
+  handoff summary while keeping the outer verifier-output hash valid, with
+  errors naming the malformed nested artifact path.
 - Added saved handoff verifier QueryGraph capture hash-drift coverage. The
   archived `lakecat-handoff-verify.json` self-verification artifact now
   explicitly rejects `artifactFiles.capturedOutputs.querygraphVerify` and

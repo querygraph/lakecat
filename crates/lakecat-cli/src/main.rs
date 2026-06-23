@@ -1063,28 +1063,22 @@ fn require_qglake_handoff_verify_output_artifact_hashes_match_summary(
     )?;
     let summary_artifacts = required_object(summary, "artifacts", "handoff summary")?;
     for field in ["bundle", "lineageDrain", "querygraphImportPlan"] {
+        let output_artifact_label = format!("lakecatHandoffVerifyOutput.artifactFiles.{field}");
+        let summary_artifact_label = format!("handoff summary artifacts.{field}");
         let output_artifact = required_object(
             output_artifacts,
             field,
             "lakecatHandoffVerifyOutput.artifactFiles",
         )?;
-        require_only_fields(
-            output_artifact,
-            &["sha256"],
-            "lakecatHandoffVerifyOutput.artifactFiles",
-        )?;
+        require_only_fields(output_artifact, &["sha256"], &output_artifact_label)?;
         let summary_artifact =
             required_object(summary_artifacts, field, "handoff summary artifacts")?;
-        require_full_hash_str(
-            output_artifact,
-            "sha256",
-            "lakecatHandoffVerifyOutput.artifactFiles",
-        )?;
+        require_full_hash_str(output_artifact, "sha256", &output_artifact_label)?;
         require_value_match(
             output_artifact,
             "sha256",
-            required_value(summary_artifact, "sha256", "handoff summary artifacts")?,
-            "lakecatHandoffVerifyOutput.artifactFiles",
+            required_value(summary_artifact, "sha256", &summary_artifact_label)?,
+            &output_artifact_label,
         )?;
     }
     let output_captures = required_object(
@@ -17385,7 +17379,41 @@ mod tests {
 
         assert!(err.to_string().contains("lakecatHandoffVerifyOutput"));
         assert!(err.to_string().contains("artifactFiles"));
+        assert!(err.to_string().contains("bundle"));
         assert!(err.to_string().contains("sha256 mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_non_bundle_artifact_hash_drift() {
+        for artifact in ["lineageDrain", "querygraphImportPlan"] {
+            let temp = qglake_temp_dir(&format!(
+                "handoff-artifacts-self-verify-{artifact}-artifact-hash-drift"
+            ));
+            let summary_path = temp.join("handoff-summary.json");
+            let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+            let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+            output["artifactFiles"][artifact]["sha256"] =
+                json!(qglake_fixture_hash(&format!("other-{artifact}-artifact")));
+            let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+            fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+                .expect("write drifted handoff verify output");
+            summary["artifacts"]["lakecatHandoffVerifyOutputHash"] =
+                json!(content_hash_bytes(&bytes));
+            fs::write(
+                &summary_path,
+                serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+            )
+            .expect("write summary");
+
+            let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+                .expect_err("artifact verifier should reject non-bundle artifact hash drift");
+            let err = err.to_string();
+
+            assert!(err.contains("lakecatHandoffVerifyOutput"), "{err}");
+            assert!(err.contains("artifactFiles"), "{err}");
+            assert!(err.contains(artifact), "{err}");
+            assert!(err.contains("sha256 mismatch"), "{err}");
+        }
     }
 
     #[test]
