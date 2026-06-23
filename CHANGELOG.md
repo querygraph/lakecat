@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added raw management-list summary invalid-ID coverage. Raw `project.listed`
+  summaries now explicitly prove malformed project identifiers are rejected
+  with project-id and event-id hashes before compact QGLake management proof can
+  inherit tenant inventory.
 - Added raw management-list summary missing-ID coverage. Raw
   `storage-profile.listed` summaries now explicitly prove list counts cannot
   enter compact QGLake management proof without the required ID array and

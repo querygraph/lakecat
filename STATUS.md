@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw management-list invalid-ID summary coverage:
+  raw `project.listed` lineage-drain summaries now explicitly prove malformed
+  project identifiers are rejected with project-id and event-id hashes, without
+  echoing the raw identifier, before compact QGLake management inventory proof
+  can inherit them.
+- Local verification for this raw management-list invalid-ID slice passed:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service lineage_drain_summary_rejects_malformed_management_ids -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest raw management-list missing-ID summary coverage:
   raw `storage-profile.listed` lineage-drain summaries now explicitly prove a
   list count cannot enter compact QGLake management inventory proof without the

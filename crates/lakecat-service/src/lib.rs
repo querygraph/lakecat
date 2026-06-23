@@ -54757,6 +54757,26 @@ mod tests {
             "{err}"
         );
 
+        let mut invalid_id = valid_lineage_summary_management_list_event(
+            "evt-invalid-project-id-summary-list",
+            "project.listed",
+        );
+        invalid_id.payload["payload"]["project-ids"] = json!(["analytics/../../secret"]);
+        let err = lineage_drain_event_summary(&invalid_id, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("project list project-ids contains an invalid identifier"),
+            "{err}"
+        );
+        assert!(err.contains("project-id-hash=sha256:"), "{err}");
+        assert!(err.contains("event-id-hash=sha256:"), "{err}");
+        assert!(
+            !err.contains("evt-invalid-project-id-summary-list"),
+            "{err}"
+        );
+        assert!(!err.contains("analytics/../../secret"), "{err}");
+
         let mut action_drift = valid_lineage_summary_management_list_event(
             "evt-action-drift-summary-server-list",
             "server.listed",
