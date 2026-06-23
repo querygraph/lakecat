@@ -280,10 +280,12 @@ The current working plan is:
    server/project/warehouse reads must bind decoded JSON back to the memory map
    key or selecting Turso row identity, including warehouse project and
    storage-root row columns where the backend exposes them, before returning
-   tenant-root inventory for QueryGraph bootstrap or management proof; the Turso
-   server/project regression suite now covers both decoded JSON identity drift
-   and durable `servers.server_id` / `projects.project_id` row-column drift for
-   tenant-root list paths. Turso
+   tenant-root inventory for QueryGraph bootstrap or management proof;
+   memory/Turso server, project, and warehouse upserts must also validate any
+   existing row before replacing it so same-key management writes cannot erase
+   tenant-root scope drift. The Turso server/project regression suite now covers
+   both decoded JSON identity drift and durable `servers.server_id` /
+   `projects.project_id` row-column drift for tenant-root list paths. Turso
    namespace reads must bind decoded JSON
    back to the selected warehouse row and namespace path before returning or
    dropping standard namespace state; memory namespace drops must also validate

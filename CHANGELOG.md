@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Hardened tenant-root upsert admission. Memory and Turso stores now validate
+  existing server, project, and warehouse rows before replacing them, so
+  management-root scope drift cannot be hidden by same-key upserts.
 - Hardened policy-binding upsert admission. Memory and Turso stores now
   validate an existing policy-binding row before replacing it, so governance
   scope drift cannot be hidden by a same-key upsert.
