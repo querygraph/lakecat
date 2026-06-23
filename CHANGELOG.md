@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added saved handoff verifier QueryGraph capture hash-drift coverage. The
+  archived `lakecat-handoff-verify.json` self-verification artifact now
+  explicitly rejects `artifactFiles.capturedOutputs.querygraphVerify` and
+  `artifactFiles.capturedOutputs.querygraphImport` hashes that drift from the
+  compact handoff summary while keeping the outer verifier-output hash valid.
 - Added saved handoff verifier QueryGraph capture hash-shape coverage. The
   archived `lakecat-handoff-verify.json` self-verification artifact now
   explicitly rejects short placeholder hashes and unverified extra hash fields

@@ -17691,6 +17691,39 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_artifact_verifier_rejects_querygraph_capture_hash_drift() {
+        for capture in ["querygraphVerify", "querygraphImport"] {
+            let temp = qglake_temp_dir(&format!(
+                "handoff-artifacts-self-verify-{capture}-capture-hash-drift"
+            ));
+            let summary_path = temp.join("handoff-summary.json");
+            let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+            let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+            output["artifactFiles"]["capturedOutputs"][capture]["sha256"] =
+                json!(qglake_fixture_hash(&format!("other-{capture}-capture")));
+            let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+            fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+                .expect("write drifted handoff verify output");
+            summary["artifacts"]["lakecatHandoffVerifyOutputHash"] =
+                json!(content_hash_bytes(&bytes));
+            fs::write(
+                &summary_path,
+                serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+            )
+            .expect("write summary");
+
+            let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+                .expect_err("artifact verifier should reject QueryGraph capture hash drift");
+            let err = err.to_string();
+
+            assert!(err.contains("lakecatHandoffVerifyOutput"), "{err}");
+            assert!(err.contains("capturedOutputs"), "{err}");
+            assert!(err.contains(capture), "{err}");
+            assert!(err.contains("sha256 mismatch"), "{err}");
+        }
+    }
+
+    #[test]
     fn qglake_handoff_artifact_verifier_requires_handoff_verify_output_captured_outputs() {
         let temp = qglake_temp_dir("handoff-artifacts-self-verify-missing-captured-outputs");
         let summary_path = temp.join("handoff-summary.json");

@@ -10507,10 +10507,13 @@ QueryGraph output hash is trusted. The saved sidecar must also keep the
 the captured LakeCat replay or QueryGraph transcripts are trusted. Each capture
 hash object is closed over a single full-digest `sha256` field; short
 placeholder hashes or extra unverified hash fields fail before the saved
-QueryGraph verify/import transcripts can be trusted. The regression suite
-covers the core bundle, lineage-drain, QueryGraph import-plan, and
-captured-output hash objects as required saved-sidecar entries. The saved
-output cannot keep a valid verifier-output hash while
+QueryGraph verify/import transcripts can be trusted. Those saved QueryGraph
+verify/import hashes must also match the compact handoff summary, so an
+archived sidecar cannot rewrite the nested transcript digest and then recompute
+only the outer verifier-output hash. The regression suite covers the core
+bundle, lineage-drain, QueryGraph import-plan, and captured-output hash objects
+as required saved-sidecar entries. The saved output cannot keep a valid
+verifier-output hash while
 rewriting `artifactFiles.serviceLogHash`; that operational log digest must
 still be present, non-null, full-length, and match the compact handoff summary.
 The regression suite covers each saved-sidecar shape explicitly: missing,
