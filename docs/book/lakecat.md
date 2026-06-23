@@ -10496,7 +10496,10 @@ stable ids, standards, request-identity proof, and QueryGraph bootstrap proof
 still match the compact handoff summary. It also checks the saved
 self-verifier output's bundle, lineage-drain, QueryGraph import-plan,
 captured-output, and service-log hashes against the summary's artifact
-manifest. The saved output cannot keep a valid verifier-output hash while
+manifest. The saved sidecar must keep the nested
+`artifactFiles.capturedOutputs` manifest present before any captured LakeCat or
+QueryGraph output hash is trusted. The saved output cannot keep a valid
+verifier-output hash while
 rewriting `artifactFiles.serviceLogHash`; that operational log digest must
 still be present, non-null, full-length, and match the compact handoff summary.
 The regression suite covers each saved-sidecar shape explicitly: missing,
