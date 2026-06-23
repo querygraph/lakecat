@@ -7951,7 +7951,13 @@ same replay gate rejects top-level warehouse or namespace evidence that drifts
 from the nested view object. That keeps a replay bundle from smuggling
 unverified graph, lineage, policy, QueryGraph, or application facts beside or
 inside view lifecycle evidence, and it prevents a view event from being
-projected under a different catalog scope than the view record itself. The
+projected under a different catalog scope than the view record itself.
+LakeCat applies the same posture one layer lower in the Turso local store:
+active-view load, namespace list, guarded mutation, and drop paths decode the
+view record and bind it back to the durable `views` row columns. A corrupted
+row cannot silently remap an active view into another namespace or name before
+that view becomes replay, graph, OpenLineage, or QueryGraph bootstrap
+evidence. The
 lineage-drain summary also carries compact view replay identity:
 
 ```json

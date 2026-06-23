@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added explicit Turso active-view row-column drift regression coverage. The
+  durable view load, list, guarded mutation, and drop paths now have focused
+  test coverage proving corrupted `views` row columns cannot remap an active
+  view away from its decoded catalog identity.
 - Hardened service lineage-drain QueryGraph artifact summaries. Raw
   lineage-drain summary construction now rejects malformed `table-artifacts`
   and `view-artifacts` evidence instead of silently reporting zero artifact

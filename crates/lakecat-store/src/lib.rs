@@ -8212,6 +8212,77 @@ pub mod turso_store {
         }
 
         #[tokio::test]
+        async fn turso_store_rejects_view_record_row_column_scope_drift() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let view_name = TableName::new("active_customers").unwrap();
+            let view = ViewRecord::new(
+                warehouse.clone(),
+                namespace.clone(),
+                view_name.clone(),
+                "select * from customers where active",
+                "sql",
+                Some(1),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            let view = store.upsert_view(view).await.unwrap();
+            let original_view_key = view_key(&view);
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update views
+                 set namespace_path = ?2, view_name = ?3
+                 where view_key = ?1",
+                (
+                    original_view_key.as_str(),
+                    "tenant_shadow",
+                    "shadow_active_customers",
+                ),
+            )
+            .await
+            .unwrap();
+
+            let replacement = ViewRecord::new(
+                warehouse.clone(),
+                namespace.clone(),
+                view_name.clone(),
+                "select id from customers where active",
+                "sql",
+                Some(2),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            for err in [
+                store
+                    .load_view(&warehouse, &namespace, &view_name)
+                    .await
+                    .unwrap_err(),
+                store
+                    .list_views(&warehouse, &"tenant_shadow".parse::<Namespace>().unwrap())
+                    .await
+                    .unwrap_err(),
+                store
+                    .upsert_view_if_version(replacement, Some(1))
+                    .await
+                    .unwrap_err(),
+                store
+                    .drop_view(&warehouse, &namespace, &view_name, Principal::anonymous())
+                    .await
+                    .unwrap_err(),
+            ] {
+                assert!(matches!(
+                    err,
+                    LakeCatError::Internal(message)
+                        if message.contains("view record row scope does not match")
+                ));
+            }
+        }
+
+        #[tokio::test]
         async fn turso_store_rejects_corrupt_view_receipts_on_read() {
             let store = TursoCatalogStore::in_memory().await.unwrap();
             let warehouse = WarehouseName::new("local").unwrap();

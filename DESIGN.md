@@ -260,7 +260,10 @@ The current working plan is:
    corrupted durable history cannot be extended. Memory/Turso keyed active-view
    reads and Turso view-list reads must also bind decoded view JSON back to the
    selected warehouse, namespace, and view identity before returning, updating,
-   or dropping active view state. Turso receipt reads and mutation-chain lookups
+   or dropping active view state; the Turso active-view regression suite now
+   covers both decoded JSON drift and durable `views` row-column drift for
+   load, list, guarded mutation, and drop paths. Turso receipt reads and
+   mutation-chain lookups
    must also verify decoded receipt JSON against the row/query warehouse,
    namespace, and view scope before returning or extending durable view-history
    evidence.
