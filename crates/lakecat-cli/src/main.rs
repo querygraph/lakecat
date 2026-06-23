@@ -12776,6 +12776,7 @@ mod tests {
         let lineage_drain_semantics =
             qglake_handoff_lineage_drain_summary_fields(&dir.join("lineage-drain.json"))
                 .expect("lineage drain summary fields");
+        let (graph_nodes, graph_edges) = qglake_handoff_fixture_graph_counts(summary);
         let output = json!({
             "schemaVersion": "lakecat.qglake.handoff-verification.v1",
             "status": "verified",
@@ -12859,8 +12860,8 @@ mod tests {
                 "openLineageHash": summary["querygraphVerification"]["openLineageHash"].clone(),
                 "queryGraphImportHash": summary["querygraphVerification"]["querygraphImportHash"].clone(),
                 "standards": summary["querygraphVerification"]["standards"].clone(),
-                "graphNodes": 6,
-                "graphEdges": 7
+                "graphNodes": graph_nodes,
+                "graphEdges": graph_edges
             },
             "querygraphImportPlanSemantics": {
                 "tableCount": summary["querygraphImportVerification"]["tableCount"].clone(),
@@ -12872,8 +12873,8 @@ mod tests {
                 "openLineageHash": summary["querygraphImportVerification"]["openLineageHash"].clone(),
                 "queryGraphImportHash": summary["querygraphImportVerification"]["querygraphImportHash"].clone(),
                 "standards": summary["querygraphImportVerification"]["standards"].clone(),
-                "graphNodes": 6,
-                "graphEdges": 7
+                "graphNodes": graph_nodes,
+                "graphEdges": graph_edges
             },
             "lineageDrainArtifactSemantics": {
                 "delivered": 15,
@@ -12923,6 +12924,51 @@ mod tests {
             .expect("write handoff verify output");
         summary["artifacts"]["lakecatHandoffVerifyOutputHash"] = json!(content_hash_bytes(&bytes));
         output
+    }
+
+    fn qglake_handoff_fixture_graph_counts(summary: &Value) -> (usize, usize) {
+        let tables = summary["querygraphImportVerification"]["verifiedTables"]
+            .as_array()
+            .expect("verified tables array")
+            .iter()
+            .map(|stable_id| {
+                let mut table = qglake_querygraph_projection(qglake_odrl_policy("events"));
+                table.stable_id = stable_id
+                    .as_str()
+                    .expect("verified table stable id")
+                    .to_string();
+                table
+            })
+            .collect::<Vec<_>>();
+        let views = summary["querygraphImportVerification"]["verifiedViews"]
+            .as_array()
+            .expect("verified views array")
+            .iter()
+            .map(|stable_id| lakecat_querygraph::QueryGraphViewProjection {
+                stable_id: stable_id
+                    .as_str()
+                    .expect("verified view stable id")
+                    .to_string(),
+                warehouse: "local".to_string(),
+                namespace: vec!["default".to_string()],
+                name: "active_customers_view".to_string(),
+                view_version: 1,
+                sql: "select * from events".to_string(),
+                dialect: "ansi".to_string(),
+                schema_version: Some(1),
+                columns: json!([]),
+                properties: json!({}),
+                osi: json!({}),
+            })
+            .collect::<Vec<_>>();
+        let warehouse = lakecat_core::WarehouseName::new("local").unwrap();
+        let graph = lakecat_querygraph::QueryGraphCatalogGraph::from_tables_and_views_for_warehouse(
+            &warehouse,
+            &tables,
+            &views,
+            &lakecat_querygraph::QueryGraphTenantProjection::default(),
+        );
+        (graph.nodes.len(), graph.edges.len())
     }
 
     fn qglake_handoff_summary_json_with_verified_bundle(
@@ -12985,6 +13031,7 @@ mod tests {
 
     fn qglake_write_handoff_import_plan_artifact(dir: &Path, summary: &mut Value) -> Value {
         let import = summary["querygraphImportVerification"].clone();
+        let (graph_nodes, graph_edges) = qglake_handoff_fixture_graph_counts(summary);
         let tables = import["verifiedTables"]
             .as_array()
             .expect("verified tables array")
@@ -13026,8 +13073,8 @@ mod tests {
                 "querygraph-import-hash": import["querygraphImportHash"],
                 "standards": import["standards"]
             },
-            "graph-nodes": 6,
-            "graph-edges": 5,
+            "graph-nodes": graph_nodes,
+            "graph-edges": graph_edges,
             "tables": tables,
             "views": views
         });
@@ -18178,7 +18225,8 @@ mod tests {
             semantics["verifiedViews"],
             json!(["lakecat:view:local:default:active_customers_view"])
         );
-        assert_eq!(semantics["graphNodes"], json!(6));
+        assert_eq!(semantics["graphNodes"], json!(8));
+        assert_eq!(semantics["graphEdges"], json!(8));
     }
 
     #[test]

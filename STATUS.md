@@ -5,6 +5,18 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest QGLake verifier fixture slice:
+  `Derive CLI handoff fixture graph counts`.
+  The Rust CLI handoff test fixtures now derive table+view graph node/edge
+  counts through the QueryGraph catalog graph builder instead of preserving the
+  old hand-coded fixture counts, keeping fixture import plans and
+  `lakecat-handoff-verify.json` self-verification artifacts aligned with the
+  live QGLake handoff graph-count evidence path.
+- Local verification for this QGLake verifier fixture slice passed:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff -- --test-threads=1`;
+  `scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`.
 - Latest QGLake handoff evidence slice:
   `Derive handoff graph counts from import plan`.
   The local handoff script no longer writes fixed graph node/edge counts into

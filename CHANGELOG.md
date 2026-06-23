@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Aligned the Rust QGLake handoff verifier fixtures with the live graph-count
+  path. CLI handoff tests now derive fixture graph node/edge counts through the
+  QueryGraph catalog graph builder for the verified table and view set, so
+  fixture import plans and self-verification artifacts agree on the same
+  table+view graph shape.
 - Derived QGLake handoff graph-count evidence from the QueryGraph import plan
   instead of hardcoded values. The generated `lakecat-handoff-verify.json`
   artifact now fails if `graph-nodes` or `graph-edges` are missing or
