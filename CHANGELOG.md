@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added a local dependency-contract guard for the Grust Turso graph boundary.
+  The contract now fails if `lakecat-graph` imports `turso::` directly, keeping
+  durable graph persistence, traversal, Cypher, and matched-node mutation
+  behavior in Grust's `grust-turso` backend while LakeCat emits catalog-facing
+  graph events through `GrustCatalogGraphSink<TursoGraphStore>`.
 - Hardened raw management-list summary extraction. Raw lineage-drain summary
   construction now reuses the service replay validator for
   `policy-binding.listed`, `project.listed`, `server.listed`,

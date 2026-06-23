@@ -4405,9 +4405,13 @@ events should have stable, replayable identity, and downstream semantic systems
 should be able to prove that their graph state was derived from accepted
 catalog transitions. The LakeCat product choice is to use Grust's Turso backend
 for that graph state, including matched-node patches and Cypher-facing
-mutation behavior. If the graph operation becomes reusable, it belongs in
-Grust; if the proof of catalog emission changes, it belongs in LakeCat; if the
-meaning of `querygraph_ready` changes, it belongs in QueryGraph.
+mutation behavior. The release contract now makes that rule executable by
+failing if `lakecat-graph` imports `turso::` directly: catalog durability may
+use the Rust Turso crate in the store spine, but durable graph persistence over
+Turso must enter through Grust's `TursoGraphStore`. If the graph operation
+becomes reusable, it belongs in Grust; if the proof of catalog emission
+changes, it belongs in LakeCat; if the meaning of `querygraph_ready` changes,
+it belongs in QueryGraph.
 
 ### Catalog Concepts As A Contract
 

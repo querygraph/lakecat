@@ -158,6 +158,8 @@ require_pattern 'grust_turso_store_patches_lakecat_catalog_projection_nodes' scr
   "release-readiness gate must prove Grust Turso matched-node patches over LakeCat catalog projection nodes"
 require_pattern 'grust_turso_store_patches_lakecat_catalog_projection_nodes' crates/lakecat-graph/src/lib.rs \
   "LakeCat graph tests must prove Grust Turso matched-node patches stay in Grust"
+forbid_pattern '(^|[^[:alnum:]_])turso::' crates/lakecat-graph/src/lib.rs \
+  "lakecat-graph must not use the Turso crate directly; durable graph persistence belongs in Grust grust-turso"
 require_pattern 'scripts/qglake-handoff-local.sh' scripts/check-release-readiness.sh \
   "release-readiness gate must include the QGLake handoff proof"
 

@@ -5,6 +5,17 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest Grust Turso boundary guard slice:
+  `Guard LakeCat graph against direct Turso use`.
+  LakeCat still does not issue direct Turso SQL for graph operations. The graph
+  path resolves through Grust's `grust-turso` backend via
+  `GrustCatalogGraphSink<TursoGraphStore>`, and the local dependency contract
+  now fails if `lakecat-graph` imports `turso::` directly.
+- Local verification for this Grust Turso boundary guard slice passed:
+  `cargo tree -p lakecat-graph --features grust-turso-local -i grust-turso`;
+  `cargo test -p lakecat-graph --features grust-turso-local --lib grust_turso_store -- --test-threads=1`;
+  `cargo test -p lakecat-service --features grust-turso-local --bin lakecat-service configured_grust_turso_graph_sink_projects_catalog_events_to_turso_store -- --test-threads=1`;
+  `/Users/alexy/src/grust: cargo test -p grust-turso`.
 - Latest raw management-list summary hardening slice:
   `Validate raw management-list summaries`.
   Raw lineage-drain summary construction now reuses the service replay
