@@ -7223,36 +7223,18 @@ fn lineage_drain_event_summary(
         read_restriction: payload.get("read-restriction").cloned(),
         required_projection: payload
             .get("required-projection")
-            .and_then(Value::as_array)
-            .map(|columns| {
-                columns
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(str::to_string)
-                    .collect()
-            })
+            .map(|_| lineage_summary_string_array_field(event, payload, "required-projection"))
+            .transpose()?
             .unwrap_or_default(),
         requested_projection: payload
             .get("requested-projection")
-            .and_then(Value::as_array)
-            .map(|columns| {
-                columns
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(str::to_string)
-                    .collect()
-            })
+            .map(|_| lineage_summary_string_array_field(event, payload, "requested-projection"))
+            .transpose()?
             .unwrap_or_default(),
         effective_projection: payload
             .get("effective-projection")
-            .and_then(Value::as_array)
-            .map(|columns| {
-                columns
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(str::to_string)
-                    .collect()
-            })
+            .map(|_| lineage_summary_string_array_field(event, payload, "effective-projection"))
+            .transpose()?
             .unwrap_or_default(),
         required_filters: payload
             .get("required-filters")
@@ -7261,25 +7243,13 @@ fn lineage_drain_event_summary(
             .unwrap_or_default(),
         requested_stats_fields: payload
             .get("requested-stats-fields")
-            .and_then(Value::as_array)
-            .map(|fields| {
-                fields
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(str::to_string)
-                    .collect()
-            })
+            .map(|_| lineage_summary_string_array_field(event, payload, "requested-stats-fields"))
+            .transpose()?
             .unwrap_or_default(),
         effective_stats_fields: payload
             .get("effective-stats-fields")
-            .and_then(Value::as_array)
-            .map(|fields| {
-                fields
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(str::to_string)
-                    .collect()
-            })
+            .map(|_| lineage_summary_string_array_field(event, payload, "effective-stats-fields"))
+            .transpose()?
             .unwrap_or_default(),
         management_scope_project_id: payload
             .get("project-id")
@@ -7449,6 +7419,33 @@ fn lineage_summary_full_hash_array_field(
     let hash_refs = hashes.to_vec();
     validate_unique_hash_array(event, &hash_refs, field)?;
     Ok(hashes.into_iter().map(str::to_string).collect())
+}
+
+fn lineage_summary_string_array_field(
+    event: &OutboxEvent,
+    object: &Value,
+    field: &str,
+) -> Result<Vec<String>, LakeCatError> {
+    let values =
+        optional_array_field(event, object, field)?.expect("field presence was checked by caller");
+    let mut strings = Vec::with_capacity(values.len());
+    for value in values {
+        let Some(string) = value.as_str() else {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{field} must contain strings"),
+            ));
+        };
+        if string.trim().is_empty() {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{field} must not contain blank strings"),
+            ));
+        }
+        strings.push(string.to_string());
+    }
+    validate_unique_string_array(event, &strings, field)?;
+    Ok(strings)
 }
 
 fn config_entries_summary(value: Option<&Value>) -> Vec<ConfigEntry> {
@@ -48094,6 +48091,98 @@ mod tests {
                 .iter()
                 .all(|hash| is_full_sha256_hash(hash))
         );
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_scan_projection_fields() {
+        let receipt = OutboxProjectionReceipt::default();
+        let malformed_requested_projection = OutboxEvent {
+            event_id: "evt-bad-summary-requested-projection".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.scan-planned".to_string(),
+            payload: json!({
+                "payload": {
+                    "requested-projection": ["event_id", 42],
+                    "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
+                    "scan-task-count": 1
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&malformed_requested_projection, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("requested-projection must contain strings"));
+
+        let duplicate_effective_projection = OutboxEvent {
+            event_id: "evt-duplicate-summary-effective-projection".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.scan-planned".to_string(),
+            payload: json!({
+                "payload": {
+                    "requested-projection": ["event_id"],
+                    "effective-projection": ["event_id", "event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
+                    "scan-task-count": 1
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&duplicate_effective_projection, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("effective-projection must not contain duplicate values"));
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_scan_stats_fields() {
+        let receipt = OutboxProjectionReceipt::default();
+        let blank_requested_stats_field = OutboxEvent {
+            event_id: "evt-blank-summary-requested-stats".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.scan-planned".to_string(),
+            payload: json!({
+                "payload": {
+                    "requested-projection": ["event_id"],
+                    "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id", " "],
+                    "effective-stats-fields": ["event_id"],
+                    "scan-task-count": 1
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&blank_requested_stats_field, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("requested-stats-fields must not contain blank strings"));
+
+        let malformed_effective_stats_field = OutboxEvent {
+            event_id: "evt-bad-summary-effective-stats".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.scan-planned".to_string(),
+            payload: json!({
+                "payload": {
+                    "requested-projection": ["event_id"],
+                    "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": [false],
+                    "scan-task-count": 1
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&malformed_effective_stats_field, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("effective-stats-fields must contain strings"));
     }
 
     #[test]

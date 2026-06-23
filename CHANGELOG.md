@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened service lineage-drain governed scan summaries. Raw lineage-drain
+  summary construction now rejects malformed, blank, or duplicate
+  projection/stat field arrays instead of silently dropping invalid entries,
+  so a future validation bypass cannot return governed scan proof with omitted
+  projection or stats evidence.
 - Hardened service lineage-drain table commit-history summaries. Raw
   lineage-drain summary construction now rejects malformed
   `sequence-numbers` and `commit-hashes` instead of silently dropping invalid

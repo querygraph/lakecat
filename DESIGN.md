@@ -858,6 +858,9 @@ future internal path bypasses replay admission.
 The same fail-closed summary rule applies to table commit-history
 `sequence-numbers` and `commit-hashes`, so malformed sequence or commit hash
 evidence cannot disappear from raw commit-history proof.
+Governed scan summary arrays for required/requested/effective projection and
+requested/effective stats fields should likewise reject malformed, blank, or
+duplicate string entries before a raw lineage-drain summary is returned.
 Compact QGLake storage-profile and credential secret-reference proof must
 mirror service replay admission: present secret refs require nonblank providers
 and full SHA-256 hashes, while absent secret refs may omit provider/hash fields
