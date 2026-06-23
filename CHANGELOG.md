@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened planned-scan required-filter shape. Present `table.scan-planned`
+  `required-filters` evidence must now be array-shaped even when no governed
+  read restriction is attached, so optional scan proof fields cannot bypass
+  service replay admission before projection.
 - Hardened planned-scan required-filter replay. Service outbox admission now
   validates present `table.scan-planned` `required-filters` evidence against
   the governed read-restriction row predicate before acknowledgement, graph

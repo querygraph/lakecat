@@ -3505,6 +3505,17 @@ fn validate_scan_required_filters_match_row_predicate(
     payload: &Value,
     label: &str,
 ) -> Result<(), LakeCatError> {
+    let required_filters = match payload.get("required-filters") {
+        Some(required_filters) => required_filters.as_array().ok_or_else(|| {
+            outbox_evidence_error(event, &format!("{label} required-filters must be an array"))
+        })?,
+        None => {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{label} required-filters must be an array"),
+            ));
+        }
+    };
     let Some(read_restriction) = payload.get("read-restriction") else {
         return Ok(());
     };
@@ -3512,12 +3523,6 @@ fn validate_scan_required_filters_match_row_predicate(
         return Err(outbox_evidence_error(
             event,
             &format!("{label} read-restriction must contain row-predicate"),
-        ));
-    };
-    let Some(required_filters) = payload.get("required-filters").and_then(Value::as_array) else {
-        return Err(outbox_evidence_error(
-            event,
-            &format!("{label} required-filters must be an array"),
         ));
     };
     let expected_filters = vec![row_predicate.clone()];
@@ -36321,6 +36326,79 @@ mod tests {
         assert!(
             lineage.events.lock().await.is_empty(),
             "drifted planned required-filters replay must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_scan_planned_malformed_required_filters_without_restriction() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let ident = table_ident("local", "default", "events").unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-scan-plan-malformed-required-filters".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.scan-planned".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-scan-plan-malformed-required-filters",
+                    "event-type": "table.scan-planned",
+                    "table": ident,
+                    "payload": {
+                        "table": ident,
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-plan-scan",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": "sha256:policy",
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "requested-projection": ["event_id"],
+                        "effective-projection": ["event_id"],
+                        "requested-stats-fields": ["event_id"],
+                        "effective-stats-fields": ["event_id"],
+                        "required-filters": "always-true",
+                        "scan-task-count": 1
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("present planned required-filters must be array-shaped");
+
+        let message = err.to_string();
+        assert!(
+            message.contains(
+                "outbox event table.scan-planned (lakecat.lineage-and-graph) has invalid"
+            )
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(message.contains("scan-planned required-filters must be an array"));
+        assert!(!message.contains("evt-scan-plan-malformed-required-filters"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "malformed planned required-filters must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "malformed planned required-filters must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "malformed planned required-filters must fail before lineage projection"
         );
     }
 

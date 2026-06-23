@@ -6,6 +6,21 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest planned-scan replay hardening slice:
+  `Shape-check planned required-filter proof`.
+  Service outbox replay now rejects present `table.scan-planned`
+  `required-filters` evidence unless it is array-shaped, even when no governed
+  read restriction is attached. This keeps optional scan proof fields from
+  bypassing service admission before acknowledgement, graph projection,
+  OpenLineage projection, or QGLake replay.
+- Local verification for this planned-scan shape slice is green:
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_scan_planned_malformed_required_filters_without_restriction -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_scan_planned_drifted_required_filters -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service` passed;
+  `scripts/check-release-readiness.sh --quick` passed; `git diff --check`
+  passed.
+- Latest planned-scan replay hardening slice:
   `Validate planned required-filter proof`.
   Service outbox replay now validates present `table.scan-planned`
   `required-filters` evidence against the governed read-restriction row
