@@ -15,14 +15,16 @@
   receipt hashes, credential replay sink receipts, and table commit-history
   replay/OpenLineage receipts; readable `sha256:` placeholders are accepted
   only in negative tests.
-- Refreshed the full local release-candidate proof from clean head `6d923feb`.
+- Refreshed the full local release-candidate proof from clean head `5067b7af`.
   `scripts/check-release-readiness.sh --release-candidate` passed locally with
   the release-proof contract in clean candidate mode, the full workspace and
   feature-gate matrix, out-of-tree book artifact validation, Grust Turso QGLake
   handoff, QueryGraph locked verify/import, bundle hash
-  `sha256:e26bb389cf2ec3ba0fdbba9dc350048b15d08384d74caaf1f7087f00a251e0b9`,
+  `sha256:b4b220d5058631c0e901b1657c035d9fecbd8e88831fad92075c9f5127cc8a85`,
+  OpenLineage hash
+  `sha256:d1671c35ee691091cc39d3caa9b2f0d9dcd7f24e3c0277470179601b59de6575`,
   QueryGraph import hash
-  `sha256:fb30e5cc9dd7b7808d191968d499c6e83fdd814f2d8304c403777bb031d3bb03`,
+  `sha256:a561c03f2fd2c0e837de197cb23deb980b132f4d0e71a84ab1aedad76fb3c761`,
   and `git diff --check`.
 - Hardened Grust Turso graph-sink startup redaction. Service configuration and
   bootstrap failures now share one hash-only formatter and regression coverage

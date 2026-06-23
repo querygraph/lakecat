@@ -5,6 +5,24 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-candidate proof refresh:
+  `scripts/check-release-readiness.sh --release-candidate` passed locally on
+  June 23, 2026 from clean head `5067b7af`. The gate covered shell syntax and
+  dependency contracts, manual workflow trigger contract checks, release
+  version and release-proof contracts, formatter checks, default and
+  all-features workspace tests, explicit Turso/Sail/TypeSec/Grust feature
+  rows, Grust Turso graph projection tests including Grust Cypher over the
+  Turso-backed projection boundary, explicit Rust QGLake handoff verifier rows,
+  out-of-tree book artifact generation and contract checks, live QGLake replay
+  verification through QueryGraph locked verify/import,
+  `graphProjectionProof.backend = grust-turso`,
+  `graphProjectionProof.tablePrefix = lakecat_graph`, bundle hash
+  `sha256:b4b220d5058631c0e901b1657c035d9fecbd8e88831fad92075c9f5127cc8a85`,
+  OpenLineage hash
+  `sha256:d1671c35ee691091cc39d3caa9b2f0d9dcd7f24e3c0277470179601b59de6575`,
+  QueryGraph import hash
+  `sha256:a561c03f2fd2c0e837de197cb23deb980b132f4d0e71a84ab1aedad76fb3c761`,
+  and `git diff --check`.
 - Latest QGLake proof fixture repair:
   positive QGLake replay and handoff artifact tests now compare hardened
   receipt/proof fields against deterministic full fixture digests instead of
@@ -27,9 +45,9 @@ Updated: 2026-06-23
   `cargo fmt -p lakecat-cli -- --check`;
   `cargo test -p lakecat-cli qglake_lineage_drain_verifier_rejects_short -- --test-threads=1`;
   `cargo test -p lakecat-cli qglake_lineage_drain -- --test-threads=1`;
-  `scripts/check-release-readiness.sh --quick` (which correctly reports that
-  executable changes after `6d923feb` require a fresh release-candidate run
-  before final proof refresh); and `git diff --check`.
+  `scripts/check-release-readiness.sh --quick` (which correctly reported that
+  executable changes after the previous release proof required a fresh
+  release-candidate run before final proof refresh); and `git diff --check`.
 - Latest QGLake lineage-drain receipt-shape hardening:
   raw QGLake lineage-drain verification now requires full SHA-256 digest
   evidence for bootstrap accepted-view receipt hashes, credential replay sink
@@ -40,9 +58,9 @@ Updated: 2026-06-23
   `cargo fmt -p lakecat-cli -- --check`;
   `cargo test -p lakecat-cli qglake_lineage_drain_verifier_rejects_short -- --test-threads=1`;
   `cargo test -p lakecat-cli qglake_lineage_drain -- --test-threads=1`;
-  `scripts/check-release-readiness.sh --quick` (which correctly reports that
-  executable changes after `6d923feb` require a fresh release-candidate run
-  before final proof refresh); and `git diff --check`.
+  `scripts/check-release-readiness.sh --quick` (which correctly reported that
+  executable changes after the previous release proof required a fresh
+  release-candidate run before final proof refresh); and `git diff --check`.
 - Latest Grust Turso graph-sink startup redaction:
   service graph-sink configuration and bootstrap failures now share one
   hash-only formatter for operator-facing errors. Coverage proves the error
@@ -58,21 +76,6 @@ Updated: 2026-06-23
   `cargo test -p lakecat-service --features grust-turso-local --bin
   lakecat-service grust_turso_tests -- --test-threads=1`;
   `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
-- Latest release-candidate proof refresh:
-  `scripts/check-release-readiness.sh --release-candidate` passed locally on
-  June 23, 2026 from clean head `6d923feb`. The gate covered shell syntax and
-  dependency contracts, manual workflow trigger contract checks, release
-  version and release-proof contracts, formatter checks, default and
-  all-features workspace tests, explicit Turso/Sail/TypeSec/Grust feature
-  rows, Grust Turso graph projection tests, explicit Rust QGLake handoff
-  verifier rows, out-of-tree book artifact generation and contract checks,
-  live QGLake replay verification through QueryGraph locked verify/import,
-  `graphProjectionProof.backend = grust-turso`,
-  `graphProjectionProof.tablePrefix = lakecat_graph`, bundle hash
-  `sha256:e26bb389cf2ec3ba0fdbba9dc350048b15d08384d74caaf1f7087f00a251e0b9`,
-  QueryGraph import hash
-  `sha256:fb30e5cc9dd7b7808d191968d499c6e83fdd814f2d8304c403777bb031d3bb03`,
-  and `git diff --check`.
 - Latest release-proof freshness reporting:
   `scripts/check-release-readiness.sh --quick` and full non-candidate runs now
   print a non-failing freshness note when executable changes after the latest
@@ -337,7 +340,7 @@ Updated: 2026-06-23
   `scripts/check-release-readiness.sh --quick`; and `git diff --check`. A dirty
   release-proof-contract self-test now accepts `GOAL.md` as documentation; the
   later full release-candidate proof refresh is recorded at clean head
-  `6d923feb`.
+  `5067b7af`.
 - Latest compact QGLake standards proof closure:
   handoff verification now rejects non-string, blank, duplicate, or unsupported
   standards entries and requires the exact expected standards set, so saved
@@ -724,7 +727,7 @@ Updated: 2026-06-23
   now executable local evidence.
 - Latest release-candidate proof:
   `scripts/check-release-readiness.sh --release-candidate` passed locally on
-  June 23, 2026 from clean head `6d923feb`. The gate covered shell syntax
+  June 23, 2026 from clean head `5067b7af`. The gate covered shell syntax
   checks, dependency and workflow trigger contracts, release-version checks,
   tracked book artifact validation, formatting, default and all-features
   workspace tests, Turso/Sail/TypeSec/Grust and Grust Turso feature rows,
@@ -736,9 +739,11 @@ Updated: 2026-06-23
   QueryGraph locked verify/import with
   `graphProjectionProof.backend = grust-turso` and
   `graphProjectionProof.tablePrefix = lakecat_graph`, bundle hash
-  `sha256:e26bb389cf2ec3ba0fdbba9dc350048b15d08384d74caaf1f7087f00a251e0b9`,
+  `sha256:b4b220d5058631c0e901b1657c035d9fecbd8e88831fad92075c9f5127cc8a85`,
+  OpenLineage hash
+  `sha256:d1671c35ee691091cc39d3caa9b2f0d9dcd7f24e3c0277470179601b59de6575`,
   QueryGraph import hash
-  `sha256:fb30e5cc9dd7b7808d191968d499c6e83fdd814f2d8304c403777bb031d3bb03`,
+  `sha256:a561c03f2fd2c0e837de197cb23deb980b132f4d0e71a84ab1aedad76fb3c761`,
   and `git diff --check`.
   This is the current first-release evidence; cloud CI remains manual/disabled
   until local gates are boring from the final release commit.
