@@ -1075,6 +1075,48 @@ pub mod grust_integration {
             );
         }
 
+        #[cfg(feature = "grust-turso-local")]
+        #[tokio::test]
+        async fn grust_turso_store_runs_cypher_over_lakecat_catalog_projection_boundary() {
+            let table = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let table_id = table.stable_id();
+            let event = GraphEvent::table(
+                GraphAction::Created,
+                table,
+                serde_json::json!({"kind":"turso-cypher-test"}),
+            )
+            .with_event_id("lakecat:outbox:evt-turso-cypher-query");
+            let graph = graph_event_to_grust(&event);
+            let store = grust_graph::TursoGraphStore::in_memory()
+                .await
+                .expect("Grust Turso graph store");
+            store.bootstrap().await.expect("Grust Turso bootstrap");
+            store
+                .put_graph(&graph)
+                .await
+                .expect("catalog graph write to Turso");
+
+            let result = execute_cypher_mutation_returning_with_options_on_store(
+                &store,
+                &format!(
+                    "MATCH (t:Table {{id: '{table_id}'}}) SET t.querygraph_ready = true RETURN t.id AS id, t.querygraph_ready AS ready"
+                ),
+                CypherMutationOptions::default(),
+            )
+            .await
+            .expect("Grust Cypher mutation over Turso-backed LakeCat graph");
+
+            assert_eq!(result.table.columns, vec!["id", "ready"]);
+            assert_eq!(
+                result.table.rows,
+                vec![vec![Value::String(table_id), Value::Bool(true)]]
+            );
+        }
+
         #[tokio::test]
         async fn grust_cypher_can_query_catalog_event_taxonomy_labels() {
             let table = TableIdent::new(

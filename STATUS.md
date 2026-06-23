@@ -11,6 +11,13 @@ Updated: 2026-06-23
   `0.1.0 - 2026-06-23` release section for the current first-release notes.
   `scripts/check-release-version-contract.sh` now verifies the workspace
   release version also appears in that changelog heading.
+- Latest graph-integration slice:
+  `Run Grust Turso Cypher over catalog projection`.
+  LakeCat's `grust-turso-local` graph tests now prove catalog events can be
+  written to Grust's Turso backend, traversed through Grust graph-store APIs,
+  and queried/mutated through Grust Cypher over the same Turso-backed store.
+  LakeCat still only emits bounded catalog events; graph persistence, traversal,
+  and Cypher behavior remain in Grust.
 - Latest release evidence:
   `scripts/check-release-readiness.sh --release-candidate` passed from a clean
   current head on 2026-06-23. This refreshed proof covers shell syntax checks,
@@ -130,8 +137,8 @@ Updated: 2026-06-23
   `grust-turso-local` and a dedicated `LAKECAT_GRUST_TURSO_PATH`, so the
   end-to-end QGLake/QueryGraph acceptance path exercises Grust's Turso-backed
   catalog graph sink instead of only the memory-backed Grust sink. Graph
-  persistence and future graph-query/Cypher-over-Turso behavior remain
-  Grust-owned; LakeCat only configures the sink and emits catalog graph events.
+  persistence, traversal, and Cypher-over-Turso behavior remain Grust-owned;
+  LakeCat only configures the sink and emits catalog graph events.
 - Local verification for this Grust Turso handoff slice is green:
   `bash -n scripts/qglake-handoff-local.sh scripts/check-local-dependency-contract.sh scripts/check-release-readiness.sh`
   passed; `scripts/check-local-dependency-contract.sh` passed;

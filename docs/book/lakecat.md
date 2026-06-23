@@ -7883,11 +7883,14 @@ bridges. Grust now follows the local 0.10 path checkout so LakeCat can use
 `grust-turso` for durable catalog graph projection. The graph boundary is still
 Grust-owned: LakeCat emits catalog graph events, `grust-local` keeps a
 memory-backed Grust sink for fast tests, and `grust-turso-local` bootstraps a
-Grust `TursoGraphStore` when durable graph persistence is being exercised. The
-live QGLake handoff harness uses that Turso-backed sink with an explicit
-`LAKECAT_GRUST_TURSO_PATH`, so the same end-to-end QueryGraph acceptance flow
-that validates replay and import also proves LakeCat is not doing graph storage
-work locally. The handoff summary records this as hash-only
+Grust `TursoGraphStore` when durable graph persistence is being exercised.
+Focused graph regressions now write LakeCat catalog events into that Turso
+store, traverse the resulting catalog graph, and run Grust Cypher mutation/query
+over the same Turso-backed projection. The live QGLake handoff harness uses that
+Turso-backed sink with an explicit `LAKECAT_GRUST_TURSO_PATH`, so the same
+end-to-end QueryGraph acceptance flow that validates replay and import also
+proves LakeCat is not doing graph storage or graph-query work locally. The
+handoff summary records this as hash-only
 `graphProjectionProof` evidence: the backend and feature are named, but the
 local graph database path is represented by a digest. The Rust verifier rejects
 missing, malformed, or drifted graph-backend proof before accepting saved

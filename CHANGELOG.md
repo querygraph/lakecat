@@ -2,7 +2,10 @@
 
 ## Unreleased
 
-No changes yet.
+- Added a Grust Turso Cypher regression for LakeCat catalog graph projection.
+  The `grust-turso-local` graph tests now prove catalog events can be written,
+  traversed, and queried/mutated through Grust's Turso-backed graph store, while
+  LakeCat still only emits catalog-facing graph events.
 
 ## 0.1.0 - 2026-06-23
 
