@@ -7448,7 +7448,7 @@ fn lineage_drain_event_summary(
         .transpose()?
         .unwrap_or_default();
     validate_lineage_summary_stats_fields(event, payload, &effective_stats_fields)?;
-    Ok(LineageDrainEventSummary {
+    let summary = LineageDrainEventSummary {
         event_id: event.event_id.clone(),
         event_type: event.event_type.clone(),
         catalog_config_defaults: lineage_summary_config_entries(
@@ -7724,7 +7724,21 @@ fn lineage_drain_event_summary(
         raw_credential_exception_reason,
         replay_event_hashes: receipt.lineage_event_hashes.clone(),
         replay_open_lineage_hashes: receipt.open_lineage_hashes.clone(),
-    })
+    };
+    validate_lineage_summary_table_operation_event_evidence(event, payload)?;
+    Ok(summary)
+}
+
+fn validate_lineage_summary_table_operation_event_evidence(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<(), LakeCatError> {
+    match event.event_type.as_str() {
+        "table.commits-listed" => validate_table_commit_history_event_evidence(event, payload),
+        "table.scan-planned" => validate_scan_planned_event_evidence(event, payload),
+        "table.scan-tasks-fetched" => validate_scan_tasks_fetched_event_evidence(event, payload),
+        _ => Ok(()),
+    }
 }
 
 fn lineage_summary_view_receipt_hashes(
@@ -16676,9 +16690,7 @@ mod tests {
                     },
                     "planned-by": "test",
                     "snapshot-id": 1,
-                    "plan-task": {
-                        "task-id": "task-1"
-                    },
+                    "plan-task": "lakecat:plan:task-1",
                     "read-restriction": read_restriction,
                     "required-projection": ["event_id"],
                     "effective-projection": ["event_id"],
@@ -51191,6 +51203,22 @@ mod tests {
         let policy_hash =
             content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
                 .unwrap();
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let read_restriction = json!({
+            "allowed-columns": ["event_id"],
+            "row-predicate": {
+                "type": "eq",
+                "term": "event_id",
+                "value": "evt-1"
+            },
+            "purpose": "qglake-agent-demo",
+            "max-credential-ttl-seconds": 300,
+            "policy-hashes": [policy_hash]
+        });
         let event = OutboxEvent {
             event_id: "evt-plan".to_string(),
             sink: "lakecat.lineage-and-graph".to_string(),
@@ -51198,24 +51226,26 @@ mod tests {
             payload: json!({
                 "audit-event-id": "audit-plan",
                 "event-type": "table.scan-planned",
+                "table": table,
                 "payload": {
+                    "event-type": "table.scan-planned",
+                    "table": table,
                     "authorization-receipt": {
                         "principal": principal,
                         "action": "table-plan-scan",
                         "allowed": true,
                         "engine": "test",
-                        "policy_hash": "sha256:policy",
+                        "policy_hash": null,
+                        "context": {
+                            "read-restriction": read_restriction
+                        },
                         "checked_at": chrono::Utc::now(),
                     },
-                    "read-restriction": {
-                        "allowed-columns": ["event_id"],
-                        "row-predicate": {
-                            "type": "eq",
-                            "term": "event_id",
-                            "value": "evt-1"
-                        },
-                        "policy-hashes": [policy_hash]
-                    },
+                    "planned-by": "test",
+                    "snapshot-id": 1,
+                    "storage-location": "s3://bucket/events",
+                    "metadata-location": "s3://bucket/events/metadata/v1.json",
+                    "read-restriction": read_restriction,
                     "requested-projection": ["event_id", "payload"],
                     "effective-projection": ["event_id"],
                     "requested-stats-fields": ["event_id", "payload"],
@@ -52192,6 +52222,153 @@ mod tests {
         assert!(
             err.contains("sequence-numbers must be strictly increasing in lineage drain summary")
         );
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_unverified_table_operation_fields() {
+        let receipt = OutboxProjectionReceipt::default();
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let policy_hash =
+            content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                .unwrap();
+        let read_restriction = json!({
+            "allowed-columns": ["event_id"],
+            "row-predicate": {
+                "type": "not-eq",
+                "term": "severity",
+                "value": "debug"
+            },
+            "purpose": "qglake-agent-demo",
+            "max-credential-ttl-seconds": 300,
+            "policy-hashes": [policy_hash]
+        });
+
+        let cases = [
+            (
+                "table.commits-listed",
+                "table commit-history contains unexpected field unverified-history-claim",
+                json!({
+                    "event-type": "table.commits-listed",
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-load",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "table": "events",
+                    "commit-count": 1,
+                    "commit-hashes": [content_hash_bytes(b"commit-one")],
+                    "sequence-numbers": [1],
+                    "principal-subject": "agent:reader",
+                    "principal-kind": "agent",
+                    "unverified-history-claim": true,
+                }),
+            ),
+            (
+                "table.scan-planned",
+                "scan-planned contains unexpected field unverified-scan-plan-claim",
+                json!({
+                    "event-type": "table.scan-planned",
+                    "table": table,
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-plan-scan",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "context": {
+                            "read-restriction": read_restriction
+                        },
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "planned-by": "test",
+                    "snapshot-id": 1,
+                    "scan-task-count": 1,
+                    "storage-location": "s3://bucket/events",
+                    "metadata-location": "s3://bucket/events/metadata/v1.json",
+                    "read-restriction": read_restriction,
+                    "requested-projection": ["event_id"],
+                    "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
+                    "unverified-scan-plan-claim": true,
+                }),
+            ),
+            (
+                "table.scan-tasks-fetched",
+                "scan-tasks-fetched contains unexpected field unverified-scan-fetch-claim",
+                json!({
+                    "event-type": "table.scan-tasks-fetched",
+                    "table": table,
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-plan-scan",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "context": {
+                            "read-restriction": read_restriction
+                        },
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "planned-by": "test",
+                    "snapshot-id": 1,
+                    "plan-task": "lakecat:plan:task-1",
+                    "file-scan-task-count": 1,
+                    "delete-file-count": 0,
+                    "child-plan-task-count": 0,
+                    "storage-location": "s3://bucket/events",
+                    "metadata-location": "s3://bucket/events/metadata/v1.json",
+                    "read-restriction": read_restriction,
+                    "required-projection": ["event_id"],
+                    "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
+                    "stats-fields": ["event_id"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }],
+                    "unverified-scan-fetch-claim": true,
+                }),
+            ),
+        ];
+
+        for (event_type, expected_message, payload) in cases {
+            let event = OutboxEvent {
+                event_id: format!("evt-summary-{event_type}-extra-field"),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: event_type.to_string(),
+                payload: json!({
+                    "audit-event-id": format!("audit-summary-{event_type}-extra-field"),
+                    "event-type": event_type,
+                    "table": table,
+                    "payload": payload,
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            };
+
+            let err = lineage_drain_event_summary(&event, &receipt)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains(expected_message), "{event_type}: {err}");
+            assert!(err.contains("event-id-hash=sha256:"), "{event_type}: {err}");
+            assert!(
+                !err.contains(event.event_id.as_str()),
+                "{event_type}: {err}"
+            );
+        }
     }
 
     #[test]

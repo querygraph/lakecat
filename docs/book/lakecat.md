@@ -10054,7 +10054,11 @@ graph, QueryGraph, or application claims beside checked table scope, count,
 sequence, commit hash, principal, and authorization evidence. It also closes
 the wrapped `table.commits-listed` outbox envelope over the producer fields,
 so those unverified commit-history claims cannot be placed beside an otherwise
-valid checked inner pointer-log proof. The compact
+valid checked inner pointer-log proof. Raw lineage-drain summary construction
+now reuses that same service replay validator before returning compact proof,
+so a valid-looking table history summary cannot quietly carry an extra
+commit-history, lineage, graph, QueryGraph, or application claim that full
+delivery replay would have rejected. The compact
 `tableCommitHistoryProof` object and the
 captured LakeCat replay `tableCommitHistory` object are closed over those
 compared fields, so a saved summary or captured replay sidecar cannot append an
@@ -13866,6 +13870,9 @@ than disappearing from a compact proof summary. Governed scan replay also
 closes the wrapped `table.scan-planned` and `table.scan-tasks-fetched` payload
 schemas, so an archived scan event cannot attach unverified lineage, graph,
 QueryGraph, or application claims beside otherwise valid Sail-planned proof.
+Raw lineage-drain summaries reuse those scan replay validators before compact
+proof is returned, which keeps governed scan proof tied to the same
+Sail-planned evidence that would be accepted for delivery.
 Inventory replay applies the same rule to `namespace.listed`, `view.listed`,
 and management list wrappers, keeping archived namespace, view, project,
 server, warehouse, policy, and storage-profile reads from carrying unchecked

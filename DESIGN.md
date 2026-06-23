@@ -932,6 +932,13 @@ Fetched scan summary `required-filters` evidence should also fail closed when
 it is not an array or when it drifts from the server-derived read-restriction
 row predicate, so raw QGLake proof cannot lose or widen mandatory filter
 evidence.
+Raw lineage-drain summaries must also reuse the full service replay validators
+for otherwise valid `table.commits-listed`, `table.scan-planned`, and
+`table.scan-tasks-fetched` wrappers before returning compact proof. This keeps
+table-history and governed-scan summaries closed over the same producer fields
+as delivery replay: unverified commit-history, scan, lineage, QueryGraph, or
+application claims cannot ride beside a valid checked table-operation payload
+and then become accepted QGLake evidence.
 Credential summary extraction must likewise fail closed when
 `credential-response-evidence` is not an array or its returned entries omit,
 malform, or duplicate `prefix-hash` evidence, so redacted credential replay

@@ -5,6 +5,22 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw table-operation summary hardening slice:
+  `Validate raw table-operation summaries`.
+  Raw lineage-drain summary construction now reuses the service replay
+  validators for `table.commits-listed`, `table.scan-planned`, and
+  `table.scan-tasks-fetched` evidence after compact-field extraction and before
+  returning a summary, so otherwise valid wrapped table-history or governed
+  scan payloads cannot append unverified commit-history, scan, lineage,
+  QueryGraph, or application claims before compact QGLake proof inherits them.
+- Local verification for this raw table-operation summary slice passed:
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_unverified_table_operation_fields -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib scan_planned_drain_summary_preserves_projection_evidence -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib lineage_drain_summary -- --test-threads=1`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`; `git diff --check`.
 - Latest raw view summary hardening slice:
   `Validate raw view summaries`.
   Raw lineage-drain summary construction now reuses the service replay

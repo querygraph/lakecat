@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Hardened raw table-operation summary extraction. Raw lineage-drain summary
+  construction now reuses the service replay validators for
+  `table.commits-listed`, `table.scan-planned`, and
+  `table.scan-tasks-fetched` evidence, so otherwise valid wrapped table
+  history or governed scan payloads cannot append unverified commit-history,
+  scan, lineage, QueryGraph, or application claims before compact QGLake proof
+  inherits them.
 - Hardened raw view summary extraction. Raw lineage-drain summary construction
   now reuses the service replay validators for `view.listed`,
   `view.upserted`, `view.loaded`, and `view.dropped` evidence, so malformed
