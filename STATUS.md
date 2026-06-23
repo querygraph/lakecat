@@ -5,6 +5,16 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest Turso corrupt pending payload diagnostics coverage:
+  the Turso pending-outbox payload drift regression now proves corrupt durable
+  pending rows expose only hash evidence for event id, event type, payload event
+  type, and payload content. The test now rejects raw event IDs, event-type
+  strings, and payload fields in operator-facing errors before graph or lineage
+  projection can observe the row.
+- Local verification for this Turso corrupt pending payload slice passed:
+  `cargo fmt -p lakecat-store -- --check`; and
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_corrupt_pending_outbox_payloads -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest namespace receipt-context policy-binding coverage:
   standard namespace-list replay now has explicit regression coverage proving
   extra fields inside `authorization-receipt.context.policy-bindings[]` fail

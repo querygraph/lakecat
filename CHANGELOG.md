@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Tightened Turso corrupt pending payload diagnostics coverage. The Turso
+  pending-outbox payload drift regression now proves operator-facing errors
+  expose only event-id, event-type, and payload hashes, not raw event IDs,
+  event-type strings, or payload fields.
 - Extended receipt-context policy-binding closure coverage to standard
   namespace replay. Namespace-list outbox events now have an explicit
   regression proving extra fields inside

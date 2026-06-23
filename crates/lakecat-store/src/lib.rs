@@ -12103,10 +12103,14 @@ pub mod turso_store {
             assert!(message.contains("event-id-hash=sha256:"), "{message}");
             assert!(message.contains("event-type-hash=sha256:"), "{message}");
             assert!(message.contains("payload-hash=sha256:"), "{message}");
+            assert!(!message.contains(pending[0].event_id.as_str()), "{message}");
+            assert!(!message.contains("querygraph.bootstrap"), "{message}");
             assert!(
                 !message.contains("querygraph.bootstrap.drifted"),
                 "{message}"
             );
+            assert!(!message.contains("manifest-hash"), "{message}");
+            assert!(!message.contains("lakecat:test"), "{message}");
         }
 
         #[tokio::test]

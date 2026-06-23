@@ -7577,7 +7577,10 @@ from a half-delivered response.
 The same suite now pins Turso's durable row guard for event-id drift: a pending
 row whose stored `event_id` no longer matches the payload hash fails with
 hash-only event-id, event-type, and payload evidence before graph or lineage
-projection can see it.
+projection can see it. Turso corrupt-payload drift follows the same rule: the
+operator-facing error is allowed to carry event-id, event-type, payload-event
+type, and payload hashes, but not the raw event id, event type, payload field
+names, or payload values.
 The drain also refuses unknown event types before any projection happens. A
 future or custom event stays pending until LakeCat knows how to project it,
 instead of disappearing behind an empty graph/lineage receipt.
