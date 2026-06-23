@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened memory table-record scope binding. Memory store table reads and
+  mutation paths now validate stored `TableRecord` values against their map
+  keys before listing, loading, committing, soft-deleting, or restoring tables,
+  matching Turso's decoded row-scope drift rejection.
 - Hardened memory management-root scope binding. Memory store server, project,
   and warehouse reads now validate records against their map keys before
   returning tenant-root inventory, matching Turso's decoded row-scope drift

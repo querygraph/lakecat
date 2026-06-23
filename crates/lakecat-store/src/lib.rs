@@ -1819,7 +1819,13 @@ impl CatalogStore for MemoryCatalogStore {
         let state = self.state.read().await;
         Ok(state
             .tables
-            .values()
+            .iter()
+            .map(|(table_key, table)| {
+                validate_table_record_map_scope(table, table_key)?;
+                Ok(table)
+            })
+            .collect::<LakeCatResult<Vec<_>>>()?
+            .into_iter()
             .filter(|table| table.ident.warehouse == *warehouse)
             .filter(|table| !state.soft_deletes.contains_key(&table_key(&table.ident)))
             .cloned()
@@ -1858,6 +1864,11 @@ impl CatalogStore for MemoryCatalogStore {
             .ok_or_else(|| LakeCatError::NotFound {
                 object: "table",
                 name: ident.stable_id(),
+            })
+            .and_then(|table| {
+                validate_table_record_map_scope(&table, &table_key(ident))?;
+                validate_table_record_identity(&table, ident)?;
+                Ok(table)
             })
     }
 
@@ -1919,6 +1930,8 @@ impl CatalogStore for MemoryCatalogStore {
                     object: "table",
                     name: ident.stable_id(),
                 })?;
+            validate_table_record_map_scope(table, &key)?;
+            validate_table_record_identity(table, ident)?;
             let previous_metadata_location = table.metadata_location.clone();
             if previous_metadata_location != commit.expected_previous_metadata_location {
                 return Err(metadata_pointer_conflict(
@@ -2193,6 +2206,8 @@ impl CatalogStore for MemoryCatalogStore {
                 object: "table",
                 name: ident.stable_id(),
             })?;
+        validate_table_record_map_scope(&table, &key)?;
+        validate_table_record_identity(&table, ident)?;
         let record = SoftDeleteRecord {
             table: ident.clone(),
             metadata_location: table.metadata_location.clone(),
@@ -2229,6 +2244,8 @@ impl CatalogStore for MemoryCatalogStore {
                 object: "table",
                 name: ident.stable_id(),
             })?;
+        validate_table_record_map_scope(&table, &key)?;
+        validate_table_record_identity(&table, ident)?;
         record.validate_for_table(ident, &table)?;
         state.soft_deletes.remove(&key);
         Ok(table)
@@ -2651,6 +2668,16 @@ fn optional_location_hash(location: Option<&str>) -> String {
 fn validate_table_record_identity(record: &TableRecord, ident: &TableIdent) -> LakeCatResult<()> {
     record.validate()?;
     if record.ident != *ident {
+        return Err(LakeCatError::Internal(
+            "table record row scope does not match requested table".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_table_record_map_scope(record: &TableRecord, record_key: &str) -> LakeCatResult<()> {
+    record.validate()?;
+    if table_key(&record.ident) != record_key {
         return Err(LakeCatError::Internal(
             "table record row scope does not match requested table".to_string(),
         ));
@@ -5813,6 +5840,125 @@ mod memory_tests {
                 if object == "table" && name == ident.stable_id()
         ));
         assert_eq!(store.list_namespaces(&warehouse).await.unwrap(), vec![]);
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_table_record_map_scope_drift() {
+        let store = MemoryCatalogStore::new();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let namespace = "default".parse::<Namespace>().unwrap();
+        let ident = TableIdent::new(
+            warehouse.clone(),
+            namespace.clone(),
+            TableName::new("events").unwrap(),
+        );
+        store
+            .create_namespace(&warehouse, namespace.clone())
+            .await
+            .unwrap();
+        store
+            .create_table(TableRecord::new(
+                ident.clone(),
+                "file:///tmp/events".to_string(),
+                Some("file:///tmp/events/metadata/00000.json".to_string()),
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            ))
+            .await
+            .unwrap();
+
+        let key = table_key(&ident);
+        store
+            .state
+            .write()
+            .await
+            .tables
+            .get_mut(&key)
+            .unwrap()
+            .ident = TableIdent::new(
+            warehouse.clone(),
+            namespace.clone(),
+            TableName::new("other_events").unwrap(),
+        );
+
+        let commit = TableCommit {
+            requirements: vec![],
+            updates: vec![serde_json::json!({"action": "noop"})],
+            expected_previous_metadata_location: Some(
+                "file:///tmp/events/metadata/00000.json".to_string(),
+            ),
+            new_metadata_location: Some("file:///tmp/events/metadata/00001.json".to_string()),
+            new_metadata: Some(serde_json::json!({"format-version": 3})),
+            idempotency_key: None,
+            idempotency_request_hash: None,
+            principal: Principal::anonymous(),
+            authorization_receipt: None,
+        };
+        for err in [
+            store.load_table(&ident).await.unwrap_err(),
+            store.list_tables(&warehouse).await.unwrap_err(),
+            store.commit_table(&ident, commit).await.unwrap_err(),
+            store
+                .soft_delete_table(&ident, Principal::anonymous(), None)
+                .await
+                .unwrap_err(),
+        ] {
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("table record row scope does not match")
+            ));
+        }
+
+        let state = store.state.read().await;
+        assert!(state.commits.is_empty());
+        assert!(state.audit_events.is_empty());
+        assert!(state.outbox_events.is_empty());
+        assert!(state.soft_deletes.is_empty());
+        drop(state);
+
+        let restore_store = MemoryCatalogStore::new();
+        restore_store
+            .create_namespace(&warehouse, namespace.clone())
+            .await
+            .unwrap();
+        restore_store
+            .create_table(TableRecord::new(
+                ident.clone(),
+                "file:///tmp/events".to_string(),
+                Some("file:///tmp/events/metadata/00000.json".to_string()),
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            ))
+            .await
+            .unwrap();
+        restore_store
+            .soft_delete_table(&ident, Principal::anonymous(), None)
+            .await
+            .unwrap();
+        restore_store
+            .state
+            .write()
+            .await
+            .tables
+            .get_mut(&key)
+            .unwrap()
+            .ident = TableIdent::new(
+            warehouse,
+            namespace,
+            TableName::new("other_events").unwrap(),
+        );
+
+        let err = restore_store
+            .restore_table(&ident, Principal::anonymous(), None)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("table record row scope does not match")
+        ));
+        assert_eq!(restore_store.state.read().await.soft_deletes.len(), 1);
     }
 
     #[tokio::test]

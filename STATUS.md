@@ -5,6 +5,16 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest memory table-record scope binding:
+  memory store table reads and mutation paths now validate stored
+  `TableRecord` values against their map keys before listing, loading,
+  committing, soft-deleting, or restoring tables, matching Turso's decoded
+  row-scope drift rejection.
+- Local verification for this memory table-record scope slice passed:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_rejects_table_record_map_scope_drift -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_table_record_json_scope_drift -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest memory management-root scope binding:
   memory store server, project, and warehouse reads now validate records
   against their map keys before returning tenant-root inventory, matching
