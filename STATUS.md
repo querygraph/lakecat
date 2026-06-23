@@ -5,6 +5,20 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest Grust Turso dependency-tree proof:
+  the local dependency contract now runs `cargo tree -i turso` for
+  `lakecat-graph` and `lakecat-service` under `grust-turso-local` and requires
+  the route to flow through `/Users/alexy/src/grust/crates/grust-turso`.
+  LakeCat graph operations over a Turso-backed store therefore stay behind
+  Grust's `grust-turso` backend; LakeCat continues to own only catalog-facing
+  graph events and service sink configuration.
+- Local verification for this Grust Turso dependency-tree proof passed:
+  `cargo tree -p lakecat-graph --features grust-turso-local -i turso`;
+  `cargo tree -p lakecat-service --features grust-turso-local -i turso`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo fmt -p lakecat-graph -p lakecat-service -- --check`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest Grust Turso manifest-boundary slice:
   the local dependency contract now rejects direct `turso` dependencies in
   `lakecat-graph` and `lakecat-service`, in addition to the existing source

@@ -291,6 +291,22 @@ require_pattern 'grust_turso::TursoGraphStore' crates/lakecat-service/src/main.r
   "lakecat-service must configure Turso graph projection through the dedicated grust-turso crate"
 require_pattern 'grust_turso::TursoGraphStore' crates/lakecat-graph/src/lib.rs \
   "LakeCat graph tests must exercise the dedicated grust-turso backend crate"
+lakecat_graph_turso_tree="$tmpdir/lakecat-graph-turso-tree.txt"
+cargo tree -p lakecat-graph --features grust-turso-local -i turso > "$lakecat_graph_turso_tree"
+require_pattern '^turso v0\.7\.0-pre\.10$' "$lakecat_graph_turso_tree" \
+  "lakecat-graph Turso inverse tree must resolve the Turso crate used by grust-turso"
+require_pattern 'grust-turso v0\.10\.0 \(/Users/alexy/src/grust/crates/grust-turso\)' "$lakecat_graph_turso_tree" \
+  "lakecat-graph must reach Turso only through the dedicated local grust-turso crate"
+require_pattern 'lakecat-graph v0\.1\.0 \(/Users/alexy/src/lakecat/crates/lakecat-graph\)' "$lakecat_graph_turso_tree" \
+  "lakecat-graph Turso inverse tree must include LakeCat graph as a grust-turso consumer"
+lakecat_service_turso_tree="$tmpdir/lakecat-service-turso-tree.txt"
+cargo tree -p lakecat-service --features grust-turso-local -i turso > "$lakecat_service_turso_tree"
+require_pattern '^turso v0\.7\.0-pre\.10$' "$lakecat_service_turso_tree" \
+  "lakecat-service Turso inverse tree must resolve the Turso crate used by grust-turso"
+require_pattern 'grust-turso v0\.10\.0 \(/Users/alexy/src/grust/crates/grust-turso\)' "$lakecat_service_turso_tree" \
+  "lakecat-service must reach Turso graph storage only through the dedicated local grust-turso crate"
+require_pattern 'lakecat-service v0\.1\.0 \(/Users/alexy/src/lakecat/crates/lakecat-service\)' "$lakecat_service_turso_tree" \
+  "lakecat-service Turso inverse tree must include the service as a grust-turso consumer"
 require_pattern 'typesec = \{ version = "0\.8\.0",' Cargo.toml \
   "typesec must use the published 0.8.0 crate"
 require_pattern 'name = "grust-turso"' Cargo.lock \

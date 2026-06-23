@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added dependency-tree proof for the Grust Turso graph route. The local
+  dependency contract now runs `cargo tree -i turso` for `lakecat-graph` and
+  `lakecat-service` under `grust-turso-local` and requires Turso to appear only
+  through the local `grust-turso` crate, so LakeCat graph operations over Turso
+  stay routed through Grust.
 - Refreshed the full local release-candidate proof from clean head `4e66cd74`.
   `scripts/check-release-readiness.sh --release-candidate` passed locally,
   covering dependency and workflow contracts, release-version checks,
