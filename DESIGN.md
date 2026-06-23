@@ -357,6 +357,11 @@ Authoritative first-release evidence:
   PDF layout agree in either tracked or temporary dist directories.
 - `scripts/check-local-dependency-contract.sh` proves the Grust/TypeSec/Sail,
   QueryGraph, and CI-trigger assumptions still match the current repo.
+- `scripts/check-release-proof-contract.sh` proves that the active docs agree
+  on the latest full release-candidate proof commit and that any commits after
+  that proof are limited to documentation and checked-in book artifact refresh.
+  If executable behavior changes after the cited proof commit, the broad
+  release-candidate gate must be rerun from the new clean candidate.
 
 Approximate completion for this first-release scope is about 90 percent as
 of June 23, 2026. The percentage is intentionally about the locally verifiable
@@ -410,6 +415,10 @@ boundary cleanup rather than new architecture:
   the same commit that passes the full gate. Tracked book artifacts should be
   refreshed deliberately with `docs/book/build.sh`; the clean release-candidate
   gate validates book generation out of tree.
+- Use `scripts/check-release-proof-contract.sh` to distinguish a valid
+  post-proof documentation/book refresh from stale release evidence. Do not
+  treat code, manifest, workflow, dependency, or release-script changes after
+  the cited proof commit as covered by the old full gate.
 - Cut a release tag only after the broad local gate, QGLake handoff,
   QueryGraph locked verify/import, dependency-contract check, and book build
   pass from a clean tree.

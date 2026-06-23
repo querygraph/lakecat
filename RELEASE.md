@@ -50,6 +50,7 @@ Confirm dependency posture before the heavy gate:
 ```sh
 scripts/check-local-dependency-contract.sh
 scripts/check-release-version-contract.sh
+scripts/check-release-proof-contract.sh
 ```
 
 This contract is part of the release. It proves that LakeCat's Grust feature
@@ -88,6 +89,21 @@ metadata dirty the candidate commit.
 The QGLake handoff proof must run QueryGraph `lakecat-verify` and
 `lakecat-import` through `cargo run --locked` against the local `qg-rust`
 manifest, then persist both outputs in the saved handoff summary.
+
+After a full release-candidate proof has passed, a post-proof
+documentation/book artifact refresh is allowed so the proof is recorded in
+`README.md`, `DESIGN.md`, `STATUS.md`, `CHANGELOG.md`, and the book without
+rerunning the heavy gate only to update the hash again. That refresh must stay
+limited to documentation and checked-in book artifacts. Prove that shape with:
+
+```sh
+scripts/check-release-proof-contract.sh
+```
+
+If any Rust source, manifest, release script, workflow, dependency bridge, or
+other executable behavior changes after the cited proof commit, rerun
+`scripts/check-release-readiness.sh --release-candidate` from the new clean
+candidate and refresh the proof references again.
 
 Use the quick gate only while preparing a narrow slice:
 

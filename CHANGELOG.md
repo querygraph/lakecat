@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added a standalone release-proof freshness contract. The new
+  `scripts/check-release-proof-contract.sh` verifies that active docs agree on
+  the latest full release-candidate proof commit, that the proof commit is an
+  ancestor of `HEAD`, and that any commits after that proof are limited to
+  documentation and checked-in book artifact refreshes.
 - Made the release-version contract date-stable for post-tag hardening. When a
   workspace-version tag already exists, the contract now derives the expected
   `CHANGELOG.md` release heading date from that tag instead of today's date, so

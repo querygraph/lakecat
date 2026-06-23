@@ -147,6 +147,10 @@ The current full proof also verifies the Grust Turso graph projection evidence,
 including `graphProjectionProof.backend = grust-turso` and
 `graphProjectionProof.tablePrefix = lakecat_graph`; the latest clean
 release-candidate proof was refreshed from head `45468f0d`.
+`scripts/check-release-proof-contract.sh` verifies that active release docs
+agree on that proof commit and that any later commits are limited to
+documentation and checked-in book artifacts; executable changes after the
+proof require a fresh full release-candidate run.
 In `--release-candidate` mode, book artifacts are built into a temporary dist
 directory through `LAKECAT_BOOK_DIST_DIR`; run `docs/book/build.sh` directly
 when intentionally refreshing tracked `docs/book/dist` artifacts.

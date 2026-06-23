@@ -13641,6 +13641,23 @@ the temporary book build, executable book artifact contract, QueryGraph locked
 verify/import, Grust Turso graph projection proof, and the final clean-tree
 check.
 
+LakeCat also carries a smaller proof-freshness contract for the release docs
+themselves:
+
+```sh
+scripts/check-release-proof-contract.sh
+```
+
+That command verifies the active docs agree on the latest full
+release-candidate proof commit, that the proof commit is an ancestor of the
+current tree, and that any commits after it are limited to documentation and
+checked-in book artifact refresh. This avoids an infinite proof-update loop:
+the heavy gate proves the candidate, then a narrow documentation commit records
+the proof. If Rust code, manifests, workflows, dependency bridges, release
+scripts, or other executable behavior changes after the cited proof commit,
+the old proof is no longer enough and the full release-candidate gate must run
+again.
+
 The already-published `v0.1.0` tag is a baseline, not something to move. While
 the workspace version remains `0.1.0` and `HEAD` is past `v0.1.0`, post-tag
 hardening stays under `Unreleased`. The release version contract checks that

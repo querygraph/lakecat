@@ -39,6 +39,13 @@ Updated: 2026-06-23
   `git diff --check`. This is the current first-release evidence; cloud CI
   remains manual/disabled until local gates are boring from the final release
   commit.
+- Latest release-proof contract:
+  `scripts/check-release-proof-contract.sh` records the allowed post-proof
+  shape for first-release documentation. Active docs must agree on the full
+  release-candidate proof commit, that commit must be an ancestor of `HEAD`,
+  and commits after it must be limited to documentation and checked-in book
+  artifacts. Any executable change after the cited proof requires a new full
+  `scripts/check-release-readiness.sh --release-candidate` run.
 - First-release proximity:
   the locally verifiable LakeCat catalog substrate is now about 90 percent
   complete for a first release. Remaining work is release engineering and
