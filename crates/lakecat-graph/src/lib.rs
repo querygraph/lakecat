@@ -648,6 +648,8 @@ pub mod grust_integration {
             CypherMutationOptions, GraphIndex, GraphStore, MemoryGraphStore, Value,
             execute_cypher_mutation_returning_with_options_on_store,
         };
+        #[cfg(feature = "grust-turso-local")]
+        use grust_graph::{GraphAdminStore, NodeId};
         use lakecat_core::{Namespace, TableIdent, TableName, WarehouseName};
 
         #[test]
@@ -988,6 +990,45 @@ pub mod grust_integration {
             assert_eq!(
                 result.table.rows,
                 vec![vec![Value::String(table_id), Value::Bool(true)]]
+            );
+        }
+
+        #[cfg(feature = "grust-turso-local")]
+        #[tokio::test]
+        async fn grust_turso_store_persists_lakecat_catalog_projection_boundary() {
+            let table = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let table_id = table.stable_id();
+            let event = GraphEvent::table(
+                GraphAction::Created,
+                table,
+                serde_json::json!({"kind":"turso-test"}),
+            )
+            .with_event_id("lakecat:outbox:evt-turso");
+            let graph = graph_event_to_grust(&event);
+            let store = grust_graph::TursoGraphStore::in_memory()
+                .await
+                .expect("Grust Turso graph store");
+            store.bootstrap().await.expect("Grust Turso bootstrap");
+
+            store
+                .put_graph(&graph)
+                .await
+                .expect("catalog graph write to Turso");
+            let table_node = store
+                .get_node(&NodeId::new(table_id.clone()))
+                .await
+                .expect("catalog table node read from Turso")
+                .expect("table node persisted in Turso");
+
+            assert_eq!(table_node.id.as_str(), table_id);
+            assert_eq!(table_node.label.as_str(), "Table");
+            assert_eq!(
+                table_node.props.get("warehouse"),
+                Some(&Value::String("local".to_string()))
             );
         }
 

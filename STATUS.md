@@ -6,6 +6,16 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Use Grust Turso graph projection`.
+  LakeCat now follows the local Grust 0.10 path checkout so it can use
+  `grust-turso` for durable catalog graph projection. The new
+  `grust-turso-local` feature bootstraps a Grust `TursoGraphStore` for the
+  service graph sink, with `LAKECAT_GRUST_TURSO_PATH` selecting a durable graph
+  database and an in-memory Turso graph store as the local fallback. Focused
+  graph and service regressions prove LakeCat catalog projection over Grust
+  Turso while keeping graph persistence, traversal, and future Cypher-over-Turso
+  behavior in Grust.
+- Latest implementation/testing slice:
   `Omit unscoped audit outbox table wrappers`.
   The full local release gate exposed that live QGLake handoff config reads
   were producing a `catalog.config-read` outbox wrapper with null table

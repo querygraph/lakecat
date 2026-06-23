@@ -120,6 +120,10 @@ require_pattern 'encodes_null_and_nested_partition_literals_for_iceberg_rest' sc
   "release-readiness gate must prove v4 bridge partition literal encoding"
 require_pattern 'cargo test -p lakecat-service --features grust-local --lib' scripts/check-release-readiness.sh \
   "release-readiness gate must prove service outbox projection through the Grust feature"
+require_pattern 'cargo test -p lakecat-service --features grust-turso-local --lib' scripts/check-release-readiness.sh \
+  "release-readiness gate must prove service outbox projection through the Grust Turso feature"
+require_pattern 'cargo test -p lakecat-graph --features grust-turso-local --lib' scripts/check-release-readiness.sh \
+  "release-readiness gate must prove LakeCat graph projection persists through Grust Turso"
 require_pattern 'scripts/qglake-handoff-local.sh' scripts/check-release-readiness.sh \
   "release-readiness gate must include the QGLake handoff proof"
 
@@ -169,16 +173,20 @@ require_pattern '## First Release Readiness' docs/book/lakecat.md \
 require_pattern 'typed-sail=unavailable' docs/book/lakecat.md \
   "LakeCat book must preserve the honest typed Sail v4 posture"
 
-require_pattern 'grust-graph = \{ package = "grust-graph", version = "0\.9\.1",' Cargo.toml \
-  "grust-graph must use the published 0.9.1 crate"
+require_pattern 'grust-graph = \{ package = "grust-graph", version = "0\.10\.0", path = "../grust/crates/grust"' Cargo.toml \
+  "grust-graph must use the active local Grust 0.10 path while grust-turso is ahead of the published facade line"
+require_pattern 'grust-turso-local = \["grust-local", "grust-graph/turso"' crates/lakecat-service/Cargo.toml \
+  "lakecat-service must expose the Grust Turso graph sink behind an explicit feature"
+require_pattern 'grust-turso-local = \["grust-local", "grust-graph/turso"\]' crates/lakecat-graph/Cargo.toml \
+  "lakecat-graph must expose Turso-backed Grust projection behind an explicit feature"
 require_pattern 'typesec = \{ version = "0\.8\.0",' Cargo.toml \
   "typesec must use the published 0.8.0 crate"
-require_pattern 'grust-cypher' Cargo.lock \
-  "Cargo.lock must include the published Grust Cypher facade used by grust-local graph tests"
-require_pattern 'name = "grust-cypher"' Cargo.lock \
-  "Cargo.lock must include grust-cypher"
-require_pattern 'version = "0\.9\.1"' Cargo.lock \
-  "Cargo.lock must keep grust-cypher on the published 0.9.1 crate"
+require_pattern 'name = "grust-turso"' Cargo.lock \
+  "Cargo.lock must include the Grust Turso backend used by grust-turso-local graph tests"
+require_pattern 'version = "0\.10\.0"' Cargo.lock \
+  "Cargo.lock must keep local Grust crates on the active 0.10.0 line"
+require_pattern 'version = "0\.7\.0-pre\.10"' Cargo.lock \
+  "Cargo.lock must use the Turso crate line required by grust-turso"
 require_pattern 'sail-catalog = \{ path = "../sail/crates/sail-catalog" \}' Cargo.toml \
   "sail-catalog must stay an explicit local Sail path until the needed Sail API is published"
 require_pattern 'sail-common-datafusion = \{ path = "../sail/crates/sail-common-datafusion" \}' Cargo.toml \
@@ -251,13 +259,15 @@ require_pattern 'version = "0\.10\.0"' ../querygraph/qg-rust/Cargo.lock \
   "local QueryGraph lockfile must resolve the Grust 0.10.0 path crate used by LakeCat handoff verification"
 
 cargo metadata --format-version 1 --no-deps > /tmp/lakecat-dependency-contract-metadata.json
-require_pattern '"name":"grust-graph".*"source":"registry\+https://github.com/rust-lang/crates.io-index".*"req":"\^0\.9\.1"' /tmp/lakecat-dependency-contract-metadata.json \
-  "cargo metadata must resolve grust-graph to crates.io with version requirement ^0.9.1"
+require_pattern '"name":"grust-graph".*"source":null.*"req":"\^0\.10\.0".*"path":"/Users/alexy/src/grust/crates/grust"' /tmp/lakecat-dependency-contract-metadata.json \
+  "cargo metadata must resolve LakeCat's grust-graph dependency to the local Grust 0.10 path"
 require_pattern '"name":"typesec".*"source":"registry\+https://github.com/rust-lang/crates.io-index".*"req":"\^0\.8\.0"' /tmp/lakecat-dependency-contract-metadata.json \
   "cargo metadata must resolve typesec to crates.io with version requirement ^0.8.0"
 cargo metadata --format-version 1 --all-features > /tmp/lakecat-dependency-contract-full-metadata.json
 tr '{' '\n' < /tmp/lakecat-dependency-contract-full-metadata.json > /tmp/lakecat-dependency-contract-full-metadata-lines.json
-require_pattern '"name":"grust-cypher","version":"0\.9\.1".*"source":"registry\+https://github.com/rust-lang/crates.io-index"' /tmp/lakecat-dependency-contract-full-metadata-lines.json \
-  "full cargo metadata must resolve grust-cypher 0.9.1 from crates.io through grust-graph"
+require_pattern '"name":"grust-cypher","version":"0\.10\.0".*"source":null' /tmp/lakecat-dependency-contract-full-metadata-lines.json \
+  "full cargo metadata must resolve grust-cypher 0.10.0 from the local Grust path"
+require_pattern '"name":"grust-turso","version":"0\.10\.0".*"source":null' /tmp/lakecat-dependency-contract-full-metadata-lines.json \
+  "full cargo metadata must resolve grust-turso 0.10.0 from the local Grust path"
 
 echo "LakeCat local dependency contract is intact."

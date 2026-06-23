@@ -7868,6 +7868,7 @@ Feature gates keep integrations honest:
 sail-local    use local Sail APIs for planning and provider integration
 typesec-local use local TypeSec APIs for governance and TypeDID verification
 grust-local   use local Grust APIs for catalog graph projection
+grust-turso-local use Grust's Turso graph backend for durable catalog graph projection
 turso-local   use the Turso-backed durable store
 ```
 
@@ -7877,16 +7878,13 @@ that only uses memory stores should not accidentally depend on a sibling repo.
 A test that claims to validate TypeSec should enable `typesec-local` and call
 TypeSec.
 
-The dependency contract is executable because LakeCat still has one active
-sibling bridge. Grust and TypeSec now resolve from the published
-`grust-graph` 0.9.1, `grust-cypher` 0.9.1, and `typesec` 0.8.0 crates, so the
-`grust-local` and `typesec-local` features no longer require sibling checkouts
-merely to compile. That makes the graph and governance boundaries reproducible
-outside this machine while still keeping their reusable behavior in Grust and
-TypeSec. A newer `grust-graph` 0.9.2 crate is visible, but LakeCat should not
-move its published contract there until the companion crates used by
-`grust-local`, including `grust-cypher`, `grust-core`, `grust-memory`, and
-`grust-sail`, are published as a consistent set for the same feature surface.
+The dependency contract is executable because LakeCat has active sibling
+bridges. Grust now follows the local 0.10 path checkout so LakeCat can use
+`grust-turso` for durable catalog graph projection. The graph boundary is still
+Grust-owned: LakeCat emits catalog graph events, `grust-local` keeps a
+memory-backed Grust sink for fast tests, and `grust-turso-local` bootstraps a
+Grust `TursoGraphStore` when durable graph persistence is being exercised.
+TypeSec still resolves from the published `typesec` 0.8.0 crate.
 
 Sail is different today: LakeCat still uses local Sail paths plus a checked-in
 patch bridge for helper APIs that are not yet published. Before pushing a slice
@@ -7897,10 +7895,10 @@ scripts/check-local-dependency-contract.sh
 ```
 
 The script checks the manual-only CI trigger, scans every GitHub workflow file
-for forbidden automatic cloud triggers, verifies crates.io resolution for the
-published Grust graph/Cypher and TypeSec versions, the local Sail path bridge,
-the Sail patch files manual CI applies, and the concrete Sail helper API surface
-LakeCat uses:
+for forbidden automatic cloud triggers, verifies the local Grust 0.10/Turso
+graph feature surface, verifies the published TypeSec version, checks the local
+Sail path bridge, checks the Sail patch files manual CI applies, and checks the
+concrete Sail helper API surface LakeCat uses:
 generated Iceberg REST models, typed metadata inputs, planning result helpers,
 fetchScanTasks result helpers, and table-status conversion. It also checks the
 local QueryGraph Rust importer for the LakeCat view receipt-chain contract:
@@ -13355,22 +13353,13 @@ keep that gate green after each dependency-boundary change and rerun it from
 the final release commit. The temporary Sail helper bridge is release-explicit:
 LakeCat depends on local Sail paths plus checked-in helper patches until the
 required Sail APIs are published. The Grust contract is likewise explicit:
-LakeCat should stay on the published 0.9.1 crate set until the companion crates
-needed by `grust-local` publish consistently for a newer Grust release.
-That is a current release choice, not stale inertia. Live registry evidence on
-June 23, 2026 still shows `grust-graph` ahead at 0.9.2 while
-`grust-cypher` and `grust-core` remain 0.9.1, and `typesec` remains 0.8.0.
-LakeCat should take the newer Grust line only when the facade, core, memory,
-and Sail companion crates used by `grust-local` publish as a coherent set.
-
-QueryGraph's local handoff verifier is a different contract. The QueryGraph
-`qg-rust` checkout follows the active local Grust path, currently
-`grust-graph` 0.10.0, because `lakecat-verify` and `lakecat-import` exercise
-the end-to-end graph import path rather than LakeCat's published-crate release
-surface. The local dependency contract checks both sides: LakeCat remains
-release-pinned to published Grust 0.9.1 crates, while QueryGraph stays aligned
-with the local Grust graph implementation used by the live QGLake acceptance
-harness.
+LakeCat and QueryGraph follow the active local Grust 0.10 path checkout while
+`grust-turso` is ahead of the published facade line. `grust-local` keeps fast
+memory-backed projection tests, while `grust-turso-local` proves durable graph
+projection through a bootstrapped Grust `TursoGraphStore`. QueryGraph's
+`qg-rust` checkout uses the same local Grust path for `lakecat-verify` and
+`lakecat-import`, keeping the end-to-end graph import path aligned with the
+catalog graph sink.
 
 README, status, changelog, book artifacts, and version notes must be refreshed
 from the same clean commit, and the release should be tagged only after the

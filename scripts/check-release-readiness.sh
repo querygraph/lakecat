@@ -86,10 +86,14 @@ if [[ "$mode" == "full" ]]; then
   run cargo test -p lakecat-service --features typesec-local --lib -- --test-threads=1
   run cargo test -p lakecat-service --features grust-local --lib \
     outbox_drain_projects_table_events_to_sinks -- --test-threads=1
+  run cargo test -p lakecat-service --features grust-turso-local --lib \
+    outbox_drain_projects_table_events_to_sinks -- --test-threads=1
   run cargo test -p lakecat-security --features typesec-local --lib -- --test-threads=1
   run cargo test -p lakecat-graph --features grust-local --lib -- --test-threads=1
   run cargo test -p lakecat-graph --features grust-local --lib \
     grust_cypher_can_query_lakecat_catalog_projection_boundary -- --test-threads=1
+  run cargo test -p lakecat-graph --features grust-turso-local --lib \
+    grust_turso_store_persists_lakecat_catalog_projection_boundary -- --test-threads=1
   run cargo test -p lakecat-cli --all-features -- --test-threads=1
   run cargo test --workspace --all-features
 

@@ -376,18 +376,12 @@ boundary cleanup rather than new architecture:
 - Keep the temporary Sail helper bridge release-explicit until the required
   helper behavior is published upstream. The local dependency contract already
   proves the expected Sail path dependencies and patch files.
-- Keep LakeCat on the published Grust 0.9.1 contract until the companion
-  crates needed by `grust-local` are published consistently for a newer Grust
-  release. As of this ledger update, `grust-graph` 0.9.2 is visible, but the
-  LakeCat feature set still resolves through published `grust-cypher`,
-  `grust-core`, `grust-memory`, and `grust-sail` 0.9.1 crates.
-  This was rechecked with live `cargo search` evidence on June 23, 2026:
-  `grust-graph` reports 0.9.2, `grust-cypher` reports 0.9.1, `grust-core`
-  reports 0.9.1, and `typesec` reports 0.8.0.
-- Keep the QueryGraph handoff verifier aligned with the active local Grust path
-  checkout. QueryGraph `qg-rust` now uses local `grust-graph` 0.10.0 for
-  `lakecat-verify` and `lakecat-import`; this is an end-to-end acceptance
-  contract and does not change LakeCat's published-crate release posture.
+- Keep LakeCat and QueryGraph aligned with the active local Grust 0.10 path
+  checkout while `grust-turso` is ahead of the published facade line. LakeCat's
+  `grust-local` feature keeps the fast memory-backed projection sink, and
+  `grust-turso-local` bootstraps a Grust `TursoGraphStore` for durable catalog
+  graph projection. Graph persistence, traversal, and future Cypher-over-Turso
+  behavior remain Grust-owned.
 - Refresh README, book artifacts, `STATUS.md`, and version/release notes from
   the same commit that passes the full gate.
 - Cut a release tag only after the broad local gate, QGLake handoff,
@@ -524,10 +518,10 @@ visible, data columns are narrowed to none, and the receipt proves the decision.
 - QueryGraph bootstrap and QGLake handoff flows now carry table and view
   evidence, view receipt chains, accepted-view chain hashes, graph/import
   proofs, credential storage-scope hashes, and local verifier coverage.
-- Local dependency-contract checks guard published Grust/TypeSec resolution,
-  the remaining Sail local path/patch bridge, concrete Sail helper APIs, the
-  manual-only CI trigger, and the sibling QueryGraph Rust importer's
-  `receipt-chain-hash` handling.
+- Local dependency-contract checks guard the local Grust 0.10/Turso graph
+  feature surface, published TypeSec resolution, the remaining Sail local
+  path/patch bridge, concrete Sail helper APIs, the manual-only CI trigger, and
+  the sibling QueryGraph Rust importer's `receipt-chain-hash` handling.
 - Automatic cloud CI remains deliberately disabled/manual until local gates are
   known to pass.
 

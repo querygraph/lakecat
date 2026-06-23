@@ -107,9 +107,13 @@ metadata-pointer state, policy gates, and integration events belong here.
 - Prefer pushing reusable fixes upstream to sibling repos, then depending on
   them from LakeCat. For example, manifest-metric decoding belongs in Sail; a
   reusable catalog graph taxonomy belongs in Grust.
+- When LakeCat needs durable graph projection over a Turso store, use Grust's
+  `grust-turso` backend through `grust-turso-local`. Keep graph persistence,
+  traversal, and future Cypher-over-Turso behavior in Grust; LakeCat should only
+  configure the sink and emit catalog graph events.
 - Keep feature gates honest. Default-feature tests should pass, and real
   integrations should be wired through explicit features such as `sail-local`,
-  `typesec-local`, `grust-local`, and `qglake-fixture`.
+  `typesec-local`, `grust-local`, `grust-turso-local`, and `qglake-fixture`.
 - Keep `lakecat-cli qglake-fixture` as an explicit feature because it depends
   on Sail's local Iceberg fixture writer. Replay, handoff verification,
   management, policy, and storage-profile CLI commands should remain available
@@ -236,8 +240,8 @@ Continue moving toward:
 - Use the existing trait seams: `CatalogStore`, `SailCatalogEngine`,
   `GovernanceEngine`, `CatalogGraphSink`, and `LineageSink`.
 - Keep defaults safe for embedded tests while wiring real integrations behind
-  explicit features such as `sail-local`, `typesec-local`, `grust-local`, and
-  `turso-local`.
+  explicit features such as `sail-local`, `typesec-local`, `grust-local`,
+  `grust-turso-local`, and `turso-local`.
 - Prefer pushing reusable fixes upstream to sibling repos, then depending on
   them from LakeCat. Manifest-metric decoding belongs in Sail; reusable catalog
   graph taxonomy belongs in Grust; reusable governance and agent authorization

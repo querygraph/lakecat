@@ -8,6 +8,7 @@ repository.workspace = true
 [features]
 default = []
 grust-local = ["dep:grust-graph"]
+grust-turso-local = ["grust-local", "grust-graph/turso"]
 
 [dependencies]
 async-trait = { workspace = true }

@@ -23,7 +23,9 @@ async fn main() {
             .with_integrations(
                 sail,
                 configured_governance_engine().expect("configure LakeCat governance"),
-                configured_graph_sink(),
+                configured_graph_sink()
+                    .await
+                    .expect("configure LakeCat graph sink"),
                 HashOnlyLineageSink::new(),
             )
             .with_credential_issuer(configured_credential_issuer())
@@ -117,16 +119,42 @@ fn configured_credential_issuer() -> Arc<dyn CredentialIssuer> {
     lakecat_service::ConservativeCredentialIssuer::new()
 }
 
-#[cfg(feature = "grust-local")]
-fn configured_graph_sink() -> Arc<dyn CatalogGraphSink> {
-    lakecat_graph::grust_integration::GrustCatalogGraphSink::new(Arc::new(
-        grust_graph::MemoryGraphStore::new(),
-    ))
+#[cfg(all(feature = "grust-local", not(feature = "grust-turso-local")))]
+async fn configured_graph_sink() -> lakecat_core::LakeCatResult<Arc<dyn CatalogGraphSink>> {
+    Ok(
+        lakecat_graph::grust_integration::GrustCatalogGraphSink::new(Arc::new(
+            grust_graph::MemoryGraphStore::new(),
+        )),
+    )
+}
+
+#[cfg(feature = "grust-turso-local")]
+async fn configured_graph_sink() -> lakecat_core::LakeCatResult<Arc<dyn CatalogGraphSink>> {
+    let path = std::env::var("LAKECAT_GRUST_TURSO_PATH").unwrap_or_else(|_| ":memory:".to_string());
+    let store = grust_graph::TursoGraphStore::connect(grust_graph::TursoConfig {
+        path,
+        table_prefix: "lakecat_graph".to_string(),
+        ..Default::default()
+    })
+    .await
+    .map_err(|err| {
+        lakecat_core::LakeCatError::Internal(format!(
+            "failed to configure Grust Turso graph sink: {err}"
+        ))
+    })?;
+    grust_graph::GraphAdminStore::bootstrap(&store)
+        .await
+        .map_err(|err| {
+            lakecat_core::LakeCatError::Internal(format!(
+                "failed to bootstrap Grust Turso graph sink: {err}"
+            ))
+        })?;
+    Ok(lakecat_graph::grust_integration::GrustCatalogGraphSink::new(Arc::new(store)))
 }
 
 #[cfg(not(feature = "grust-local"))]
-fn configured_graph_sink() -> Arc<dyn CatalogGraphSink> {
-    NoopCatalogGraphSink::new()
+async fn configured_graph_sink() -> lakecat_core::LakeCatResult<Arc<dyn CatalogGraphSink>> {
+    Ok(NoopCatalogGraphSink::new())
 }
 
 #[cfg(all(test, feature = "typesec-local"))]

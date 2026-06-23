@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added a Grust Turso durable graph projection path. LakeCat now follows the
+  local Grust 0.10 path checkout, exposes `grust-turso-local`, bootstraps
+  Grust's `TursoGraphStore` for the service graph sink, and proves LakeCat
+  catalog graph projection through Grust Turso while keeping graph persistence
+  and future Cypher-over-Turso behavior in Grust.
 - Fixed unscoped audit outbox wrappers for memory and Turso stores. Warehouse-
   scoped events such as `catalog.config-read` now omit the wrapper `table`
   field instead of emitting null table evidence that closed replay admission

@@ -34,36 +34,30 @@ present; missing metrics keep the file.
 HTTP handlers resolve principals from `x-lakecat-principal`,
 `x-lakecat-agent-did`, or bearer authorization headers before calling the
 governance engine; absent credentials remain anonymous for local compatibility.
-The service binary exposes `sail-local`, `typesec-local`, `grust-local`, and
-`turso-local` feature gates so local real integrations can be activated without
-code edits. `LAKECAT_WAREHOUSE` selects the served warehouse, and
-`LAKECAT_BIND_ADDR` selects the listen address; defaults are `local` and
-`127.0.0.1:8181`. With the `turso-local` feature, `LAKECAT_TURSO_PATH` selects a
+The service binary exposes `sail-local`, `typesec-local`, `grust-local`,
+`grust-turso-local`, and `turso-local` feature gates so local real integrations
+can be activated without code edits. `LAKECAT_WAREHOUSE` selects the served
+warehouse, and `LAKECAT_BIND_ADDR` selects the listen address; defaults are
+`local` and `127.0.0.1:8181`. With the `turso-local` feature, `LAKECAT_TURSO_PATH` selects a
 Turso-backed `TursoCatalogStore` for namespaces, table records, metadata pointer
 history, audit/outbox rows, and idempotent commit replay; without it the binary
 keeps the in-memory store.
 
-The Grust and TypeSec feature gates build against published crates
-(`grust-graph` 0.9.1 and `typesec` 0.8.0). LakeCat intentionally keeps the
-Grust contract at 0.9.1 until the companion crates used by `grust-local`
-publish as a consistent newer set; `grust-graph` 0.9.2 is visible, but the
-current LakeCat feature set still relies on published `grust-cypher`,
-`grust-core`, `grust-memory`, and `grust-sail` 0.9.1 crates. Sail integration
-still uses local Sail paths plus the checked-in helper patch bridge until the
-required Sail APIs are published.
-
-This dependency posture was refreshed on June 23, 2026 from live `cargo search`
-evidence: `grust-graph` reports 0.9.2, `grust-cypher` reports 0.9.1,
-`grust-core` reports 0.9.1, and `typesec` reports 0.8.0. LakeCat should not
-raise the Grust requirement until the facade, core, memory, and Sail companion
-crates needed by `grust-local` are published as the same newer release line.
+The Grust feature gate follows the local Grust 0.10 path checkout so LakeCat
+can use `grust-turso` for durable catalog graph projection. Plain
+`grust-local` keeps the fast memory-backed Grust sink; `grust-turso-local`
+constructs a bootstrapped `TursoGraphStore`, using `LAKECAT_GRUST_TURSO_PATH`
+when set and an in-memory Turso graph database otherwise. TypeSec remains on
+the published `typesec` 0.8.0 crate, and Sail integration still uses local Sail
+paths plus the checked-in helper patch bridge until the required Sail APIs are
+published.
 
 The local QueryGraph handoff path has a separate compatibility contract:
 `/Users/alexy/src/querygraph/qg-rust` follows the local Grust 0.10.0 path
 checkout for `lakecat-verify` and `lakecat-import`. The dependency contract
-checks both sides so LakeCat can keep its published-crate release posture while
-the end-to-end QueryGraph acceptance harness stays aligned with the active
-local Grust graph implementation.
+keeps the end-to-end QueryGraph acceptance harness aligned with the active
+local Grust graph implementation while graph persistence, traversal, and future
+Cypher-over-Turso work remain Grust-owned.
 
 Useful local checks:
 

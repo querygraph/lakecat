@@ -35,7 +35,7 @@ sha2 = "0.10"
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "sync"] }
 tower = "0.5"
-turso = { version = "0.7.0-pre.7", default-features = false }
+turso = { version = "0.7.0-pre.10", default-features = false }
 url = "2.5.8"
 uuid = { version = "1", features = ["serde", "v4"] }
 
@@ -48,7 +48,7 @@ lakecat-sail = { path = "crates/lakecat-sail" }
 lakecat-security = { path = "crates/lakecat-security" }
 lakecat-store = { path = "crates/lakecat-store" }
 
-grust-graph = { package = "grust-graph", version = "0.9.1", default-features = false }
+grust-graph = { package = "grust-graph", version = "0.10.0", path = "../grust/crates/grust", default-features = false }
 typesec = { version = "0.8.0", default-features = false }
 sail-catalog = { path = "../sail/crates/sail-catalog" }
 sail-common-datafusion = { path = "../sail/crates/sail-common-datafusion" }

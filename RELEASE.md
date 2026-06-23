@@ -43,16 +43,12 @@ Confirm dependency posture before the heavy gate:
 scripts/check-local-dependency-contract.sh
 ```
 
-This contract is part of the release. It proves that LakeCat's release-facing
-`grust-local` feature stays on the published Grust crate set, TypeSec stays on
-the published TypeSec crate, local Sail paths and patch bridge remain explicit,
-manual workflow triggers remain intentional, and the local QueryGraph handoff
-verifier stays aligned with the active Grust path checkout.
-
-As of the June 23, 2026 dependency refresh, the release-facing published-crate
-contract remains Grust 0.9.1 plus TypeSec 0.8.0: `cargo search` shows
-`grust-graph` 0.9.2, but the `grust-cypher` and `grust-core` companion crates
-used by `grust-local` still publish at 0.9.1.
+This contract is part of the release. It proves that LakeCat's Grust feature
+surface follows the active local Grust 0.10 path checkout, including the
+`grust-turso-local` durable graph sink, TypeSec stays on the published TypeSec
+crate, local Sail paths and patch bridge remain explicit, manual workflow
+triggers remain intentional, and the local QueryGraph handoff verifier stays
+aligned with the same active Grust path checkout.
 
 ## Required Local Gate
 
