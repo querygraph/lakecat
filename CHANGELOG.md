@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Hardened raw credential-vend summary extraction. Raw lineage-drain summary
+  construction now reuses the service replay validator for
+  `credentials.vend-attempted` evidence, so malformed credential response,
+  raw-credential exception, and storage-profile proof cannot bypass replay
+  admission before compact QGLake credential or graph/OpenLineage projection
+  proof inherits it.
 - Hardened raw table-commit summary extraction. Raw lineage-drain summary
   construction now reuses the service replay validator for `table.commit`
   evidence, rejecting malformed committed-at timestamps or commit hashes before

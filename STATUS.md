@@ -5,6 +5,22 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw credential-vend summary hardening slice:
+  `Validate raw credential-vend summaries`.
+  Raw lineage-drain summary construction now reuses the service replay
+  validator for `credentials.vend-attempted` evidence, rejecting malformed
+  credential response, raw-credential exception, and storage-profile proof
+  before compact QGLake credential or graph/OpenLineage projection proof can
+  inherit it.
+- Local verification for this raw credential-vend summary slice passed:
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_credential -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_raw_credential_exception -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_storage_profile_secret_ref_evidence -- --test-threads=1`;
+  `cargo test -p lakecat-graph --features grust-turso-local --lib grust_turso_store -- --test-threads=1`;
+  `cargo test -p lakecat-service --features grust-turso-local --bin lakecat-service configured_grust_turso_graph_sink_projects_catalog_events_to_turso_store -- --test-threads=1`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service`;
+  `scripts/check-release-readiness.sh --quick`; `git diff --check`.
 - Latest raw table-commit summary hardening slice:
   `Validate raw table commit summaries`.
   Raw lineage-drain summary construction now reuses the service replay

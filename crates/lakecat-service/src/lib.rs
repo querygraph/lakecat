@@ -7267,6 +7267,10 @@ fn lineage_drain_event_summary(
     if event.event_type == "table.commit" {
         validate_table_commit_hash_evidence(event)?;
     }
+    if event.event_type == "credentials.vend-attempted" {
+        let payload = event.payload.get("payload").unwrap_or(&event.payload);
+        validate_credential_vend_event_evidence(event, payload)?;
+    }
     let payload = event.payload.get("payload").unwrap_or(&event.payload);
     let view = payload.get("view");
     let view_warehouse = lineage_summary_optional_nonblank_string_value(
@@ -51413,22 +51417,32 @@ mod tests {
                 "credentials.vend-attempted",
                 "credential-count",
                 json!("0"),
-                "credential-count must be an unsigned integer when present",
+                "credential-vend evidence must contain credential-count",
             ),
         ];
 
         for (event_type, field, value, expected_message) in cases {
             let mut payload = serde_json::Map::new();
             payload.insert(field.to_string(), value);
-            let event = OutboxEvent {
-                event_id: format!("evt-malformed-summary-{field}"),
-                sink: "lakecat.lineage-and-graph".to_string(),
-                event_type: event_type.to_string(),
-                payload: json!({
-                    "payload": Value::Object(payload)
-                }),
-                created_at: chrono::Utc::now(),
-                delivered_at: None,
+            let event = if event_type == "credentials.vend-attempted" {
+                let mut event = valid_lineage_summary_credential_event(&format!(
+                    "evt-malformed-summary-{field}"
+                ));
+                for (key, value) in payload {
+                    event.payload["payload"][key] = value;
+                }
+                event
+            } else {
+                OutboxEvent {
+                    event_id: format!("evt-malformed-summary-{field}"),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "payload": Value::Object(payload)
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }
             };
             let err = lineage_drain_event_summary(&event, &receipt)
                 .unwrap_err()
@@ -52183,160 +52197,157 @@ mod tests {
     #[test]
     fn lineage_drain_summary_rejects_malformed_credential_prefix_hashes() {
         let receipt = OutboxProjectionReceipt::default();
-        let non_array_credential_evidence = OutboxEvent {
-            event_id: "evt-bad-summary-credential-evidence".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "credentials.vend-attempted".to_string(),
-            payload: json!({
-                "payload": {
-                    "credential-response-evidence": {
-                        "prefix-hash": content_hash_bytes(b"credential")
-                    }
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut non_array_credential_evidence =
+            valid_lineage_summary_credential_event("evt-bad-summary-credential-evidence");
+        non_array_credential_evidence.payload["payload"]["credential-response-evidence"] =
+            json!({ "prefix-hash": content_hash_bytes(b"credential") });
         let err = lineage_drain_event_summary(&non_array_credential_evidence, &receipt)
             .unwrap_err()
             .to_string();
-        assert!(err.contains("credential-response-evidence must be an array when present"));
+        assert!(err.contains("credential-response-evidence"), "{err}");
 
-        let missing_prefix_hash = OutboxEvent {
-            event_id: "evt-missing-summary-prefix-hash".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "credentials.vend-attempted".to_string(),
-            payload: json!({
-                "payload": {
-                    "credential-response-evidence": [{
-                        "credential-mode": "short-lived"
-                    }]
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut missing_prefix_hash =
+            valid_lineage_summary_credential_event("evt-missing-summary-prefix-hash");
+        missing_prefix_hash.payload["payload"]["credential-response-evidence"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("prefix-hash");
         let err = lineage_drain_event_summary(&missing_prefix_hash, &receipt)
             .unwrap_err()
             .to_string();
-        assert!(err.contains("prefix-hash must contain full SHA-256 digest evidence"));
+        assert!(
+            err.contains("prefix-hash must contain full SHA-256 digest evidence"),
+            "{err}"
+        );
 
-        let malformed_prefix_hash = OutboxEvent {
-            event_id: "evt-bad-summary-prefix-hash".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "credentials.vend-attempted".to_string(),
-            payload: json!({
-                "payload": {
-                    "credential-response-evidence": [{
-                        "prefix-hash": "sha256:not-full"
-                    }]
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut malformed_prefix_hash =
+            valid_lineage_summary_credential_event("evt-bad-summary-prefix-hash");
+        malformed_prefix_hash.payload["payload"]["credential-response-evidence"][0]["prefix-hash"] =
+            json!("sha256:not-full");
         let err = lineage_drain_event_summary(&malformed_prefix_hash, &receipt)
             .unwrap_err()
             .to_string();
         assert!(err.contains("prefix-hash must contain full SHA-256 digest evidence"));
 
         let duplicate_prefix_hash = content_hash_bytes(b"duplicate-credential-prefix");
-        let duplicate_prefix_hashes = OutboxEvent {
-            event_id: "evt-duplicate-summary-prefix-hash".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "credentials.vend-attempted".to_string(),
-            payload: json!({
-                "payload": {
-                    "credential-response-evidence": [
-                        {"prefix-hash": duplicate_prefix_hash},
-                        {"prefix-hash": duplicate_prefix_hash}
-                    ]
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut duplicate_prefix_hashes =
+            valid_lineage_summary_credential_event("evt-duplicate-summary-prefix-hash");
+        let mut duplicate_entry =
+            duplicate_prefix_hashes.payload["payload"]["credential-response-evidence"][0].clone();
+        duplicate_entry["prefix-hash"] = json!(duplicate_prefix_hash);
+        duplicate_prefix_hashes.payload["payload"]["credential-response-evidence"][0]["prefix-hash"] =
+            json!(duplicate_prefix_hash);
+        duplicate_prefix_hashes.payload["payload"]["credential-response-evidence"] =
+            json!([duplicate_entry.clone(), duplicate_entry]);
+        duplicate_prefix_hashes.payload["payload"]["credential-count"] = json!(2);
         let err = lineage_drain_event_summary(&duplicate_prefix_hashes, &receipt)
             .unwrap_err()
             .to_string();
         assert!(
             err.contains(
-                "lineage drain credential-response prefix-hashes must not contain duplicate hashes"
+                "credential-vend credential-response-evidence must not contain duplicate prefix-hash values"
             ),
             "{err}"
         );
 
-        let count_without_prefix_hashes = OutboxEvent {
-            event_id: "evt-summary-credential-count-without-prefixes".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "credentials.vend-attempted".to_string(),
-            payload: json!({
-                "payload": {
-                    "credential-count": 1
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut count_without_prefix_hashes =
+            valid_lineage_summary_credential_event("evt-summary-credential-count-without-prefixes");
+        count_without_prefix_hashes.payload["payload"]["credential-response-evidence"] = json!([]);
         let err = lineage_drain_event_summary(&count_without_prefix_hashes, &receipt)
             .unwrap_err()
             .to_string();
         assert!(
-            err.contains(
-                "credential-count must match credential-response prefix-hashes in lineage drain summary"
-            ),
+            err.contains("credential-count does not match credential-response-evidence"),
             "{err}"
         );
 
-        let count_drift_prefix_hashes = OutboxEvent {
-            event_id: "evt-summary-credential-count-drift-prefixes".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "credentials.vend-attempted".to_string(),
-            payload: json!({
-                "payload": {
-                    "credential-count": 2,
-                    "credential-response-evidence": [
-                        {"prefix-hash": content_hash_bytes(b"credential-one")}
-                    ]
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut count_drift_prefix_hashes =
+            valid_lineage_summary_credential_event("evt-summary-credential-count-drift-prefixes");
+        count_drift_prefix_hashes.payload["payload"]["credential-count"] = json!(2);
         let err = lineage_drain_event_summary(&count_drift_prefix_hashes, &receipt)
             .unwrap_err()
             .to_string();
         assert!(
-            err.contains(
-                "credential-count must match credential-response prefix-hashes in lineage drain summary"
-            ),
+            err.contains("credential-count does not match credential-response-evidence"),
             "{err}"
         );
 
-        let zero_count_with_prefix_hash = OutboxEvent {
-            event_id: "evt-summary-zero-credential-count-with-prefix".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "credentials.vend-attempted".to_string(),
-            payload: json!({
-                "payload": {
-                    "credential-count": 0,
-                    "credential-response-evidence": [
-                        {"prefix-hash": content_hash_bytes(b"unexpected-credential")}
-                    ]
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut zero_count_with_prefix_hash =
+            valid_lineage_summary_credential_event("evt-summary-zero-credential-count-with-prefix");
+        zero_count_with_prefix_hash.payload["payload"]["credential-count"] = json!(0);
         let err = lineage_drain_event_summary(&zero_count_with_prefix_hash, &receipt)
             .unwrap_err()
             .to_string();
         assert!(
-            err.contains(
-                "credential-count must match credential-response prefix-hashes in lineage drain summary"
-            ),
+            err.contains("credential-count does not match credential-response-evidence"),
             "{err}"
         );
+    }
+
+    fn valid_lineage_summary_credential_event(event_id: &str) -> OutboxEvent {
+        let payload = json!({
+            "audit-event-id": format!("audit-{event_id}"),
+            "event-type": "credentials.vend-attempted",
+            "table": {
+                "warehouse": "local",
+                "namespace": ["default"],
+                "name": "events"
+            },
+            "authorization-receipt": {
+                "principal": {
+                    "subject": "human:operator",
+                    "kind": "human"
+                },
+                "action": "credentials-vend",
+                "allowed": true,
+                "engine": "lakecat-test",
+                "policy_hash": null,
+                "checked_at": chrono::Utc::now().to_rfc3339()
+            },
+            "storage-location": "file:///tmp/events",
+            "storage-profile-id": "events-local",
+            "mode": "local-file-no-secret",
+            "storage-profile": {
+                "profile-id": "events-local",
+                "warehouse": "local",
+                "provider": "file",
+                "issuance-mode": "local-file-no-secret",
+                "location-prefix-hash": content_hash_bytes(b"file:///tmp/events"),
+                "secret-ref-present": false,
+                "public-config": {}
+            },
+            "secret-ref-present": false,
+            "credential-count": 1,
+            "credential-response-evidence": [{
+                "prefix-hash": content_hash_bytes(b"file:///tmp/events"),
+                "issuer-config-hash": content_hash_bytes(b"issuer-config"),
+                "issuer-config-entry-count": 1,
+                "storage-profile-id": "events-local",
+                "catalog-profile-id": "events-local",
+                "storage-provider": "file",
+                "credential-mode": "local-file-no-secret",
+                "authorization-principal": "human:operator",
+                "receipt-principal": "human:operator",
+                "governed-read-required": "false"
+            }]
+        });
+        OutboxEvent {
+            event_id: event_id.to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "credentials.vend-attempted".to_string(),
+            payload: json!({
+                "audit-event-id": format!("audit-envelope-{event_id}"),
+                "event-type": "credentials.vend-attempted",
+                "table": {
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "name": "events"
+                },
+                "payload": payload
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        }
     }
 
     #[test]
@@ -52349,7 +52360,7 @@ mod tests {
                     "credential-count": 0,
                     "lakecat:raw-credential-exception": true
                 }),
-                "lakecat:raw-credential-exception must be an object when present",
+                "raw-credential exception must be an object",
             ),
             (
                 "evt-bad-summary-raw-exception-allowed",
@@ -52361,7 +52372,7 @@ mod tests {
                         "reason": "fine-grained read restriction requires Sail-planned reads"
                     }
                 }),
-                "lakecat:raw-credential-exception.allowed must be boolean when present",
+                "raw-credential exception allowed must be boolean",
             ),
             (
                 "evt-bad-summary-raw-exception-missing-reason",
@@ -52384,7 +52395,7 @@ mod tests {
                         "reason": " "
                     }
                 }),
-                "lakecat:raw-credential-exception.reason must not be blank",
+                "blocked raw-credential exception must carry non-empty reason",
             ),
             (
                 "evt-bad-summary-credential-block-reason",
@@ -52396,7 +52407,7 @@ mod tests {
                         "reason": "fine-grained read restriction requires Sail-planned reads"
                     }
                 }),
-                "lakecat:credential-block-reason must not be blank",
+                "blocked credential evidence must contain block reason",
             ),
             (
                 "evt-bad-summary-block-reason-drift",
@@ -52408,51 +52419,46 @@ mod tests {
                         "reason": "fine-grained read restriction requires Sail-planned reads"
                     }
                 }),
-                "credential block reason must match raw-credential exception reason",
+                "block reason must match raw-credential exception reason",
             ),
             (
                 "evt-bad-summary-blocked-with-credentials",
                 json!({
                     "credential-count": 1,
-                    "credential-response-evidence": [
-                        {"prefix-hash": content_hash_bytes(b"blocked-credential")}
-                    ],
                     "lakecat:credential-block-reason": "fine-grained read restriction requires Sail-planned reads",
                     "lakecat:raw-credential-exception": {
                         "allowed": false,
                         "reason": "fine-grained read restriction requires Sail-planned reads"
                     }
                 }),
-                "blocked raw-credential exception must not carry credentials",
+                "blocked credential evidence must not carry credentials",
             ),
             (
                 "evt-bad-summary-allowed-with-block-reason",
                 json!({
                     "credential-count": 1,
-                    "credential-response-evidence": [
-                        {"prefix-hash": content_hash_bytes(b"allowed-credential")}
-                    ],
                     "lakecat:credential-block-reason": "fine-grained read restriction requires Sail-planned reads",
                     "lakecat:raw-credential-exception": {
                         "allowed": true,
                         "reason": "trusted human principal may use audited raw credential vending"
                     }
                 }),
-                "lakecat:credential-block-reason must be absent when raw credentials are allowed",
+                "block reason must be absent when raw credentials are allowed",
             ),
         ];
 
         for (event_id, payload, expected_message) in cases {
-            let event = OutboxEvent {
-                event_id: event_id.to_string(),
-                sink: "lakecat.lineage-and-graph".to_string(),
-                event_type: "credentials.vend-attempted".to_string(),
-                payload: json!({
-                    "payload": payload
-                }),
-                created_at: chrono::Utc::now(),
-                delivered_at: None,
-            };
+            let mut event = valid_lineage_summary_credential_event(event_id);
+            if payload.get("credential-count").and_then(Value::as_u64) == Some(0) {
+                event.payload["payload"]["credential-response-evidence"] = json!([]);
+            }
+            for (key, value) in payload.as_object().unwrap() {
+                event.payload["payload"][key] = value.clone();
+            }
+            if let Some(raw_exception) = payload.get("lakecat:raw-credential-exception") {
+                event.payload["payload"]["authorization-receipt"]["context"]["lakecat:raw-credential-exception"] =
+                    raw_exception.clone();
+            }
             let err = lineage_drain_event_summary(&event, &receipt)
                 .unwrap_err()
                 .to_string();
@@ -52466,35 +52472,24 @@ mod tests {
         let valid_location_hash = content_hash_bytes(b"storage-profile-prefix");
         let valid_secret_hash = content_hash_bytes(b"storage-profile-secret-ref");
 
-        let raw_secret_ref = OutboxEvent {
-            event_id: "evt-summary-storage-profile-raw-secret-ref".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "credentials.vend-attempted".to_string(),
-            payload: json!({
-                "payload": {
-                    "storage-profile": {
-                        "profile-id": "s3-events",
-                        "warehouse": "local",
-                        "provider": "s3",
-                        "issuance-mode": "short-lived-secret-ref",
-                        "location-prefix-hash": valid_location_hash,
-                        "secret-ref-present": true,
-                        "secret-ref-provider": "typesec",
-                        "secret-ref-hash": valid_secret_hash,
-                        "secret-ref": "typesec://env/LAKECAT_S3_EVENTS"
-                    }
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut raw_secret_ref =
+            valid_lineage_summary_credential_event("evt-summary-storage-profile-raw-secret-ref");
+        raw_secret_ref.payload["payload"]["storage-profile"] = json!({
+            "profile-id": "s3-events",
+            "warehouse": "local",
+            "provider": "s3",
+            "issuance-mode": "short-lived-secret-ref",
+            "location-prefix-hash": valid_location_hash,
+            "secret-ref-present": true,
+            "secret-ref-provider": "typesec",
+            "secret-ref-hash": valid_secret_hash,
+            "secret-ref": "typesec://env/LAKECAT_S3_EVENTS"
+        });
         let err = lineage_drain_event_summary(&raw_secret_ref, &receipt)
             .unwrap_err()
             .to_string();
         assert!(
-            err.contains(
-                "lineage drain storage-profile summary contains unexpected field secret-ref"
-            ),
+            err.contains("storage-profile contains unexpected field secret-ref"),
             "{err}"
         );
 
@@ -52561,98 +52556,70 @@ mod tests {
         assert!(!err.contains("lakecat.storage-profile-id"));
         assert!(!err.contains("shadow-profile"));
 
-        let secret_like_public_config_value = OutboxEvent {
-            event_id: "evt-summary-storage-profile-secret-public-config".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "credentials.vend-attempted".to_string(),
-            payload: json!({
-                "payload": {
-                    "storage-profile": {
-                        "profile-id": "s3-events",
-                        "warehouse": "local",
-                        "provider": "s3",
-                        "issuance-mode": "short-lived-secret-ref",
-                        "location-prefix-hash": valid_location_hash,
-                        "secret-ref-present": true,
-                        "secret-ref-provider": "typesec",
-                        "secret-ref-hash": valid_secret_hash,
-                        "public-config": {
-                            "region": "password=super-secret"
-                        }
-                    }
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut secret_like_public_config_value = valid_lineage_summary_credential_event(
+            "evt-summary-storage-profile-secret-public-config",
+        );
+        secret_like_public_config_value.payload["payload"]["storage-profile"] = json!({
+            "profile-id": "s3-events",
+            "warehouse": "local",
+            "provider": "s3",
+            "issuance-mode": "short-lived-secret-ref",
+            "location-prefix-hash": valid_location_hash,
+            "secret-ref-present": true,
+            "secret-ref-provider": "typesec",
+            "secret-ref-hash": valid_secret_hash,
+            "public-config": {
+                "region": "password=super-secret"
+            }
+        });
         let err = lineage_drain_event_summary(&secret_like_public_config_value, &receipt)
             .unwrap_err()
             .to_string();
         assert!(
-            err.contains(
-                "lineage drain storage-profile summary public-config value may expose secret material"
-            ),
+            err.contains("storage-profile public-config value may expose secret material"),
             "{err}"
         );
         assert!(err.contains("public-config-key-hash=sha256:"));
         assert!(!err.contains("password=super-secret"));
 
-        let missing_secret_ref_provider = OutboxEvent {
-            event_id: "evt-summary-storage-profile-missing-secret-provider".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "credentials.vend-attempted".to_string(),
-            payload: json!({
-                "payload": {
-                    "storage-profile": {
-                        "profile-id": "s3-events",
-                        "warehouse": "local",
-                        "provider": "s3",
-                        "issuance-mode": "short-lived-secret-ref",
-                        "location-prefix-hash": valid_location_hash,
-                        "secret-ref-present": true,
-                        "secret-ref-hash": valid_secret_hash
-                    }
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut missing_secret_ref_provider = valid_lineage_summary_credential_event(
+            "evt-summary-storage-profile-missing-secret-provider",
+        );
+        missing_secret_ref_provider.payload["payload"]["storage-profile"] = json!({
+            "profile-id": "s3-events",
+            "warehouse": "local",
+            "provider": "s3",
+            "issuance-mode": "short-lived-secret-ref",
+            "location-prefix-hash": valid_location_hash,
+            "secret-ref-present": true,
+            "secret-ref-hash": valid_secret_hash
+        });
         let err = lineage_drain_event_summary(&missing_secret_ref_provider, &receipt)
             .unwrap_err()
             .to_string();
         assert!(
-            err.contains(
-                "lineage drain storage-profile summary secret-ref-present requires secret-ref-provider"
-            ),
+            err.contains("storage-profile secret-ref-present requires secret-ref-provider"),
             "{err}"
         );
 
-        let unexpected_secret_ref_hash = OutboxEvent {
-            event_id: "evt-summary-storage-profile-unexpected-secret-hash".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "credentials.vend-attempted".to_string(),
-            payload: json!({
-                "payload": {
-                    "storage-profile": {
-                        "profile-id": "local-events",
-                        "warehouse": "local",
-                        "provider": "file",
-                        "issuance-mode": "local-file-no-secret",
-                        "location-prefix-hash": valid_location_hash,
-                        "secret-ref-present": false,
-                        "secret-ref-hash": valid_secret_hash
-                    }
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut unexpected_secret_ref_hash = valid_lineage_summary_credential_event(
+            "evt-summary-storage-profile-unexpected-secret-hash",
+        );
+        unexpected_secret_ref_hash.payload["payload"]["storage-profile"] = json!({
+            "profile-id": "local-events",
+            "warehouse": "local",
+            "provider": "file",
+            "issuance-mode": "local-file-no-secret",
+            "location-prefix-hash": valid_location_hash,
+            "secret-ref-present": false,
+            "secret-ref-hash": valid_secret_hash
+        });
         let err = lineage_drain_event_summary(&unexpected_secret_ref_hash, &receipt)
             .unwrap_err()
             .to_string();
         assert!(
             err.contains(
-                "lineage drain storage-profile summary cannot carry secret-ref evidence when secret-ref-present is false"
+                "storage-profile cannot carry secret-ref evidence when secret-ref-present is false"
             ),
             "{err}"
         );
