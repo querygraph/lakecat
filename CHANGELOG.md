@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened raw table-commit summary extraction. Raw lineage-drain summary
+  construction now reuses the service replay validator for `table.commit`
+  evidence, rejecting malformed committed-at timestamps or commit hashes before
+  compact QGLake commit proof can inherit them.
 - Hardened commit-history sequence summary extraction. Raw lineage-drain
   summary construction now rejects zero or non-increasing
   `sequence-numbers` evidence before compact QGLake pointer-history proof can

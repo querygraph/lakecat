@@ -5,6 +5,18 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw table-commit summary hardening slice:
+  `Validate raw table commit summaries`.
+  Raw lineage-drain summary construction now reuses the service replay
+  validator for `table.commit` evidence, rejecting malformed committed-at
+  timestamps or commit hashes before compact QGLake commit proof can inherit
+  them.
+- Local verification for this raw table-commit summary slice passed:
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_table_commit_evidence -- --test-threads=1`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest raw commit-history summary hardening slice:
   `Validate commit sequence ordering in summaries`.
   Raw lineage-drain summary construction now rejects zero or non-increasing

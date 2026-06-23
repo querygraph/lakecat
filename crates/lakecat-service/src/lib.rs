@@ -7264,6 +7264,9 @@ fn lineage_drain_event_summary(
     event: &OutboxEvent,
     receipt: &OutboxProjectionReceipt,
 ) -> Result<LineageDrainEventSummary, LakeCatError> {
+    if event.event_type == "table.commit" {
+        validate_table_commit_hash_evidence(event)?;
+    }
     let payload = event.payload.get("payload").unwrap_or(&event.payload);
     let view = payload.get("view");
     let view_warehouse = lineage_summary_optional_nonblank_string_value(
@@ -51431,6 +51434,91 @@ mod tests {
                 .unwrap_err()
                 .to_string();
             assert!(err.contains(expected_message), "{err}");
+        }
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_table_commit_evidence() {
+        let receipt = OutboxProjectionReceipt::default();
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let base_commit = json!({
+            "table": table,
+            "previous_metadata_location": "file:///tmp/events/metadata/00000.json",
+            "new_metadata_location": "file:///tmp/events/metadata/00001.json",
+            "sequence_number": 7,
+            "principal": principal,
+            "format_version": 3,
+            "snapshot_id": 42,
+            "policy_hash": null,
+            "request_hash": content_hash_json(&json!({"request": "commit"})).unwrap(),
+            "response_hash": content_hash_json(&json!({"response": "commit"})).unwrap(),
+            "idempotency_key_sha256": content_hash_bytes("commit:events:0001".as_bytes()),
+            "committed_at": chrono::Utc::now(),
+        });
+
+        for (case, mutate, expected_message) in [
+            (
+                "missing-committed-at",
+                "remove-committed-at",
+                "table commit evidence committed_at timestamp must be present",
+            ),
+            (
+                "malformed-committed-at",
+                "malformed-committed-at",
+                "table commit evidence committed_at timestamp must be RFC3339",
+            ),
+            (
+                "short-request-hash",
+                "short-request-hash",
+                "request_hash/request-hash must contain full SHA-256 digest evidence",
+            ),
+        ] {
+            let mut commit = base_commit.clone();
+            match mutate {
+                "remove-committed-at" => {
+                    commit.as_object_mut().unwrap().remove("committed_at");
+                }
+                "malformed-committed-at" => {
+                    commit["committed_at"] = json!("not-a-timestamp");
+                }
+                "short-request-hash" => {
+                    commit["request_hash"] = json!("sha256:short");
+                }
+                _ => unreachable!("unknown table commit summary mutation"),
+            }
+            let event = OutboxEvent {
+                event_id: format!("evt-summary-table-commit-{case}"),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.commit".to_string(),
+                payload: json!({
+                    "audit-event-id": format!("audit-summary-table-commit-{case}"),
+                    "event-type": "table.commit",
+                    "table": table,
+                    "commit": commit,
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-commit",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            };
+
+            let err = lineage_drain_event_summary(&event, &receipt)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains(expected_message), "{case}: {err}");
+            assert!(err.contains("event-id-hash=sha256:"), "{case}: {err}");
+            assert!(!err.contains(event.event_id.as_str()), "{case}: {err}");
         }
     }
 
