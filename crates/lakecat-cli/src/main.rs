@@ -2091,6 +2091,11 @@ fn verify_lakecat_replay_capture_matches_summary(
     lakecat: &serde_json::Map<String, Value>,
     querygraph: &serde_json::Map<String, Value>,
 ) -> lakecat_core::LakeCatResult<()> {
+    require_only_fields(
+        capture,
+        LAKECAT_REPLAY_CAPTURE_FIELDS,
+        "captured LakeCat replay output",
+    )?;
     require_string_match(
         capture,
         "schema-version",
@@ -2927,6 +2932,7 @@ fn verify_querygraph_capture_matches_summary(
     view_scope: &HandoffViewScope,
     label: &str,
 ) -> lakecat_core::LakeCatResult<()> {
+    require_only_fields(capture, QUERYGRAPH_CAPTURE_FIELDS, label)?;
     require_string_match(capture, "warehouse", table_scope.warehouse.as_str(), label)?;
     require_verified_table_scope(capture, table_scope, label)?;
     require_verified_view_scope(capture, view_scope, label)?;
@@ -3019,6 +3025,38 @@ fn querygraph_capture_semantics_json(
         "standards": required_value(capture, "standards", label)?,
     }))
 }
+
+const LAKECAT_REPLAY_CAPTURE_FIELDS: &[&str] = &[
+    "schema-version",
+    "status",
+    "bundle-hash",
+    "graph-hash",
+    "open-lineage-hash",
+    "querygraph-import-hash",
+    "table-count",
+    "view-count",
+    "verified-tables",
+    "verified-views",
+    "standards",
+    "scan-replay",
+    "management-replay",
+    "credential-replay",
+    "table-commit-history-replay",
+    "replay-evidence",
+];
+
+const QUERYGRAPH_CAPTURE_FIELDS: &[&str] = &[
+    "warehouse",
+    "verified-tables",
+    "verified-views",
+    "table-count",
+    "view-count",
+    "bundle-hash",
+    "graph-hash",
+    "open-lineage-hash",
+    "querygraph-import-hash",
+    "standards",
+];
 
 struct HandoffTableScope {
     warehouse: String,
@@ -19092,6 +19130,66 @@ mod tests {
             semantics["lakecatReplay"]["credentialVendingProof"]["restricted"]["blockReason"],
             json!(QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON)
         );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_extra_lakecat_replay_root_fields() {
+        let temp = qglake_temp_dir("handoff-captured-extra-lakecat-root");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut replay = read_json_file(&temp.join("lakecat-replay.txt")).expect("replay JSON");
+        replay["unverifiedReplayRootClaim"] =
+            json!(qglake_fixture_hash("unverified-captured-replay-root-claim"));
+        let bytes = serde_json::to_vec_pretty(&replay).expect("drifted replay JSON");
+        fs::write(temp.join("lakecat-replay.txt"), &bytes).expect("write drifted replay");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured LakeCat replay output should reject extra root fields");
+        let err = err.to_string();
+
+        assert!(err.contains("captured LakeCat replay output"), "{err}");
+        assert!(
+            err.contains("unexpected field unverifiedReplayRootClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_extra_querygraph_root_fields() {
+        for (capture, file, claim, label) in [
+            (
+                "querygraphVerify",
+                "querygraph-verify.json",
+                "unverifiedQueryGraphVerifyClaim",
+                "captured QueryGraph verify output",
+            ),
+            (
+                "querygraphImport",
+                "querygraph-import.json",
+                "unverifiedQueryGraphImportClaim",
+                "captured QueryGraph import output",
+            ),
+        ] {
+            let temp = qglake_temp_dir(&format!("handoff-captured-extra-{capture}-root"));
+            let summary_path = temp.join("handoff-summary.json");
+            let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+            let mut output =
+                read_json_file(&temp.join(file)).expect("read captured QueryGraph output");
+            output[claim] = json!(qglake_fixture_hash("unverified-querygraph-root-claim"));
+            let bytes = serde_json::to_vec_pretty(&output).expect("drifted QueryGraph JSON");
+            fs::write(temp.join(file), &bytes).expect("write drifted QueryGraph output");
+            summary["artifacts"]["capturedOutputs"][capture]["sha256"] =
+                json!(content_hash_bytes(&bytes));
+
+            let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+                .expect_err("captured QueryGraph output should reject extra root fields");
+            let err = err.to_string();
+
+            assert!(err.contains(label), "{err}");
+            assert!(err.contains(&format!("unexpected field {claim}")), "{err}");
+        }
     }
 
     #[test]

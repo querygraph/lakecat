@@ -13751,6 +13751,10 @@ and individual bundle, lineage-drain, QueryGraph import-plan, and captured
 output artifact objects may carry only the path and SHA-256 evidence LakeCat
 checks. A saved summary cannot add an alternate hash, mirror artifact, or
 unverified capture beside an otherwise valid handoff bundle.
+The captured files themselves are closed at the root as well. Saved LakeCat
+replay output and QueryGraph verify/import output may carry only the fields
+LakeCat compares to the compact summary; a matching hash does not make an
+extra replay, QueryGraph, import, or application claim part of the proof.
 The same release gate treats raw view-lineage proof hashes as real digests,
 not placeholders: view replay receipts, tombstone view receipts, namespace
 receipt-chain hashes, and receipt-chain replay/OpenLineage hashes must be full

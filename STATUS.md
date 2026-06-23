@@ -5,6 +5,18 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest archived QGLake captured-output root closure:
+  captured output semantic verification now rejects unexpected root fields
+  inside saved LakeCat replay output and QueryGraph verify/import output, so
+  archived captured files cannot attach unverified replay or QueryGraph root
+  claims beside otherwise matching hashes.
+- Local verification for this archived captured-output root closure slice
+  passed: `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick` (which correctly reported that
+  executable changes after the prior release proof require a fresh
+  release-candidate run before final proof refresh); and `git diff --check`.
 - Latest compact QGLake proof-root closure:
   handoff summary verification now rejects unexpected root fields inside
   `querygraphVerification`, `querygraphImportVerification`, and

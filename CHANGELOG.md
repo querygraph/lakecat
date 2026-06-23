@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed the archived QGLake captured-output root schemas. The CLI captured
+  output semantic verifier now rejects unexpected root fields inside saved
+  LakeCat replay output and QueryGraph verify/import output, so matching hashes
+  cannot carry unverified replay or QueryGraph claims beside the checked
+  captured evidence.
 - Closed the compact QGLake proof-root schemas. The CLI handoff summary
   verifier now rejects unexpected root fields inside `querygraphVerification`,
   `querygraphImportVerification`, and `lakecatReplayVerification`, preventing

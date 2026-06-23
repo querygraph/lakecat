@@ -1015,6 +1015,11 @@ semantic proof sections must be closed as well: LakeCat replay semantics,
 QueryGraph verify/import semantics, bundle artifact semantics, import-plan
 semantics, and lineage-drain semantics may carry only the fields the verifier
 compares.
+Archived captured output files must be root-schema-closed too. The captured
+LakeCat replay output and QueryGraph verify/import output may carry only the
+root fields LakeCat compares to the compact summary; a valid captured-output
+hash is not enough if the saved file can append unverified replay,
+QueryGraph, import, or application claims beside the checked evidence.
 Handoff artifact paths must resolve under the handoff summary directory before
 LakeCat hashes or parses them. A saved summary must not be able to splice in an
 absolute path or `..` traversal to matching bytes outside the archived bundle.

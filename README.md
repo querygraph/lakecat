@@ -126,7 +126,10 @@ attach alternate hashes, mirror artifacts, unverified root proof claims, or
 unverified captured-output claims beside otherwise valid files; the compact
 `querygraphVerification`, `querygraphImportVerification`, and
 `lakecatReplayVerification` roots are also schema-closed before archived
-QueryGraph/import/replay proof is accepted. View
+QueryGraph/import/replay proof is accepted. The saved captured LakeCat replay
+output and QueryGraph verify/import output roots are schema-closed as well, so
+matching captured-output hashes cannot carry unchecked replay or QueryGraph
+claims. View
 receipt-chain proof is structural in this local gate as well: the script walks
 verified chains and receipts, checks
 version-1 upsert heads, previous receipt links, supported operations, version
