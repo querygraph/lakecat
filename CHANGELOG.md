@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added raw management-list summary action-drift coverage. Raw
+  `server.listed` summaries now explicitly prove mutation/read action drift is
+  rejected with hash-only event identity before compact QGLake management proof
+  can inherit tenant inventory.
 - Extended catalog-config endpoint-set coverage to credential routes. Raw
   `catalog.config-read` summaries, compact handoff summaries, and saved
   lineage-drain semantics now prove default and warehouse-prefixed credential

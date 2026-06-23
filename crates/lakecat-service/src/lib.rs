@@ -54735,6 +54735,26 @@ mod tests {
                 .to_string();
             assert!(err.contains(expected_message), "{err}");
         }
+
+        let mut action_drift = valid_lineage_summary_management_list_event(
+            "evt-action-drift-summary-server-list",
+            "server.listed",
+        );
+        action_drift.payload["payload"]["authorization-receipt"]["action"] = json!("table-load");
+        let err = lineage_drain_event_summary(&action_drift, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains(
+                "management-list authorization receipt action does not match outbox event type"
+            ),
+            "{err}"
+        );
+        assert!(err.contains("event-id-hash=sha256:"), "{err}");
+        assert!(
+            !err.contains("evt-action-drift-summary-server-list"),
+            "{err}"
+        );
     }
 
     #[test]

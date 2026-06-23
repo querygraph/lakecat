@@ -5,6 +5,14 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw management-list action-drift summary coverage:
+  raw `server.listed` lineage-drain summaries now explicitly prove
+  authorization receipt action drift is rejected with hash-only event identity
+  before compact QGLake management inventory proof can inherit it.
+- Local verification for this raw management-list action-drift slice passed:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service lineage_drain_summary_rejects_malformed_management_ids -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest credential catalog-config endpoint-set coverage:
   raw `catalog.config-read` summaries, compact handoff summaries, and saved
   lineage-drain semantics now explicitly prove default and warehouse-prefixed
