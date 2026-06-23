@@ -7954,7 +7954,9 @@ stays pending and reaches neither the Grust-facing graph sink nor OpenLineage.
 Service replay closes those namespace lifecycle payloads over `event-type`,
 `authorization-receipt`, `warehouse`, and `namespace`, so an archived create,
 load, or drop cannot attach unverified namespace, scope, replay, OpenLineage,
-or QueryGraph claims beside valid standard catalog evidence.
+or QueryGraph claims beside valid standard catalog evidence. It also closes
+the wrapped outbox envelope for namespace lifecycle events, so those claims
+cannot be placed beside an otherwise valid checked inner namespace payload.
 Catalog read replay has the same fail-closed shape: `catalog.config-read`
 events must carry a valid warehouse, and `namespace.listed` events must carry
 both a valid warehouse and an unsigned namespace count before the read evidence

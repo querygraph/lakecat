@@ -1265,6 +1265,9 @@ Namespace lifecycle replay must also close the top-level payload schema over
 `event-type`, `authorization-receipt`, `warehouse`, and `namespace`, so
 create/load/drop replay cannot append unverified namespace, scope, graph,
 lineage, or QGLake claims beside otherwise valid standard catalog evidence.
+Service replay now also closes the wrapped namespace lifecycle envelopes over
+the producer wrapper fields, so those claims cannot ride beside an otherwise
+valid checked namespace create/load/drop payload.
 Table lifecycle replay for create, load, delete, and restore events must carry
 the same valid authorization receipt principal plus an event-matching catalog
 action, affirmative allowed decision, non-empty engine, and RFC3339 `checked_at`

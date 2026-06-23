@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed service outbox admission over wrapped namespace lifecycle replay
+  payloads. `namespace.created`, `namespace.loaded`, and
+  `namespace.dropped` wrappers now reject extra unverified namespace, scope,
+  graph, lineage, QGLake, QueryGraph, or application claims before
+  acknowledgement, graph projection, or OpenLineage projection.
 - Closed service outbox admission over wrapped table commit replay payloads.
   `table.commit` wrappers now reject extra unverified commit, policy, storage,
   graph, lineage, QueryGraph, or application claims before acknowledgement,
