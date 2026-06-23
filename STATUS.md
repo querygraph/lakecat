@@ -28,14 +28,14 @@ Updated: 2026-06-23
   now executable local evidence.
 - Latest release-candidate proof:
   `scripts/check-release-readiness.sh --release-candidate` passed locally on
-  June 23, 2026 from clean head `ba419db0`. The gate covered shell syntax
+  June 23, 2026 from clean head `f0aad163`. The gate covered shell syntax
   checks, dependency and workflow trigger contracts, release-version checks,
   tracked book artifact validation, formatting, default and all-features
   workspace tests, Turso/Sail/TypeSec/Grust and Grust Turso feature rows,
-  explicit Rust handoff verifier tests, the checked-in release-proof contract,
-  out-of-tree book artifact validation plus the executable book artifact
-  contract, live QGLake handoff replay through QueryGraph locked verify/import
-  with `graphProjectionProof.backend = grust-turso` and
+  explicit Rust handoff verifier tests, the checked-in release-proof contract
+  in clean candidate mode, out-of-tree book artifact validation plus the
+  executable book artifact contract, live QGLake handoff replay through
+  QueryGraph locked verify/import with `graphProjectionProof.backend = grust-turso` and
   `graphProjectionProof.tablePrefix = lakecat_graph`, and `git diff --check`.
   This is the current first-release evidence; cloud CI remains manual/disabled
   until local gates are boring from the final release commit.
