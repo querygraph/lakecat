@@ -7,6 +7,17 @@
   LakeCat replay output and QueryGraph verify/import output, so matching hashes
   cannot carry unverified replay or QueryGraph claims beside the checked
   captured evidence.
+- Refreshed the full local release-candidate proof from clean head `b4482b18`.
+  `scripts/check-release-readiness.sh --release-candidate` passed locally with
+  the release-proof contract in clean candidate mode, the full workspace and
+  feature-gate matrix, out-of-tree book artifact validation, Grust Turso QGLake
+  handoff, QueryGraph locked verify/import, bundle hash
+  `sha256:cb55c26d5cfd0f1ac56966711734fbed8e6c79b17ab116ab8519eba3b023b6af`,
+  OpenLineage hash
+  `sha256:db5a19ec66660ea7870254a53d118fc3440ee5a4874ae821f88942c1750a9ce5`,
+  QueryGraph import hash
+  `sha256:246f4bee4a440b8d18d03530a2a4bc3cf22141484671de0312f605423e2b49c7`,
+  and `git diff --check`.
 - Closed the compact QGLake proof-root schemas. The CLI handoff summary
   verifier now rejects unexpected root fields inside `querygraphVerification`,
   `querygraphImportVerification`, and `lakecatReplayVerification`, preventing
