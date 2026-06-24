@@ -1,0 +1,14 @@
+sequenceDiagram
+    participant C as Client
+    participant L as LakeCat
+    participant T as TypeSec
+    participant S as Sail
+    C->>L: load / plan table (REST)
+    L->>L: resolve warehouse, namespace, table, pointer, identity
+    L->>T: may principal perform this action?
+    T-->>L: decision + restrictions
+    L->>L: build ReadRestriction (columns, row predicate, purpose, policy hash)
+    L->>S: plan against current pointer with effective projection + filters
+    S-->>L: Iceberg-compatible scan tasks (pruned, delete-aware)
+    L-->>C: plan / task response
+    L->>L: record audit + outbox (for graph + lineage)

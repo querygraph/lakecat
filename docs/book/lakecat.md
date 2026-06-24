@@ -342,408 +342,188 @@ LakeCat keeps the catalog boundary thin and binds its proof to Sail's plan so
 the restriction is real.
 
 
-## LakeCat's Thin Boundary
+## The Architecture
 
-LakeCat should be thin, but thin does not mean trivial. It owns the durable
-catalog state that must be correct even when external sinks are unavailable.
+Thin does not mean trivial. LakeCat owns the durable catalog state that must be
+correct even when external sinks are down, and nothing more. Its
+responsibilities are exactly:
 
-The core LakeCat responsibilities are:
+- serve the Iceberg REST Catalog API for standard clients;
+- model projects, warehouses, namespaces, tables, views, and storage profiles;
+- persist metadata pointers and compare-and-swap commit history;
+- validate idempotency keys and replay only matching commit bodies;
+- resolve request identity from headers, bearer tokens, agents, and TypeDID
+  envelopes;
+- ask TypeSec for authorization decisions and persist the receipts;
+- route scan planning and commit preparation through Sail;
+- record audit and outbox events inside the catalog transaction;
+- drain committed events to Grust and OpenLineage sinks;
+- publish a QueryGraph bootstrap bundle.
 
-- Serve the Iceberg REST Catalog API for standard clients.
-- Model projects, warehouses, namespaces, tables, views, and storage profiles.
-- Persist metadata pointers and compare-and-swap commit history.
-- Validate idempotency keys and replay only matching commit bodies.
-- Resolve request identity from headers, bearer tokens, agents, and TypeDID
-  envelopes.
-- Ask TypeSec for authorization decisions and persist receipts.
-- Route scan planning and commit preparation through Sail.
-- Record audit and outbox events inside the catalog transaction.
-- Drain committed events to Grust and OpenLineage sinks.
-- Publish a QueryGraph bootstrap bundle.
+Everything else is deliberately excluded — LakeCat does not invent a table
+format, fork manifest pruning, own graph traversal, decide security semantics,
+or author QueryGraph's business model. Those belong to Sail, Grust, TypeSec, and
+QueryGraph respectively (Chapter 4).
 
-The deliberately excluded responsibilities are just as important:
+### The CatalogStore seam
 
-- LakeCat does not invent a table format.
-- LakeCat does not fork Iceberg manifest pruning.
-- LakeCat does not own graph traversal or graph query behavior.
-- LakeCat does not own security semantics or agent trust semantics.
-- LakeCat does not author QueryGraph's final business semantic model.
+All durable state sits behind one trait, so the memory store (for tests and
+embedded use) and the Turso store (for durable local deployments) are
+interchangeable. The interesting methods are the table lifecycle and the
+idempotent replay hook:
 
-That boundary gives each sibling project a clear job. Sail owns reusable
-Iceberg and planning behavior. Grust owns graph schema, storage, and query
-mechanics. TypeSec owns policy, capabilities, TypeDID envelopes, secure agents,
-and authorization semantics. QueryGraph owns the semantic application built on
-top.
+```rust
+#[async_trait]
+pub trait CatalogStore: Send + Sync + 'static {
+    async fn create_namespace(&self, warehouse: &WarehouseName, namespace: Namespace)
+        -> LakeCatResult<()>;
+    async fn list_tables(&self, warehouse: &WarehouseName) -> LakeCatResult<Vec<TableRecord>>;
+    async fn create_table(&self, table: TableRecord) -> LakeCatResult<TableRecord>;
+    async fn load_table(&self, ident: &TableIdent) -> LakeCatResult<TableRecord>;
 
-## The Read Path
+    // Optimistic pointer advancement: the catalog transaction.
+    async fn commit_table(&self, ident: &TableIdent, commit: TableCommit)
+        -> LakeCatResult<TableRecord>;
 
-The LakeCat read path begins like a standard catalog request and ends with a
-governed Sail plan.
+    // Exact idempotent replay: same key + same request hash -> stored response.
+    async fn replay_table_commit(
+        &self,
+        ident: &TableIdent,
+        idempotency_key: &str,
+        idempotency_request_hash: &str,
+    ) -> LakeCatResult<Option<TableRecord>>;
 
-1. A client asks to load or plan a table through the Iceberg REST surface.
-2. LakeCat resolves the warehouse, namespace, table, and current metadata
-   pointer.
-3. LakeCat resolves the request identity.
-4. LakeCat asks TypeSec whether the principal can perform the requested action.
-5. TypeSec returns a decision and any enforced restrictions.
-6. LakeCat turns those restrictions into a `ReadRestriction`: allowed columns,
-   required row predicate, purpose, policy hash, and audit context.
-7. LakeCat asks Sail to plan against the current metadata pointer with the
-   effective projection and filters.
-8. Sail validates Iceberg expressions against generated REST models and table
-   schema, expands manifests, applies conservative file-bound pruning when
-   metrics are present, and carries delete-file references into file scan tasks.
-9. LakeCat returns Iceberg-compatible plan and task responses.
-10. LakeCat records audit and outbox events that can later be projected into
-    graph and lineage.
+    // Compact pointer-log history for operators and QueryGraph.
+    async fn table_commit_records(&self, ident: &TableIdent, start: u64, end: Option<u64>)
+        -> LakeCatResult<Vec<TableCommitRecord>>;
+}
+```
 
-The important detail is that the policy restriction becomes part of planning,
-not a note beside it. An empty client projection under a column restriction
-means the allowed columns. A client projection can narrow further, but cannot
-widen. LakeCat records both the client's requested projection and the effective
-projection that survived the server-derived column restriction in the durable
-scan-planned replay evidence. The same rule applies to stats-field requests:
-LakeCat records both the client's requested stats fields and the effective
-stats fields that survived the restriction, while the compatibility
-`stats-fields` extension remains the narrowed effective set. The default REST
-path is tested at the Sail boundary: Sail receives only the effective
-projection and mandatory policy filters, while LakeCat keeps the broader
-request and narrowed result as replay evidence. During `fetchScanTasks`,
-LakeCat recomputes the current restriction and sends Sail the required
-projection and mandatory filters again;
-the response extension and audit outbox record the same proof. A stale or
-legacy token cannot silently expand back to all columns. Outbox admission also
-checks that governed planned/fetched scan replay carries the same
-`read-restriction` in the top-level payload and in
-`authorization-receipt.context.read-restriction`, so replay cannot claim policy
-narrowing that the durable receipt did not capture. The same admission boundary
-requires governed scan replay to keep a nonblank `purpose` and a positive
-`max-credential-ttl-seconds` value before graph or OpenLineage projection, so a
-QGLake handoff cannot learn task evidence whose purpose or credential TTL cap
-was lost before replay. Optional `plan-task` values in planned and fetched scan
-replay are treated as evidence too: they must be non-empty LakeCat-issued tokens
-and cannot carry decorated location material, query or fragment material, or
-credential strings before the event can be acknowledged. The service now also
-rejects unexpected fields inside top-level and receipt `read-restriction`
-objects, and inside nested `row-predicate` objects, before outbox
-acknowledgement. That keeps graph, OpenLineage, and QGLake evidence from
-inheriting extra unverified claims beside the known governed restriction fields.
-The scan replay payloads themselves are closed over the fields LakeCat producers
-emit for `table.scan-planned` and `table.scan-tasks-fetched`, so an archived
-governed read cannot attach unverified scan, lineage, graph, QueryGraph, or
-application claims beside the checked restriction, projection, stats, filter,
-plan-token, task-count, and authorization evidence.
+### The read path
 
-## The Commit Path
+A read begins like a standard catalog request and ends with a *governed* Sail
+plan. The policy restriction becomes part of planning, not a note beside it.
 
-The write path follows the same principle: LakeCat owns the catalog transaction,
-Sail owns reusable Iceberg validation and metadata preparation.
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant L as LakeCat
+    participant T as TypeSec
+    participant S as Sail
+    C->>L: load / plan table (REST)
+    L->>L: resolve warehouse, namespace, table, pointer, identity
+    L->>T: may principal perform this action?
+    T-->>L: decision + restrictions
+    L->>L: build ReadRestriction (columns, row predicate, purpose, policy hash)
+    L->>S: plan against current pointer with effective projection + filters
+    S-->>L: Iceberg-compatible scan tasks (pruned, delete-aware)
+    L-->>C: plan / task response
+    L->>L: record audit + outbox (for graph + lineage)
+```
 
-1. A client sends an Iceberg commit request, optionally with an idempotency key.
-2. LakeCat validates the request shape and the idempotency key.
-3. LakeCat resolves identity and asks TypeSec for the commit capability.
-4. If the idempotency key already has an exact stored response, LakeCat returns
-   that response before Sail validation or metadata-object writes.
-5. LakeCat loads the current metadata pointer from the store.
-6. LakeCat delegates Iceberg update validation and metadata assembly to Sail.
-7. LakeCat rejects metadata-object writes that target the table's current
-   metadata pointer, so the current metadata file cannot be overwritten before
-   the store commit has won.
-8. LakeCat rejects metadata-write plans that do not carry a concrete new
-   metadata location.
-9. LakeCat rejects metadata-object locations outside the table's matched
-   storage profile prefix, and also rejects the storage-profile root itself
-   because metadata commits must create a child object.
-10. LakeCat rejects literal or percent-encoded dot path segments in metadata
-    object locations, so commit plans cannot rely on traversal-like spelling to
-    address anything other than a plain child object.
-11. LakeCat writes the new metadata object through the warehouse storage
-    profile with create-only object-store semantics.
-12. LakeCat advances the table pointer with compare-and-swap.
-13. LakeCat persists idempotency, audit, pointer-log, and outbox records.
-14. If the store rejects the commit after a local metadata write, LakeCat cleans
-   up the uncommitted metadata object when it can do so safely.
-15. Outbox draining projects the committed event to graph and lineage sinks.
+The governing rule is **narrow, never widen**. An empty client projection under
+a column restriction means *the allowed columns*; a client projection may narrow
+further but cannot widen. LakeCat records both the requested and the effective
+projection (and stats fields) as replay evidence, and recomputes the restriction
+on every stateless `fetchScanTasks` so a stale token cannot expand back to all
+columns. Outbox admission enforces that the governed scan replay carries the
+same `read-restriction` at the top level and inside
+`authorization-receipt.context`, a nonblank `purpose`, and a positive
+`max-credential-ttl-seconds`, and rejects unknown fields — so graph, lineage,
+and QGLake evidence can never inherit a claim the receipt did not capture.
 
-The Turso-backed store binds decoded table JSON back to the selected table
-identity on this path. A row selected for `local.default.events` cannot return
-or replay `record_json` or idempotency `response_json` that claims another
-table. LakeCat rejects that drift before loading a table, listing standard
-catalog tables, replaying an idempotent commit response, committing over the
-row, soft-deleting it, or restoring it. That is not an Iceberg extension; it is
-durable-store hygiene around standard Iceberg table access.
-The idempotency row is part of that hygiene, and the embedded memory store
-follows the same invariant: the stored request hash must still be full SHA-256
-evidence and the stored response must still bind to the requested table before
-an exact retry can observe the stored response.
+### The commit path
 
-The cleanup path is deliberately secondary to the commit result. LakeCat makes
-a small bounded retry of the idempotent delete for an uncommitted create-only
-metadata object, then preserves the original store or compare-and-swap error if
-cleanup still fails. If metadata cleanup fails after the store rejects a commit, LakeCat preserves the original
-store or compare-and-swap error class and appends cleanup context. A stale
-pointer conflict still looks like a conflict to an Iceberg client, but the
-message carries SHA-256 hashes of the expected and actual metadata locations so
-operators can diagnose the race without exposing raw object paths. The
-service-level regression for this path checks the API response and the
-filesystem side effect together: the rejected metadata object is gone, while
-the conflict body contains only hashed pointer evidence. True cleanup
-failures use the same redaction discipline: the cleanup context identifies the
-uncommitted metadata object by `metadata-location-hash=sha256:...`, not by the
-raw object path. When that cleanup failure is appended to the preserved commit
-conflict, LakeCat keeps only `error-detail-hash=sha256:...` evidence for the
-cleanup detail, so raw backend text cannot leak through the combined conflict
-message. If cleanup discovers the uncommitted object is already absent, LakeCat
-treats that as successful cleanup rather than turning a resolved orphan into an
-internal error. Cleanup also refuses to delete the previous committed metadata
-pointer if a future plan accidentally reports it as the staged write; the
-committed metadata object remains the table's current state, not an orphan.
-The combined-error path now covers cleanup setup failures as well as delete
-failures: if LakeCat cannot open the staged metadata object's object-store
-location while cleaning up a rejected commit, the original commit conflict
-remains the visible error class and the cleanup detail is represented only by
-hash evidence.
-The same audit-safe shape applies before the write:
-current-pointer overwrite, existing-object overwrite, unsupported object-store
-configuration, and storage-profile-prefix failures report metadata-location
-hashes, and prefix mismatches also report a storage-profile-prefix hash rather
-than raw object paths. LakeCat also keeps the storage-profile id out of this
-error text, so tenant or profile naming conventions do not leak when a planned
-metadata object falls outside the selected root. A root-targeted metadata write
-uses the same redacted error shape: the operator sees that the plan did not
-name a child metadata object without receiving the raw table or storage root.
-Dot-segment failures use the same style: literal `..` and percent-encoded
-`%2e%2e` paths fail before object-store writes and expose only the
-metadata-location hash. Decorated metadata object locations with URI query
-strings, fragments, URI userinfo, or raw and percent-encoded credential-marker
-path material are rejected at the same pre-write boundary, so a commit plan
-cannot smuggle version selectors, backend hints, fragment markers, or embedded
-credential material into what should be a plain metadata object address.
+The write path follows the same principle: LakeCat owns the transaction, Sail
+owns Iceberg validation and metadata assembly.
 
-Idempotency is part of correctness. Reusing the same key for the same commit can
-return the stored response even after the table has advanced beyond the
-original commit requirements. Reusing the same key for a different body must
-conflict. LakeCat persists a normalized request hash and stores only audit-safe
-evidence, not raw secrets or raw idempotency keys. REST idempotency keys are
-intentionally narrow: `Idempotency-Key` and `x-lakecat-idempotency-key` must be
-1 to 128 ASCII characters and may use only letters, digits, `-`, `_`, `.`, or
-`:`. If both headers are present they must match exactly. Invalid, duplicate,
-or conflicting keys, including non-ASCII or invalid header bytes, fail before
-LakeCat performs authorization, Sail validation, table loading, or
-metadata-object writes.
-When a reused key is attached to a different commit body, the conflict response
-also stays redacted: it does not echo the raw key or the mismatched metadata
-object location. The Turso spine pins the same redaction for both commit-time
-reused-key conflicts and explicit idempotency replay probes: the raw key,
-mismatched request hash, and mismatched metadata object location are not
-operator-facing error text.
-The service regression for this path proves the replay happens before
-metadata-object writes: an exact retry returns the stored response without
-touching the already committed metadata object. The same regression pins the
-outbox side effect: exact replay and mismatched reused-key conflicts leave only
-the original `table.commit` outbox event, so QueryGraph and OpenLineage replay
-do not see duplicate commit work from retry traffic.
-Another regression sends a commit whose requested metadata location is the
-table's current pointer and verifies that LakeCat returns a bad request without
-touching the existing metadata file.
-Another sends a commit to a different metadata location that already exists and
-verifies that LakeCat returns a conflict without overwriting that non-current
-object.
-The same guard fails closed if a future Sail plan asks LakeCat to write metadata
-but does not provide a new object location, or if it tries to use the storage
-profile root as the new metadata object. A companion regression rejects both
-literal and percent-encoded dot path segments in a planned metadata location.
-When a backend object store fails setup, create-only write, or cleanup, LakeCat
-keeps the metadata location hash and adds hash evidence instead of returning
-raw backend text. Invalid metadata URI parsing and unsupported backend setup
-failures use `backend-error-hash=sha256:...`, making the setup-admission
-boundary explicit. Create-only write and cleanup failures keep
-`error-detail-hash=sha256:...` because those happen after setup. In every case,
-the response names the hashed metadata location and hashed failure detail, not
-the submitted path, object name, scheme, or parser/backend diagnostic. That
-route-level promise is pinned by a commit regression for decorated metadata
-locations with raw query-token material. It matters for local files, cloud
-bucket keys, and credential-provider diagnostics:
-operators can correlate a failure without copying sensitive storage topology
-into API responses or logs.
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant L as LakeCat
+    participant T as TypeSec
+    participant S as Sail
+    participant O as Object store
+    C->>L: commit (requirements + updates, optional Idempotency-Key)
+    L->>L: validate shape + idempotency key
+    alt key already has an exact stored response
+        L-->>C: replay stored response (no Sail call, no write)
+    else fresh commit
+        L->>T: commit capability?
+        T-->>L: decision
+        L->>S: validate updates, assemble new metadata
+        S-->>L: commit plan (new metadata location + body)
+        L->>O: create-only write of new metadata object
+        L->>L: compare-and-swap the table pointer
+        L->>L: persist idempotency, audit, pointer-log, outbox
+        L-->>C: new table metadata
+    end
+```
 
-The embedded in-memory store follows the same commit evidence contract as the
-Turso path. A successful commit emits one `table.commit` audit/outbox event
-with the compact commit record, authorization receipt, response hash, and
-redacted idempotency-key hash. An idempotent replay returns the stored response
-without adding a second outbox event, so tests and local embedded deployments
-exercise the same outbox invariant as the durable spine.
+Three invariant groups make this safe, each enforced once:
 
-Commit records also carry a response hash over the stored table response. That
-pair matters: the request hash proves which commit body won or replayed, while
-the response hash proves which metadata pointer and table body LakeCat returned
-to clients and later projected through graph and lineage replay.
+- **Metadata-write safety.** The new object must be a concrete child of the
+  table's matched storage-profile prefix — never the current pointer, never the
+  profile root, never a path with literal or percent-encoded dot segments, query
+  strings, fragments, userinfo, or credential markers. Writes are create-only;
+  if the store CAS loses after a write, LakeCat makes a bounded retry to delete
+  the orphaned object and otherwise preserves the original conflict.
+- **Idempotency.** Keys are 1–128 ASCII chars (`Idempotency-Key` /
+  `x-lakecat-idempotency-key`, matching if both present). The same key + same
+  body replays the stored response before any Sail call or write; the same key +
+  a different body conflicts. Only audit-safe hashes are stored — never raw keys
+  or secrets. Ordinary clients may commit without a key; they simply get no
+  replay proof.
+- **Redaction.** Every commit error — pointer conflict, overwrite, prefix
+  mismatch, cleanup failure, backend error — reports `sha256:` hashes of the
+  metadata location and failure detail, never raw object paths, storage roots,
+  profile ids, or backend text. A conflict still looks like an ordinary Iceberg
+  conflict to the client.
 
-The same commit record includes compact summary evidence: Iceberg format
-version, current snapshot id, and the policy hash from the authorization
-receipt when one exists. Memory and Turso commit producers now require positive
-Iceberg `format-version` evidence before table or commit metadata can produce a
-durable commit record. If the table metadata has no current snapshot, the
-producer emits explicit `snapshot_id: 0` evidence instead of omitting the
-field, preserving no-snapshot Iceberg states without creating an undrainable
-`table.commit` event. QueryGraph can inspect those fields from the
-pointer-log/outbox stream without parsing full table metadata for every
-catalog audit question. Before a `table.commit` outbox event is projected or
-acknowledged, LakeCat now checks that it carries a commit object, an unsigned
-sequence number, a decodable root table identity, matching nested commit-table
-identity when present, both the commit principal and authorization receipt
-principal with matching values, positive format-version evidence, non-negative
-snapshot-id evidence, and full `sha256:`-prefixed 64-hex request, response,
-idempotency-key, and present policy hashes. A prefix-shaped placeholder,
-contradictory commit identity, missing receipt principal, missing
-table-format evidence, or drifted principal cannot become delivered commit
-replay evidence. LakeCat also closes the nested `commit` object over those
-verified fields before projection, so an outbox event cannot attach an
-unverified pointer-transition, policy, storage, or graph claim beside an
-otherwise valid table commit.
-Older saved sidecars may spell the same commit evidence with snake_case or
-kebab-case field names. LakeCat accepts either spelling for the verified
-`table.commit` envelope, but it rejects an event that carries both aliases for
-one semantic field before acknowledgement, graph projection, or OpenLineage
-projection. That keeps a replay sidecar from hiding a conflicting pointer,
-hash, timestamp, format, or snapshot claim beside the field LakeCat verifies.
-Replay admission also applies the same credential-shape guard as the
-metadata-object write path: metadata-location proof fields must not carry query
-strings, fragments, obvious credential markers, or URI userinfo. A forged or
-stale outbox row therefore cannot smuggle `access:secret@` style authority
-material into Grust projection, OpenLineage replay, or QGLake/QueryGraph commit
-proof after the original request validator has already learned to reject it.
-
-Operators and QueryGraph can read that pointer-log evidence through a governed
-management endpoint:
+Commit records carry compact evidence — Iceberg format version, current snapshot
+id, request/response/idempotency/policy hashes, principal — so operators and
+QueryGraph can answer audit questions from the pointer log without parsing full
+metadata. Operators read it through a governed endpoint:
 
 ```sh
-curl -s \
-  -H 'x-lakecat-principal: operator@example.com' \
+curl -s -H 'x-lakecat-principal: operator@example.com' \
   http://127.0.0.1:3000/management/v1/warehouses/local/namespaces/default/tables/events/commits
 ```
 
-The response contains compact commit records: sequence number, previous and new
-metadata locations, request hash, response hash, idempotency-key hash, Iceberg
-format version, current snapshot id, policy hash, principal, and a commit hash.
-The read itself enters the durable outbox as `table.commits-listed` and drains
-as lineage evidence plus catalog-facing `Commit` graph anchors keyed by table
-and sequence number. That gives audit tools and QueryGraph a Grust-visible
-pointer-log inspection trail without requiring direct access to the Turso
-catalog database or making LakeCat a graph query engine. The outbox payload
-also carries `principal-subject` and `principal-kind`, and service replay
-admission requires those fields to match the authorization receipt principal
-before graph or OpenLineage projection. QGLake acceptance now
-exercises this path directly: the fixture issues an idempotent no-op commit
-probe, reads the compact commit-history endpoint, verifies that the record
-preserves the table's Iceberg format-version and current snapshot summary,
-requires the compact request, response, idempotency-key, commit, and optional
-policy hashes to be full `sha256:`-prefixed 64-hex digests, and then requires
-the lineage drain to replay `table.commits-listed` receipt hashes
-plus compact commit count, sequence-number, and commit-hash summary fields
-before the QueryGraph handoff is accepted.
+That read itself enters the outbox as `table.commits-listed` and drains as
+lineage plus `Commit` graph anchors keyed by table and sequence — an auditable
+trail without giving anyone direct database access or turning LakeCat into a
+graph query engine.
 
-## The Durable Spine
+### The durable spine
 
-LakeCat's durable local spine uses the Rust `turso` crate behind the
-`turso-local` feature. The store contract remains portable, but the local
-foundation is not SQLx. The important tables are not an application afterthought;
-they define the catalog's control-plane memory:
+The durable local store uses the Rust `turso` crate behind the `turso-local`
+feature. Object storage remains the source of Iceberg metadata files; Turso
+holds the atomic pointer and the control-plane memory: projects and warehouses,
+storage profiles, namespaces and tables, the metadata pointer log, idempotency
+records, soft deletes, policy bindings, audit events, and outbox events. This
+mirrors the Iceberg contract — metadata files describe the table; catalog state
+decides which file is current.
 
-- projects and warehouses;
-- storage profiles;
-- namespaces and tables;
-- metadata pointer log;
-- idempotency records;
-- soft deletes;
-- policy bindings;
-- audit events;
-- outbox events.
+Two disciplines keep the spine trustworthy:
 
-Object storage remains the source of Iceberg metadata files. Turso stores the
-atomic pointer, management state, idempotency evidence, and event record. This
-mirrors the Iceberg catalog contract: metadata files describe the table;
-catalog state decides which metadata file is current.
-Warehouse reads bind decoded records to the Turso row's warehouse, project id,
-and storage-root columns before returning tenant-root inventory. That keeps
-management and QueryGraph bootstrap proof from inheriting a row index that
-points a valid JSON warehouse at a different project or storage root.
-Child management writes use the same evidence rule. A project upsert that
-names a parent server validates the decoded server record before accepting the
-project, and a warehouse upsert validates the decoded parent project before
-accepting the warehouse. A tenant tree is therefore not allowed to grow from a
-corrupted parent row merely because the row key still exists.
-Namespace reads use the same decoded-row binding. A namespace list, load, or
-drop operation must reconcile the decoded namespace with the selected warehouse
-and durable `namespaces.namespace_path` row column before standard namespace
-state can be returned or removed. That prevents a corrupted local catalog row
-from moving a standard Iceberg namespace into another path before management,
-outbox replay, or QueryGraph bootstrap consumes it.
-For governed policy evidence, Turso policy-binding reads bind the decoded JSON
-back to the row's warehouse, policy id, namespace path, table name, and enforced
-flag before a binding can be returned or matched to a table. That keeps a
-corrupted row index from silently changing which TypeSec-style policy anchors
-apply to a governed read.
-Storage-profile reads follow the same rule for credential-root evidence: the
-decoded profile must match the memory map key or Turso row's warehouse,
-profile id, location prefix, provider, and issuance mode before LakeCat can
-return it or match it to a table. That prevents durable row-column drift from
-changing the storage scope used by credential vending or QGLake management
-proof.
+- **Decoded-row binding.** Every read reconciles the decoded JSON against the
+  row's own key columns before returning it — a warehouse against its project
+  and storage root, a namespace against its path, a policy binding against its
+  table and enforced flag, a storage profile against its prefix/provider/mode, a
+  table body against its identity. A corrupted row index can therefore never
+  point a valid-looking record at the wrong tenant, path, or policy.
+- **Strict outbox draining.** LakeCat projects a batch to graph and lineage
+  *first*, then acknowledges the whole batch; if projection fails, nothing is
+  acknowledged, and an under-count acknowledgement is a hard error rather than a
+  quiet partial success. The drain refuses unknown event types (they stay
+  pending rather than vanish), rejects event-id/payload-hash drift, and
+  validates governed-read and commit evidence — policy-hash arrays must be
+  non-empty full digests, top-level and receipt `read-restriction` must match,
+  purpose and TTL must be present — before any sink sees the event. Malformed
+  source evidence stays available for retry instead of being promoted into a
+  QGLake handoff.
 
-Outbox draining is intentionally strict. LakeCat projects a batch to graph and
-lineage sinks first, then acknowledges the whole projected batch in the store.
-Embedded and Turso stores select the same pending prefix by sorting on
-`created_at,event_id` before applying the drain limit, so a small batch means
-the same replay set in either durable backend. The drain response and delivery
-acknowledgement follow that ordered prefix, leaving later pending events for a
-future drain. If projection fails, nothing is
-acknowledged. If the store reports that fewer events were acknowledged than
-LakeCat projected, the drain fails with an acknowledgement mismatch instead of
-returning a quiet partial success. That keeps retry and operator evidence
-honest when a concurrent drain or backend anomaly interferes with delivery
-accounting. The regression suite covers the uncomfortable middle case too: if
-the first event in a multi-event batch already projected to graph and lineage
-but a later event fails during lineage projection, LakeCat still acknowledges
-none of the events. Recovery starts from the committed outbox batch instead of
-from a half-delivered response.
-The same suite now pins Turso's durable row guard for event-id drift: a pending
-row whose stored `event_id` no longer matches the payload hash fails with
-hash-only event-id, event-type, and payload evidence before graph or lineage
-projection can see it. Turso corrupt-payload drift follows the same rule: the
-operator-facing error is allowed to carry event-id, event-type, payload-event
-type, and payload hashes, but not the raw event id, event type, payload field
-names, or payload values. Embedded and Turso validation also reject pending
-rows whose payload omits `event-type` entirely; a durable row cannot keep a
-plausible payload hash while dropping the replay type that graph and lineage
-projection use to choose the admission path.
-The drain also refuses unknown event types before any projection happens. A
-future or custom event stays pending until LakeCat knows how to project it,
-instead of disappearing behind an empty graph/lineage receipt.
-The drain also validates governed-read evidence before projection. If a pending
-event contains a `read-restriction.policy-hashes` array, it must be non-empty
-and each entry must already be a full `sha256:`-prefixed 64-hex digest. A
-readable placeholder such as `sha256:policy-name`, or an empty policy anchor
-array, fails the drain before graph or lineage sinks run and before the store
-can mark the event delivered, keeping malformed source evidence available for
-retry or operator repair instead of promoting it into a QGLake handoff. LakeCat
-now applies that same admission rule to
-`authorization-receipt.context.read-restriction.policy-hashes`, so the receipt
-kept for later proof cannot preserve an empty or placeholder policy anchor
-while the top-level scan event looks valid. LakeCat also rejects both planned
-and fetched scan replay when the top-level `read-restriction` differs from
-`authorization-receipt.context.read-restriction`, so graph and OpenLineage
-evidence cannot drift from the TypeSec receipt that authorized the narrowed
-read. Planned and fetched scan replay must also carry nonblank purpose evidence
-and a positive policy-derived credential TTL cap before the outbox event can be
-acknowledged or projected. Table
-commit events receive the same treatment for compact
-commit receipt evidence: `request_hash` and `response_hash` must be full
-digests, `idempotency_key_sha256` must be a full digest when a retry key was
-present, and any present `policy_hash` must be a full digest before the event
-can be projected or acknowledged. Ordinary Iceberg clients can still commit
-without LakeCat's idempotency header; they just do not produce idempotent
-replay proof for that commit.
 
 ## Grust For Graph Concepts
 

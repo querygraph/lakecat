@@ -1,0 +1,20 @@
+sequenceDiagram
+    participant C as Client
+    participant L as LakeCat
+    participant T as TypeSec
+    participant S as Sail
+    participant O as Object store
+    C->>L: commit (requirements + updates, optional Idempotency-Key)
+    L->>L: validate shape + idempotency key
+    alt key already has an exact stored response
+        L-->>C: replay stored response (no Sail call, no write)
+    else fresh commit
+        L->>T: commit capability?
+        T-->>L: decision
+        L->>S: validate updates, assemble new metadata
+        S-->>L: commit plan (new metadata location + body)
+        L->>O: create-only write of new metadata object
+        L->>L: compare-and-swap the table pointer
+        L->>L: persist idempotency, audit, pointer-log, outbox
+        L-->>C: new table metadata
+    end
