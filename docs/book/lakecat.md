@@ -14723,24 +14723,31 @@ an OSI application profile. A QueryGraph import should not trust a graph edge
 unless LakeCat can replay the catalog event that produced it. That is the
 architectural bargain.
 
-## What Comes Next
+## Future Work
 
-LakeCat is a direction more than a single release. The next slices should keep
-making the architecture more true:
+LakeCat is a direction more than a single release. The next stage should keep
+the architecture more true without pushing engine, graph, or security semantics
+back into the catalog.
 
-1. Remove temporary Sail patch bridges when the required helpers are available
-   upstream.
-2. Keep pushing reusable Iceberg table-status, planning, metadata-as-data, and
-   commit helpers into Sail.
-3. Make the transactional outbox the only path for graph and lineage side
-   effects.
-4. Expand TypeSec-backed capability checks until every privileged path is
-   unbypassable.
-5. Keep graph taxonomy and Cypher behavior in Grust.
-6. Keep OSI as a QueryGraph-owned semantic handoff rather than a LakeCat-authored
-   business model.
+1. Replace temporary Sail patch bridges only after their helpers are published
+   upstream, then remove the corresponding LakeCat bridge contract.
+2. Keep pushing reusable table-status, planning, metadata-as-data, manifest,
+   delete, and commit helpers into Sail.
+3. Treat typed Iceberg v4 as a Sail project after formal specification adoption.
+   The active v4 draft includes relative metadata locations, but LakeCat should
+   not turn a moving draft into catalog behavior; its bridge remains explicit
+   and JSON-only until Sail can model and plan the adopted semantics.
+4. Make the transactional outbox the only path for graph and lineage side
+   effects, while keeping graph persistence, traversal, and Cypher in Grust.
+5. Expand TypeSec-backed capability checks until every privileged path is
+   unbypassable, with raw credentials remaining an explicit audited exception.
+6. Keep OSI, Croissant, CDIF, ODRL composition, and agent workflows in
+   QueryGraph. Before the next public release, refresh QueryGraph's older
+   dependency-guide examples to match its live Grust `0.10.0` and TypeSec
+   `0.8.0` runtime manifest; its LakeCat importer already validates the current
+   receipt-chain and Grust graph handoff contract.
 7. Prove the bootstrap bundle through QueryGraph import on every meaningful
-   public-surface change.
+   public-surface change, and keep local release evidence ahead of cloud CI.
 
 The payoff is a catalog foundation that feels ordinary to Iceberg clients and
 rich to QueryGraph. Tables remain portable. Policies become enforceable. Graph

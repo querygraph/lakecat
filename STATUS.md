@@ -17633,12 +17633,20 @@ Updated: 2026-06-24
 - `cargo test --workspace --all-features`
 - `git diff --check`
 
-## Next Recommended Slice
+## Next Stage Work
 
-Keep `scripts/qglake-handoff-local.sh` in the local verification loop whenever
-QGLake handoff behavior changes, then continue tightening the handoff boundary
-without adding new non-standard Iceberg access paths. If the next step starts
-to become reusable typed view-history or Iceberg view-history semantics, push
-that model into Sail first and consume it through LakeCat's existing seams.
-Keep CI manual-only until local gates are green and the temporary Sail patch
-bridge can be replaced by an upstream branch or published Sail helper crate.
+1. Keep the release candidate proof fresh after executable dependency or
+   boundary changes; use the full local gate before any version bump or tag.
+2. Replace the explicit Sail helper patch bridge with published upstream
+   helpers, then remove the matching LakeCat patch/dependency contract rows.
+3. Track Apache Iceberg v4 until formal adoption. Only then add typed metadata,
+   relative-location, manifest, delete, and planner support in Sail; LakeCat
+   remains on the declared JSON bridge until Sail exposes stable APIs.
+4. Refresh the QueryGraph implementation-guide dependency snippet from the
+   obsolete Grust/TypeSec `0.7` examples to its runtime-aligned Grust `0.10.0`
+   and TypeSec `0.8.0` paths. Its `qg-rust` importer already matches the live
+   LakeCat receipt-chain and graph contract, so no importer protocol change is
+   currently required.
+5. Keep `scripts/qglake-handoff-local.sh` in the local verification loop for
+   every QGLake/public-surface change. Keep CI manual-only until a deliberately
+   triggered cloud run can resolve the published Sail helper surface.

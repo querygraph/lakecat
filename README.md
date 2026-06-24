@@ -2,10 +2,40 @@
 
 LakeCat is a Rust-native Iceberg REST catalog and QueryGraph foundation.
 
-The implementation keeps Iceberg compatibility at the service boundary while
-pushing engine-heavy metadata planning, pruning, and commit validation toward
-Sail. See [ARCHITECTURE.md](ARCHITECTURE.md) for the system design and
-[docs/book/lakecat.md](docs/book/lakecat.md) for the longer workflow guide.
+It keeps standard Iceberg clients on ordinary REST catalog paths while binding
+catalog state, governed Sail planning, TypeSec receipts, Grust projection, and
+QueryGraph handoff to the same accepted table transition. LakeCat is release
+ready as a locally verified catalog substrate; typed Iceberg v4 remains an
+upstream Sail task until Apache Iceberg formally adopts the specification.
+
+**Start here:** [architecture](ARCHITECTURE.md), [living design](DESIGN.md),
+[release checklist](RELEASE.md), [current status](STATUS.md),
+[contributor guidance](AGENTS.md), and the [LakeCat book](docs/book/lakecat.md).
+
+## Run Locally With Sail
+
+In one terminal, start the Rust service with the real local integrations:
+
+```bash
+LAKECAT_BIND_ADDR=127.0.0.1:8181 \
+LAKECAT_TURSO_PATH=target/local/catalog.turso \
+LAKECAT_GRUST_TURSO_PATH=target/local/catalog-graph.turso \
+cargo run -p lakecat-service --features sail-local,typesec-local,grust-turso-local,turso-local
+```
+
+In another terminal, exercise the standard catalog config route and then the
+full LakeCat-to-QueryGraph acceptance path:
+
+```bash
+cargo run -p lakecat-cli -- config --catalog http://127.0.0.1:8181
+scripts/qglake-handoff-local.sh
+```
+
+The first command proves the Iceberg REST catalog is reachable. The handoff
+harness creates a local fixture, plans through Sail, writes Turso catalog and
+Grust graph state, verifies replay and OpenLineage evidence, and runs
+QueryGraph's locked verify/import commands. It writes disposable artifacts
+under `target/qglake-handoff/` by default.
 
 The current implementation exposes an Iceberg REST-compatible catalog surface
 under `/catalog/v1` and a QueryGraph bootstrap bundle at
