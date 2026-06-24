@@ -5,6 +5,14 @@ Updated: 2026-06-24
 ## Current State
 
 - LakeCat is on `master`.
+- Latest commit-recovery hardening: failed table commits now retry cleanup of
+  the uncommitted create-only metadata object up to three times with bounded
+  increasing delays. The original CAS or store error remains authoritative if
+  cleanup still fails, so recovery cannot rewrite Iceberg commit semantics.
+- Local verification for this metadata-cleanup retry slice passed:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service metadata_cleanup -- --test-threads=1`; and
+  `git diff --check`.
 - Latest release-candidate evidence: the local candidate matrix completed all
   default and all-feature Rust rows and its temporary book artifact contract.
   Its persistent-runtime handoff cannot bind `127.0.0.1` by sandbox policy;

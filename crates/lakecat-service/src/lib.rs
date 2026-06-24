@@ -10615,10 +10615,22 @@ async fn cleanup_planned_metadata(
         return Ok(());
     }
     let (store, object_path) = metadata_object_store(&write.location)?;
-    match store.delete(&object_path).await {
-        Ok(()) | Err(object_store::Error::NotFound { .. }) => Ok(()),
-        Err(err) => Err(metadata_cleanup_error(&write.location, err)),
+    for attempt in 0..METADATA_CLEANUP_DELETE_ATTEMPTS {
+        match store.delete(&object_path).await {
+            Ok(()) | Err(object_store::Error::NotFound { .. }) => return Ok(()),
+            Err(err) if attempt + 1 == METADATA_CLEANUP_DELETE_ATTEMPTS => {
+                return Err(metadata_cleanup_error(&write.location, err));
+            }
+            Err(_) => tokio::time::sleep(metadata_cleanup_retry_delay(attempt)).await,
+        }
     }
+    unreachable!("metadata cleanup retry loop must return")
+}
+
+const METADATA_CLEANUP_DELETE_ATTEMPTS: usize = 3;
+
+fn metadata_cleanup_retry_delay(attempt: usize) -> std::time::Duration {
+    std::time::Duration::from_millis(25 * (attempt as u64 + 1))
 }
 
 fn metadata_object_write_error(
@@ -47323,6 +47335,13 @@ mod tests {
         .expect("missing uncommitted metadata object should already be clean");
 
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn metadata_cleanup_retry_delay_is_bounded_and_increasing() {
+        assert_eq!(METADATA_CLEANUP_DELETE_ATTEMPTS, 3);
+        assert_eq!(metadata_cleanup_retry_delay(0).as_millis(), 25);
+        assert_eq!(metadata_cleanup_retry_delay(1).as_millis(), 50);
     }
 
     #[tokio::test]

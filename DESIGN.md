@@ -1153,7 +1153,9 @@ Compact `managementProof`, captured replay `management`, and nested
 ### P3 Commit Hardening
 
 Continue hardening REST-visible idempotency, metadata object orphan cleanup, CAS
-conflict receipts, and recovery behavior. Metadata-object writes must be
+conflict receipts, and recovery behavior. Cleanup of an uncommitted create-only
+metadata object may use bounded idempotent delete retry, but must preserve the
+original commit result if recovery ultimately fails. Metadata-object writes must be
 create-only child objects under the selected storage profile, never overwrites
 of the current pointer, existing objects, or the storage root itself; rejection
 evidence stays hash-only for both the submitted metadata location and storage

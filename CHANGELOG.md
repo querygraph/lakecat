@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added bounded retry for cleanup of an uncommitted create-only metadata
+  object after a failed table commit. LakeCat retries the idempotent delete
+  three times with short increasing delays while preserving the original
+  commit error if cleanup ultimately fails.
 - Revalidated the local release matrix after artifact-isolation hardening. The
   default and all-feature Rust rows plus temporary book contract passed; the
   direct loopback-enabled QGLake handoff also passed with 26 delivered events

@@ -7431,8 +7431,10 @@ follows the same invariant: the stored request hash must still be full SHA-256
 evidence and the stored response must still bind to the requested table before
 an exact retry can observe the stored response.
 
-The cleanup path is deliberately secondary to the commit result. If metadata
-cleanup fails after the store rejects a commit, LakeCat preserves the original
+The cleanup path is deliberately secondary to the commit result. LakeCat makes
+a small bounded retry of the idempotent delete for an uncommitted create-only
+metadata object, then preserves the original store or compare-and-swap error if
+cleanup still fails. If metadata cleanup fails after the store rejects a commit, LakeCat preserves the original
 store or compare-and-swap error class and appends cleanup context. A stale
 pointer conflict still looks like a conflict to an Iceberg client, but the
 message carries SHA-256 hashes of the expected and actual metadata locations so
