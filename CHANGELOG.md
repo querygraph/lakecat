@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- The full local release-candidate proof was refreshed from clean head
+  `72df4eed`. `scripts/check-release-readiness.sh --release-candidate` passed
+  with the default and all-feature matrix, temporary book validation, Grust
+  Turso QGLake handoff, QueryGraph locked verify/import, bundle hash
+  `sha256:ee1f996eeac976cc07edb468f41039bc24275adbaf11b8113c38b85a9b4d5a66`,
+  graph hash
+  `sha256:2c32eaec43a9043c4a764e749afb851f68a59efcb471790ff9126fef5b8010ed`,
+  OpenLineage hash
+  `sha256:2b280c4fe4815dbc74c3a43a91c2ec2d7edae0c26b661cc1318f699afe7b778b`,
+  QueryGraph import hash
+  `sha256:3f86e0f8b7948b8cc97b7f8dda9af4c26f672c4fc8862541eee2110b45b56333`,
+  and the final clean-tree check.
 - Added an optional `LAKECAT_RELEASE_RESULT_FILE` hook to the local release
   gate. Its own exit trap writes the gate status after temporary cleanup, so
   local automation can retain candidate evidence when an outer command runner

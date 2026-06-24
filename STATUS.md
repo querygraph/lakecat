@@ -5,6 +5,18 @@ Updated: 2026-06-24
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-candidate proof refresh: the broad local gate passed on June
+  24, 2026 from clean head `72df4eed`. The gate covered shell and dependency
+  contracts, default and all-feature Rust matrices, temporary book validation,
+  Grust Turso QGLake handoff, QueryGraph locked verify/import, and the final
+  clean-tree check. Its bundle hash was
+  `sha256:ee1f996eeac976cc07edb468f41039bc24275adbaf11b8113c38b85a9b4d5a66`,
+  graph hash
+  `sha256:2c32eaec43a9043c4a764e749afb851f68a59efcb471790ff9126fef5b8010ed`,
+  OpenLineage hash
+  `sha256:2b280c4fe4815dbc74c3a43a91c2ec2d7edae0c26b661cc1318f699afe7b778b`,
+  and QueryGraph import hash
+  `sha256:3f86e0f8b7948b8cc97b7f8dda9af4c26f672c4fc8862541eee2110b45b56333`.
 - Latest release-gate observability hardening: the local gate can now write
   its own final status to `LAKECAT_RELEASE_RESULT_FILE` from its cleanup trap,
   after removing temporary candidate artifacts. This preserves local evidence
@@ -19,20 +31,6 @@ Updated: 2026-06-24
   `cargo fmt -p lakecat-service -- --check`;
   `cargo test -p lakecat-service metadata_cleanup -- --test-threads=1`; and
   `git diff --check`.
-- Latest release-candidate evidence: the local candidate matrix completed all
-  default and all-feature Rust rows and its temporary book artifact contract.
-  Its persistent-runtime handoff cannot bind `127.0.0.1` by sandbox policy;
-  the same direct loopback-enabled `scripts/qglake-handoff-local.sh` passed on
-  this head, proving 26 delivered outbox/lineage events, 54 Grust Turso graph
-  events, QueryGraph verify/import, bundle hash
-  `sha256:8dc22c00a88e414f2896ce458baffdbaadde90259e155a2684cc6723834e213d`,
-  graph hash
-  `sha256:2c32eaec43a9043c4a764e749afb851f68a59efcb471790ff9126fef5b8010ed`,
-  OpenLineage hash
-  `sha256:ff3f78fa6aa7dc1f2da2b73bf29f72bc1e4cc78a22f453a063571ef831dfa7f1`,
-  and QueryGraph import hash
-  `sha256:c96c2e58b384e31209eaf69307cd66296014415e102eceb4fbe5cedea0035a3d`.
-  This remains split local evidence, not a refreshed release-candidate proof.
 - Latest release-candidate handoff isolation: clean candidate mode now gives
   the QGLake handoff a per-run evidence directory and Cargo target directory,
   avoiding mutation of ordinary `target/qglake-handoff` artifacts while
@@ -147,9 +145,9 @@ Updated: 2026-06-24
   executable workflow/script changes after `4f7ac153` require a fresh
   release-candidate proof before final release refresh). A later full
   release-candidate proof refresh is now recorded at clean head `a186cf24`.
-- Latest release-candidate proof refresh:
+- Historical release-candidate proof refresh:
   `scripts/check-release-readiness.sh --release-candidate` passed locally on
-  June 23, 2026 from clean head `a186cf24`. The gate covered shell syntax and
+  June 23, 2026 using candidate head `a186cf24`. The gate covered shell syntax and
   dependency contracts, manual workflow trigger contract checks, release
   version and release-proof contracts, formatter checks, default and
   all-features workspace tests, explicit Turso/Sail/TypeSec/Grust feature
@@ -927,7 +925,7 @@ Updated: 2026-06-24
   now executable local evidence.
 - Latest release-candidate proof:
   `scripts/check-release-readiness.sh --release-candidate` passed locally on
-  June 23, 2026 from clean head `a186cf24`. The gate covered shell syntax
+  June 23, 2026 using historical candidate head `a186cf24`. The gate covered shell syntax
   checks, dependency and workflow trigger contracts, release-version checks,
   tracked book artifact validation, formatting, default and all-features
   workspace tests, Turso/Sail/TypeSec/Grust and Grust Turso feature rows,
