@@ -525,360 +525,139 @@ Two disciplines keep the spine trustworthy:
   QGLake handoff.
 
 
-## Grust For Graph Concepts
+## The Siblings and the Engine Path
 
-Catalog events naturally form a graph. A server contains projects. A project
-contains warehouses. A warehouse contains namespaces and storage profiles that
-define credential roots. A namespace contains tables. A table has columns,
-snapshots, manifests, files, policies, commits, scan plans, principals, and
-lineage runs. QueryGraph needs that graph, but LakeCat should not become a
-graph database.
+Chapter 4 named the four sibling repositories. This chapter shows how LakeCat
+talks to each — what it hands off, and what it deliberately refuses to own.
 
-Grust owns the graph layer. It is the place for reusable graph taxonomy,
-projection builders, graph stores, traversal indexes, Cypher support, and typed
-or untyped graph operations. LakeCat's responsibility is narrower: translate
-committed catalog events into a bounded envelope and pass it through a
-catalog-facing sink.
+### Grust: the graph boundary
 
-In practice this means LakeCat can emit graph events for stable catalog facts:
+Catalog events naturally form a graph: a server contains projects, a project
+contains warehouses, a warehouse contains namespaces and credential-rooted
+storage profiles, a namespace contains tables, and a table has columns,
+snapshots, commits, policies, scan plans, principals, and lineage runs.
+QueryGraph wants that graph — but LakeCat must not become a graph database.
 
-```text
-Server CONTAINS Project
-Project CONTAINS Warehouse
-Warehouse CONTAINS Namespace
-Namespace CONTAINS Table
-Table HAS_COLUMN Column
-Table GOVERNED_BY Policy
-Warehouse HAS_STORAGE_PROFILE StorageProfile
-Principal CAN_PLAN ScanPlan
-Commit DERIVED_FROM Snapshot
-LineageRun USED_BY QueryGraphModel
-```
-
-High-cardinality file and manifest facts should stay queryable through
-Iceberg/Sail metadata-as-data unless Grust provides a reusable taxonomy and
-storage strategy for them. The graph should be powerful, but the catalog must
-not smuggle a second lakehouse engine into its event sink.
-
-The current local direction already proves the boundary: LakeCat's
-`grust-local` sink calls Grust-owned LakeCat projection helpers, and the Grust
-Cypher boundary test verifies catalog graph projection without making LakeCat
-own Cypher parsing, traversal, or graph execution. The current boundary test
-writes table-adjacent `Column`, `Snapshot`, and `Commit` events plus
-`Principal`, `ScanPlan`, tenant-root `Server`, and credential-root
-`StorageProfile` catalog events through Grust, then matches catalog-event
-labels through Grust Cypher. Storage profile replay uses redacted evidence such
-as `secret-ref-present` and the secret-reference provider, never the full
-secret-store URI. Credential-vend attempts replay through that same thin
-boundary as `StorageProfile` graph events keyed by the redacted credential-root
-anchor, so QueryGraph can see a principal attempted credential-root access
-without seeing a secret reference or raw credential material. That proves
-QueryGraph can discover the semantic anchors LakeCat emits while the richer
-node/edge materialization remains reusable Grust work.
-
-## TypeSec For Security
-
-LakeCat is a policy enforcement point, not the author of security semantics.
-TypeSec owns the semantics: RBAC, ODRL-style policy composition, typed
-capabilities, TypeDID envelopes, secure agents, credential issuance decisions,
-and authorization proofs.
-
-Every externally meaningful action should pass through TypeSec:
-
-- catalog configuration reads;
-- namespace creation, listing, loading, and dropping;
-- table creation, load, scan planning, commit, drop, and restore;
-- credential vending;
-- policy management;
-- graph and lineage reads.
-
-LakeCat gathers the request context and asks TypeSec for a decision. The context
-can include principal DID, agent DID, bearer-derived subject, warehouse,
-namespace, table, columns, snapshot, requested credential duration, purpose, and
-active policy bindings. TypeSec returns a decision and receipt. LakeCat persists
-the receipt with audit-safe hashes and applies the resulting restrictions before
-Sail plans.
-
-This is where ODRL becomes operational. An ODRL-style policy can say that a
-principal may read only certain columns, only for a purpose, or only with an
-enforced row predicate. LakeCat parses the minimal enforceable subset it needs
-to narrow the plan, but policy composition and authorization semantics belong to
-TypeSec. LakeCat should ask TypeSec, not grow a parallel security language.
-When that subset is expressed through ODRL constraints, LakeCat accepts only
-operators that actually mean "use this as the allowed or narrowing value";
-missing or deny-shaped operators fail closed instead of being treated as
-governed read permission. The bounded parser accepts camel-case, kebab-case,
-and prefixed JSON-LD operand keys such as `odrl:leftOperand` and
-`odrl:rightOperand`. It also accepts compact JSON-LD term objects such as
-`{"@id":"odrl:eq"}` for constraint operands and operators, plus JSON-LD
-`@value` and `@list` right operands for bounded allowed-column, purpose, and
-credential-TTL values. Malformed JSON-LD lists still fail closed, and the parser
-does not turn LakeCat into a full ODRL reasoner.
-
-Namespace events follow the same receipt discipline as table, view, and
-management events. A namespace list proves `namespace-list`; creation proves
-`namespace-create`; loading proves `namespace-load`; dropping proves
-`namespace-drop`. Replay admission rejects action drift before graph or
-OpenLineage projection, so standard Iceberg namespace behavior cannot become
-QueryGraph evidence under the wrong TypeSec-style authority.
-Service-level TypeSec configuration follows the same redaction posture. When
-the `typesec-local` service binary is pointed at `LAKECAT_TYPESEC_RBAC_POLICY`
-and the policy file cannot be read, LakeCat reports only
-`policy-path-hash=sha256:...` evidence rather than the raw local path. The
-path is operational configuration, not governance semantics, so the hash-only
-diagnostic belongs in LakeCat while RBAC interpretation remains in TypeSec.
-Recognized constraint operands must also include a right operand; otherwise
-LakeCat rejects the policy material instead of silently dropping an
-allowed-column, row-predicate, purpose, or credential-TTL restriction. The
-derived restriction also rejects empty or blank allowed-column lists and blank
-purposes before they can reach credential issuance or governed Sail planning and
-fetch paths. The service route pins this behavior too: a table scan with a
-malformed active ODRL
-restriction, including malformed JSON-LD allowed-column lists, fails before
-Sail planning and before `table.scan-planned` replay evidence is emitted. A
-`fetchScanTasks` call with the same malformed JSON-LD active policy fails
-before Sail fetch execution and before `table.scan-tasks-fetched` replay
-evidence is emitted, and a credential request with the same malformed JSON-LD
-active policy fails before issuer dispatch and before
-`credentials.vend-attempted` replay evidence is emitted. Purpose is composed the
-same way: every purpose source in the active policy material must agree. If
-one binding says a read is for
-`resilience-demo` and another says `training`, LakeCat rejects the restriction
-instead of guessing which purpose should follow the agent into Sail planning,
-credential TTL proof, and QueryGraph handoff evidence.
-
-Credential vending follows the same rule. Raw credential vending is an audited
-exception. Governed Sail-planned reads are the default path for agents and
-untrusted principals. When credentials must be issued, TypeSec checks the
-`credentials.issue` capability for the exact secret reference and LakeCat
-returns only scoped, short-lived credential configuration. If policy carries a
-`max-credential-ttl-seconds` restriction, LakeCat passes that cap to the
-credential issuer and annotates each returned credential with
-`lakecat.max-credential-ttl-seconds`, so the exception path has an auditable
-duration bound. If the cap appears in multiple supported ODRL locations in the
-same policy document, or across multiple active policy bindings, LakeCat keeps
-the tightest value before asking the credential issuer. If an issuer returns
-that LakeCat TTL key itself, LakeCat normalizes the response to one TTL entry
-per credential and keeps the stricter valid TTL, so duplicate backend-supplied
-entries cannot widen or confuse the policy cap. The same response boundary owns
-the rest of the LakeCat evidence:
-issuer-supplied values for `lakecat.storage-profile-id`,
-`lakecat.storage-provider`, `lakecat.credential-mode`,
-`lakecat.authorization-principal`, `lakecat.governed-read-required`, and
-`lakecat.secret-ref-provider` are removed and replaced with catalog-derived
-values before the response is returned. The REST credential-vending regressions
-exercise this at the public response boundary: a backend can return multiple
-TTL entries or forged catalog evidence, but `loadCredentials` exposes one
-canonical proof while preserving issuer-owned credential details such as
-credential kind and provider session tokens. LakeCat records the same decision
-shape in audit/outbox evidence without copying raw credentials: each vended
-credential gets a hashed prefix, canonical LakeCat evidence values, and a hash
-of issuer-owned config. Replay can prove
-the response posture, but it does not inherit cloud session tokens. If the
-credential event carries a governed read restriction, outbox admission requires
-the top-level `read-restriction` to match
-`authorization-receipt.context.read-restriction`, keeping TTL and blocked-read
-evidence inside the durable receipt. Raw credential exceptions follow the same
-rule: the top-level `lakecat:raw-credential-exception` object must match
-`authorization-receipt.context.lakecat:raw-credential-exception` exactly, so
-trusted-human exceptions and blocked-agent denials cannot drift during replay.
-Replay admission and raw lineage-drain summary construction both enforce this
-binding; a compact QGLake proof cannot accept a top-level-only exception, a
-receipt-context-only exception, or two raw-credential exception objects that
-disagree. Replay admission also closes both raw-credential exception objects
-over the fields LakeCat actually verifies: requested posture, allowed/blocked
-posture, and reason. Extra raw-credential claims are rejected before
-acknowledgement, graph projection, OpenLineage projection, or QGLake credential
-proof.
-
-## Rust-First Engines And The V3 To V4 Path
-
-The new Rust-first engine path matters because it changes where catalog
-intelligence can live. Sail is not a Java service with Rust bindings bolted on
-the side. It is a Rust engine path built around Arrow, DataFusion, generated
-Iceberg REST models, catalog provider traits, manifest pruning, metadata-as-data
-scans, and table-status conversion.
-
-That shape gives LakeCat a better option than reimplementation. LakeCat can ask
-Sail for typed Iceberg behavior instead of parsing just enough JSON to survive a
-request. That matters for Iceberg v3 and the emerging v4 work. Format v3 already
-pushes catalogs and engines toward richer metadata, row lineage, deletion
-semantics, and better interoperability around advanced table state. Format v4 is
-still settling, but it is plainly moving the lakehouse toward more adaptive and
-structured metadata rather than less.
-
-LakeCat should evolve under three rules:
-
-1. Conform to Iceberg v3 for ordinary clients.
-2. Preserve unknown and emerging v4 metadata without claiming settled semantics.
-3. Prefer typed Sail support as soon as Sail exposes it, using JSON passthrough
-   only as a compatibility bridge.
-
-That gives LakeCat room to support v4-ready capability flags, round-trip tests,
-metadata extension preservation, and future metadata-tree planning without
-forking Iceberg. The catalog can become more intelligent while the table remains
-portable. The standard path stays boring. The governed Sail path becomes richer.
-
-The reason to push work into the engine is not architectural tidiness. It is
-correctness. Iceberg semantics are field-id semantics, snapshot semantics,
-manifest semantics, delete semantics, and metrics semantics. A catalog can
-guard the pointer, but it cannot safely become a second planner without
-reimplementing the engine. The moment LakeCat starts doing its own file pruning,
-delete application, partition tuple decoding, field-id projection, residual
-filter evaluation, or v4 metadata interpretation, it risks drifting from the
-engine that will actually read the files.
-
-Sail is a strong engine choice because it is already close to the representation
-LakeCat needs to trust. It is Rust-native, it speaks Arrow and DataFusion, it
-has Iceberg REST model generation and catalog-provider seams, and it can expose
-metadata-as-data without routing everything through a JVM adapter. That means
-LakeCat can keep the catalog transaction small and ask Sail questions that
-belong to an engine:
-
-- Which Iceberg field ids satisfy this requested projection?
-- Which required filters are enforceable at planning time?
-- Which manifests and files survive partition and statistics pruning?
-- Which delete files must accompany the selected data files?
-- Which manifest metrics are trustworthy enough for stats-field proof?
-- Which scan tasks are children of a governed parent plan?
-- Which v4 fields are known, which are preserved as passthrough, and which are
-  not yet safe to interpret?
-
-Those answers should come from Sail because they require table-format knowledge
-and execution-plan discipline. LakeCat should persist the request, the TypeSec
-decision, the effective restriction, the plan/fetch receipts, and the replay
-evidence. Sail should own the reusable mechanics that turn current Iceberg
-metadata into tasks and validation. QueryGraph should consume the proof and
-project it into graph, lineage, and agent workflows.
-
-This division also makes standards work easier. A future optional Iceberg
-profile for proof-carrying scan planning should be engine-shaped: field ids,
-snapshot ids, manifest-list anchors, projection evidence, filter evidence,
-delete-file evidence, and task lineage. If LakeCat proves that profile by
-calling Sail, another Rust engine can reuse the same semantics. If LakeCat
-hand-rolls it, the proof becomes a LakeCat-specific story.
-
-The current v4 bridge is intentionally narrow and tested as such. When LakeCat
-sees `format-version: 4`, it does not pretend that Sail already has a settled
-typed v4 model. Instead, `lakecat-sail` extracts the stable JSON envelope
-fields that remain useful across versions: table UUID, location, schema id,
-snapshot id, sequence number, manifest-list path, default spec, and field
-names. It can plan a governed manifest-list scan task from that envelope and
-validate the signed plan task again during `fetchScanTasks` so a stateless fetch
-cannot drift to a different manifest list or widen the governed projection and
-filters. It also validates stable commit requirements such as table UUID,
-current schema id, main snapshot id, last assigned field id, and default spec
-id. Pruning and typed metadata-tree semantics wait for Sail-owned v4 support.
-
-## OSI, OpenLineage, And Responsible Semantic Handoff
-
-QueryGraph needs more than physical table access. It needs a semantic picture:
-datasets, fields, policies, lineage, graph relationships, and anchors that can
-survive import. LakeCat should publish that picture without pretending to be
-QueryGraph.
-
-The LakeCat bootstrap bundle contains:
-
-- Semantic Croissant and CDIF projections for dataset and field discovery.
-- An OSI handoff with stable dataset and field anchors.
-- ODRL policy artifacts and TypeSec policy context.
-- OpenLineage events for catalog changes, scan plans, commits, and maintenance.
-- A Grust-ready graph envelope.
-- A manifest that hashes each emitted artifact.
-
-The OSI boundary is deliberately careful. LakeCat should not author rich
-business metrics, dimensions, joins, ontology claims, or authoritative semantic
-names. It can publish stable anchors and governed source metadata. QueryGraph
-owns the final semantic model.
-
-This is the Responsible Semantic Layer boundary. Semantic Croissant and CDIF
-make datasets and fields discoverable and exchangeable. OSI gives QueryGraph a
-stable handoff for semantic anchors without forcing LakeCat to own business
-meaning. OpenLineage records how catalog and planning events happened. Together
-they let the semantic layer be responsible because it can be traced back to
-catalog state, policy, and lineage, not just to a hand-authored model file.
-
-OpenLineage fits the catalog outbox. A committed table create, scan plan,
-commit, soft delete, restore, or maintenance action can become a lineage event.
-Because the event is drained from a durable outbox after the catalog transaction,
-lineage reflects committed state rather than a handler's best-effort side
-effect. Drains process pending events in `created_at,event_id` order before
-projection, response summarization, and delivery acknowledgement. That stable
-order is part of the replay contract QueryGraph and OpenLineage consume, and it
-holds even when a custom store implementation returns a pending batch in another
-order.
-
-## QueryGraph.ai When LakeCat Is Done
-
-QueryGraph.ai is the enterprise lakehouse this work is pointing toward.
-QueryGraph needs the catalog to be more than a storage address book. It wants to
-answer questions over data, metadata, semantics, policy, and lineage as one
-governed graph. That requires a catalog foundation that can speak to ordinary
-Iceberg clients and also publish trustworthy control-plane facts.
-
-LakeCat supports that foundation by exposing a QueryGraph bootstrap endpoint:
+LakeCat emits a bounded envelope of stable catalog facts through a
+catalog-facing sink; Grust owns the taxonomy, stores, traversal, and Cypher:
 
 ```text
-/querygraph/v1/bootstrap
+Server CONTAINS Project          Warehouse HAS_STORAGE_PROFILE StorageProfile
+Project CONTAINS Warehouse       Table GOVERNED_BY Policy
+Warehouse CONTAINS Namespace     Principal CAN_PLAN ScanPlan
+Namespace CONTAINS Table         Commit DERIVED_FROM Snapshot
+Table HAS_COLUMN Column          LineageRun USED_BY QueryGraphModel
 ```
 
-The bundle gives QueryGraph an import contract. QueryGraph can verify hashes,
-load catalog graph envelopes through Grust, inspect policy artifacts through
-TypeSec, and attach semantic modeling work to stable dataset and field anchors.
-The import path should prove that LakeCat is the substrate, not a standalone
-demo.
+High-cardinality file and manifest facts stay queryable through Sail's
+metadata-as-data rather than being smuggled into the event sink. Storage-profile
+and credential-vend events replay with redacted evidence only —
+`secret-ref-present`, the provider, never the secret URI — so QueryGraph can see
+*that* a principal attempted credential-root access without seeing the
+credential. The `grust-turso-local` feature proves the boundary end to end:
+LakeCat writes catalog events into a Grust-owned Turso graph store and Grust
+Cypher reads them back, with LakeCat never parsing Cypher or executing traversal.
 
-When LakeCat is done, the QueryGraph.ai architecture looks like this:
+### TypeSec: the authorization boundary
 
-```text
-Standard engines and tools
-  Spark, Trino, Flink, PyIceberg, notebooks
-    |
-    | Iceberg REST
-    v
-LakeCat catalog
-  identity, tenancy, metadata pointers, commits, policy gates,
-  idempotency, credential-vending decisions, audit, durable outbox
-    |
-    | typed planning and table semantics
-    v
-Sail
-  Rust-native Iceberg planning, metadata-as-data, scan pruning,
-  delete handling, commit validation, table maintenance
-    |
-    | graph events                  | authorization proofs
-    v                               v
-Grust                           TypeSec
-  catalog graph, traversal,        RBAC, ODRL, capabilities,
-  projection, graph stores         TypeDID, secure agents
-    |
-    | semantic and lineage bootstrap
-    v
-QueryGraph.ai
-  Responsible Semantic Layer over Croissant, CDIF, OSI,
-  OpenLineage, ODRL, graph, and governed table access
+LakeCat is a policy *enforcement* point, not the author of security semantics.
+Every externally meaningful action — config reads; namespace and table
+lifecycle; scan planning; commit; credential vending; policy management; graph
+and lineage reads — passes through TypeSec. LakeCat gathers context (principal
+and agent DID, bearer subject, warehouse/namespace/table, columns, snapshot,
+requested credential duration, purpose, active bindings), asks TypeSec for a
+decision, persists the receipt with audit-safe hashes, and applies the
+restriction *before* Sail plans.
+
+This is where ODRL becomes operational. A policy may say a principal reads only
+certain columns, only for a purpose, or only under a row predicate. LakeCat
+parses the minimal enforceable subset — accepting camel-case, kebab-case, and
+JSON-LD operand forms — and **fails closed**: missing or deny-shaped operators,
+blank allowed-column lists, blank purposes, or disagreeing purpose sources are
+rejected rather than guessed. Composition and reasoning stay in TypeSec; LakeCat
+does not grow a parallel security language.
+
+Credential vending is the audited exception, not the default. Governed
+Sail-planned reads are the norm. When credentials must issue, TypeSec checks the
+`credentials.issue` capability for the exact secret reference and LakeCat returns
+only scoped, short-lived configuration — capping TTL to the tightest
+`max-credential-ttl-seconds` across all policy locations, replacing any
+issuer-supplied `lakecat.*` evidence with catalog-derived values, and recording
+only hashed prefixes in audit. The replay-admission rules from Chapter 5 (matching
+top-level and receipt restrictions, full digests, closed field sets) apply
+identically here, so a credential or raw-exception event cannot drift before it
+reaches graph, lineage, or QGLake proof.
+
+### Sail and the v3→v4 path
+
+Sail is a Rust-native engine — Arrow, DataFusion, generated Iceberg REST models,
+catalog-provider seams, manifest pruning, metadata-as-data — so LakeCat can *ask*
+for typed Iceberg behavior instead of parsing just enough JSON to survive. The
+questions LakeCat sends to Sail are the ones that require table-format knowledge:
+
+- which field ids satisfy this projection?
+- which filters are enforceable at planning time?
+- which manifests and files survive pruning?
+- which delete files must accompany the selected data files?
+- which scan tasks are children of a governed parent plan?
+- which v4 fields are known, preserved as passthrough, or not yet safe to read?
+
+LakeCat evolves under three rules: conform to Iceberg v3 for ordinary clients;
+preserve unknown/emerging v4 metadata without claiming settled semantics; prefer
+typed Sail support the moment it exists, using JSON passthrough only as a bridge.
+Today the v4 bridge is deliberately narrow — when LakeCat sees
+`format-version: 4`, `lakecat-sail` extracts the stable envelope (table UUID,
+location, schema id, snapshot id, sequence number, manifest-list path, default
+spec, field names), can plan a governed manifest-list scan task from it, and
+re-validates the signed plan task on `fetchScanTasks` so a stateless fetch can
+neither drift to a different manifest list nor widen the governed projection.
+Pruning and typed metadata-tree semantics wait for Sail-owned v4 support.
+
+### The semantic handoff: Croissant, CDIF, OSI, OpenLineage
+
+QueryGraph needs a semantic picture, not just physical access. LakeCat publishes
+one without pretending to be QueryGraph. The bootstrap bundle carries Semantic
+Croissant and CDIF projections (dataset/field discovery), an OSI handoff of
+stable anchors, ODRL artifacts and TypeSec policy context, OpenLineage events
+for catalog changes and plans, a Grust-ready graph envelope, and a manifest that
+hashes every artifact. The boundary is careful: LakeCat publishes stable anchors
+and governed source metadata; QueryGraph authors the business model. Because
+OpenLineage events drain from the durable outbox in `created_at,event_id` order
+*after* the catalog transaction, lineage reflects committed state rather than a
+handler's best-effort side effect.
+
+### The full stack
+
+When LakeCat is done, a standard engine still loads and commits tables without
+knowing QueryGraph exists, while governed callers get the richer path:
+
+```mermaid
+flowchart TB
+  tools[Spark / Trino / Flink / PyIceberg / notebooks]
+  lc[LakeCat catalog<br/>identity, tenancy, pointers, commits, policy gates,<br/>idempotency, credential decisions, audit, durable outbox]
+  sail[Sail<br/>Iceberg planning, metadata-as-data, pruning, delete handling, commit validation]
+  grust[Grust<br/>catalog graph, traversal, projection, stores]
+  typesec[TypeSec<br/>RBAC, ODRL, capabilities, TypeDID, secure agents]
+  qg[QueryGraph.ai<br/>Responsible Semantic Layer: Croissant, CDIF, OSI, OpenLineage, ODRL]
+  tools -->|Iceberg REST| lc
+  lc -->|typed planning + table semantics| sail
+  lc -->|graph events| grust
+  lc -->|authorization proofs| typesec
+  sail --> qg
+  grust --> qg
+  typesec --> qg
+  lc -->|semantic + lineage bootstrap| qg
 ```
 
-Basic catalog use remains optional and standard. A normal Iceberg engine can
-load and commit tables without knowing QueryGraph exists. The enhanced path is
-there for enterprises that want more: governed Sail-planned reads, TypeSec
-authorization receipts, ODRL rights, TypeDID agent identity, OpenLineage replay,
-Semantic Croissant/CDIF publication, OSI handoff, and Grust graph loading.
+### Implementation shape
 
-That is the core motivation for LakeCat. The next QueryGraph.ai should not bolt
-governance, graph, and lineage onto tables after the fact. It should begin from
-a catalog that already records governed state transitions and exposes standard,
-engine-close planning.
-
-## Implementation Shape
-
-The current workspace shape expresses the architecture directly:
+The workspace expresses the architecture directly:
 
 ```text
 crates/
   lakecat-core        stable IDs, errors, time, config, content hashes
   lakecat-api         Iceberg REST request/response adapters
-  lakecat-store       catalog state traits and Turso-backed implementation
+  lakecat-store       catalog state traits + Turso-backed implementation
   lakecat-sail        Sail provider bridge and privileged planning client
   lakecat-graph       catalog-facing Grust sink/adapters
   lakecat-security    TypeSec integration and authorization receipts
@@ -888,167 +667,25 @@ crates/
   lakecat-cli         admin, local demo, conformance, bootstrap export
 ```
 
-Feature gates keep integrations honest:
+Feature gates keep integrations honest, and embedded defaults stay safe for
+tests so a memory-store test never accidentally depends on a sibling repo:
 
 ```text
-sail-local    use local Sail APIs for planning and provider integration
-typesec-local use local TypeSec APIs for governance and TypeDID verification
-grust-local   use local Grust APIs for catalog graph projection
-grust-turso-local use Grust's Turso graph backend for durable catalog graph projection
-turso-local   use the Turso-backed durable store
+sail-local         local Sail APIs for planning and provider integration
+typesec-local      local TypeSec APIs for governance and TypeDID verification
+grust-local        local Grust APIs for catalog graph projection
+grust-turso-local  Grust's Turso backend for durable catalog graph projection
+turso-local        the Turso-backed durable store
 ```
 
-Embedded defaults stay safe for tests. Real integrations are explicit. That
-matters because LakeCat is a foundation, not a pile of optional demos. A test
-that only uses memory stores should not accidentally depend on a sibling repo.
-A test that claims to validate TypeSec should enable `typesec-local` and call
-TypeSec.
+The runtime honors the same line: without `sail-local`, the deferred Sail seam
+*rejects* scan planning rather than fabricating an empty plan, so any real read
+reflects the engine that interprets Iceberg metadata, never a catalog-shaped
+placeholder. Standard compatibility lives at `/catalog/v1`; management APIs,
+`/querygraph/v1/bootstrap`, and feature-gated Sail planning sit beside it, never
+in front of it. (The first-release gate and dependency contract that hold this
+together are covered in the release chapter.)
 
-The same distinction is visible at runtime. The embedded deferred Sail seam
-does not fabricate a successful empty scan plan: a service without
-`sail-local` rejects scan planning and task fetch. A real read workflow must
-enable Sail, so any plan task or manifest work reflects the engine that
-interprets Iceberg metadata rather than a catalog-shaped placeholder.
-
-The dependency contract is executable because LakeCat has active sibling
-bridges. Grust now follows the local 0.10 path checkout so LakeCat can use the
-dedicated `grust-turso` crate for durable catalog graph projection. The graph
-boundary is still Grust-owned: LakeCat emits catalog graph events,
-`grust-local` keeps a memory-backed Grust sink for fast tests, and
-`grust-turso-local` bootstraps `grust_turso::TursoGraphStore` when durable
-graph persistence is being exercised.
-Focused graph regressions now write LakeCat catalog events into that Turso
-store, traverse the resulting catalog graph, and run Grust Cypher mutation/query
-over the same Turso-backed projection. The live QGLake handoff harness uses that
-Turso-backed sink with an explicit `LAKECAT_GRUST_TURSO_PATH`, so the same
-end-to-end QueryGraph acceptance flow that validates replay and import also
-proves LakeCat is not doing graph storage or graph-query work locally. The
-handoff summary records this as hash-only
-`graphProjectionProof` evidence: the backend, feature, and configured
-`lakecat_graph` table prefix are named, but the local graph database path is
-represented by a digest. The Rust verifier rejects missing, malformed, or
-drifted graph-backend proof before accepting saved artifacts, and it treats
-extra graph-backend claims as invalid rather than letting a saved handoff attach
-unverified Turso or Grust behavior to the compact proof. TypeSec still
-resolves from the published `typesec` 0.8.0 crate.
-The same closure rule applies one level higher: the compact
-`querygraphVerification`, `querygraphImportVerification`, and
-`lakecatReplayVerification` roots accept only the fields LakeCat validates.
-That keeps a saved handoff from hiding a new QueryGraph, import, or replay claim
-beside otherwise checked hashes, counts, scopes, and receipt evidence.
-
-Sail is different today: LakeCat still uses local Sail paths plus a checked-in
-patch bridge for helper APIs that are not yet published. Before pushing a slice
-that touches integration features, run:
-
-```sh
-scripts/check-local-dependency-contract.sh
-```
-
-The script checks the manual-only CI trigger, scans every GitHub workflow file
-for forbidden automatic cloud triggers, verifies the local Grust 0.10/Turso
-graph feature surface, verifies the published TypeSec version, checks the local
-Sail path bridge, checks the Sail patch files manual CI applies, verifies those
-patches against the corresponding local Sail helper commits with stable
-`git patch-id` evidence, and checks the concrete Sail helper API surface
-LakeCat uses:
-generated Iceberg REST models, typed metadata inputs, planning result helpers,
-fetchScanTasks result helpers, and table-status conversion. It also checks the
-local QueryGraph Rust importer for the LakeCat view receipt-chain contract:
-`receipt-chain-hash` must be preserved in view receipt evidence and missing
-receipt-chain evidence must fail closed. Manual-only means no automatic push,
-pull-request, pull-request-target, merge-queue, repository-dispatch, scheduled,
-workflow-run, or reusable-workflow cloud runs; the local audit fails if any of
-those triggers appear before the local gates are proven stable, including
-compact scalar triggers, inline lists and maps, block lists and maps, quoted
-YAML forms such as `"on": ["push"]`, and quoted event names in trigger blocks.
-The guard looks specifically at the workflow `on:` declaration, so a harmless
-job id such as `jobs.push` is allowed. The focused workflow-trigger self-test
-exists so this guard can be checked without running the full dependency audit.
-It is not a
-substitute for upstreaming the Sail helper APIs or re-enabling automatic CI; it
-is a guard that makes drift visible while LakeCat still depends on unpublished
-Sail helper work and a local QueryGraph acceptance target.
-
-While LakeCat is still changing quickly, the book source is the active editing
-surface. Development slices should update `docs/book/lakecat.md` when workflow
-or architecture behavior changes, but checked-in `docs/book/dist` artifacts
-should wait for an explicit finishing or release-proof step. That keeps the
-reader-facing explanation current without turning every source edit into a
-binary artifact refresh.
-
-For the first release, LakeCat has one local release gate:
-
-```sh
-scripts/check-release-readiness.sh
-```
-
-The full gate runs the dependency contract, the workspace formatting matrix,
-default workspace tests, QGLake fixture coverage, Turso store tests, Sail,
-TypeSec, and Grust integration feature tests, an explicit all-features CLI
-test, the all-features workspace library test, the book build, and the QGLake
-handoff proof. The current full proof also exercises `grust-turso-local` graph
-projection rows and the live QGLake handoff summary must include
-`graphProjectionProof.backend = grust-turso` before replay verification is
-accepted. The handoff also runs QueryGraph `lakecat-verify` and
-`lakecat-import` with `cargo run --locked` against the local `qg-rust` manifest
-and persists both outputs in the handoff summary before LakeCat accepts the
-saved artifacts. The default workspace test still covers ordinary doc-tests; the
-feature matrix targets package unit tests so an empty rustdoc phase cannot hang
-after the actual Turso/Sail/TypeSec/Grust coverage has passed. The `--quick`
-mode keeps script syntax, dependency-contract, formatting, and diff checks
-cheap enough to run inside narrow implementation slices. Cloud CI remains
-manual-only until this local gate is boringly green.
-
-The QGLake handoff proof is intentionally stricter than a hash inventory. View
-receipt-chain evidence is checked as ordered structure: a chain must begin with
-a version-1 upsert without previous links, every later receipt must point to
-the previous receipt hash, upserts must advance the version, drops must keep the
-same durable version, unsupported operations fail closed, and tombstone
-receipts must be covered by verified chains. The group-level chain and receipt
-hash arrays must also exactly match the nested structural chains and receipts,
-so a handoff cannot carry extra digest claims that are not backed by ordered
-view-history objects. That lets QueryGraph trust view history as replayed
-catalog evidence instead of treating it as an opaque bag of digests.
-
-The same hash-only discipline applies before a handoff can even start. When
-LakeCat is configured with the `grust-turso-local` feature, the service opens a
-Grust-owned Turso graph store for catalog projection. If graph-store
-configuration or bootstrap fails, the operator-facing error carries only
-`graph-store-path-hash` and `backend-error-hash`. The raw graph database path
-and raw backend error text stay out of the message, so a failed local or
-agentic run still leaves replayable evidence without leaking filesystem
-layout, secret-bearing paths, or backend diagnostics.
-
-As of the current local reconciliation, the Sail helper work is not an
-anonymous dirty tree. `/Users/alexy/src/sail` has scoped local commits on
-`codex/graph` for exposing Iceberg REST models to LakeCat, preserving Iceberg
-manifest lower and upper bounds in Avro, and adding Sail's Cypher graph query
-extension. That Cypher extension is a Sail SQL/analyzer/planning surface; the
-catalog graph taxonomy, projection helpers, traversal, and stores remain Grust
-responsibilities. The only remaining Sail working-tree entries are untracked
-artifact/book directories, and pushing the Sail branch upstream is blocked by
-HTTPS GitHub authentication rather than by local test failures.
-
-## Standard Compatibility And Extensions
-
-LakeCat must be boring where standards require boring behavior. Standard
-Iceberg clients should be able to use the catalog without knowing QueryGraph
-exists. Business semantics and agent state must not be required custom Iceberg
-metadata.
-
-Extensions belong beside the standard path:
-
-- `/catalog/v1` serves Iceberg REST compatibility.
-- management APIs handle warehouses, policies, profiles, and operational state.
-- `/querygraph/v1/bootstrap` publishes QueryGraph import artifacts.
-- feature-gated Sail paths provide governed scan planning and local provider
-  integration.
-
-Format v4 work should follow the same rule. Prefer typed Sail support when
-available. JSON passthrough can bridge compatibility, but it is not the desired
-long-term implementation. Round-trip tests should prove LakeCat preserves
-unknown or evolving metadata without claiming settled semantics too early.
 
 ## Workflow Examples
 

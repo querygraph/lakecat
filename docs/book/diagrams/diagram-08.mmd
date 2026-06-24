@@ -1,0 +1,15 @@
+flowchart TB
+  tools[Spark / Trino / Flink / PyIceberg / notebooks]
+  lc[LakeCat catalog<br/>identity, tenancy, pointers, commits, policy gates,<br/>idempotency, credential decisions, audit, durable outbox]
+  sail[Sail<br/>Iceberg planning, metadata-as-data, pruning, delete handling, commit validation]
+  grust[Grust<br/>catalog graph, traversal, projection, stores]
+  typesec[TypeSec<br/>RBAC, ODRL, capabilities, TypeDID, secure agents]
+  qg[QueryGraph.ai<br/>Responsible Semantic Layer: Croissant, CDIF, OSI, OpenLineage, ODRL]
+  tools -->|Iceberg REST| lc
+  lc -->|typed planning + table semantics| sail
+  lc -->|graph events| grust
+  lc -->|authorization proofs| typesec
+  sail --> qg
+  grust --> qg
+  typesec --> qg
+  lc -->|semantic + lineage bootstrap| qg
