@@ -45,7 +45,7 @@ reject_pattern() {
 }
 
 require_pattern '^LakeCat$' "$page1" "cover page is missing the visible title"
-require_pattern 'covers lakecat \([0-9]+\.[0-9]+\.[0-9]+\)' "$page1" \
+require_pattern 'covers lakecat \([0-9]+\.[0-9]+\.[0-9]+(-[0-9a-f]+)?\)' "$page1" \
   "cover page is missing the generated versioned title"
 require_pattern '^Alexy Khrabrov$' "$page1" "cover page is missing the author"
 reject_pattern '^Contents$' "$page1" "cover page includes body contents"

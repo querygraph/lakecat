@@ -68,7 +68,16 @@ if [[ -z "$kindle_short_title" ]]; then
   kindle_short_title="lakecat"
 fi
 
-kindle_name="$kindle_short_title ($version)"
+# Suffix the linked, versioned artifact name with the short git hash so each
+# build is traceable to a commit, e.g. "lakecat (0.1.1-205596e)".
+commit_suffix="$(git -C "$repo_root" rev-parse --short HEAD)"
+if [[ -z "$commit_suffix" ]]; then
+  echo "could not read git commit suffix" >&2
+  exit 1
+fi
+
+kindle_version="$version-$commit_suffix"
+kindle_name="$kindle_short_title ($kindle_version)"
 stable_epub="$dist_dir/$kindle_short_title.epub"
 kindle_epub="$dist_dir/$kindle_name.epub"
 

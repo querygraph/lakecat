@@ -46,15 +46,17 @@ built_at="$(awk -F': ' '/^built_at:/ { print $2; exit }' "$version_file")"
 epub_file="$(awk -F': ' '/^epub_file:/ { print $2; exit }' "$version_file")"
 kindle_link="$(awk -F': ' '/^kindle_link:/ { print $2; exit }' "$version_file")"
 
-expected_kindle_name="lakecat ($workspace_version)"
-expected_kindle_link="$expected_kindle_name.epub"
+# The linked, versioned artifact name carries a short git-hash suffix:
+#   lakecat (<workspace_version>-<short_hash>)
+kindle_name_re="^lakecat \($workspace_version-[0-9a-f]{7,}\)$"
+kindle_link_re="^lakecat \($workspace_version-[0-9a-f]{7,}\)\.epub$"
 
-[[ "$kindle_name" == "$expected_kindle_name" ]] || \
-  fail "kindle_name '$kindle_name' does not match expected '$expected_kindle_name'"
+[[ "$kindle_name" =~ $kindle_name_re ]] || \
+  fail "kindle_name '$kindle_name' does not match expected 'lakecat ($workspace_version-<hash>)'"
 [[ "$epub_file" == "lakecat.epub" ]] || \
   fail "epub_file '$epub_file' does not match lakecat.epub"
-[[ "$kindle_link" == "$expected_kindle_link" ]] || \
-  fail "kindle_link '$kindle_link' does not match expected '$expected_kindle_link'"
+[[ "$kindle_link" =~ $kindle_link_re ]] || \
+  fail "kindle_link '$kindle_link' does not match expected 'lakecat ($workspace_version-<hash>).epub'"
 [[ "$built_at" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || \
   fail "built_at '$built_at' must be an ISO date"
 
