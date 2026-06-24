@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Refreshed the full local release-candidate proof from clean head `a186cf24`.
+  `scripts/check-release-readiness.sh --release-candidate` passed locally with
+  the release-proof candidate contract from `0ba1fe1c` to `a186cf24`, full
+  workspace and feature-gate matrix, out-of-tree book artifact validation,
+  Grust Turso QGLake handoff, QueryGraph locked verify/import, bundle hash
+  `sha256:96934549691f0a883957552ff3158a18296b3b07547b8d5b0ef716dfa758784a`,
+  graph hash
+  `sha256:2c32eaec43a9043c4a764e749afb851f68a59efcb471790ff9126fef5b8010ed`,
+  OpenLineage hash
+  `sha256:5eae9a81bcc17cd4c6c847abba1c1d24ab1866fc614cc773ca99afd3e0909e74`,
+  QueryGraph import hash
+  `sha256:9ceca53a304c1632d727e56e292c8e0bcd143caf1581138ed5f33268584f95b3`,
+  `graphProjectionProof.backend = grust-turso`,
+  `graphProjectionProof.tablePrefix = lakecat_graph`, one table, one view,
+  26 delivered lineage/outbox events, 54 graph events in lineage-drain
+  semantics, and `git diff --check`.
 - Hardened outbox replay event-type binding. Service projection validation now
   rejects forged hash-bound pending outbox rows whose outer envelope names a
   supported event type but whose inner replay payload omits `event-type`, so
@@ -12,7 +28,8 @@
   fields before graph or lineage delivery, closing a gap where
   credential-bearing metadata pointers could bypass the object-write validator
   through forged replay evidence.
-- Refreshed the full local release-candidate proof from clean head `0ba1fe1c`.
+- Recorded the previous full local release-candidate run from clean head
+  `0ba1fe1c`.
   `scripts/check-release-readiness.sh --release-candidate` passed locally with
   the release-proof candidate contract from `93ee0a20` to `0ba1fe1c`, full
   workspace and feature-gate matrix, out-of-tree book artifact validation,

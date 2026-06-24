@@ -20,9 +20,9 @@ Updated: 2026-06-23
   `cargo test -p lakecat-service outbox_drain_rejects -- --test-threads=1`;
   `cargo test -p lakecat-service --all-features -- --test-threads=1`;
   `git diff --check`; and `scripts/check-release-readiness.sh --quick`.
-  The quick gate passed and correctly reported that executable changes now
-  exist after clean proof head `0ba1fe1c`; rerun the full local
-  release-candidate gate before claiming final proof freshness.
+  The quick gate passed and correctly reported that executable changes then
+  existed after clean proof head `0ba1fe1c`; the full local release-candidate
+  gate was rerun afterward and is now recorded at clean head `a186cf24`.
 - Latest metadata-location proof admission hardening:
   replay/projection validation now rejects URI userinfo in catalog location
   evidence before `table.commit` or other location-bearing outbox rows can be
@@ -38,7 +38,7 @@ Updated: 2026-06-23
   The quick gate passed and correctly reported that executable changes existed
   after the then-current clean proof head `93ee0a20`; the full local
   release-candidate gate was rerun afterward and is now recorded at clean head
-  `0ba1fe1c`.
+  `a186cf24`.
 - Latest book release-readiness clarification:
   the book source now explains the manual CI vs. local release-proof split:
   intentionally triggered GitHub Actions runs dependency, workflow-trigger, and
@@ -62,10 +62,10 @@ Updated: 2026-06-23
   `scripts/check-release-readiness.sh --quick` (which correctly reported that
   executable workflow/script changes after `4f7ac153` require a fresh
   release-candidate proof before final release refresh). A later full
-  release-candidate proof refresh is now recorded at clean head `0ba1fe1c`.
+  release-candidate proof refresh is now recorded at clean head `a186cf24`.
 - Latest release-candidate proof refresh:
   `scripts/check-release-readiness.sh --release-candidate` passed locally on
-  June 23, 2026 from clean head `0ba1fe1c`. The gate covered shell syntax and
+  June 23, 2026 from clean head `a186cf24`. The gate covered shell syntax and
   dependency contracts, manual workflow trigger contract checks, release
   version and release-proof contracts, formatter checks, default and
   all-features workspace tests, explicit Turso/Sail/TypeSec/Grust feature
@@ -75,13 +75,13 @@ Updated: 2026-06-23
   verification through QueryGraph locked verify/import,
   `graphProjectionProof.backend = grust-turso`,
   `graphProjectionProof.tablePrefix = lakecat_graph`, bundle hash
-  `sha256:0ceb6b4b156f0c86ddd61fb7ce457631592f0a68a6046802e5fe559b3b4535cb`,
+  `sha256:96934549691f0a883957552ff3158a18296b3b07547b8d5b0ef716dfa758784a`,
   graph hash
   `sha256:2c32eaec43a9043c4a764e749afb851f68a59efcb471790ff9126fef5b8010ed`,
   OpenLineage hash
-  `sha256:34842c47c7cdd55b3d0bceeb10ab211c29f5e1cae3f19436101aaa769c95f041`,
+  `sha256:5eae9a81bcc17cd4c6c847abba1c1d24ab1866fc614cc773ca99afd3e0909e74`,
   QueryGraph import hash
-  `sha256:ea54ac5580c1475b3e4fdd8bf70504f258e7a03f0407a429b6dfbe17ef02a497`,
+  `sha256:9ceca53a304c1632d727e56e292c8e0bcd143caf1581138ed5f33268584f95b3`,
   and `git diff --check`.
 - Latest REST commit idempotency compatibility slice:
   table commit retry now accepts the conventional `Idempotency-Key` header
@@ -127,7 +127,7 @@ Updated: 2026-06-23
   `scripts/check-release-readiness.sh --quick` (which correctly reported that
   executable changes after the prior release proof required a fresh
   release-candidate run); and `git diff --check`. A later full
-  release-candidate proof refresh is now recorded at clean head `0ba1fe1c`.
+  release-candidate proof refresh is now recorded at clean head `a186cf24`.
 - Latest compact QGLake handoff summary root closure:
   handoff summary verification now rejects unexpected top-level fields before
   archived artifacts can attach unverified root proof claims beside otherwise
@@ -456,7 +456,7 @@ Updated: 2026-06-23
   `scripts/check-release-readiness.sh --quick`; and `git diff --check`. A dirty
   release-proof-contract self-test now accepts `GOAL.md` as documentation; the
   later full release-candidate proof refresh is recorded at clean head
-  `0ba1fe1c`.
+  `a186cf24`.
 - Latest compact QGLake standards proof closure:
   handoff verification now rejects non-string, blank, duplicate, or unsupported
   standards entries and requires the exact expected standards set, so saved
@@ -843,7 +843,7 @@ Updated: 2026-06-23
   now executable local evidence.
 - Latest release-candidate proof:
   `scripts/check-release-readiness.sh --release-candidate` passed locally on
-  June 23, 2026 from clean head `0ba1fe1c`. The gate covered shell syntax
+  June 23, 2026 from clean head `a186cf24`. The gate covered shell syntax
   checks, dependency and workflow trigger contracts, release-version checks,
   tracked book artifact validation, formatting, default and all-features
   workspace tests, Turso/Sail/TypeSec/Grust and Grust Turso feature rows,
@@ -855,13 +855,13 @@ Updated: 2026-06-23
   QueryGraph locked verify/import with
   `graphProjectionProof.backend = grust-turso` and
   `graphProjectionProof.tablePrefix = lakecat_graph`, bundle hash
-  `sha256:0ceb6b4b156f0c86ddd61fb7ce457631592f0a68a6046802e5fe559b3b4535cb`,
+  `sha256:96934549691f0a883957552ff3158a18296b3b07547b8d5b0ef716dfa758784a`,
   graph hash
   `sha256:2c32eaec43a9043c4a764e749afb851f68a59efcb471790ff9126fef5b8010ed`,
   OpenLineage hash
-  `sha256:34842c47c7cdd55b3d0bceeb10ab211c29f5e1cae3f19436101aaa769c95f041`,
+  `sha256:5eae9a81bcc17cd4c6c847abba1c1d24ab1866fc614cc773ca99afd3e0909e74`,
   QueryGraph import hash
-  `sha256:ea54ac5580c1475b3e4fdd8bf70504f258e7a03f0407a429b6dfbe17ef02a497`,
+  `sha256:9ceca53a304c1632d727e56e292c8e0bcd143caf1581138ed5f33268584f95b3`,
   and `git diff --check`.
   This is the current first-release evidence; cloud CI remains manual/disabled
   until local gates are boring from the final release commit.
