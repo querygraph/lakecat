@@ -1,0 +1,12 @@
+flowchart LR
+  subgraph bad[Anti-pattern: catalog drifts into a partial engine]
+    c1[Catalog] --> p1[Ad-hoc schema parse]
+    c1 --> p2[Ad-hoc manifest read]
+    c1 --> p3[Ad-hoc delete logic]
+    p1 -.drift.-> e1[(Real engine semantics)]
+    p2 -.drift.-> e1
+    p3 -.drift.-> e1
+  end
+  subgraph good[LakeCat: catalog owns the transaction, Sail owns the table]
+    c2[LakeCat: identity, pointer CAS, receipts, audit] -->|plan / validate| s2[Sail: schema, manifests, deletes, v4]
+  end
