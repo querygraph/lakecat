@@ -5,6 +5,9 @@ Updated: 2026-06-24
 ## Current State
 
 - LakeCat is on `master`.
+- Release naming: `v0.1.0` is the original Bobcat release. The durable feline
+  codename map and planned SemVer emphasis live in `docs/RELEASES.md`; future
+  codenames remain planning labels until release proof is complete.
 - Goal documentation: the original foundational charter is archived unchanged
   as `docs/completed/GOAL1.md`. The new `GOAL.md` is the concise live
   release-and-next-stage charter and defers detailed execution guidance to the

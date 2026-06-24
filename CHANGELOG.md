@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added the feline release map in `docs/RELEASES.md`. The original `v0.1.0`
+  release is Bobcat; planned names remain non-binding codenames beside SemVer.
 - Archived the original foundational goal as `docs/completed/GOAL1.md` and
   replaced `GOAL.md` with the live release-and-next-stage charter. Release
   proof allowlists now recognize versioned archived-goal records as
