@@ -5,6 +5,10 @@ Updated: 2026-06-24
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-gate observability hardening: the local gate can now write
+  its own final status to `LAKECAT_RELEASE_RESULT_FILE` from its cleanup trap,
+  after removing temporary candidate artifacts. This preserves local evidence
+  when an outer runner loses the process result without changing gate behavior.
 - Latest commit-recovery hardening: failed table commits now retry cleanup of
   the uncommitted create-only metadata object up to three times with bounded
   increasing delays. The original CAS or store error remains authoritative if

@@ -11,13 +11,16 @@ require_clean=0
 cleanup_dirs=()
 
 cleanup() {
+  local status="$?"
   local dir
-  if [[ "${#cleanup_dirs[@]}" -eq 0 ]]; then
-    return
-  fi
-  for dir in "${cleanup_dirs[@]}"; do
+  for dir in "${cleanup_dirs[@]-}"; do
+    [[ -n "$dir" ]] || continue
     rm -rf "$dir"
   done
+  if [[ -n "${LAKECAT_RELEASE_RESULT_FILE:-}" ]]; then
+    printf '%s\n' "$status" > "$LAKECAT_RELEASE_RESULT_FILE"
+  fi
+  return "$status"
 }
 trap cleanup EXIT
 
