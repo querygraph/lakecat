@@ -5,6 +5,10 @@ Updated: 2026-06-24
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-candidate handoff isolation: clean candidate mode now gives
+  the QGLake handoff a per-run evidence directory and Cargo target directory,
+  avoiding mutation of ordinary `target/qglake-handoff` artifacts while
+  preserving the default local harness paths for day-to-day development.
 - Latest release-artifact isolation hardening: `docs/book/build.sh` now directs
   Pandoc's `TMPDIR` scratch state into its per-run workspace, alongside the
   isolated Calibre configuration directory. This keeps temporary media

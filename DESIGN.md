@@ -393,7 +393,9 @@ Authoritative first-release evidence:
   the book into a temporary `LAKECAT_BOOK_DIST_DIR` and isolates Calibre's
   conversion state in a temporary `CALIBRE_CONFIG_DIRECTORY` and converter
   scratch state in its per-run `TMPDIR`, so EPUB/PDF/MOBI validation does not
-  dirty a clean candidate commit or the operator's profile.
+  dirty a clean candidate commit or the operator's profile. Candidate mode
+  also uses a temporary QGLake handoff evidence directory and Cargo target, so
+  its live QueryGraph acceptance run does not rewrite ordinary handoff output.
 - `scripts/check-book-artifact-contract.sh` proves the generated book marker,
   stable EPUB/PDF/MOBI artifacts, versioned Kindle symlink, EPUB metadata, and
   PDF layout agree in either tracked or temporary dist directories.

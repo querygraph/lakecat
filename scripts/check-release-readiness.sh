@@ -226,7 +226,16 @@ if [[ "$mode" == "full" ]]; then
     fi
   fi
   if [[ "$skip_handoff" -eq 0 ]]; then
-    run scripts/qglake-handoff-local.sh
+    if [[ "$require_clean" -ne 0 ]]; then
+      handoff_tmpdir="$(mktemp -d)"
+      cleanup_dirs+=("$handoff_tmpdir")
+      run env \
+        LAKECAT_QGLAKE_HANDOFF_DIR="$handoff_tmpdir/handoff" \
+        LAKECAT_QGLAKE_CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$repo_root/target}/qglake-handoff" \
+        scripts/qglake-handoff-local.sh
+    else
+      run scripts/qglake-handoff-local.sh
+    fi
   fi
 fi
 

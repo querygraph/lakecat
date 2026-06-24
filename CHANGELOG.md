@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Isolated QGLake handoff artifacts during clean release candidates. Candidate
+  runs now place both handoff evidence and its Cargo target under per-run
+  temporary paths, leaving ordinary local handoff defaults unchanged.
 - Isolated Pandoc media scratch state during book builds. The book build now
   directs `TMPDIR` into its per-run workspace along with Calibre state, so a
   release-candidate conversion cannot write converter files beside sources or
