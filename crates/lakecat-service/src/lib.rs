@@ -10478,6 +10478,12 @@ fn validate_planned_metadata_location(
             metadata_location_hash_context(new_metadata_location)
         )));
     }
+    if location_has_credential_marker(new_metadata_location) {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "metadata object location {} must not contain credential material",
+            metadata_location_hash_context(new_metadata_location)
+        )));
+    }
     if !location_is_strictly_within_prefix(
         new_metadata_location,
         storage_profile.location_prefix.as_str(),
@@ -10508,6 +10514,29 @@ fn location_has_userinfo(location: &str) -> bool {
     Url::parse(location)
         .map(|url| !url.username().is_empty() || url.password().is_some())
         .unwrap_or(false)
+}
+
+fn location_has_credential_marker(location: &str) -> bool {
+    const MARKERS: [&str; 6] = [
+        "token=",
+        "secret=",
+        "credential=",
+        "password=",
+        "access_key=",
+        "session_token=",
+    ];
+
+    fn contains_marker(value: &str) -> bool {
+        let normalized = value.to_ascii_lowercase();
+        MARKERS.iter().any(|marker| normalized.contains(marker))
+    }
+
+    contains_marker(location)
+        || location
+            .split(['/', '?', '#'])
+            .filter_map(percent_decode_segment)
+            .filter_map(|segment| String::from_utf8(segment).ok())
+            .any(|segment| contains_marker(&segment))
 }
 
 fn is_dot_path_segment(segment: &str) -> bool {
@@ -46737,13 +46766,10 @@ mod tests {
         let initial_metadata_location = url::Url::from_file_path(metadata_dir.join("00000.json"))
             .unwrap()
             .to_string();
-        let decorated_metadata_path = metadata_dir.join("00001-secret.json");
-        let decorated_metadata_location = format!(
-            "{}?token=raw-secret",
-            url::Url::from_file_path(&decorated_metadata_path)
-                .unwrap()
-                .as_str()
-        );
+        let decorated_metadata_path = metadata_dir.join("token=raw-secret.json");
+        let decorated_metadata_location = url::Url::from_file_path(&decorated_metadata_path)
+            .unwrap()
+            .to_string();
         let base_metadata = serde_json::json!({
             "format-version": 3,
             "table-uuid": "11111111-1111-1111-1111-111111111111",
@@ -46841,7 +46867,7 @@ mod tests {
             .unwrap();
         let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let message = payload["error"]["message"].as_str().unwrap();
-        assert!(message.contains("query strings or fragments"));
+        assert!(message.contains("credential material"));
         assert!(message.contains("metadata-location-hash=sha256:"));
         assert!(!message.contains(&decorated_metadata_location));
         assert!(!message.contains("raw-secret"));
@@ -47035,6 +47061,45 @@ mod tests {
         assert!(!message.contains("access"));
         assert!(!message.contains("secret"));
         assert!(!message.contains("00001.json"));
+    }
+
+    #[test]
+    fn metadata_write_plan_rejects_credential_markers_in_location_paths() {
+        let table = TableRecord::new(
+            table_ident("local", "default", "events").unwrap(),
+            "file:///tmp/events".to_string(),
+            Some("file:///tmp/events/metadata/00000.json".to_string()),
+            serde_json::json!({"format-version": 3}),
+            Principal::anonymous(),
+        );
+        let storage_profile = StorageProfile::inferred_for_table(&table);
+        for location in [
+            "file:///tmp/events/metadata/token=raw-secret.json",
+            "file:///tmp/events/metadata/token%3Draw-secret.json",
+        ] {
+            let plan = lakecat_sail::CommitPlan {
+                prepared_by: "test".to_string(),
+                requirements: Vec::new(),
+                updates: Vec::new(),
+                new_metadata_location: Some(location.to_string()),
+                new_metadata: serde_json::json!({"format-version": 3}),
+                metadata_write_required: true,
+                metadata_patch: serde_json::json!({}),
+            };
+
+            let err = validate_planned_metadata_location(
+                &plan,
+                table.metadata_location.as_deref(),
+                &storage_profile,
+            )
+            .unwrap_err();
+            assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+            let message = err.to_string();
+            assert!(message.contains("credential material"));
+            assert!(message.contains("metadata-location-hash=sha256:"));
+            assert!(!message.contains(location));
+            assert!(!message.contains("raw-secret"));
+        }
     }
 
     #[test]

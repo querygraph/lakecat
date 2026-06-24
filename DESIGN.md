@@ -1160,7 +1160,8 @@ hashes, not raw URI parse text, schemes, or backend diagnostics. Catalog state
 changes should not lose outbox side effects. Table commit-history replay must
 carry the accepted replay principal subject/kind and an explicit commit count.
 Replay admission for catalog location proof must reject decorated material,
-credential-marker substrings, and URI userinfo before graph, OpenLineage,
+raw or percent-encoded credential-marker substrings, and URI userinfo before
+graph, OpenLineage,
 QGLake, or QueryGraph proof can inherit those fields.
 An empty history is valid zero-count proof and must drain without fabricating
 commit graph nodes; present commit entries must carry positive, strictly

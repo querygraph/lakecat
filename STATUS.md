@@ -1,10 +1,19 @@
 # LakeCat Status
 
-Updated: 2026-06-23
+Updated: 2026-06-24
 
 ## Current State
 
 - LakeCat is on `master`.
+- Latest metadata-write credential-path hardening: new metadata object
+  locations now reject raw and percent-encoded credential markers in their
+  path material before any object-store write. The response preserves only a
+  metadata-location hash, matching replay-side location evidence admission.
+- Local verification for this metadata-write credential-path slice passed:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service metadata_write_plan_rejects_credential_markers_in_location_paths -- --test-threads=1`;
+  `cargo test -p lakecat-service commit_rejects_decorated_metadata_locations_without_leaking_details -- --test-threads=1`; and
+  `git diff --check`.
 - Latest release-artifact isolation hardening:
   `docs/book/build.sh` now defaults Calibre's config directory to its
   per-run temporary workspace. Release-candidate EPUB/PDF/MOBI validation can

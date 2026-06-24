@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened metadata-object commit admission against credential-bearing path
+  material. New metadata locations now reject raw and percent-encoded
+  `token=`, `secret=`, credential, password, access-key, and session-token
+  markers before object-store writes, retaining hash-only error evidence.
 - Isolated Calibre conversion state during book builds. `docs/book/build.sh`
   now defaults `CALIBRE_CONFIG_DIRECTORY` to its per-run temporary workspace,
   so local release-candidate book validation neither writes user preferences
