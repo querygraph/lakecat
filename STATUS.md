@@ -5,6 +5,14 @@ Updated: 2026-06-24
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-artifact isolation hardening: `docs/book/build.sh` now directs
+  Pandoc's `TMPDIR` scratch state into its per-run workspace, alongside the
+  isolated Calibre configuration directory. This keeps temporary media
+  extraction out of book sources, tracked artifacts, and ambient user paths.
+- Local verification for this Pandoc scratch-isolation slice passed:
+  `docs/book/build.sh` with a temporary `LAKECAT_BOOK_DIST_DIR` under
+  `/private/tmp`; `scripts/check-book-artifact-contract.sh` on that temporary
+  directory; and `git diff --check`.
 - Latest metadata-write credential-path hardening: new metadata object
   locations now reject raw and percent-encoded credential markers in their
   path material before any object-store write. The response preserves only a

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Isolated Pandoc media scratch state during book builds. The book build now
+  directs `TMPDIR` into its per-run workspace along with Calibre state, so a
+  release-candidate conversion cannot write converter files beside sources or
+  into an ambient temporary directory.
 - Hardened metadata-object commit admission against credential-bearing path
   material. New metadata locations now reject raw and percent-encoded
   `token=`, `secret=`, credential, password, access-key, and session-token

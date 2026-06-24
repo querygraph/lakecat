@@ -1,13 +1,30 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd "$(dirname "$0")/../.."
+repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$repo_root"
 
 dist_dir="${LAKECAT_BOOK_DIST_DIR:-docs/book/dist}"
 mkdir -p "$dist_dir"
+dist_dir="$(cd "$dist_dir" && pwd)"
 
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
+
+# Pandoc's media extraction and its Haskell runtime use TMPDIR. Keep those
+# transient files with the other per-run conversion state instead of allowing
+# a converter default to write beside the source or into an operator profile.
+export TMPDIR="$tmpdir"
+
+# Pandoc stages media under its working directory even when TMPDIR is set.
+# Execute it from the owned workspace while passing only absolute source and
+# output paths, so conversion never creates scratch material beside the book.
+run_pandoc() {
+  (
+    cd "$tmpdir"
+    pandoc "$@"
+  )
+}
 
 # Keep Calibre's conversion state out of the user's profile and the tracked
 # artifact directory. Callers may override this for deliberate local debugging.
@@ -62,13 +79,13 @@ kindle_epub="$dist_dir/$kindle_name.epub"
   printf 'kindle_link: %s.epub\n' "$kindle_name"
 } > "$dist_dir/VERSION.md"
 
-sed "s/{{KINDLE_NAME}}/$kindle_name/g" docs/book/cover.md > "$tmpdir/cover.md"
+sed "s/{{KINDLE_NAME}}/$kindle_name/g" "$repo_root/docs/book/cover.md" > "$tmpdir/cover.md"
 
-pandoc "$tmpdir/cover.md" \
+run_pandoc "$tmpdir/cover.md" \
   -o "$tmpdir/cover.pdf" \
   --pdf-engine=typst
 
-pandoc docs/book/lakecat.md \
+run_pandoc "$repo_root/docs/book/lakecat.md" \
   -o "$tmpdir/body.pdf" \
   --pdf-engine=typst \
   --toc \
@@ -77,13 +94,13 @@ pandoc docs/book/lakecat.md \
 pdfunite "$tmpdir/cover.pdf" "$tmpdir/body.pdf" "$dist_dir/lakecat.pdf"
 docs/book/check_pdf_layout.sh "$dist_dir/lakecat.pdf"
 
-pandoc "$tmpdir/cover.md" docs/book/lakecat.md \
+run_pandoc "$tmpdir/cover.md" "$repo_root/docs/book/lakecat.md" \
   -o "$dist_dir/lakecat.epub" \
   --toc \
   --number-sections \
-  --metadata-file docs/book/metadata.yaml \
+  --metadata-file "$repo_root/docs/book/metadata.yaml" \
   --metadata date="$pubdate" \
-  --css docs/book/epub.css \
+  --css "$repo_root/docs/book/epub.css" \
   --epub-title-page=false
 
 docs/book/fix_epub_layout.sh "$dist_dir/lakecat.epub" "$kindle_name"
