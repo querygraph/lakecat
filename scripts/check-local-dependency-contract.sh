@@ -272,6 +272,8 @@ require_pattern 'LAKECAT_BOOK_DIST_DIR' scripts/check-release-readiness.sh \
   "release-candidate gate must build book artifacts out of tree"
 require_pattern 'LAKECAT_BOOK_DIST_DIR' docs/book/build.sh \
   "book build must support an explicit artifact dist directory"
+require_pattern 'CALIBRE_CONFIG_DIRECTORY' docs/book/build.sh \
+  "book build must isolate Calibre conversion state from the operator profile"
 require_pattern 'partial[[:space:]]+evidence instead of release-candidate success' scripts/check-release-readiness.sh \
   "release-readiness help must describe skipped full runs as partial evidence"
 require_pattern 'docs/book/check_pdf_layout\.sh' RELEASE.md \

@@ -5,6 +5,16 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-artifact isolation hardening:
+  `docs/book/build.sh` now defaults Calibre's config directory to its
+  per-run temporary workspace. Release-candidate EPUB/PDF/MOBI validation can
+  therefore run without writing Calibre preference state under the operator's
+  home directory, while tracked book artifacts remain untouched unless an
+  operator deliberately runs the normal book refresh.
+- Local verification for this release-artifact isolation slice:
+  `docs/book/build.sh` with a temporary `LAKECAT_BOOK_DIST_DIR`;
+  `scripts/check-book-artifact-contract.sh` on that temporary directory;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest Sail runtime-honesty hardening:
   the embedded deferred Sail engine now rejects scan planning without
   `sail-local`, matching its already-explicit task-fetch behavior. A deployed

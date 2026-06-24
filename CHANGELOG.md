@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Isolated Calibre conversion state during book builds. `docs/book/build.sh`
+  now defaults `CALIBRE_CONFIG_DIRECTORY` to its per-run temporary workspace,
+  so local release-candidate book validation neither writes user preferences
+  nor dirties tracked artifacts.
 - Made the deferred Sail engine fail closed for scan planning. A service built
   without `sail-local` now returns an explicit unsupported response instead of
   reporting a successful empty scan plan; real table planning and task fetch

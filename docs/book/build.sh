@@ -9,6 +9,11 @@ mkdir -p "$dist_dir"
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 
+# Keep Calibre's conversion state out of the user's profile and the tracked
+# artifact directory. Callers may override this for deliberate local debugging.
+export CALIBRE_CONFIG_DIRECTORY="${CALIBRE_CONFIG_DIRECTORY:-$tmpdir/calibre-config}"
+mkdir -p "$CALIBRE_CONFIG_DIRECTORY"
+
 version="$(
   awk '
     /^\[workspace\.package\]/ { in_workspace_package = 1; next }

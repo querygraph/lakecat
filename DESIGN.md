@@ -390,8 +390,9 @@ Authoritative first-release evidence:
 - `docs/book/build.sh` proves the reader-facing book artifacts match the
   current source when deliberately refreshing tracked `docs/book/dist`
   artifacts. `scripts/check-release-readiness.sh --release-candidate` builds
-  the book into a temporary `LAKECAT_BOOK_DIST_DIR` so EPUB/PDF/MOBI
-  validation does not dirty a clean candidate commit.
+  the book into a temporary `LAKECAT_BOOK_DIST_DIR` and isolates Calibre's
+  conversion state in a temporary `CALIBRE_CONFIG_DIRECTORY`, so EPUB/PDF/MOBI
+  validation does not dirty a clean candidate commit or the operator's profile.
 - `scripts/check-book-artifact-contract.sh` proves the generated book marker,
   stable EPUB/PDF/MOBI artifacts, versioned Kindle symlink, EPUB metadata, and
   PDF layout agree in either tracked or temporary dist directories.

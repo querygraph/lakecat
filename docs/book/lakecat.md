@@ -13835,8 +13835,9 @@ broad local gate, QGLake handoff, QueryGraph locked verify/import,
 dependency-contract check, and book validation all pass together. Tracked book
 artifacts are refreshed deliberately with `docs/book/build.sh`; the
 release-candidate gate validates a fresh EPUB/PDF/MOBI build in a temporary
-`LAKECAT_BOOK_DIST_DIR` so binary artifact metadata cannot dirty the candidate
-commit by itself.
+`LAKECAT_BOOK_DIST_DIR` and gives Calibre a temporary
+`CALIBRE_CONFIG_DIRECTORY`, so neither binary artifact metadata nor converter
+preference state can dirty the candidate commit or operator profile.
 
 Manual GitHub Actions is deliberately narrower than the local release proof.
 When an operator triggers it, the workflow runs the local dependency contract,
