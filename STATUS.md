@@ -5,6 +5,20 @@ Updated: 2026-06-24
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-candidate evidence: the local candidate matrix completed all
+  default and all-feature Rust rows and its temporary book artifact contract.
+  Its persistent-runtime handoff cannot bind `127.0.0.1` by sandbox policy;
+  the same direct loopback-enabled `scripts/qglake-handoff-local.sh` passed on
+  this head, proving 26 delivered outbox/lineage events, 54 Grust Turso graph
+  events, QueryGraph verify/import, bundle hash
+  `sha256:8dc22c00a88e414f2896ce458baffdbaadde90259e155a2684cc6723834e213d`,
+  graph hash
+  `sha256:2c32eaec43a9043c4a764e749afb851f68a59efcb471790ff9126fef5b8010ed`,
+  OpenLineage hash
+  `sha256:ff3f78fa6aa7dc1f2da2b73bf29f72bc1e4cc78a22f453a063571ef831dfa7f1`,
+  and QueryGraph import hash
+  `sha256:c96c2e58b384e31209eaf69307cd66296014415e102eceb4fbe5cedea0035a3d`.
+  This remains split local evidence, not a refreshed release-candidate proof.
 - Latest release-candidate handoff isolation: clean candidate mode now gives
   the QGLake handoff a per-run evidence directory and Cargo target directory,
   avoiding mutation of ordinary `target/qglake-handoff` artifacts while

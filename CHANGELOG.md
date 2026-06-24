@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Revalidated the local release matrix after artifact-isolation hardening. The
+  default and all-feature Rust rows plus temporary book contract passed; the
+  direct loopback-enabled QGLake handoff also passed with 26 delivered events
+  and 54 Grust Turso graph events. The persistent-runtime sandbox still cannot
+  bind the local service, so this is recorded as split local evidence rather
+  than a refreshed clean-candidate proof.
 - Isolated QGLake handoff artifacts during clean release candidates. Candidate
   runs now place both handoff evidence and its Cargo target under per-run
   temporary paths, leaving ordinary local handoff defaults unchanged.
