@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "LakeCat Croissant/CDIF/OSI/ODRL/OpenLineage bootstrap projection types for QueryGraph"
 
 [dependencies]
 chrono = { workspace = true }

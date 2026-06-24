@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "LakeCat Iceberg REST request/response types and API adapters"
 
 [dependencies]
 lakecat-core = { workspace = true }

@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "LakeCat OpenLineage event types, audit event hashes, and replay/export support"
 
 [dependencies]
 async-trait = { workspace = true }
