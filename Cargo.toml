@@ -39,14 +39,14 @@ turso = { version = "0.7.0-pre.10", default-features = false }
 url = "2.5.8"
 uuid = { version = "1", features = ["serde", "v4"] }
 
-lakecat-api = { path = "crates/lakecat-api" }
-lakecat-core = { path = "crates/lakecat-core" }
-lakecat-graph = { path = "crates/lakecat-graph" }
-lakecat-lineage = { path = "crates/lakecat-lineage" }
-lakecat-querygraph = { path = "crates/lakecat-querygraph" }
-lakecat-sail = { path = "crates/lakecat-sail" }
-lakecat-security = { path = "crates/lakecat-security" }
-lakecat-store = { path = "crates/lakecat-store" }
+lakecat-api = { path = "crates/lakecat-api", version = "0.1.0" }
+lakecat-core = { path = "crates/lakecat-core", version = "0.1.0" }
+lakecat-graph = { path = "crates/lakecat-graph", version = "0.1.0" }
+lakecat-lineage = { path = "crates/lakecat-lineage", version = "0.1.0" }
+lakecat-querygraph = { path = "crates/lakecat-querygraph", version = "0.1.0" }
+lakecat-sail = { path = "crates/lakecat-sail", version = "0.1.0" }
+lakecat-security = { path = "crates/lakecat-security", version = "0.1.0" }
+lakecat-store = { path = "crates/lakecat-store", version = "0.1.0" }
 
 grust-graph = { package = "grust-graph", version = "0.10.0", path = "../grust/crates/grust", default-features = false }
 grust-turso = { package = "grust-turso", version = "0.10.0", path = "../grust/crates/grust-turso", default-features = false }
