@@ -336,6 +336,12 @@ LakeCat has to duplicate. That makes LakeCat faster, smaller, and more
 compatible: it proves authority and state transitions while Sail proves table
 meaning.
 
+Iceberg format version 4 is still under active development and has not been
+formally adopted by Apache Iceberg. LakeCat therefore keeps its v4 posture
+explicitly limited to a JSON compatibility bridge, while Sail waits to model
+the adopted specification rather than turning a moving draft into catalog
+behavior.
+
 ## Why The Engine Boundary Matters
 
 The reason LakeCat pushes work into Sail is not just cleanliness. It is the

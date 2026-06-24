@@ -365,6 +365,9 @@ Release-deferred scope:
 - Typed Iceberg v4 semantics remain Sail-owned future work. LakeCat may
   advertise `extension-ready` JSON passthrough with
   `typed-sail=unavailable`, but it must not claim settled typed v4 support.
+  Apache Iceberg currently describes v4 as under active development and not
+  formally adopted, so Sail should track the evolving specification before any
+  typed model, planner, or catalog compatibility claim is enabled.
 - Cloud SDK-backed secret managers beyond the current Vault and file-backed
   provider roots remain future work. Existing secret-ref proof must stay
   redacted and TypeSec-gated.

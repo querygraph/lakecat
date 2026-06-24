@@ -5,6 +5,10 @@ Updated: 2026-06-24
 ## Current State
 
 - LakeCat is on `master`.
+- Latest v4 boundary review: Apache Iceberg still lists format version 4 as
+  under active development and not formally adopted. LakeCat continues to
+  advertise only its extension-ready JSON bridge; typed model, planner, and
+  compatibility work remains a Sail-owned pre-adoption task.
 - Latest release-candidate proof refresh: the broad local gate passed on June
   24, 2026 from clean head `72df4eed`. The gate covered shell and dependency
   contracts, default and all-feature Rust matrices, temporary book validation,

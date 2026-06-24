@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Clarified the v4 boundary against the current Apache Iceberg specification:
+  v4 remains under active development and is not formally adopted. LakeCat
+  stays on its explicit JSON bridge while typed semantics remain Sail-owned
+  future work.
 - The full local release-candidate proof was refreshed from clean head
   `72df4eed`. `scripts/check-release-readiness.sh --release-candidate` passed
   with the default and all-feature matrix, temporary book validation, Grust
