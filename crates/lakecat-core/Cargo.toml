@@ -1,12 +1,13 @@
 [package]
 name = "lakecat-core"
-version.workspace = true
+version = "0.1.1"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "LakeCat core types: stable IDs, errors, time, config, and content hashes"
 
 [dependencies]
+async-trait = { workspace = true }
 chrono = { workspace = true }
 hex = { workspace = true }
 serde = { workspace = true }
@@ -14,3 +15,6 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }

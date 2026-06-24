@@ -3850,14 +3850,16 @@ dependencies = [
 
 [[package]]
 name = "lakecat-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
+ "async-trait",
  "chrono",
  "hex",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "thiserror",
+ "tokio",
  "uuid",
 ]
 
@@ -3950,7 +3952,6 @@ dependencies = [
  "lakecat-graph",
  "lakecat-lineage",
  "lakecat-querygraph",
- "lakecat-sail",
  "lakecat-security",
  "lakecat-store",
  "object_store",

@@ -40,7 +40,7 @@ url = "2.5.8"
 uuid = { version = "1", features = ["serde", "v4"] }
 
 lakecat-api = { path = "crates/lakecat-api", version = "0.1.0" }
-lakecat-core = { path = "crates/lakecat-core", version = "0.1.0" }
+lakecat-core = { path = "crates/lakecat-core", version = "0.1.1" }
 lakecat-graph = { path = "crates/lakecat-graph", version = "0.1.0" }
 lakecat-lineage = { path = "crates/lakecat-lineage", version = "0.1.0" }
 lakecat-querygraph = { path = "crates/lakecat-querygraph", version = "0.1.0" }

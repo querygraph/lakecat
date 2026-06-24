@@ -36,16 +36,16 @@ use lakecat_querygraph::{
     QueryGraphBootstrap, QueryGraphTenantProjection, QueryGraphViewReceiptEvidence,
 };
 #[cfg(not(feature = "sail-local"))]
-use lakecat_sail::DeferredSailCatalogEngine;
+use lakecat_core::sail::DeferredSailCatalogEngine;
 #[cfg(not(feature = "sail-local"))]
-use lakecat_sail::FetchScanTasksRequest as SailFetchScanTasksRequest;
+use lakecat_core::sail::FetchScanTasksRequest as SailFetchScanTasksRequest;
 #[cfg(not(feature = "sail-local"))]
-use lakecat_sail::ScanPlanningRequest;
+use lakecat_core::sail::ScanPlanningRequest;
 #[cfg(feature = "sail-local")]
 use lakecat_sail::catalog_provider::{
     LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
 };
-use lakecat_sail::{CommitPreparationRequest, SailCatalogEngine};
+use lakecat_core::sail::{CommitPreparationRequest, SailCatalogEngine};
 use lakecat_security::{
     AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
     CatalogConfigCapability, CredentialsVendCapability, GovernanceEngine, GraphReadCapability,
@@ -9346,7 +9346,7 @@ fn table_scan_planned_audit_payload(
     ident: &TableIdent,
     table: &TableRecord,
     receipt: &AuthorizationReceipt,
-    scan: &lakecat_sail::ScanPlan,
+    scan: &lakecat_core::sail::ScanPlan,
     scan_request_extensions: &Value,
 ) -> Value {
     let mut audit_payload = json!({
@@ -9380,7 +9380,7 @@ fn table_scan_tasks_fetched_audit_payload(
     ident: &TableIdent,
     table: &TableRecord,
     receipt: &AuthorizationReceipt,
-    fetched: &lakecat_sail::FetchScanTasksPlan,
+    fetched: &lakecat_core::sail::FetchScanTasksPlan,
     fetch_extensions: &Value,
 ) -> Value {
     let mut audit_payload = json!({
@@ -10411,7 +10411,7 @@ fn metadata_object_store(
 }
 
 async fn write_planned_metadata(
-    commit_plan: &lakecat_sail::CommitPlan,
+    commit_plan: &lakecat_core::sail::CommitPlan,
 ) -> Result<Option<PlannedMetadataWrite>, LakeCatError> {
     if !commit_plan.metadata_write_required {
         return Ok(None);
@@ -10442,7 +10442,7 @@ async fn write_planned_metadata(
 }
 
 fn validate_planned_metadata_location(
-    commit_plan: &lakecat_sail::CommitPlan,
+    commit_plan: &lakecat_core::sail::CommitPlan,
     current_metadata_location: Option<&str>,
     storage_profile: &StorageProfile,
 ) -> Result<(), LakeCatError> {
@@ -10792,7 +10792,7 @@ async fn plan_scan_with_capability(
     capability: &TableScanCapability,
     table: &TableRecord,
     request: PlanTableScanRequest,
-) -> Result<(lakecat_sail::ScanPlan, serde_json::Value), LakeCatHttpError> {
+) -> Result<(lakecat_core::sail::ScanPlan, serde_json::Value), LakeCatHttpError> {
     request.validate_scan_mode()?;
     #[cfg(feature = "sail-local")]
     let _ = &table;
@@ -10962,7 +10962,7 @@ async fn fetch_scan_tasks_with_capability(
     capability: &TableScanCapability,
     table: &TableRecord,
     request: ApiFetchScanTasksRequest,
-) -> Result<lakecat_sail::FetchScanTasksPlan, LakeCatHttpError> {
+) -> Result<lakecat_core::sail::FetchScanTasksPlan, LakeCatHttpError> {
     #[cfg(feature = "sail-local")]
     let _ = &table;
     #[cfg(not(feature = "sail-local"))]
@@ -13720,8 +13720,8 @@ mod tests {
     impl SailCatalogEngine for RecordingSailEngine {
         async fn prepare_commit(
             &self,
-            _request: lakecat_sail::CommitPreparationRequest,
-        ) -> lakecat_core::LakeCatResult<lakecat_sail::CommitPlan> {
+            _request: lakecat_core::sail::CommitPreparationRequest,
+        ) -> lakecat_core::LakeCatResult<lakecat_core::sail::CommitPlan> {
             *self.commit_prepare_count.lock().await += 1;
             Err(LakeCatError::Internal(
                 "recording Sail engine should not prepare commit".to_string(),
@@ -13730,8 +13730,8 @@ mod tests {
 
         async fn plan_scan(
             &self,
-            _request: lakecat_sail::ScanPlanningRequest,
-        ) -> lakecat_core::LakeCatResult<lakecat_sail::ScanPlan> {
+            _request: lakecat_core::sail::ScanPlanningRequest,
+        ) -> lakecat_core::LakeCatResult<lakecat_core::sail::ScanPlan> {
             Err(LakeCatError::NotSupported(
                 "recording Sail engine does not plan scans".to_string(),
             ))
@@ -13739,8 +13739,8 @@ mod tests {
 
         async fn fetch_scan_tasks(
             &self,
-            _request: lakecat_sail::FetchScanTasksRequest,
-        ) -> lakecat_core::LakeCatResult<lakecat_sail::FetchScanTasksPlan> {
+            _request: lakecat_core::sail::FetchScanTasksRequest,
+        ) -> lakecat_core::LakeCatResult<lakecat_core::sail::FetchScanTasksPlan> {
             Err(LakeCatError::NotSupported(
                 "recording Sail engine does not fetch scan tasks".to_string(),
             ))
@@ -13749,16 +13749,16 @@ mod tests {
 
     #[derive(Debug, Default)]
     struct CapturingSailEngine {
-        last_scan: Mutex<Option<lakecat_sail::ScanPlanningRequest>>,
-        last_fetch: Mutex<Option<lakecat_sail::FetchScanTasksRequest>>,
+        last_scan: Mutex<Option<lakecat_core::sail::ScanPlanningRequest>>,
+        last_fetch: Mutex<Option<lakecat_core::sail::FetchScanTasksRequest>>,
     }
 
     #[async_trait]
     impl SailCatalogEngine for CapturingSailEngine {
         async fn prepare_commit(
             &self,
-            _request: lakecat_sail::CommitPreparationRequest,
-        ) -> lakecat_core::LakeCatResult<lakecat_sail::CommitPlan> {
+            _request: lakecat_core::sail::CommitPreparationRequest,
+        ) -> lakecat_core::LakeCatResult<lakecat_core::sail::CommitPlan> {
             Err(LakeCatError::Internal(
                 "capturing Sail engine should not prepare commit".to_string(),
             ))
@@ -13766,10 +13766,10 @@ mod tests {
 
         async fn plan_scan(
             &self,
-            request: lakecat_sail::ScanPlanningRequest,
-        ) -> lakecat_core::LakeCatResult<lakecat_sail::ScanPlan> {
+            request: lakecat_core::sail::ScanPlanningRequest,
+        ) -> lakecat_core::LakeCatResult<lakecat_core::sail::ScanPlan> {
             *self.last_scan.lock().await = Some(request.clone());
-            Ok(lakecat_sail::ScanPlan {
+            Ok(lakecat_core::sail::ScanPlan {
                 planned_by: "capturing-sail".to_string(),
                 snapshot_id: Some(42),
                 scan_tasks: vec![serde_json::json!({
@@ -13784,10 +13784,10 @@ mod tests {
 
         async fn fetch_scan_tasks(
             &self,
-            request: lakecat_sail::FetchScanTasksRequest,
-        ) -> lakecat_core::LakeCatResult<lakecat_sail::FetchScanTasksPlan> {
+            request: lakecat_core::sail::FetchScanTasksRequest,
+        ) -> lakecat_core::LakeCatResult<lakecat_core::sail::FetchScanTasksPlan> {
             *self.last_fetch.lock().await = Some(request.clone());
-            Ok(lakecat_sail::FetchScanTasksPlan {
+            Ok(lakecat_core::sail::FetchScanTasksPlan {
                 planned_by: "capturing-sail".to_string(),
                 plan_task: request.plan_task,
                 snapshot_id: Some(42),
@@ -46899,7 +46899,7 @@ mod tests {
             Principal::anonymous(),
         );
         let storage_profile = StorageProfile::inferred_for_table(&table);
-        let plan = lakecat_sail::CommitPlan {
+        let plan = lakecat_core::sail::CommitPlan {
             prepared_by: "test".to_string(),
             requirements: Vec::new(),
             updates: Vec::new(),
@@ -46927,7 +46927,7 @@ mod tests {
             Principal::anonymous(),
         );
         let storage_profile = StorageProfile::inferred_for_table(&table);
-        let plan = lakecat_sail::CommitPlan {
+        let plan = lakecat_core::sail::CommitPlan {
             prepared_by: "test".to_string(),
             requirements: Vec::new(),
             updates: Vec::new(),
@@ -46965,7 +46965,7 @@ mod tests {
             "file:///tmp/events/metadata/../00001.json",
             "file:///tmp/events/metadata/%2e%2e/00001.json",
         ] {
-            let plan = lakecat_sail::CommitPlan {
+            let plan = lakecat_core::sail::CommitPlan {
                 prepared_by: "test".to_string(),
                 requirements: Vec::new(),
                 updates: Vec::new(),
@@ -47004,7 +47004,7 @@ mod tests {
             "file:///tmp/events/metadata/00001.json?version=staged",
             "file:///tmp/events/metadata/00001.json#staged",
         ] {
-            let plan = lakecat_sail::CommitPlan {
+            let plan = lakecat_core::sail::CommitPlan {
                 prepared_by: "test".to_string(),
                 requirements: Vec::new(),
                 updates: Vec::new(),
@@ -47049,7 +47049,7 @@ mod tests {
         )
         .unwrap();
         let location = "s3://access:secret@lakecat-demo/events/metadata/00001.json";
-        let plan = lakecat_sail::CommitPlan {
+        let plan = lakecat_core::sail::CommitPlan {
             prepared_by: "test".to_string(),
             requirements: Vec::new(),
             updates: Vec::new(),
@@ -47089,7 +47089,7 @@ mod tests {
             "file:///tmp/events/metadata/token=raw-secret.json",
             "file:///tmp/events/metadata/token%3Draw-secret.json",
         ] {
-            let plan = lakecat_sail::CommitPlan {
+            let plan = lakecat_core::sail::CommitPlan {
                 prepared_by: "test".to_string(),
                 requirements: Vec::new(),
                 updates: Vec::new(),
@@ -47259,7 +47259,7 @@ mod tests {
             BTreeMap::new(),
         )
         .unwrap();
-        let plan = lakecat_sail::CommitPlan {
+        let plan = lakecat_core::sail::CommitPlan {
             prepared_by: "test".to_string(),
             requirements: Vec::new(),
             updates: Vec::new(),
@@ -47293,7 +47293,7 @@ mod tests {
         )
         .unwrap();
         let outside_location = "s3://other-secret-bucket/events/metadata/00001.json";
-        let plan = lakecat_sail::CommitPlan {
+        let plan = lakecat_core::sail::CommitPlan {
             prepared_by: "test".to_string(),
             requirements: Vec::new(),
             updates: Vec::new(),
@@ -52355,7 +52355,7 @@ mod tests {
             }),
             checked_at: chrono::Utc::now(),
         };
-        let scan = lakecat_sail::ScanPlan {
+        let scan = lakecat_core::sail::ScanPlan {
             planned_by: "lakecat-sail".to_string(),
             snapshot_id: Some(42),
             scan_tasks: vec![serde_json::json!({"task": 1})],
@@ -56451,7 +56451,7 @@ mod tests {
             }),
             checked_at: chrono::Utc::now(),
         };
-        let fetched = lakecat_sail::FetchScanTasksPlan {
+        let fetched = lakecat_core::sail::FetchScanTasksPlan {
             planned_by: "lakecat-sail".to_string(),
             plan_task: "lakecat:plan:abc".to_string(),
             snapshot_id: Some(42),
