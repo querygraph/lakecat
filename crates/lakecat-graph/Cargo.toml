@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-publish = false  # optional deps grust-graph/grust-turso not yet on crates.io
+description = "LakeCat catalog-facing Grust graph sink and projection adapters"
 
 [features]
 default = []
