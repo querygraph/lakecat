@@ -14,7 +14,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/querygraph/lakecat"
@@ -40,7 +40,7 @@ url = "2.5.8"
 uuid = { version = "1", features = ["serde", "v4"] }
 
 lakecat-api = { path = "crates/lakecat-api", version = "0.1.0" }
-lakecat-core = { path = "crates/lakecat-core", version = "0.1.1" }
+lakecat-core = { path = "crates/lakecat-core", version = "0.1.1" }  # 0.1.1 added sail module
 lakecat-graph = { path = "crates/lakecat-graph", version = "0.1.0" }
 lakecat-lineage = { path = "crates/lakecat-lineage", version = "0.1.0" }
 lakecat-querygraph = { path = "crates/lakecat-querygraph", version = "0.1.0" }
