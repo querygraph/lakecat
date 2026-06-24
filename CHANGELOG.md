@@ -5,7 +5,8 @@
 - Added an optional `LAKECAT_RELEASE_RESULT_FILE` hook to the local release
   gate. Its own exit trap writes the gate status after temporary cleanup, so
   local automation can retain candidate evidence when an outer command runner
-  loses the child process result.
+  loses the child process result. Normal `INT` and `TERM` cancellation now
+  also flows through that exit trap with status `143`.
 - Added bounded retry for cleanup of an uncommitted create-only metadata
   object after a failed table commit. LakeCat retries the idempotent delete
   three times with short increasing delays while preserving the original

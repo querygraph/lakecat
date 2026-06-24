@@ -9,6 +9,8 @@ Updated: 2026-06-24
   its own final status to `LAKECAT_RELEASE_RESULT_FILE` from its cleanup trap,
   after removing temporary candidate artifacts. This preserves local evidence
   when an outer runner loses the process result without changing gate behavior.
+  Ordinary `INT` and `TERM` cancellation now exit through the same trap as
+  status `143`; a hard kill remains outside shell cleanup guarantees.
 - Latest commit-recovery hardening: failed table commits now retry cleanup of
   the uncommitted create-only metadata object up to three times with bounded
   increasing delays. The original CAS or store error remains authoritative if

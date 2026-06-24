@@ -23,6 +23,7 @@ cleanup() {
   return "$status"
 }
 trap cleanup EXIT
+trap 'exit 143' INT TERM
 
 usage() {
   cat <<'USAGE'
