@@ -1,0 +1,16 @@
+flowchart TB
+  subgraph clients[Engines and agents]
+    spark[Spark / Flink / Trino]
+    py[PyIceberg / DuckDB]
+    agent[Governed agent]
+  end
+  cat[Catalog: name to current metadata pointer]
+  subgraph storage[Object storage]
+    meta[Iceberg metadata files]
+    data[Parquet / Avro / ORC data files]
+  end
+  spark --> cat
+  py --> cat
+  agent --> cat
+  cat -->|current pointer| meta
+  meta --> data

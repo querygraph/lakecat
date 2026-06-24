@@ -1,0 +1,11 @@
+flowchart TB
+  std[Standard Iceberg parlance<br/>catalog, namespace, metadata pointer, commit] 
+  impl[LakeCat implementation<br/>Rust spine, CatalogStore, Turso, idempotency, audit, outbox]
+  ext[LakeCat optional extensions<br/>management, commit history, view proof, replay, bootstrap]
+  gov[TypeSec governance<br/>receipts, capabilities, TypeDID, ODRL-derived restriction]
+  sem[QueryGraph semantics<br/>Croissant, CDIF, OSI, ODRL, OpenLineage, graph]
+  eng[Sail engine truth<br/>format interpretation, scan planning, commit validation, v4]
+  std --> impl --> ext
+  gov -.governs.-> ext
+  ext -.feeds.-> sem
+  eng -.validates.-> impl

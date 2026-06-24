@@ -1,0 +1,18 @@
+flowchart TB
+  subgraph lc[LakeCat — thin catalog control plane]
+    id[Identity, tenancy, warehouse scope]
+    ptr[Metadata-pointer CAS + history]
+    gate[Policy gates + receipts]
+    evt[Audit / outbox / replay]
+  end
+  sail[Sail — engine truth<br/>format, scan planning, commit validation, v4]
+  grust[Grust — graph substrate<br/>taxonomy, traversal, Cypher, stores]
+  typesec[TypeSec — security fabric<br/>authority, capabilities, TypeDID, ODRL]
+  qg[QueryGraph — semantic + agentic composition]
+  lc -->|delegates table-format work| sail
+  lc -->|projects catalog graph| grust
+  lc -->|asks for decisions, persists receipts| typesec
+  lc -->|emits governed bootstrap evidence| qg
+  sail -.-> qg
+  grust -.-> qg
+  typesec -.-> qg

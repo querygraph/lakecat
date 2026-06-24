@@ -1,0 +1,5 @@
+flowchart LR
+  client[Standard Iceberg client] -->|unchanged REST| rest[Compatible REST surface]
+  rest --> truth[(Pristine Iceberg metadata)]
+  agent[Governed agent / QueryGraph] -->|optional proof APIs| proof[Evidence beside the table]
+  proof -.derived from.-> truth
