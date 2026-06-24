@@ -8076,6 +8076,12 @@ that only uses memory stores should not accidentally depend on a sibling repo.
 A test that claims to validate TypeSec should enable `typesec-local` and call
 TypeSec.
 
+The same distinction is visible at runtime. The embedded deferred Sail seam
+does not fabricate a successful empty scan plan: a service without
+`sail-local` rejects scan planning and task fetch. A real read workflow must
+enable Sail, so any plan task or manifest work reflects the engine that
+interprets Iceberg metadata rather than a catalog-shaped placeholder.
+
 The dependency contract is executable because LakeCat has active sibling
 bridges. Grust now follows the local 0.10 path checkout so LakeCat can use the
 dedicated `grust-turso` crate for durable catalog graph projection. The graph

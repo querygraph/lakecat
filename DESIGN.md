@@ -759,6 +759,9 @@ emit, so an archived governed read cannot append unverified scan, lineage,
 graph, QueryGraph, or application claims beside otherwise valid restriction,
 projection, stats, filter, task-count, and authorization evidence.
 Prefer upstream Sail APIs for any reusable planner or manifest work.
+The embedded deferred engine is a test seam, not a planner: when `sail-local`
+is absent it must reject plan and fetch requests explicitly rather than return
+an empty successful scan that could be mistaken for engine-derived work.
 
 ### P2 QGLake Acceptance
 

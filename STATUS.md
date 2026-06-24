@@ -5,6 +5,17 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest Sail runtime-honesty hardening:
+  the embedded deferred Sail engine now rejects scan planning without
+  `sail-local`, matching its already-explicit task-fetch behavior. A deployed
+  service therefore cannot report a successful empty plan without the Sail
+  engine that owns Iceberg metadata interpretation and task construction.
+- Local verification for this Sail runtime-honesty slice passed:
+  `cargo fmt -p lakecat-sail -p lakecat-service -- --check`;
+  `cargo test -p lakecat-sail deferred_engine_rejects_scan_planning_instead_of_returning_empty_work -- --test-threads=1`;
+  `cargo test -p lakecat-service create_load_commit_and_plan_table_round_trips_through_integrations -- --test-threads=1`;
+  `cargo test -p lakecat-service plan_rejects_invalid_incremental_scan_modes -- --test-threads=1`; and
+  `git diff --check`.
 - Latest Sail capability-carrying hardening:
   the `sail-local` HTTP scan path now supplies the original typed
   `TableScanCapability` to the Sail catalog provider for both plan and

@@ -190,18 +190,10 @@ impl SailCatalogEngine for DeferredSailCatalogEngine {
     }
 
     async fn plan_scan(&self, request: ScanPlanningRequest) -> LakeCatResult<ScanPlan> {
-        if request.metadata_location.is_none() {
-            return Err(LakeCatError::NotSupported(
-                "Sail scan planning needs an Iceberg metadata location".to_string(),
-            ));
-        }
-        validate_lakecat_metadata_format(&request.table_metadata)?;
-        Ok(ScanPlan {
-            planned_by: "lakecat-sail-deferred".to_string(),
-            snapshot_id: request.snapshot_id.or(request.end_snapshot_id),
-            scan_tasks: Vec::new(),
-            residual_filter: None,
-        })
+        Err(LakeCatError::NotSupported(format!(
+            "Sail scan planning is unavailable without the `sail-local` feature for {}",
+            request.table.stable_id()
+        )))
     }
 
     async fn fetch_scan_tasks(
@@ -229,6 +221,39 @@ pub fn validate_lakecat_metadata_format(metadata: &Value) -> LakeCatResult<Icebe
     Err(LakeCatError::NotSupported(format!(
         "unsupported Iceberg table format version v{version}"
     )))
+}
+
+#[cfg(test)]
+mod deferred_tests {
+    use super::*;
+    use lakecat_core::{Namespace, TableName, WarehouseName};
+
+    #[tokio::test]
+    async fn deferred_engine_rejects_scan_planning_instead_of_returning_empty_work() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let error = DeferredSailCatalogEngine::new()
+            .plan_scan(ScanPlanningRequest {
+                table,
+                principal: Principal::anonymous(),
+                metadata_location: Some("file:///tmp/events/metadata/00000.json".to_string()),
+                table_metadata: serde_json::json!({"format-version": 3}),
+                projection: Vec::new(),
+                filters: Vec::new(),
+                limit: None,
+                snapshot_id: None,
+                start_snapshot_id: None,
+                end_snapshot_id: None,
+            })
+            .await
+            .expect_err("deferred engine must not claim a successful empty scan plan");
+
+        assert!(matches!(error, LakeCatError::NotSupported(_)));
+        assert!(error.to_string().contains("sail-local"));
+    }
 }
 
 #[cfg(feature = "catalog-provider")]

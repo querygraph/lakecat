@@ -45059,25 +45059,27 @@ mod tests {
             .body(Body::from(r#"{"select":["id"],"filter":{"type":"always-true"},"case-sensitive":true,"limit":10}"#))
             .unwrap();
         let response = app.clone().oneshot(plan).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
-        let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(payload["status"], serde_json::json!("completed"));
-        let _: sail_catalog_iceberg::models::PlanTableScanRequest =
-            serde_json::from_value(serde_json::json!({
-                "select": ["id"],
-                "filter": {"type": "always-true"},
-                "case-sensitive": true
-            }))
-            .unwrap();
-        assert_eq!(
-            payload["residual-filter"]["lakecat:scan-request"]["case-sensitive"],
-            serde_json::json!(true)
-        );
+        #[cfg(not(feature = "sail-local"))]
+        assert_eq!(response.status(), StatusCode::NOT_IMPLEMENTED);
         #[cfg(feature = "sail-local")]
         {
+            assert_eq!(response.status(), StatusCode::OK);
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(payload["status"], serde_json::json!("completed"));
+            let _: sail_catalog_iceberg::models::PlanTableScanRequest =
+                serde_json::from_value(serde_json::json!({
+                    "select": ["id"],
+                    "filter": {"type": "always-true"},
+                    "case-sensitive": true
+                }))
+                .unwrap();
+            assert_eq!(
+                payload["residual-filter"]["lakecat:scan-request"]["case-sensitive"],
+                serde_json::json!(true)
+            );
             assert_eq!(
                 payload["lakecat-plan-tasks"][0]["task-type"],
                 serde_json::json!("manifest-list")
@@ -47759,17 +47761,22 @@ mod tests {
             ))
             .unwrap();
         let response = app.oneshot(valid_empty_delta).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
-        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(body["snapshot-id"], serde_json::json!(42));
-        assert_eq!(body["plan-tasks"], serde_json::json!([]));
-        assert_eq!(
-            body["residual-filter"]["lakecat:scan-request"]["start-snapshot-id"],
-            serde_json::json!(42)
-        );
+        #[cfg(not(feature = "sail-local"))]
+        assert_eq!(response.status(), StatusCode::NOT_IMPLEMENTED);
+        #[cfg(feature = "sail-local")]
+        {
+            assert_eq!(response.status(), StatusCode::OK);
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(body["snapshot-id"], serde_json::json!(42));
+            assert_eq!(body["plan-tasks"], serde_json::json!([]));
+            assert_eq!(
+                body["residual-filter"]["lakecat:scan-request"]["start-snapshot-id"],
+                serde_json::json!(42)
+            );
+        }
     }
 
     #[tokio::test]

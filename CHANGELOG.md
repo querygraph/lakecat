@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made the deferred Sail engine fail closed for scan planning. A service built
+  without `sail-local` now returns an explicit unsupported response instead of
+  reporting a successful empty scan plan; real table planning and task fetch
+  require the Sail integration feature.
 - Preserved one TypeSec authorization receipt across each `sail-local` HTTP
   scan operation. The service now passes its already-authorized typed scan
   capability into the Sail catalog provider for plan and task-fetch execution,
