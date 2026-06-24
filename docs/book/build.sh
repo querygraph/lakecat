@@ -81,11 +81,20 @@ kindle_epub="$dist_dir/$kindle_name.epub"
 
 sed "s/{{KINDLE_NAME}}/$kindle_name/g" "$repo_root/docs/book/cover.md" > "$tmpdir/cover.md"
 
+# Render Mermaid diagrams to PNG and rewrite fenced blocks as image references.
+# Tracked diagram sources/outputs live in docs/book/diagrams; pandoc runs from
+# $tmpdir, so copy them there for relative image resolution.
+node "$repo_root/docs/book/render-diagrams.mjs" \
+  "$repo_root/docs/book/lakecat.md" \
+  "$tmpdir/lakecat.md" \
+  "$repo_root/docs/book/diagrams"
+cp -R "$repo_root/docs/book/diagrams" "$tmpdir/diagrams"
+
 run_pandoc "$tmpdir/cover.md" \
   -o "$tmpdir/cover.pdf" \
   --pdf-engine=typst
 
-run_pandoc "$repo_root/docs/book/lakecat.md" \
+run_pandoc "$tmpdir/lakecat.md" \
   -o "$tmpdir/body.pdf" \
   --pdf-engine=typst \
   --toc \
@@ -94,7 +103,7 @@ run_pandoc "$repo_root/docs/book/lakecat.md" \
 pdfunite "$tmpdir/cover.pdf" "$tmpdir/body.pdf" "$dist_dir/lakecat.pdf"
 docs/book/check_pdf_layout.sh "$dist_dir/lakecat.pdf"
 
-run_pandoc "$tmpdir/cover.md" "$repo_root/docs/book/lakecat.md" \
+run_pandoc "$tmpdir/cover.md" "$tmpdir/lakecat.md" \
   -o "$dist_dir/lakecat.epub" \
   --toc \
   --number-sections \
