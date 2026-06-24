@@ -5,6 +5,10 @@ Updated: 2026-06-24
 ## Current State
 
 - LakeCat is on `master`.
+- Goal documentation: the original foundational charter is archived unchanged
+  as `docs/completed/GOAL1.md`. The new `GOAL.md` is the concise live
+  release-and-next-stage charter and defers detailed execution guidance to the
+  current design, status, release, book, and agent documents.
 - Latest v4 boundary review: Apache Iceberg still lists format version 4 as
   under active development and not formally adopted. LakeCat continues to
   advertise only its extension-ready JSON bridge; typed model, planner, and

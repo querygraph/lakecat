@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Archived the original foundational goal as `docs/completed/GOAL1.md` and
+  replaced `GOAL.md` with the live release-and-next-stage charter. Release
+  proof allowlists now recognize versioned archived-goal records as
+  documentation-only post-proof changes.
 - Clarified the v4 boundary against the current Apache Iceberg specification:
   v4 remains under active development and is not formally adopted. LakeCat
   stays on its explicit JSON bridge while typed semantics remain Sail-owned
