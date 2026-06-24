@@ -421,6 +421,19 @@ pub mod catalog_provider {
                 .await
         }
 
+        /// Plans through Sail using a capability that the HTTP/catalog boundary
+        /// already authorized. This preserves the exact receipt and restriction
+        /// that LakeCat will record as scan evidence.
+        pub async fn plan_authorized_table_scan(
+            &self,
+            capability: &TableScanCapability,
+            request: ProviderScanPlanningRequest,
+        ) -> CatalogResult<ScanPlan> {
+            self.ensure_capability_warehouse(capability)?;
+            self.plan_table_scan_with_capability(capability.clone(), request)
+                .await
+        }
+
         async fn plan_table_scan_with_capability(
             &self,
             capability: TableScanCapability,
@@ -475,6 +488,18 @@ pub mod catalog_provider {
                 .await
         }
 
+        /// Fetches through Sail using the same capability that authorized the
+        /// plan. A task fetch must not silently mint a second policy decision.
+        pub async fn fetch_authorized_table_scan_tasks(
+            &self,
+            capability: &TableScanCapability,
+            request: ProviderFetchScanTasksRequest,
+        ) -> CatalogResult<FetchScanTasksPlan> {
+            self.ensure_capability_warehouse(capability)?;
+            self.fetch_table_scan_tasks_with_capability(capability.clone(), request)
+                .await
+        }
+
         async fn fetch_table_scan_tasks_with_capability(
             &self,
             capability: TableScanCapability,
@@ -500,6 +525,19 @@ pub mod catalog_provider {
                 })
                 .await
                 .map_err(catalog_error)
+        }
+
+        fn ensure_capability_warehouse(
+            &self,
+            capability: &TableScanCapability,
+        ) -> CatalogResult<()> {
+            if capability.table().warehouse == self.warehouse {
+                Ok(())
+            } else {
+                Err(CatalogError::Conflict(
+                    "LakeCat scan capability does not target this Sail warehouse".to_string(),
+                ))
+            }
         }
 
         async fn authorize_catalog(
@@ -1703,7 +1741,10 @@ pub mod catalog_provider {
             SailCatalogEngine,
         };
         use lakecat_core::{LakeCatError, LakeCatResult};
-        use lakecat_security::AllowAllGovernanceEngine;
+        use lakecat_security::{
+            AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
+            GovernanceEngine, TableScanCapability,
+        };
         use lakecat_store::{MemoryCatalogStore, TableRecord};
         use sail_catalog::provider::CatalogProvider;
         use tokio::sync::Mutex;
@@ -1712,6 +1753,22 @@ pub mod catalog_provider {
         struct RecordingSailEngine {
             last_scan: Mutex<Option<ScanPlanningRequest>>,
             last_fetch: Mutex<Option<FetchScanTasksRequest>>,
+        }
+
+        #[derive(Debug)]
+        struct RejectingGovernance;
+
+        #[async_trait::async_trait]
+        impl GovernanceEngine for RejectingGovernance {
+            async fn authorize(
+                &self,
+                _request: AuthorizationRequest,
+            ) -> LakeCatResult<AuthorizationReceipt> {
+                Err(LakeCatError::Internal(
+                    "provider governance must not be consulted for a pre-authorized scan"
+                        .to_string(),
+                ))
+            }
         }
 
         #[async_trait::async_trait]
@@ -2442,6 +2499,94 @@ pub mod catalog_provider {
             assert_eq!(
                 recorded.metadata_location.as_deref(),
                 Some("file:///tmp/events/metadata/00000.json")
+            );
+        }
+
+        #[tokio::test]
+        async fn provider_uses_pre_authorized_scan_capability_without_reauthorizing() {
+            let store = MemoryCatalogStore::new();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let table_name = TableName::new("events").unwrap();
+            let ident = TableIdent::new(warehouse.clone(), namespace, table_name);
+            store
+                .create_table(TableRecord::new(
+                    ident.clone(),
+                    "file:///tmp/events".to_string(),
+                    Some("file:///tmp/events/metadata/00000.json".to_string()),
+                    json!({"format-version": 3}),
+                    Principal::anonymous(),
+                ))
+                .await
+                .unwrap();
+            let receipt = AllowAllGovernanceEngine::new()
+                .authorize(AuthorizationRequest {
+                    principal: Principal::anonymous(),
+                    action: CatalogAction::TablePlanScan,
+                    table: Some(ident.clone()),
+                    context: json!({
+                        "read-restriction": {
+                            "allowed-columns": ["event_id"],
+                            "row-predicate": {
+                                "type": "equal",
+                                "term": "region",
+                                "value": "west"
+                            }
+                        }
+                    }),
+                })
+                .await
+                .unwrap();
+            let capability = TableScanCapability::from_receipt(receipt, ident).unwrap();
+            let sail = Arc::new(RecordingSailEngine::default());
+            let provider = LakeCatCatalogProvider::new(
+                "lakecat",
+                warehouse,
+                store,
+                sail.clone(),
+                Arc::new(RejectingGovernance),
+                Principal::anonymous(),
+            );
+
+            provider
+                .plan_authorized_table_scan(
+                    &capability,
+                    ProviderScanPlanningRequest {
+                        projection: vec!["event_id".to_string(), "payload".to_string()],
+                        ..Default::default()
+                    },
+                )
+                .await
+                .expect("pre-authorized plan should not ask provider governance again");
+            let planned = sail.last_scan.lock().await.clone().unwrap();
+            assert_eq!(planned.projection, vec!["event_id".to_string()]);
+            assert_eq!(
+                planned.filters,
+                vec![json!({
+                    "type": "equal",
+                    "term": "region",
+                    "value": "west"
+                })]
+            );
+
+            provider
+                .fetch_authorized_table_scan_tasks(
+                    &capability,
+                    ProviderFetchScanTasksRequest {
+                        plan_task: "manifest-list-token".to_string(),
+                    },
+                )
+                .await
+                .expect("pre-authorized fetch should not ask provider governance again");
+            let fetched = sail.last_fetch.lock().await.clone().unwrap();
+            assert_eq!(fetched.required_projection, vec!["event_id".to_string()]);
+            assert_eq!(
+                fetched.required_filters,
+                vec![json!({
+                    "type": "equal",
+                    "term": "region",
+                    "value": "west"
+                })]
             );
         }
 

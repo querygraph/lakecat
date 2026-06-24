@@ -10783,8 +10783,8 @@ async fn plan_scan_with_capability(
             capability.receipt().principal.clone(),
         );
         provider
-            .plan_table_scan_for_ident(
-                capability.table(),
+            .plan_authorized_table_scan(
+                capability,
                 ProviderScanPlanningRequest {
                     projection: requested_projection,
                     filters,
@@ -10937,8 +10937,8 @@ async fn fetch_scan_tasks_with_capability(
             capability.receipt().principal.clone(),
         );
         provider
-            .fetch_table_scan_tasks_for_ident(
-                capability.table(),
+            .fetch_authorized_table_scan_tasks(
+                capability,
                 ProviderFetchScanTasksRequest {
                     plan_task: request.plan_task,
                 },
@@ -13346,7 +13346,7 @@ mod tests {
     use http::{HeaderValue, Method, Request, StatusCode};
     use lakecat_graph::GraphNodeLabel;
     use lakecat_lineage::LineageReceipt;
-    use lakecat_store::{MemoryCatalogStore, OutboxEvent};
+    use lakecat_store::{MemoryCatalogStore, OutboxEvent, TableRecord};
     use tokio::sync::Mutex;
     use tower::ServiceExt;
 
@@ -13418,6 +13418,7 @@ mod tests {
     struct RecordingGovernance {
         principals: Mutex<Vec<Principal>>,
         contexts: Mutex<Vec<serde_json::Value>>,
+        actions: Mutex<Vec<CatalogAction>>,
     }
 
     #[derive(Debug)]
@@ -13705,14 +13706,12 @@ mod tests {
         }
     }
 
-    #[cfg(not(feature = "sail-local"))]
     #[derive(Debug, Default)]
     struct CapturingSailEngine {
         last_scan: Mutex<Option<lakecat_sail::ScanPlanningRequest>>,
         last_fetch: Mutex<Option<lakecat_sail::FetchScanTasksRequest>>,
     }
 
-    #[cfg(not(feature = "sail-local"))]
     #[async_trait]
     impl SailCatalogEngine for CapturingSailEngine {
         async fn prepare_commit(
@@ -14293,6 +14292,7 @@ mod tests {
         ) -> lakecat_core::LakeCatResult<lakecat_security::AuthorizationReceipt> {
             self.principals.lock().await.push(request.principal.clone());
             self.contexts.lock().await.push(request.context.clone());
+            self.actions.lock().await.push(request.action.clone());
             Ok(lakecat_security::AuthorizationReceipt {
                 principal: request.principal,
                 action: request.action,
@@ -47456,6 +47456,77 @@ mod tests {
         assert_eq!(records.len(), 1);
         assert_eq!(store.load_table(&ident).await.unwrap().version, 1);
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[cfg(feature = "sail-local")]
+    #[tokio::test]
+    async fn sail_local_scan_uses_one_http_authorization_receipt_per_request() {
+        let store = MemoryCatalogStore::new();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let ident = table_ident("local", "default".to_string(), "events".to_string()).unwrap();
+        store
+            .create_table(TableRecord::new(
+                ident,
+                "file:///tmp/events".to_string(),
+                Some("file:///tmp/events/metadata/00000.json".to_string()),
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            ))
+            .await
+            .unwrap();
+        let sail = Arc::new(CapturingSailEngine::default());
+        let governance = Arc::new(RecordingGovernance::default());
+        let app = app(LakeCatState::new(warehouse, store).with_integrations(
+            sail.clone(),
+            governance.clone(),
+            NoopCatalogGraphSink::new(),
+            HashOnlyLineageSink::new(),
+        ));
+
+        let plan = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables/events/plan")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "analyst@example.com")
+            .body(Body::from(
+                serde_json::json!({"select": ["event_id"]}).to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(plan).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let fetch = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables/events/fetch-scan-tasks")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "analyst@example.com")
+            .body(Body::from(
+                serde_json::json!({"plan-task": "lakecat:plan:captured"}).to_string(),
+            ))
+            .unwrap();
+        let response = app.oneshot(fetch).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let contexts = governance.contexts.lock().await;
+        assert_eq!(
+            contexts.len(),
+            2,
+            "plan and fetch should each have one HTTP authorization decision"
+        );
+        assert!(contexts.iter().all(|context| {
+            context["request-identity"]["principal"]["subject"]
+                == serde_json::json!("analyst@example.com")
+                && context.get("lakecat:sail-provider").is_none()
+        }));
+        drop(contexts);
+        assert_eq!(
+            *governance.actions.lock().await,
+            vec![CatalogAction::TablePlanScan, CatalogAction::TablePlanScan]
+        );
+        let planned = sail.last_scan.lock().await.clone().unwrap();
+        assert_eq!(planned.principal.subject, "analyst@example.com");
+        let fetched = sail.last_fetch.lock().await.clone().unwrap();
+        assert_eq!(fetched.principal.subject, "analyst@example.com");
     }
 
     #[cfg(feature = "sail-local")]

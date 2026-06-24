@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Preserved one TypeSec authorization receipt across each `sail-local` HTTP
+  scan operation. The service now passes its already-authorized typed scan
+  capability into the Sail catalog provider for plan and task-fetch execution,
+  rather than reconstructing and re-authorizing a weaker provider context.
+  This keeps the restriction Sail applies identical to the receipt, audit, and
+  replay evidence LakeCat records.
 - Refreshed the full local release-candidate proof from clean head `a186cf24`.
   `scripts/check-release-readiness.sh --release-candidate` passed locally with
   the release-proof candidate contract from `0ba1fe1c` to `a186cf24`, full

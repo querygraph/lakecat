@@ -5,6 +5,20 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest Sail capability-carrying hardening:
+  the `sail-local` HTTP scan path now supplies the original typed
+  `TableScanCapability` to the Sail catalog provider for both plan and
+  fetch-task execution. This prevents a second provider-local authorization
+  with reconstructed context, so Sail's applied restriction remains the exact
+  TypeSec-style receipt bound to LakeCat audit, outbox, replay, and QGLake
+  evidence. Regression coverage proves the provider does not consult its
+  governance engine when a valid capability is supplied and the HTTP routes
+  produce one authorization decision per plan/fetch request.
+- Local verification for this Sail capability-carrying slice passed:
+  `cargo fmt -p lakecat-sail -p lakecat-service -- --check`;
+  `cargo test -p lakecat-sail --features catalog-provider provider_uses_pre_authorized_scan_capability_without_reauthorizing -- --test-threads=1`;
+  `cargo test -p lakecat-service --features sail-local sail_local_scan_uses_one_http_authorization_receipt_per_request -- --test-threads=1`; and
+  `git diff --check`.
 - Latest outbox event-type binding hardening:
   service-side replay/projection validation now rejects hash-bound pending
   outbox rows whose outer envelope carries a supported event type but whose

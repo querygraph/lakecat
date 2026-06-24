@@ -696,8 +696,14 @@ whether an old OPUS item still needs work.
 Keep tightening the read path so the effective restriction is derived by the
 server, carried by capability, applied by Sail plan/fetch paths, and captured in
 receipts. Scan evidence should preserve both requested and effective
-projection/stat metadata so replay can prove what policy narrowed. Outbox
-admission now requires top-level scan read restrictions and authorization
+projection/stat metadata so replay can prove what policy narrowed.
+The `sail-local` HTTP path must carry that exact typed scan capability into the
+Sail provider for both planning and task fetch. It must not mint a second
+provider-local authorization decision with reconstructed context: Sail's
+effective projection and filters, the TypeSec receipt, audit record, outbox
+event, and later QGLake proof must all describe the same server-derived policy
+decision.
+Outbox admission now requires top-level scan read restrictions and authorization
 receipt read-restriction contexts to match, with explicit planned and fetched
 scan drift coverage at the same policy-hash evidence strength. Governed scan
 replay should continue failing when effective projection/stat evidence drifts
