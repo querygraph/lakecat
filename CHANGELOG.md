@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- `lakecat-service`: split the ~58k-line monolithic `lib.rs` into focused
+  modules by responsibility (`state`, `identity`, `commit`, `outbox`, `scan`,
+  `location`, `router`, `responses`, `error`, `handlers`, `lineage_summary`,
+  `typesec_credential_issuer`, `typesec_typedid`, and an `evidence/` tree) and
+  moved the inline tests into a `tests/` tree. `lib.rs` is now a 41-line root of
+  glob re-exports; the public API and all behavior are unchanged. Cleaned the
+  unused-import warnings left by the glob re-exports so the crate is
+  warning-clean on default, `turso-local`, and `typesec-local`.
 - `lakecat-cli`: split the ~31k-line monolithic `main.rs` into focused modules
   (`cli`, `commands`, `http`, `lineage`, `replay_evidence`, `verify_handoff`,
   `verify_proof`, `verify_receipts`, `verify_replay`, `fixture`) and moved the
