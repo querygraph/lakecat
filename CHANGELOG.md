@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.1 - 2026-06-25
+
+- Rebuilt and published the book artifacts for current head `ed8df8e0`,
+  producing the versioned EPUB link `lakecat (0.1.1-ed8df8e0).epub`.
 - Consolidated the book's second-pass workflow narrative. Dense replay,
   credential-redaction, view receipt-chain, and QGLake handoff proof details now
   live in appendices with review matrices, while the main workflow chapter stays
