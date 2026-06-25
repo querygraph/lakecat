@@ -211,11 +211,11 @@ require_pattern 'encodes_null_and_nested_partition_literals_for_iceberg_rest' sc
   "release-readiness gate must prove v4 bridge partition literal encoding"
 require_pattern 'cargo test -p lakecat-cli qglake_handoff' scripts/check-release-readiness.sh \
   "release-readiness gate must explicitly exercise the Rust QGLake handoff verifier"
-require_pattern 'qglake_handoff_querygraph_import_plan_semantics_rejects_extra_verification_fields' crates/lakecat-cli/src/main.rs \
+require_pattern 'qglake_handoff_querygraph_import_plan_semantics_rejects_extra_verification_fields' crates/lakecat-cli/src/tests/handoff_misc.rs \
   "QGLake handoff verifier must reject extra QueryGraph import-plan verification fields"
 require_pattern 'cargo test -p lakecat-service --features grust-local --lib' scripts/check-release-readiness.sh \
   "release-readiness gate must prove service outbox projection through the Grust feature"
-require_pattern 'short-response-hash' crates/lakecat-service/src/lib.rs \
+require_pattern 'short-response-hash' crates/lakecat-service/src/tests/outbox.rs \
   "service raw lineage summary tests must reject malformed table commit response hashes"
 require_pattern 'cargo test -p lakecat-service --features grust-turso-local --bin lakecat-service' scripts/check-release-readiness.sh \
   "release-readiness gate must prove service startup projection through the Grust Turso feature"
@@ -398,17 +398,17 @@ require_pattern '"graphProjectionProof"' scripts/qglake-handoff-local.sh \
   "local QGLake handoff must write machine-readable graph projection proof"
 require_pattern '"tablePrefix": "lakecat_graph"' scripts/qglake-handoff-local.sh \
   "local QGLake handoff graph projection proof must bind the Grust Turso table prefix"
-require_pattern '"tablePrefix",' crates/lakecat-cli/src/main.rs \
+require_pattern '"tablePrefix",' crates/lakecat-cli/src/verify_proof.rs \
   "Rust QGLake handoff verifier must preserve graph projection table-prefix proof"
-require_pattern 'const QGLAKE_GRUST_TURSO_TABLE_PREFIX: &str = "lakecat_graph";' crates/lakecat-cli/src/main.rs \
+require_pattern 'const QGLAKE_GRUST_TURSO_TABLE_PREFIX: &str = "lakecat_graph";' crates/lakecat-cli/src/verify_proof.rs \
   "Rust QGLake handoff verifier must reject Grust Turso table-prefix drift"
-require_pattern 'qglake_handoff_artifact_verifier_rejects_handoff_verify_output_graph_projection_table_prefix_drift' crates/lakecat-cli/src/main.rs \
+require_pattern 'qglake_handoff_artifact_verifier_rejects_handoff_verify_output_graph_projection_table_prefix_drift' crates/lakecat-cli/src/tests/handoff_artifact.rs \
   "Rust QGLake handoff artifact verifier must reject saved verifier graph projection table-prefix drift"
 require_pattern 'const graphNodes = graphCount\("graph-nodes"\)' scripts/qglake-handoff-local.sh \
   "local QGLake handoff verification artifact must derive graph node count from the QueryGraph import plan"
 require_pattern 'const graphEdges = graphCount\("graph-edges"\)' scripts/qglake-handoff-local.sh \
   "local QGLake handoff verification artifact must derive graph edge count from the QueryGraph import plan"
-require_pattern 'require_graph_projection_proof' crates/lakecat-cli/src/main.rs \
+require_pattern 'require_graph_projection_proof' crates/lakecat-cli/src/verify_proof.rs \
   "LakeCat handoff verifier must require graph projection proof"
 
 for sibling in ../sail/crates/sail-catalog ../sail/crates/sail-common-datafusion; do

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- `scripts/check-local-dependency-contract.sh`: repointed the six `require_pattern`
+  guards that were pinned to the pre-refactor `lakecat-cli/src/main.rs` and
+  `lakecat-service/src/lib.rs` monoliths at the files those guarantees now live in
+  (`verify_proof.rs`, the cli/service `tests/` trees). No guard was weakened; each
+  still asserts the same string, only in its new location.
 - `lakecat-store`: split the ~16.9k-line `lib.rs` (16,852 → 3,802 lines) by
   extracting the `turso-local` backend into `turso_store/mod.rs` and its inline
   test module into `turso_store/tests.rs`, and the memory-backend test module
