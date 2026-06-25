@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- `lakecat-cli`: split the ~31k-line monolithic `main.rs` into focused modules
+  (`cli`, `commands`, `http`, `lineage`, `replay_evidence`, `verify_handoff`,
+  `verify_proof`, `verify_receipts`, `verify_replay`, `fixture`) and moved the
+  inline test module into a `tests/` tree, with no change to CLI behavior or the
+  500 preserved tests. Also fixed the `qglake-fixture` `CreateTableRequest`
+  literal (H3) so the feature compiles after the spec-conformant createTable
+  change. `main.rs` is now 201 lines; the longest function dropped from 537 to
+  103 lines, with shared `lakecat_endpoint`/`send_request` HTTP helpers.
 - `lakecat-sail`: removed a dead import so the default build is warning-clean.
 - Synced `Cargo.lock` with the current sibling dependency graph (dropped the
   unused `arrow-pyarrow`/`pyo3` chain, bumped `jiter`), reflecting upstream Sail

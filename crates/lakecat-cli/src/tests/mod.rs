@@ -1,0 +1,15 @@
+mod bootstrap;
+mod cli;
+pub(crate) mod common;
+mod credentials;
+mod fixture;
+mod handoff_artifact;
+mod handoff_captured;
+mod handoff_misc;
+mod handoff_summary;
+mod handoff_summary2;
+mod lineage;
+mod lineage2;
+mod lineage3;
+mod scan;
+mod verify_runtime;
