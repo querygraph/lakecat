@@ -7833,6 +7833,13 @@ pub mod turso_store {
     #[derive(Debug, Clone)]
     pub struct TursoCatalogStore {
         db: Database,
+        // The local Turso/libsql file is single-writer. The `turso` crate gives
+        // async (non-blocking) I/O, but concurrent write transactions to one
+        // file still collide ("database is locked"); multi-writer concurrency is
+        // still in development upstream. The catalog is single-writer by design,
+        // so we serialize all write transactions through this lock. Reads are
+        // unaffected. When Turso ships concurrent writes/MVCC this can be relaxed.
+        write_lock: Arc<tokio::sync::Mutex<()>>,
     }
 
     impl TursoCatalogStore {
@@ -7853,7 +7860,10 @@ pub mod turso_store {
         }
 
         pub async fn from_database(db: Database) -> LakeCatResult<Arc<Self>> {
-            let store = Arc::new(Self { db });
+            let store = Arc::new(Self {
+                db,
+                write_lock: Arc::new(tokio::sync::Mutex::new(())),
+            });
             store.migrate().await?;
             Ok(store)
         }
@@ -7862,8 +7872,21 @@ pub mod turso_store {
             &self.db
         }
 
+        /// Acquire exclusive write access. Held for the duration of a write
+        /// transaction so only one writer touches the single-writer file at a
+        /// time. Returns an owned guard so callers don't fight borrow lifetimes.
+        async fn write_guard(&self) -> tokio::sync::OwnedMutexGuard<()> {
+            self.write_lock.clone().lock_owned().await
+        }
+
         async fn migrate(&self) -> LakeCatResult<()> {
             let conn = self.connect()?;
+            // Best-effort durability/concurrency pragmas. WAL is persisted in the
+            // db header (helps readers run alongside the serialized writer);
+            // busy_timeout is per-connection. Ignore errors so an unsupported
+            // pragma in a Turso pre-release does not break startup.
+            let _ = conn.execute_batch("PRAGMA journal_mode=WAL;").await;
+            let _ = conn.execute_batch("PRAGMA busy_timeout=10000;").await;
             conn.execute_batch(TURSO_MIGRATION.join(";\n"))
                 .await
                 .map_err(turso_error)?;
@@ -7895,6 +7918,7 @@ pub mod turso_store {
             warehouse: &WarehouseName,
             namespace: Namespace,
         ) -> LakeCatResult<()> {
+            let _write = self.write_guard().await;
             let conn = self.connect()?;
             conn.execute(
                 "insert or ignore into namespaces (warehouse, namespace_path, namespace_json)
@@ -7974,6 +7998,7 @@ pub mod turso_store {
             warehouse: &WarehouseName,
             namespace: &Namespace,
         ) -> LakeCatResult<Namespace> {
+            let _write = self.write_guard().await;
             let namespace = self.load_namespace(warehouse, namespace).await?;
             let conn = self.connect()?;
             let namespace_path = namespace.path();
@@ -8046,6 +8071,7 @@ pub mod turso_store {
         }
 
         async fn create_table(&self, table: TableRecord) -> LakeCatResult<TableRecord> {
+            let _write = self.write_guard().await;
             table.validate()?;
             let mut conn = self.connect()?;
             let tx = conn.transaction().await.map_err(turso_error)?;
@@ -8135,6 +8161,7 @@ pub mod turso_store {
             ident: &TableIdent,
             commit: TableCommit,
         ) -> LakeCatResult<TableRecord> {
+            let _write = self.write_guard().await;
             commit.validate()?;
             let mut conn = self.connect()?;
             let tx = conn.transaction().await.map_err(turso_error)?;
@@ -8400,6 +8427,7 @@ pub mod turso_store {
             principal: lakecat_core::Principal,
             authorization_receipt: Option<JsonValue>,
         ) -> LakeCatResult<TableRecord> {
+            let _write = self.write_guard().await;
             let mut conn = self.connect()?;
             let tx = conn.transaction().await.map_err(turso_error)?;
             let mut rows = tx
@@ -8524,6 +8552,7 @@ pub mod turso_store {
             principal: lakecat_core::Principal,
             authorization_receipt: Option<JsonValue>,
         ) -> LakeCatResult<TableRecord> {
+            let _write = self.write_guard().await;
             let mut conn = self.connect()?;
             let tx = conn.transaction().await.map_err(turso_error)?;
             let mut rows = tx
@@ -8662,6 +8691,7 @@ pub mod turso_store {
         }
 
         async fn upsert_server(&self, server: ServerRecord) -> LakeCatResult<ServerRecord> {
+            let _write = self.write_guard().await;
             server.validate()?;
             let mut conn = self.connect()?;
             let tx = conn.transaction().await.map_err(turso_error)?;
@@ -8720,6 +8750,7 @@ pub mod turso_store {
         }
 
         async fn upsert_project(&self, project: ProjectRecord) -> LakeCatResult<ProjectRecord> {
+            let _write = self.write_guard().await;
             project.validate()?;
             let mut conn = self.connect()?;
             let tx = conn.transaction().await.map_err(turso_error)?;
@@ -8796,6 +8827,7 @@ pub mod turso_store {
             &self,
             warehouse: WarehouseRecord,
         ) -> LakeCatResult<WarehouseRecord> {
+            let _write = self.write_guard().await;
             warehouse.validate()?;
             let mut conn = self.connect()?;
             let tx = conn.transaction().await.map_err(turso_error)?;
@@ -8973,6 +9005,7 @@ pub mod turso_store {
             view: ViewRecord,
             expected_view_version: Option<u64>,
         ) -> LakeCatResult<ViewRecord> {
+            let _write = self.write_guard().await;
             view.validate()?;
             if let Some(expected) = expected_view_version {
                 validate_expected_view_version(expected)?;
@@ -9213,6 +9246,7 @@ pub mod turso_store {
             principal: Principal,
             expected_view_version: Option<u64>,
         ) -> LakeCatResult<ViewRecord> {
+            let _write = self.write_guard().await;
             if let Some(expected) = expected_view_version {
                 validate_expected_view_version(expected)?;
             }
@@ -9328,6 +9362,7 @@ pub mod turso_store {
         }
 
         async fn record_audit_event(&self, event: CatalogAuditEvent) -> LakeCatResult<()> {
+            let _write = self.write_guard().await;
             event.validate_recordable()?;
             let mut conn = self.connect()?;
             let tx = conn.transaction().await.map_err(turso_error)?;
@@ -9398,6 +9433,7 @@ pub mod turso_store {
         }
 
         async fn mark_outbox_delivered(&self, event_ids: &[String]) -> LakeCatResult<usize> {
+            let _write = self.write_guard().await;
             if event_ids.is_empty() {
                 return Ok(0);
             }
@@ -9447,6 +9483,7 @@ pub mod turso_store {
             &self,
             profile: StorageProfile,
         ) -> LakeCatResult<StorageProfile> {
+            let _write = self.write_guard().await;
             profile.validate()?;
             let mut conn = self.connect()?;
             let tx = conn.transaction().await.map_err(turso_error)?;
@@ -9546,6 +9583,7 @@ pub mod turso_store {
             &self,
             binding: PolicyBinding,
         ) -> LakeCatResult<PolicyBinding> {
+            let _write = self.write_guard().await;
             binding.validate()?;
             let mut conn = self.connect()?;
             let tx = conn.transaction().await.map_err(turso_error)?;
