@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed the book manuscript heading hierarchy so the generated TOC numbers real
+  chapters directly instead of nesting every chapter under `LakeCat` as `1.x`.
+
 ## 0.1.1 - 2026-06-25
 
 - Rebuilt and published the book artifacts for current head `ed8df8e0`,

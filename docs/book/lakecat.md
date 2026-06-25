@@ -1,6 +1,4 @@
-# LakeCat
-
-## Preface
+# Preface
 
 LakeCat is a Rust-native, Iceberg-compatible catalog foundation for QueryGraph.
 It begins from one conservative claim and one ambitious one. The conservative
@@ -30,9 +28,9 @@ worked examples, and the first-release scope.
 Each concept is defined once and then used. Where a later chapter needs a term,
 it links back rather than restating it.
 
-## Catalogs, Iceberg, and What LakeCat Adds
+# Catalogs, Iceberg, and What LakeCat Adds
 
-### What a catalog is
+## What a catalog is
 
 A data catalog is often described as a place that lists datasets. That is true
 but too small. A real catalog is the control plane between names, storage,
@@ -80,7 +78,7 @@ storage profile, and policy receipt — and if it captures that before planning
 and commits it after state changes, it becomes a governed control plane rather
 than a passive address book.
 
-### What Iceberg makes the catalog responsible for
+## What Iceberg makes the catalog responsible for
 
 Apache Iceberg is a table format for large analytic tables. Its core idea is to
 put the table's truth in explicit metadata files so engines can plan reads and
@@ -105,7 +103,7 @@ The rule that governs everything else in this book: **a normal client must never
 have to call a non-standard endpoint to read an ordinary table.** If it does,
 compatibility is already broken.
 
-### What LakeCat adds without changing Iceberg
+## What LakeCat adds without changing Iceberg
 
 LakeCat's promise is *compatibility first, evidence second, semantics above the
 catalog.* A Spark or PyIceberg client sees an Iceberg REST catalog. A QueryGraph
@@ -124,7 +122,7 @@ flowchart LR
 Iceberg metadata stays pristine. Policy, graph, lineage, and agent state are
 *derived* control-plane or graph data. The table remains an Iceberg table.
 
-## The Vocabulary
+# The Vocabulary
 
 A layered system fails the moment its words blur. The most common mistake is to
 call every useful LakeCat feature an "Iceberg extension," which makes the
@@ -195,7 +193,7 @@ drafts repeated; read each LakeCat claim through its category.
 | QueryGraph / QGLake / OpenLineage handoff | Not required for table access | QueryGraph semantics | Redacted, replayable lineage/view/commit evidence |
 | Typed Iceberg v4 behavior | Belongs to the format as it evolves | Sail engine truth | Engine-owned v4 interpretation, not catalog JSON parsing |
 
-## The Boundary Model
+# The Boundary Model
 
 The vocabulary tells you which category a word lives in. The boundary model says
 which *repository* owns the work and why. LakeCat is deliberately thin: it keeps
@@ -247,7 +245,7 @@ stronger shape locally, then extract only the database-neutral, policy-neutral,
 engine-neutral part.
 
 
-## Where LakeCat Stands Today
+# Where LakeCat Stands Today
 
 LakeCat is not only a design. The implementation already has a Rust
 service/catalog spine, a Turso-backed durable store, Iceberg REST-compatible
@@ -284,7 +282,7 @@ lineage receipt binding. The posture, in five rules:
 5. Promote only small, interoperable proof profiles once real workflows prove
    multiple engines and catalogs need them.
 
-## Why the Catalog Stays Thin
+# Why the Catalog Stays Thin
 
 The most dangerous failure mode for a "smart" catalog is becoming a partial
 engine. It starts innocently — validate a schema here, expand a manifest list
@@ -342,7 +340,7 @@ LakeCat keeps the catalog boundary thin and binds its proof to Sail's plan so
 the restriction is real.
 
 
-## The Architecture
+# The Architecture
 
 Thin does not mean trivial. LakeCat owns the durable catalog state that must be
 correct even when external sinks are down, and nothing more. Its
@@ -365,7 +363,7 @@ format, fork manifest pruning, own graph traversal, decide security semantics,
 or author QueryGraph's business model. Those belong to Sail, Grust, TypeSec, and
 QueryGraph respectively (Chapter 4).
 
-### The CatalogStore seam
+## The CatalogStore seam
 
 All durable state sits behind one trait, so the memory store (for tests and
 embedded use) and the Turso store (for durable local deployments) are
@@ -399,7 +397,7 @@ pub trait CatalogStore: Send + Sync + 'static {
 }
 ```
 
-### The read path
+## The read path
 
 A read begins like a standard catalog request and ends with a *governed* Sail
 plan. The policy restriction becomes part of planning, not a note beside it.
@@ -432,7 +430,7 @@ same `read-restriction` at the top level and inside
 `max-credential-ttl-seconds`, and rejects unknown fields — so graph, lineage,
 and QGLake evidence can never inherit a claim the receipt did not capture.
 
-### The commit path
+## The commit path
 
 The write path follows the same principle: LakeCat owns the transaction, Sail
 owns Iceberg validation and metadata assembly.
@@ -495,7 +493,7 @@ lineage plus `Commit` graph anchors keyed by table and sequence — an auditable
 trail without giving anyone direct database access or turning LakeCat into a
 graph query engine.
 
-### The durable spine
+## The durable spine
 
 The durable local store uses the Rust `turso` crate behind the `turso-local`
 feature. Object storage remains the source of Iceberg metadata files; Turso
@@ -525,12 +523,12 @@ Two disciplines keep the spine trustworthy:
   QGLake handoff.
 
 
-## The Siblings and the Engine Path
+# The Siblings and the Engine Path
 
 Chapter 4 named the four sibling repositories. This chapter shows how LakeCat
 talks to each — what it hands off, and what it deliberately refuses to own.
 
-### Grust: the graph boundary
+## Grust: the graph boundary
 
 Catalog events naturally form a graph: a server contains projects, a project
 contains warehouses, a warehouse contains namespaces and credential-rooted
@@ -558,7 +556,7 @@ credential. The `grust-turso-local` feature proves the boundary end to end:
 LakeCat writes catalog events into a Grust-owned Turso graph store and Grust
 Cypher reads them back, with LakeCat never parsing Cypher or executing traversal.
 
-### TypeSec: the authorization boundary
+## TypeSec: the authorization boundary
 
 LakeCat is a policy *enforcement* point, not the author of security semantics.
 Every externally meaningful action — config reads; namespace and table
@@ -588,7 +586,7 @@ top-level and receipt restrictions, full digests, closed field sets) apply
 identically here, so a credential or raw-exception event cannot drift before it
 reaches graph, lineage, or QGLake proof.
 
-### Sail and the v3→v4 path
+## Sail and the v3→v4 path
 
 Sail is a Rust-native engine — Arrow, DataFusion, generated Iceberg REST models,
 catalog-provider seams, manifest pruning, metadata-as-data — so LakeCat can *ask*
@@ -613,7 +611,7 @@ re-validates the signed plan task on `fetchScanTasks` so a stateless fetch can
 neither drift to a different manifest list nor widen the governed projection.
 Pruning and typed metadata-tree semantics wait for Sail-owned v4 support.
 
-### The semantic handoff: Croissant, CDIF, OSI, OpenLineage
+## The semantic handoff: Croissant, CDIF, OSI, OpenLineage
 
 QueryGraph needs a semantic picture, not just physical access. LakeCat publishes
 one without pretending to be QueryGraph. The bootstrap bundle carries Semantic
@@ -626,7 +624,7 @@ OpenLineage events drain from the durable outbox in `created_at,event_id` order
 *after* the catalog transaction, lineage reflects committed state rather than a
 handler's best-effort side effect.
 
-### The full stack
+## The full stack
 
 When LakeCat is done, a standard engine still loads and commits tables without
 knowing QueryGraph exists, while governed callers get the richer path:
@@ -649,7 +647,7 @@ flowchart TB
   lc -->|semantic + lineage bootstrap| qg
 ```
 
-### Implementation shape
+## Implementation shape
 
 The workspace expresses the architecture directly:
 
@@ -687,7 +685,7 @@ in front of it. (The first-release gate and dependency contract that hold this
 together are covered in the release chapter.)
 
 
-## Workflow Examples
+# Workflow Examples
 
 The catalog is easiest to understand by watching it participate in ordinary work.
 LakeCat should not ask users to think about graph, lineage, security, and Sail
@@ -700,7 +698,7 @@ same for larger warehouses. The important point is not the exact sample data. It
 is the catalog role in each workflow. The dense replay and handoff checks are in
 the appendices so the examples can stay human-readable.
 
-### Starting The Catalog
+## Starting The Catalog
 
 A local operator starts LakeCat as an Iceberg REST catalog plus management
 surface:
@@ -747,7 +745,7 @@ ordinary duplicate-free key/value entries, advertised endpoints prove that the
 standard REST and additive governed surfaces were present, and QueryGraph sees
 compact config proof only after service replay accepts it.
 
-### Registering The Warehouse Shape
+## Registering The Warehouse Shape
 
 An operator usually starts with management objects. A server groups projects. A
 project groups warehouses. A warehouse owns namespaces, tables, views, storage
@@ -794,7 +792,7 @@ lifecycle replay carries the matching action receipt, and raw endpoint or
 storage-root material is replaced by full hash evidence before graph,
 OpenLineage, QGLake, or QueryGraph sees it.
 
-### Storage Profiles And Credential Roots
+## Storage Profiles And Credential Roots
 
 Storage profiles bind a warehouse to physical storage roots and credential
 issuance policy. A local profile can return scoped local file configuration. A
@@ -852,7 +850,7 @@ profile prefix, carry the policy-derived TTL cap, and preserve LakeCat-owned
 profile/provider/mode/principal evidence. Replay records redacted prefix and
 issuer hashes, not credential material.
 
-### A PySpark User Reads Iceberg
+## A PySpark User Reads Iceberg
 
 A PySpark user should not need to know about QueryGraph. They configure Spark's
 Iceberg REST catalog and point it at LakeCat:
@@ -899,7 +897,7 @@ proof compares planned and fetched evidence so a saved artifact cannot widen the
 server-derived purpose, TTL cap, allowed columns, row predicate, stats fields,
 or policy hashes.
 
-### A Notebook Requests Credentials
+## A Notebook Requests Credentials
 
 Credential vending is deliberately different from scan planning. Returning
 storage credentials gives the client broader power than returning a governed
@@ -927,7 +925,7 @@ audited raw credential exception, but the audit and replay evidence still carry
 the principal, table, decision, reason, TTL cap, storage-profile anchor, and
 redacted returned-prefix hashes.
 
-### A View Becomes Part Of The Catalog Story
+## A View Becomes Part Of The Catalog Story
 
 Views are catalog objects too. LakeCat stores durable view records with SQL,
 dialect, schema version, typed columns, properties, creator, and warehouse
@@ -1004,7 +1002,7 @@ verify the version chain, including tombstones after the current view row is
 gone, while keeping the richer view history model available for a future
 Sail-owned implementation. Appendix C captures the exact receipt-chain rules.
 
-### QueryGraph Bootstrap
+## QueryGraph Bootstrap
 
 QueryGraph should import LakeCat facts through a verified handoff, not by
 scraping service internals. The bootstrap endpoint publishes a bundle with
@@ -1073,7 +1071,7 @@ LakeCat replay status, QueryGraph-verified table/view counts, and semantic
 bundle/graph/OpenLineage/import hashes plus accepted standards. Appendix D is
 the detailed handoff proof map.
 
-### Draining The Outbox
+## Draining The Outbox
 
 LakeCat records side effects as durable outbox events. Draining the outbox is
 what turns committed catalog facts into graph and lineage receipts:
@@ -1109,7 +1107,7 @@ outbox events by `created_at,event_id` in both embedded memory tests and the dur
 Turso store, and duplicate or malformed pending records fail with hash-only
 evidence before graph emission, lineage emission, or acknowledgement.
 
-### An Agentic QGLake Flow
+## An Agentic QGLake Flow
 
 The agentic path is the reason LakeCat has to be more than a passive catalog.
 Imagine a resilience supervisor agent investigating incidents:
@@ -1156,7 +1154,7 @@ bundle through QueryGraph's Rust verifier/importer. It is small, but it is not
 decorative. It is the acceptance story for a catalog that participates in the
 user workflow from notebook to agent.
 
-## Operating The Book's Example System
+# Operating The Book's Example System
 
 The local development posture is intentionally small:
 
@@ -1184,7 +1182,7 @@ The important thing is what these commands exercise. They are not a separate
 product surface. They touch the same catalog, policy, bootstrap, and QueryGraph
 export contracts that the service uses.
 
-## Standards And Engine Boundary Decision Record
+# Standards And Engine Boundary Decision Record
 
 This chapter is the release decision record for the current catalog concepts.
 It answers three questions that come up whenever LakeCat vocabulary gets close
@@ -1221,7 +1219,7 @@ QueryGraph semantic contract
 The outer layers are additive. They can observe, prove, and compose catalog
 state, but they must not redefine the inner standard table contract.
 
-### Catalog Concepts In Plain Terms
+## Catalog Concepts In Plain Terms
 
 This section names the catalog concepts directly, because the words can sound
 similar even when they live at different layers. The simplest way to read the
@@ -1352,7 +1350,7 @@ credential posture, and view lifecycle proof. The proper nouns are where the
 implementation is being proven. The neutral concepts are what might someday
 be shared.
 
-### Decision Matrix
+## Decision Matrix
 
 | Concept | Iceberg meaning | LakeCat or QueryGraph meaning | Decision |
 | --- | --- | --- | --- |
@@ -1371,7 +1369,7 @@ many extensions in the practical sense, because it extends what a catalog can
 prove. Only the parts that survive without LakeCat-specific names should be
 considered future Iceberg-adjacent proposals.
 
-### The Proper-Noun Test
+## The Proper-Noun Test
 
 The proper-noun test is the simplest review tool:
 
@@ -1391,7 +1389,7 @@ transactional event identity, replay-admissible evidence, governed scan proof,
 credential posture proof, view receipt chains, and lineage receipt binding are
 more plausible because they can be expressed without adopting the LakeCat stack.
 
-### Why The Engine Owns The Truth
+## Why The Engine Owns The Truth
 
 The strongest technical reason to push work into Sail is that Iceberg table
 truth is not a set of easy strings. A governed proof that says "only these
@@ -1435,7 +1433,7 @@ proof without crossing a JVM sidecar, Python shim, or remote plugin boundary in
 the hot path. The public compatibility boundary remains Iceberg REST. The
 internal correctness boundary stays close to the Rust engine.
 
-### Workflow Consequences
+## Workflow Consequences
 
 For a PySpark user, the catalog remains ordinary. The user configures an
 Iceberg REST catalog, lists namespaces, loads a table, reads metadata, and
@@ -1476,7 +1474,7 @@ Iceberg behavior. Operators get durable Rust and Turso proof. Governed callers
 get TypeSec decisions bound to Sail engine work. QueryGraph gets a semantic
 handoff that is broad enough to build on and narrow enough not to fork Iceberg.
 
-## First Release Readiness
+# First Release Readiness
 
 The first LakeCat release should not try to finish every idea in this book. It
 should release the catalog substrate that can already be proven locally. The
@@ -1749,7 +1747,7 @@ the replay-admission contract, Appendix B captures credential redaction,
 Appendix C captures view receipt chains, and Appendix D maps the QGLake handoff
 proof.
 
-## Appendix A: Replay Admission Matrix
+# Appendix A: Replay Admission Matrix
 
 Replay admission is the line between durable catalog fact and downstream proof.
 An outbox row may be stored, but it is not allowed to become graph, OpenLineage,
@@ -1775,7 +1773,7 @@ The pattern is deliberately repetitive in code but not in the narrative: every
 event must be scoped, actor-bound, action-bound, closed over the fields LakeCat
 actually verifies, and redacted before it becomes downstream evidence.
 
-## Appendix B: Credential And Redaction Contract
+# Appendix B: Credential And Redaction Contract
 
 Credential handling is where catalog convenience can become security risk.
 LakeCat's posture is therefore narrow: governed Sail-planned reads are the
@@ -1797,7 +1795,7 @@ root exists, while credential vending proves whether a caller received raw
 storage reach. QueryGraph can reason over both without seeing the raw root,
 secret URI, backend error, token, or returned credential material.
 
-## Appendix C: View Receipt-Chain Rules
+# Appendix C: View Receipt-Chain Rules
 
 LakeCat's first release does not claim full Iceberg view-history semantics. It
 keeps a compact, catalog-owned receipt chain so QueryGraph can prove which view
@@ -1821,7 +1819,7 @@ tombstones, not full SQL engine view semantics. That is enough for QueryGraph to
 reject a bootstrap that lost or borrowed view proof while LakeCat keeps richer
 view interpretation out of the catalog.
 
-## Appendix D: QGLake Handoff Proof Map
+# Appendix D: QGLake Handoff Proof Map
 
 The QGLake handoff is a compact acceptance artifact over several raw artifacts:
 the LakeCat bootstrap bundle, lineage-drain response, QueryGraph import plan,
@@ -1854,7 +1852,7 @@ log bundle. It proves that LakeCat replay, graph projection, OpenLineage,
 QueryGraph verification, and QueryGraph import all agreed on the same catalog
 state.
 
-## Future Work
+# Future Work
 
 LakeCat is a direction more than a single release. The next stage should keep
 the architecture more true without pushing engine, graph, or security semantics
