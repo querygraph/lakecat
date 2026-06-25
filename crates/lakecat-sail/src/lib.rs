@@ -2631,6 +2631,8 @@ pub mod sail_integration {
         completed_planning_with_id_result_from_values, fetch_scan_tasks_result_from_values, models,
     };
     use sail_iceberg::io::{StoreContext, load_manifest, load_manifest_list};
+    use sail_iceberg::spec::catalog::TableUpdate;
+    use sail_iceberg::spec::metadata::apply_table_updates;
     use sail_iceberg::spec::{
         DataContentType, DataFile as SailDataFile, DataFileFormat, Datum, DeleteFileIndex,
         DeleteFileRef, Literal, MAIN_BRANCH, ManifestContentType, ManifestStatus, PrimitiveLiteral,
@@ -2667,8 +2669,6 @@ pub mod sail_integration {
             &self,
             request: CommitPreparationRequest,
         ) -> LakeCatResult<CommitPlan> {
-            let metadata_write_required =
-                request.new_metadata_location.is_some() || request.new_metadata.is_some();
             let (metadata_summary, typed_metadata) =
                 inspect_sail_table_metadata_with_typed(&request.current_metadata)?;
             let validated_requirements = match typed_metadata.as_ref() {
@@ -2700,11 +2700,54 @@ pub mod sail_integration {
                 .as_array()
                 .cloned()
                 .unwrap_or_default();
-            let new_metadata_location = request
-                .new_metadata_location
-                .clone()
-                .or_else(|| request.current_metadata_location.clone());
-            let new_metadata = request.new_metadata.unwrap_or(request.current_metadata);
+            // Three commit shapes:
+            //  1. register/stage: the client supplied a full new metadata doc.
+            //  2. standard updateTable: apply the REST updates to the current
+            //     metadata via Sail to produce the new metadata + a fresh
+            //     metadata-location (the catalog then writes it and CAS-es).
+            //  3. no-op: no updates and no supplied metadata -> pass through.
+            let (new_metadata, new_metadata_location, metadata_write_required) =
+                if let Some(client_metadata) = request.new_metadata.clone() {
+                    let location = request
+                        .new_metadata_location
+                        .clone()
+                        .or_else(|| request.current_metadata_location.clone());
+                    (client_metadata, location, true)
+                } else if !updates.is_empty() {
+                    let mut metadata = typed_metadata.clone().ok_or_else(|| {
+                        LakeCatError::NotSupported(
+                            "applying Iceberg REST updates needs typed Sail metadata".to_string(),
+                        )
+                    })?;
+                    let typed_updates: Vec<TableUpdate> =
+                        serde_json::from_value(Value::Array(updates.clone())).map_err(|err| {
+                            LakeCatError::InvalidArgument(format!(
+                                "invalid Iceberg REST table updates for Sail: {err}"
+                            ))
+                        })?;
+                    let now_ms = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_millis() as i64)
+                        .unwrap_or(0);
+                    apply_table_updates(&mut metadata, &typed_updates, now_ms)
+                        .map_err(|err| LakeCatError::InvalidArgument(err.to_string()))?;
+                    let new_metadata: Value = serde_json::from_slice(
+                        &metadata.to_json().map_err(|err| {
+                            LakeCatError::Internal(format!(
+                                "failed to serialize updated table metadata: {err}"
+                            ))
+                        })?,
+                    )
+                    .map_err(|err| LakeCatError::Internal(err.to_string()))?;
+                    let location = next_metadata_location(&metadata.location, now_ms);
+                    (new_metadata, Some(location), true)
+                } else {
+                    let location = request
+                        .new_metadata_location
+                        .clone()
+                        .or_else(|| request.current_metadata_location.clone());
+                    (request.current_metadata.clone(), location, false)
+                };
             validate_lakecat_metadata_format(&new_metadata)?;
             Ok(CommitPlan {
                 prepared_by: "sail-rest-models".to_string(),
@@ -2890,6 +2933,16 @@ pub mod sail_integration {
         LakeCatError::Internal(format!(
             "Sail generated an invalid Iceberg REST planning payload: {error}"
         ))
+    }
+
+    /// Derive a fresh, unique metadata object location under the table's
+    /// `metadata/` directory: `<table-location>/metadata/<ms>-<uuid>.metadata.json`.
+    /// The timestamp keeps it ordered and the UUID keeps it unique under
+    /// concurrent commits, so it never collides with the current pointer.
+    fn next_metadata_location(table_location: &str, now_ms: i64) -> String {
+        let base = table_location.trim_end_matches('/');
+        let token = uuid::Uuid::new_v4();
+        format!("{base}/metadata/{now_ms:020}-{token}.metadata.json")
     }
 
     pub fn validate_sail_table_metadata(metadata: &Value) -> LakeCatResult<IcebergFormatSupport> {

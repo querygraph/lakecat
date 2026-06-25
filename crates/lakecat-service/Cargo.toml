@@ -10,7 +10,7 @@ description = "LakeCat Axum service: request routing, auth, middleware, and cata
 default = []
 grust-local = ["dep:grust-graph", "lakecat-graph/grust-local"]
 grust-turso-local = ["grust-local", "dep:grust-turso", "lakecat-graph/grust-turso-local"]
-sail-local = []  # enables local Sail integration; requires lakecat-sail via workspace
+sail-local = ["dep:lakecat-sail", "lakecat-sail/catalog-provider", "lakecat-sail/sail-local"]
 turso-local = ["lakecat-store/turso-local"]
 typesec-local = ["dep:reqwest", "dep:typesec", "typesec/integrations", "typesec/rbac", "lakecat-security/typesec-local"]
 
@@ -23,8 +23,7 @@ lakecat-core = { workspace = true }
 lakecat-graph = { workspace = true }
 lakecat-lineage = { workspace = true }
 lakecat-querygraph = { workspace = true }
-# lakecat-sail is a workspace-only dep (Sail path deps not on crates.io);
-# it is injected by the workspace for sail-local builds, not declared here.
+lakecat-sail = { workspace = true, optional = true }
 lakecat-security = { workspace = true }
 lakecat-store = { workspace = true }
 chrono = { workspace = true }

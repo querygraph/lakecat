@@ -3952,6 +3952,7 @@ dependencies = [
  "lakecat-graph",
  "lakecat-lineage",
  "lakecat-querygraph",
+ "lakecat-sail",
  "lakecat-security",
  "lakecat-store",
  "object_store",
