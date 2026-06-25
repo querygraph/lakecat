@@ -79,7 +79,9 @@ fi
 kindle_version="$version-$commit_suffix"
 kindle_name="$kindle_short_title ($kindle_version)"
 stable_epub="$dist_dir/$kindle_short_title.epub"
+stable_pdf="$dist_dir/$kindle_short_title.pdf"
 kindle_epub="$dist_dir/$kindle_name.epub"
+kindle_pdf="$dist_dir/$kindle_name.pdf"
 
 {
   printf 'kindle_name: %s\n' "$kindle_name"
@@ -126,8 +128,26 @@ find "$dist_dir" -maxdepth 1 -name "$kindle_short_title (*).epub" -exec rm -f {}
 ln -s "$(basename "$stable_epub")" "$kindle_epub"
 docs/book/check_epub_metadata.sh "$dist_dir/lakecat.epub" "$kindle_name"
 
+# Mirror the versioned link for the PDF so both formats carry the version+hash.
+find "$dist_dir" -maxdepth 1 -name "$kindle_short_title (*).pdf" -exec rm -f {} +
+ln -s "$(basename "$stable_pdf")" "$kindle_pdf"
+
 /Applications/calibre.app/Contents/MacOS/ebook-convert \
   "$dist_dir/lakecat.epub" \
   "$dist_dir/lakecat.mobi"
 
 scripts/check-book-artifact-contract.sh "$dist_dir"
+
+# Always publish both versioned artifacts (EPUB + PDF, version + git hash) to
+# the reading library. Override the destination with LAKECAT_BOOK_PUBLISH_DIR;
+# skip (without failing the build) when the destination is absent, e.g. CI.
+publish_dir="${LAKECAT_BOOK_PUBLISH_DIR:-$HOME/icloud/books}"
+if [[ -d "$publish_dir" ]]; then
+  cp -L "$stable_epub" "$publish_dir/$kindle_name.epub"
+  cp -L "$stable_pdf" "$publish_dir/$kindle_name.pdf"
+  echo "Published to $publish_dir:"
+  echo "  $kindle_name.epub"
+  echo "  $kindle_name.pdf"
+else
+  echo "Skipped library publish: $publish_dir not present (set LAKECAT_BOOK_PUBLISH_DIR)"
+fi
