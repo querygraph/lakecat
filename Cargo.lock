@@ -3964,6 +3964,7 @@ dependencies = [
  "tower",
  "typesec",
  "url",
+ "uuid",
 ]
 
 [[package]]

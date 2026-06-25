@@ -216,6 +216,96 @@ impl SailCatalogEngine for DeferredSailCatalogEngine {
     }
 }
 
+/// Synthesize an initial, empty Iceberg table metadata document from a
+/// standard `createTable` request (a schema, optional partition spec / sort
+/// order / properties). The Iceberg REST spec has the catalog create table
+/// metadata server-side; full typed construction belongs in Sail, but the
+/// catalog needs a minimal compliant document so a stock client can create a
+/// table without supplying metadata itself. The result is a valid empty table
+/// (no snapshots) that ordinary engines and LakeCat's own validators accept.
+pub fn initial_table_metadata(
+    table_uuid: &str,
+    location: &str,
+    schema: &Value,
+    partition_spec: Option<&Value>,
+    sort_order: Option<&Value>,
+    properties: &Value,
+) -> Value {
+    // schema-id and field ids come from the client schema; derive last-column-id
+    // as the max field id so later column additions keep increasing it.
+    let mut schema = schema.clone();
+    if schema.get("schema-id").is_none() {
+        if let Some(obj) = schema.as_object_mut() {
+            obj.insert("schema-id".into(), Value::from(0));
+        }
+    }
+    let current_schema_id = schema.get("schema-id").and_then(Value::as_i64).unwrap_or(0);
+    let last_column_id = max_field_id(&schema);
+
+    let partition_spec = partition_spec
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({"spec-id": 0, "fields": []}));
+    let default_spec_id = partition_spec
+        .get("spec-id")
+        .and_then(Value::as_i64)
+        .unwrap_or(0);
+    let sort_order = sort_order
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({"order-id": 0, "fields": []}));
+    let default_sort_order_id = sort_order
+        .get("order-id")
+        .and_then(Value::as_i64)
+        .unwrap_or(0);
+    let now_ms = chrono::Utc::now().timestamp_millis();
+
+    serde_json::json!({
+        "format-version": 2,
+        "table-uuid": table_uuid,
+        "location": location,
+        "last-sequence-number": 0,
+        "last-updated-ms": now_ms,
+        "last-column-id": last_column_id,
+        "schemas": [schema],
+        "current-schema-id": current_schema_id,
+        "partition-specs": [partition_spec],
+        "default-spec-id": default_spec_id,
+        "last-partition-id": 999,
+        "sort-orders": [sort_order],
+        "default-sort-order-id": default_sort_order_id,
+        "properties": if properties.is_object() { properties.clone() } else { serde_json::json!({}) },
+        "current-snapshot-id": -1,
+        "snapshots": [],
+        "snapshot-log": [],
+        "metadata-log": []
+    })
+}
+
+fn max_field_id(schema: &Value) -> i64 {
+    fn walk(v: &Value, max: &mut i64) {
+        match v {
+            Value::Object(map) => {
+                if let Some(id) = map.get("id").and_then(Value::as_i64) {
+                    if id > *max {
+                        *max = id;
+                    }
+                }
+                for (_k, child) in map {
+                    walk(child, max);
+                }
+            }
+            Value::Array(items) => {
+                for child in items {
+                    walk(child, max);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut max = 0;
+    walk(schema, &mut max);
+    max
+}
+
 pub fn validate_lakecat_metadata_format(metadata: &Value) -> LakeCatResult<IcebergFormatSupport> {
     let support = IcebergFormatSupport::default();
     let Some(version) = metadata.get("format-version").and_then(Value::as_i64) else {

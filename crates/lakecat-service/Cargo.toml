@@ -38,6 +38,7 @@ tokio = { workspace = true }
 tower = { workspace = true }
 typesec = { workspace = true, optional = true }
 url = { workspace = true }
+uuid = { workspace = true }
 
 [dev-dependencies]
 sail-catalog-iceberg = { path = "../../../sail/crates/sail-catalog-iceberg" }

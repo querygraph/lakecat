@@ -8936,11 +8936,58 @@ async fn create_table_in_warehouse(
     let capability = authorize_table_create(&state, identity, ident).await?;
     let principal = capability.receipt().principal.clone();
     let ident = capability.table().clone();
+
+    // Two creation paths:
+    //  - standard Iceberg REST `createTable`: client sends a `schema`, the
+    //    catalog derives a location and generates the initial metadata;
+    //  - register-style: client supplies its own `metadata` (+ location).
+    let (location, metadata_location, metadata) = if request.metadata.is_object() {
+        // Register-style path: keep the existing behavior, location required.
+        let location = request.location.clone().ok_or_else(|| {
+            LakeCatError::InvalidArgument(
+                "create table requires a location when metadata is supplied".to_string(),
+            )
+        })?;
+        (location, request.metadata_location, request.metadata)
+    } else if let Some(schema) = request.schema.as_ref() {
+        // Standard path: synthesize initial metadata from the schema.
+        let location = request.location.clone().unwrap_or_else(|| {
+            format!(
+                "file:///tmp/lakecat/{}/{}/{}",
+                ident.warehouse.as_str(),
+                ident.namespace,
+                ident.name.as_str()
+            )
+        });
+        let table_uuid = uuid::Uuid::new_v4().to_string();
+        let metadata = lakecat_core::sail::initial_table_metadata(
+            &table_uuid,
+            &location,
+            schema,
+            request.partition_spec.as_ref(),
+            request.write_order.as_ref(),
+            request
+                .properties
+                .as_ref()
+                .unwrap_or(&serde_json::Value::Null),
+        );
+        let metadata_location = Some(format!(
+            "{location}/metadata/00000-{table_uuid}.metadata.json"
+        ));
+        (location, metadata_location, metadata)
+    } else {
+        return Err(LakeCatError::InvalidArgument(
+            "create table requires either a schema (standard createTable) or a metadata document"
+                .to_string(),
+        )
+        .into());
+    };
+
     let table = TableRecord::new(
         ident.clone(),
-        request.location,
-        request.metadata_location,
-        request.metadata,
+        location,
+        metadata_location,
+        metadata,
         principal.clone(),
     );
     let table = state.store.create_table(table).await?;
@@ -45067,6 +45114,54 @@ mod tests {
         assert_eq!(
             lineage_events[0].payload["standards"],
             serde_json::json!(bootstrap_standards)
+        );
+    }
+
+    #[tokio::test]
+    async fn create_table_generates_metadata_from_standard_schema() {
+        // Spec `createTable`: client sends name + schema (no metadata, no
+        // location); the catalog generates the initial metadata and a location.
+        let app = test_app();
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"name":"events","schema":{"type":"struct","schema-id":0,"fields":[{"id":1,"name":"id","required":true,"type":"long"},{"id":2,"name":"name","required":false,"type":"string"}]}}"#,
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        // Server generated a metadata location and a valid empty table.
+        assert!(
+            payload["metadata-location"]
+                .as_str()
+                .unwrap()
+                .contains("/metadata/")
+        );
+        assert_eq!(payload["metadata"]["format-version"], serde_json::json!(2));
+        assert_eq!(
+            payload["metadata"]["current-schema-id"],
+            serde_json::json!(0)
+        );
+        assert_eq!(payload["metadata"]["last-column-id"], serde_json::json!(2));
+        assert_eq!(payload["metadata"]["snapshots"], serde_json::json!([]));
+        assert!(payload["metadata"]["table-uuid"].as_str().is_some());
+
+        // The generated table loads and commits via the bare spec path.
+        let commit = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables/events")
+            .header("content-type", "application/json")
+            .body(Body::from(r#"{"requirements":[],"updates":[]}"#))
+            .unwrap();
+        assert_eq!(
+            app.clone().oneshot(commit).await.unwrap().status(),
+            StatusCode::OK
         );
     }
 

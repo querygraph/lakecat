@@ -214,7 +214,25 @@ pub struct ListNamespacesResponse {
 #[serde(rename_all = "kebab-case")]
 pub struct CreateTableRequest {
     pub name: String,
-    pub location: String,
+    /// Optional in the Iceberg REST spec: the catalog derives a location from the
+    /// warehouse when omitted. Still accepted (and required) for the
+    /// register-style path that supplies its own `metadata`.
+    #[serde(default)]
+    pub location: Option<String>,
+    /// Standard `createTable` schema. When present (and `metadata` is absent),
+    /// the catalog generates the initial table metadata server-side.
+    #[serde(default)]
+    pub schema: Option<Value>,
+    #[serde(default)]
+    pub partition_spec: Option<Value>,
+    #[serde(default)]
+    pub write_order: Option<Value>,
+    #[serde(default)]
+    pub properties: Option<Value>,
+    #[serde(default)]
+    pub stage_create: Option<bool>,
+    /// Register-style path: a client may supply a prebuilt metadata document and
+    /// its location instead of a schema.
     pub metadata_location: Option<String>,
     #[serde(default)]
     pub metadata: Value,
