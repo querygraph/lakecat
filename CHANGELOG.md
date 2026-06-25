@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rebuilt and published corrected book artifacts for current source head
+  `bbdaa0bb`, producing the versioned EPUB link
+  `lakecat (0.1.1-bbdaa0bb).epub` with fixed chapter numbering.
 - Fixed the book manuscript heading hierarchy so the generated TOC numbers real
   chapters directly instead of nesting every chapter under `LakeCat` as `1.x`.
 
