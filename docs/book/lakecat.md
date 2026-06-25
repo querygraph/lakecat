@@ -689,15 +689,16 @@ together are covered in the release chapter.)
 
 ## Workflow Examples
 
-The catalog is easiest to understand by watching it participate in ordinary
-work. LakeCat should not ask users to think about graph, lineage, security, and
-Sail every time they read a table. Those systems should appear when they matter:
-at the boundary where a name is resolved, a policy is enforced, a plan is
-created, credentials are withheld or issued, and a durable event is replayed.
+The catalog is easiest to understand by watching it participate in ordinary work.
+LakeCat should not ask users to think about graph, lineage, security, and Sail
+every time they read a table. Those systems should appear when they matter: at
+the boundary where a name is resolved, a policy is enforced, a plan is created,
+credentials are withheld or issued, and a durable event is replayed.
 
 The examples below use one table, `local.default.events`, but the pattern is the
-same for larger warehouses. The important point is not the exact sample data.
-It is the catalog role in each workflow.
+same for larger warehouses. The important point is not the exact sample data. It
+is the catalog role in each workflow. The dense replay and handoff checks are in
+the appendices so the examples can stay human-readable.
 
 ### Starting The Catalog
 
@@ -708,8 +709,8 @@ surface:
 cargo run -p lakecat-service --features sail-local,turso-local,typesec-local,grust-local
 ```
 
-The standard catalog path is still `/catalog/v1`. The management and
-QueryGraph surfaces sit beside it:
+The standard catalog path is still `/catalog/v1`. The management and QueryGraph
+surfaces sit beside it:
 
 ```text
 /catalog/v1
@@ -717,9 +718,9 @@ QueryGraph surfaces sit beside it:
 /querygraph/v1/bootstrap
 ```
 
-A simple health-oriented configuration read shows the split. Standard engines
-care about the Iceberg endpoints. Operators and QueryGraph care about the
-management and bootstrap endpoints.
+A simple configuration read shows the split. Standard engines care about the
+Iceberg endpoints. Operators and QueryGraph care about management and bootstrap
+surfaces.
 
 ```sh
 curl -s http://127.0.0.1:3000/catalog/v1/config
@@ -739,102 +740,12 @@ The defaults intentionally separate compatibility from future capability:
 }
 ```
 
-That means LakeCat can preserve and replay emerging v4 metadata through the
-Sail JSON bridge, but it is not claiming typed Sail v4 semantics yet. The same
-defaults are stored in catalog config-read replay evidence, and malformed
-replay that omits the v4 bridge posture is rejected before graph or OpenLineage
-projection. The replay defaults must also be ordinary string key/value entries
-with duplicate-free keys, so a saved outbox event cannot say both
-`lakecat.format.v4.typed-sail=unavailable` and
-`lakecat.format.v4.typed-sail=available`.
-Those key/value entries are closed over just `key` and `value` before replay is
-acknowledged. A saved config-read event cannot hide an extra compatibility, v4,
-integration, or application claim inside a default or override entry and have
-that claim travel into graph, OpenLineage, or QGLake config proof beside the
-checked catalog contract.
-LakeCat also rejects unsupported extra `lakecat.format.v4*` defaults, such as
-preview typed-Sail keys, because those would make the bridge posture sound more
-settled than the current Sail-owned typed v4 surface proves. Config overrides
-are held to the same honesty rule for v4 posture: until typed Sail v4 support is
-available, replay evidence cannot use an override to claim
-`lakecat.format.v4.typed-sail=available` or introduce another v4 bridge key.
-Catalog config replay now also preserves the advertised endpoint list. That is
-not a new protocol requirement for standard clients; it is proof that the
-configuration LakeCat projected to graph and OpenLineage still contained the
-ordinary Iceberg REST surface. Replay validation requires the config endpoint,
-namespace list/create endpoints, table create endpoint, table load endpoint,
-and table commit endpoint for both the default and warehouse-prefixed catalog
-routes before the config read can become compatibility evidence.
-Replay validation also requires LakeCat's governed access endpoints: plan,
-fetch-scan-tasks, and credentials. Those routes are not a new table format and
-not a QueryGraph dependency for ordinary reads. They are additive catalog APIs
-that let governed clients ask LakeCat, TypeSec, and Sail for proof-carrying
-plans, task fetches, or audited credential decisions over the same standard
-Iceberg tables.
-Replay validation also preserves the additive integration surfaces that make
-LakeCat useful as the QueryGraph foundation: `/querygraph/v1/bootstrap` and
-`/management/v1/lineage/drain`. These are not standard Iceberg REST table
-operations and they are not required for PySpark or another ordinary Iceberg
-client to load a table. They are LakeCat/QueryGraph/OpenLineage control-plane
-endpoints. Their presence in config evidence proves that a QGLake import,
-OpenLineage replay, or agentic management workflow saw the same integration
-contract that LakeCat later projects into graph and lineage systems.
-
-That proof now survives into saved lineage-drain artifacts and compact QGLake
-handoff summaries, not only service admission. A `catalog.config-read` drain
-summary carries three compact fields: the advertised config defaults, config
-overrides, and endpoint list. The compact handoff summary then promotes the
-same evidence into `lakecatReplayVerification.catalogConfigProof`, alongside
-the principal, authorization action, graph count, replay hashes, and
-OpenLineage hashes for the config-read event. QGLake verification checks those
-fields again when reading the saved drain, when reading the compact summary,
-and when comparing captured LakeCat replay sidecars. A handoff cannot keep the
-`catalog.config-read` event while dropping
-`lakecat.format.v4.typed-sail=unavailable`, adding a preview
-`lakecat.format.v4*` key, using an override to rewrite v4 posture, omitting the
-standard REST, governed access, bootstrap, or lineage-drain endpoints, or
-archiving a captured replay file whose config proof differs from the summary.
-Raw lineage-drain summary construction now applies the same fail-closed shape
-checks before that compact proof is returned: config defaults and overrides
-must remain `ConfigEntry` arrays with duplicate-free string keys and string
-values, and endpoint evidence must remain a duplicate-free nonblank string
-array containing the required standard REST, governed plan/fetch, bootstrap,
-and lineage-drain routes LakeCat advertised at service replay.
-That makes the config proof replayable outside the service process. QueryGraph
-can trust that the compatibility and integration contract it imports is the
-same contract LakeCat admitted before graph and OpenLineage projection.
-The same rule now applies to raw `querygraph.bootstrap` summaries. Bootstrap
-itself is not standard Iceberg parlance: it is LakeCat/QueryGraph handoff
-evidence built beside the Iceberg REST path. Its source facts still describe
-standard catalog state such as warehouse identity, table count, view count, and
-accepted table/view stable ids, but its bundle hash, Grust graph hash,
-OpenLineage hash, Croissant/CDIF/OSI/ODRL artifact hashes, standards list,
-authorization receipt, and TypeSec-style request-identity hashes are additive
-LakeCat/QueryGraph/TypeSec proof. Raw summary construction now runs the same
-service replay validator over that bootstrap envelope before compact QGLake
-proof can inherit any of it. A saved drain cannot keep a `querygraph.bootstrap`
-event while shrinking the standards list, replacing artifact arrays with
-objects, drifting table/view counts away from verified manifests, inventing a
-malformed principal, or attaching short TypeDID/agent hashes to an otherwise
-valid-looking bootstrap proof.
-When config evidence carries optional tenant-root records, the same admission
-rule applies to sensitive roots: a raw `server-record.endpoint-url` must carry
-the matching full `endpoint-url-hash`, and a raw
-`warehouse-record.storage-root` must carry the matching full
-`storage-root-hash` before config discovery can be projected or archived as
-QGLake proof.
-
-The bridge is intentionally conservative, but it should not reject Iceberg
-metadata that Sail has already decoded. Manifest expansion now emits null
-partition slots as JSON `null` and recursively encodes nested Sail partition
-literals into JSON objects, arrays, and explicit key/value map entries. That
-keeps standard Iceberg REST fetch responses usable for richer partition tuples
-without pretending LakeCat owns a full typed v4 implementation.
-
-At this point the catalog is already doing more than route HTTP. It has a
-warehouse identity, a store, a governance engine, a Sail planning seam, a graph
-sink, and a lineage sink. Embedded defaults keep the local loop small, but the
-same trait boundaries can point to Turso, TypeSec, Grust, and Sail.
+That means LakeCat can preserve and replay emerging v4 metadata through the Sail
+JSON bridge, but it is not claiming typed Sail v4 semantics yet. The same
+posture is captured in replay evidence: config defaults and overrides stay
+ordinary duplicate-free key/value entries, advertised endpoints prove that the
+standard REST and additive governed surfaces were present, and QueryGraph sees
+compact config proof only after service replay accepts it.
 
 ### Registering The Warehouse Shape
 
@@ -849,9 +760,7 @@ curl -s -X PUT http://127.0.0.1:3000/management/v1/servers/prod \
   -d '{
     "display-name": "Production LakeCat",
     "endpoint-url": "https://lakecat.example.com",
-    "properties": {
-      "owner": "platform"
-    }
+    "properties": {"owner": "platform"}
   }'
 
 curl -s -X PUT http://127.0.0.1:3000/management/v1/projects/resilience \
@@ -859,9 +768,7 @@ curl -s -X PUT http://127.0.0.1:3000/management/v1/projects/resilience \
   -d '{
     "display-name": "Resilience Desk",
     "server-id": "prod",
-    "properties": {
-      "environment": "demo"
-    }
+    "properties": {"environment": "demo"}
   }'
 
 curl -s -X PUT http://127.0.0.1:3000/management/v1/projects/resilience/warehouses/local \
@@ -869,164 +776,23 @@ curl -s -X PUT http://127.0.0.1:3000/management/v1/projects/resilience/warehouse
   -d '{
     "display-name": "Local QGLake Warehouse",
     "storage-root": "file:///tmp/lakecat/qglake",
-    "properties": {
-      "querygraph": "enabled"
-    }
+    "properties": {"querygraph": "enabled"}
   }'
 ```
 
 These writes are not Iceberg table metadata. They are catalog control-plane
 state. LakeCat persists them durably, records authorization receipts, and writes
-outbox events. When the outbox drains, server, project, warehouse, and
-storage-profile and policy-binding changes become catalog graph events; the
-same management changes also become OpenLineage receipts. QueryGraph can later
-learn the management shape without requiring every Iceberg client to understand
-it. Project, server, and warehouse tenant-root replay is checked before
-projection: project evidence must carry a matching project id, optional valid
-server scope, and string-map public properties; server evidence must carry a
-valid server id, optional valid endpoint URL or full `endpoint-url-hash`, and
-string-map properties; warehouse evidence must carry a valid warehouse, project
-id, optional valid storage root or full `storage-root-hash`, and string-map
-properties. Service admission also closes those nested project, server, and
-warehouse record objects over their route-produced fields, so unexpected
-tenant-root, endpoint, or storage-root claims fail before acknowledgement,
-graph projection, OpenLineage projection, or QGLake proof can inherit them.
-LakeCat also closes the top-level management upsert payloads for
-`project.upserted`, `server.upserted`, and `warehouse.upserted`, so a replay
-sidecar cannot append unverified endpoint, storage-root, project-scope,
-lineage, graph, QueryGraph, or application claims beside checked route
-identity, nested record evidence, optional project scope, and authorization
-receipt evidence. The wrapped outbox envelopes for `project.upserted`,
-`server.upserted`, and `warehouse.upserted` are closed as well: only the audit
-event id, event type, and checked inner payload are accepted, which keeps
-tenant-root replay evidence from gaining extra management claims outside the
-schema LakeCat actually verifies.
-Policy-binding upsert replay is checked before projection too: the
-evidence must carry a valid policy id, warehouse, optional namespace/table
-scope, an enforcement flag, the captured ODRL material, and an `odrl-hash`
-that matches that material. The hash must be a full SHA-256-shaped digest
-before LakeCat compares it to the ODRL body. LakeCat does not reason over that
-ODRL during replay, but malformed binding shape or drifted ODRL content proof
-fails closed before the policy anchor can be delivered to graph or lineage
-sinks. Service admission also closes the nested `policy` object over the
-route-produced fields, so unexpected ODRL, governance, scope, or enforcement
-claims fail before acknowledgement, graph projection, OpenLineage projection,
-or QGLake proof can inherit them. It also closes the top-level
-`policy-binding.upserted` payload, so a replay sidecar cannot append unverified
-ODRL, governance, scope, lineage, graph, QueryGraph, or application claims
-beside checked warehouse, policy object, ODRL content hash, enforcement state,
-and authorization evidence. The wrapped `policy-binding.upserted` envelope is
-closed too, so ODRL or governance claims cannot be smuggled beside an otherwise
-valid inner policy-binding replay payload. Raw lineage-drain summaries now use
-the same service replay validators for `policy-binding.upserted`,
-`project.upserted`, `server.upserted`, and `warehouse.upserted` before compact
-QGLake management proof inherits them. That keeps compact replay proof from
-becoming a looser path for malformed management ids, endpoint or storage-root
-hashes, ODRL hashes, wrapper fields, or authorization receipts. Those
-management upserts must also carry a valid authorization receipt principal, so
-the catalog graph and OpenLineage stream never accept actorless tenant-root,
-storage-profile, or policy mutations.
-Namespace lifecycle replay is checked before projection as well: create, load,
-and drop events must carry a valid warehouse and either a valid namespace path
-or non-empty namespace component array. A malformed namespace lifecycle event
-stays pending and reaches neither the Grust-facing graph sink nor OpenLineage.
-Service replay closes those namespace lifecycle payloads over `event-type`,
-`authorization-receipt`, `warehouse`, and `namespace`, so an archived create,
-load, or drop cannot attach unverified namespace, scope, replay, OpenLineage,
-or QueryGraph claims beside valid standard catalog evidence. It also closes
-the wrapped outbox envelope for namespace lifecycle events, so those claims
-cannot be placed beside an otherwise valid checked inner namespace payload. Raw
-lineage-drain summaries now reuse those same validators for `namespace.listed`,
-`namespace.created`, `namespace.loaded`, and `namespace.dropped`: namespace
-inventory counts must match the listed namespace paths and remain
-duplicate-free, lifecycle namespaces must be valid paths or component arrays,
-receipt actions must match the event type, and closed wrappers cannot carry
-unverified QueryGraph or lineage sidecars before compact QGLake standard
-catalog proof inherits the evidence.
-Catalog read replay has the same fail-closed shape: `catalog.config-read`
-events must carry a valid warehouse, and `namespace.listed` events must carry
-both a valid warehouse and an unsigned namespace count before the read evidence
-can be projected. These standard catalog reads and namespace lifecycle events
-must also carry a valid authorization receipt principal before delivery, so
-Iceberg-compatible control-plane replay remains attributable.
-Management-list replay is checked before delivery too: policy-binding,
-project, server, storage-profile, and warehouse list events must carry unsigned
-counts, warehouse-scoped lists must carry a valid warehouse, and optional
-project scope on warehouse-list replay must be a non-empty, syntactically valid
-project identifier before those reads can become replay evidence.
-Raw management-list summaries now use that same service replay validator before
-compact QGLake proof inherits the inventory. This keeps management proof as a
-LakeCat/QueryGraph control-plane extension around catalog state, not a loose
-JSON appendix: list events must still carry the event-matching management
-action, valid authorization receipt, closed wrapper schema, valid warehouse or
-project scope where applicable, required count-aligned ID arrays, and
-duplicate-free valid identifiers before QueryGraph can treat server, project,
-warehouse, policy-binding, or storage-profile inventory as accepted proof.
-Malformed management identifiers are reported with hash evidence rather than
-raw tenant-root text.
-Raw summaries enforce the same closed payload schema, actor evidence, action
-match, and allowed decision before compact proof is built. They also require a
-nonblank receipt engine and RFC3339 `checked_at` timestamp, so a `server.listed`
-replay cannot be accepted under an unrelated table action, with unverified
-QueryGraph or OpenLineage claims, with missing or denied authorization, with an
-untraceable decision engine, with malformed decision time, or without a valid
-authorization principal.
-View replay is checked at the same boundary: view list events must carry valid
-warehouse, namespace, and count evidence, and the count must match the listed
-view names before graph or OpenLineage projection. View create/load/drop
-evidence must carry a valid warehouse, namespace, and non-empty view name before
-projection too. View list and lifecycle replay must also carry a valid
-authorization receipt principal before delivery, preserving actor evidence for
-QueryGraph view proofs. A view list is read-side catalog evidence, so the
-service requires its authorization receipt action to be `view-load`; a
-`view-manage` receipt is valid for mutations but not for replaying
-`view.listed`. Raw lineage-drain summaries enforce the same count binding and
-read-side action before compact QGLake proof is built, so an archived view
-inventory cannot inflate discovery counts or be accepted under mutation
-authority. View lifecycle replay is action-bound too: `view.upserted` requires
-`view-manage`, `view.loaded` requires `view-load`, and `view.dropped` requires
-`view-drop` before LakeCat emits graph or OpenLineage evidence. The
-nested `view` evidence is closed over the catalog route's view shape too:
-warehouse, namespace, name, store-assigned `view-version`, SQL, dialect, schema
-version, columns, and properties. If a sidecar also carries top-level
-warehouse or namespace evidence, it must match the nested view object before
-delivery. A replay sidecar cannot drift the view scope, add an extra
-QueryGraph, lineage, governance, or application claim inside that view object,
-and have it acknowledged as catalog evidence. Raw lineage-drain summaries now
-use the same service replay validators for `view.listed`, `view.upserted`,
-`view.loaded`, and `view.dropped`, so compact QGLake view proof cannot inherit
-a looser view list, action-drifted receipt, malformed version guard, or
-sidecar-modified lifecycle payload than full replay would accept. Table
-lifecycle replay now follows the same rule:
+outbox events. When the outbox drains, server, project, warehouse,
+storage-profile, and policy-binding changes become catalog graph events and
+OpenLineage receipts. QueryGraph can later learn the management shape without
+requiring every Iceberg client to understand it.
 
-Active view state is protected before replay as well. A Turso row selected as
-warehouse `local`, namespace `default`, and view `active_customers` must decode
-to that same view before LakeCat returns it, lists it, updates it, or drops it.
-The memory store applies the same check to keyed active-view reads. This is not
-an Iceberg view extension; it is LakeCat's durable row/content guard around the
-control-plane view state that later produces view receipt chains and QGLake
-proof.
-create, load, delete, and restore events must carry a valid root table identity,
-and any payload warehouse, namespace, table-name, or soft-delete table evidence
-must agree with that identity before the event can be acknowledged. Their
-authorization receipts must also carry the matching lifecycle action:
-`table-create`, `table-load`, `table-drop`, or `table-restore`, along with an
-allow decision, engine, and checked-at timestamp. Delete replay preserves the
-table-format generation through nested soft-delete `format-version` evidence.
-Older sidecars may spell that field as `format_version`, but LakeCat rejects a
-soft-delete object that carries both aliases before acknowledgement, graph
-projection, or OpenLineage projection. That keeps archived delete proof from
-hiding conflicting table-format evidence behind the spelling LakeCat happens
-to read first.
-Server endpoint URLs are operator-visible management metadata, so LakeCat keeps
-them deliberately plain: they must be absolute `http` or `https` URLs, and they
-cannot include query strings, fragments, or URI userinfo. Rejected submissions
-return `server-endpoint-url-hash=sha256:...` evidence rather than echoing the
-submitted endpoint.
-Warehouse replay does not forward the raw storage root to graph or lineage
-consumers. The drained payload replaces `storage-root` with
-`storage-root-hash`, so QueryGraph can bind tenant evidence to a configured
-root without receiving the local filesystem path or bucket URI.
+The replay rule is simple: management evidence is closed, attributable, scoped,
+and redacted. Tenant-root records bind decoded IDs back to their route scope,
+policy-binding replay carries the ODRL content hash, namespace/table/view
+lifecycle replay carries the matching action receipt, and raw endpoint or
+storage-root material is replaced by full hash evidence before graph,
+OpenLineage, QGLake, or QueryGraph sees it.
 
 ### Storage Profiles And Credential Roots
 
@@ -1034,91 +800,6 @@ Storage profiles bind a warehouse to physical storage roots and credential
 issuance policy. A local profile can return scoped local file configuration. A
 remote profile should usually reference a secret store and require TypeSec to
 authorize issuance before any resolver sees the secret reference.
-Warehouse storage roots are validated before memory or Turso persistence:
-query strings, fragments, URI userinfo, and literal or percent-encoded dot path
-segments fail with `warehouse-storage-root-hash=sha256:...` evidence rather
-than echoing the submitted root.
-LakeCat rejects profiles whose declared provider conflicts with the URI scheme
-of the location prefix, so a credential root cannot claim to be local while
-pointing at an S3 prefix. Those provider/location mismatch errors follow the
-same redaction rule as replay: they name provider labels and a
-`storage-profile-prefix-hash=sha256:...`, not the raw storage root.
-When multiple profiles in the same warehouse could match a table, LakeCat uses
-the longest matching location prefix. If two profiles tie on that longest
-prefix, LakeCat fails closed rather than guessing which credential root or
-metadata-object boundary should apply. The ambiguity error reports the
-competing profile ids and `location-prefix-hash=sha256:...` evidence, not the
-raw storage root.
-The location prefix itself must be plainly addressed: LakeCat rejects literal
-and percent-encoded dot path segments, query strings, fragments, and URI
-userinfo before the profile can reach memory or Turso persistence.
-Traversal-shaped or decorated storage-profile prefixes fail with
-`storage-profile-prefix-hash=sha256:...` evidence rather than echoing the raw
-prefix, token-like query value, or embedded userinfo. The management route pins
-the same operator-facing behavior, so a rejected storage-profile upsert does
-not leak the submitted decorated prefix.
-It also rejects unsafe issuance-mode combinations: `local-file-no-secret` is
-for file storage only, while `short-lived-secret-ref` is for configured remote
-providers such as S3, GCS, and Azure. Those mismatches fail with the same
-`storage-profile-prefix-hash=sha256:...` anchor and without echoing the raw
-storage prefix or submitted `secret-ref`, so operators can correlate the
-credential-root error without turning the management API into a credential
-leak.
-The `public-config` map is only for non-secret routing hints such as region,
-endpoint labels, and operational purpose. LakeCat rejects secret-looking
-public keys and values, so raw tokens, passwords, access keys, and credential
-query parameters must move behind `secret-ref` and the TypeSec-authorized
-resolver path. That rule is enforced both when a profile is built from a
-management request and when a storage profile is revalidated before memory or
-Turso persistence, so deserialized control-plane records cannot bypass the
-public-config guard. Public-config validation failures also use
-`public-config-key-hash=sha256:...` evidence rather than echoing the submitted
-key or value, because even a rejected key name may contain a secret-looking
-identifier. LakeCat also reserves credential-evidence keys such as
-`lakecat.storage-profile-id`, `lakecat.storage-provider`,
-`lakecat.credential-mode`, and `lakecat.max-credential-ttl-seconds`; operators
-may still publish non-secret hints such as `lakecat.endpoint`, but they cannot
-shadow catalog-owned proof in the eventual credential response. Replay
-admission re-checks the same public-config shape for `storage-profile.upserted`
-and `credentials.vend-attempted`, so archived storage-profile or credential
-sidecars cannot smuggle reserved LakeCat proof keys or secret-like public hints
-after the management/store guards have already run. The
-`secret-ref` field itself must remain a clean external
-secret-store locator: LakeCat rejects query strings, URI fragments, and
-userinfo before persisting a storage profile, so token-like material cannot hide
-inside a decorated secret URI. It also rejects literal and percent-encoded dot
-path segments, so a credential root cannot rely on traversal-like spelling
-before a resolver sees it. Unsupported credential-root schemes and malformed
-secret-root paths are rejected with `secret-ref-hash=sha256:...` evidence
-instead of echoing the submitted secret reference. The same hash-only rule
-applies to invalid secret-ref URI syntax, decorated URI forms, and embedded
-secret-like material such as password or token assignments.
-Management upsert and list responses follow the same redaction rule. They do
-not echo the raw `secret-ref`; they return `secret-ref-present`,
-`secret-ref-provider`, and `secret-ref-hash` so operators and QueryGraph can
-verify that a credential root exists and correlate it without learning the
-secret-store path.
-When LakeCat selects the storage profile for a table, the location prefix is
-also matched on a storage-root boundary. A profile for
-`s3://lakecat/events` applies to that exact root and to children such as
-`s3://lakecat/events/tenant-a/table`, but it does not apply to a sibling path
-such as `s3://lakecat/events-shadow/table`. That keeps credential roots from
-accidentally governing more storage than their configured prefix describes; if
-no stored profile matches, LakeCat falls back to an inferred governed-read
-profile for the table location. The same check runs after the credential
-issuer returns: `loadCredentials` rejects any returned prefix broader than the
-selected profile before LakeCat attaches canonical response evidence, so a
-custom issuer cannot widen catalog-owned storage scope. The rejection exposes
-only `credential-prefix-hash` and `storage-profile-prefix-hash` evidence, and
-LakeCat records no `credentials.vend-attempted` replay event for that failed
-issuer response.
-Public configuration on the selected storage profile remains non-secret
-evidence. Service replay and raw lineage-drain credential summaries both
-re-check that public-config keys are non-secret, values are strings, and
-LakeCat-reserved credential-evidence keys do not appear there. Rejections carry
-`public-config-key-hash=sha256:...` rather than the raw key or value, so compact
-credential proof cannot smuggle token-shaped hints or structured secret blobs
-beside an otherwise valid credential-vend event.
 
 ```sh
 curl -s -X PUT \
@@ -1128,9 +809,7 @@ curl -s -X PUT \
     "location-prefix": "file:///tmp/lakecat/qglake/events",
     "provider": "file",
     "issuance-mode": "local-file-no-secret",
-    "public-config": {
-      "lakecat.purpose": "developer-loop"
-    }
+    "public-config": {"lakecat.purpose": "developer-loop"}
   }'
 
 curl -s -X PUT \
@@ -1148,158 +827,30 @@ curl -s -X PUT \
   }'
 ```
 
+The store accepts only plainly addressed roots: no query strings, fragments,
+URI userinfo, literal or percent-encoded dot segments, provider/location
+mismatches, ambiguous longest-prefix ties, secret-looking `public-config`, or
+decorated `secret-ref` values. Operator-facing errors and replay evidence use
+hashes such as `storage-profile-prefix-hash`, `location-prefix-hash`,
+`secret-ref-hash`, and `public-config-key-hash` rather than echoing submitted
+paths or secret-like strings.
+
 The catalog row stores the public profile and secret reference, not raw cloud
 keys. A later credential request is checked against TypeSec and against the
 effective read restriction for the target table. Agents with fine-grained table
 restrictions are steered to governed Sail-planned reads instead of raw
 credentials. Trusted humans can receive audited standard credentials only when
 policy allows the exception.
-For production secret managers, LakeCat keeps a provider-dispatch seam rather
-than hard-coding credentials into catalog state. `vault://` can resolve through
-the built-in Vault HTTP backend when Vault environment configuration is present.
-`aws-sm://`, `gcp-sm://`, and `azure-kv://` can dispatch to explicitly
+
+For production-shaped secret managers, LakeCat keeps a provider-dispatch seam
+instead of embedding credentials in catalog state. `vault://` can use the built-in
+Vault HTTP backend. `aws-sm://`, `gcp-sm://`, and `azure-kv://` can dispatch to
 configured provider backends after TypeSec authorizes the exact secret-ref
-resource. They can also use LakeCat's built-in file-backed provider roots for
-local or single-node deployments:
-`LAKECAT_AWS_SECRETS_MANAGER_FILE_DIR`,
-`LAKECAT_GCP_SECRET_MANAGER_FILE_DIR`, and
-`LAKECAT_AZURE_KEY_VAULT_FILE_DIR`. Each directory contains JSON credential
-config files named as the full SHA-256 digest of the exact secret reference,
-without the `sha256:` prefix, plus `.json`. For example,
-`gcp-sm://lakecat/events` is authorized as that exact TypeSec resource and then
-resolved from a hash-named JSON file under the configured GCP root. If no
-backend is configured, those providers fail closed with an operator-readable
-not-configured error, and denied TypeSec decisions do not call the backend or
-read the file at all. Configured provider backends receive the same
-policy-derived `max-credential-ttl-seconds` cap that LakeCat records in the
-read restriction, and returned credentials must preserve that cap in
-`lakecat.max-credential-ttl-seconds`. LakeCat rewrites duplicate TTL config
-entries into one effective value before returning credentials, preserving a
-stricter issuer TTL when it is valid and otherwise falling back to the policy
-cap. It also rewrites LakeCat-owned profile, provider, mode, principal, and
-governed-read-required evidence after issuance. For secret-ref-backed profiles
-it also derives `lakecat.secret-ref-provider` and `lakecat.secret-ref-hash`
-from the selected storage profile, so a cloud secret backend cannot make the
-response look like a different catalog decision, secret-provider path, or
-secret-reference anchor. Replay admission treats that evidence as structural
-too: secret-ref providers and hashes must be nonblank when
-`secret-ref-present` is true, and provider/hash fields must be absent when
-`secret-ref-present` is false, no matter how a corrupted pending event encodes
-them. The service tests for the REST
-credential endpoint prove this response shape directly, not just through helper
-functions. LakeCat also rejects any credential whose returned
-prefix is outside the storage profile's `location-prefix`, so a misconfigured
-cloud secret backend cannot widen a table's storage scope after TypeSec has
-authorized the secret reference.
-That failure remains hash-only and stops before credential-vend replay evidence
-is recorded.
-The audit event for the credential attempt records redacted
-`credential-response-evidence`: the response prefix is hashed, LakeCat-owned
-proof fields are kept as canonical values, and issuer-owned config is hashed
-rather than copied. That keeps OpenLineage and QueryGraph replay useful without
-turning lineage into a credential leak. For secret-ref-backed profiles the
-redacted response evidence includes the catalog-derived
-`lakecat.secret-ref-provider` and `lakecat.secret-ref-hash`, while the
-storage-profile replay evidence includes `secret-ref-provider` and a full
-`secret-ref-hash`; outbox admission rejects any credential response whose
-provider or hash proof drifts from the selected profile before graph or
-OpenLineage projection. The nested storage-profile proof is still checked even
-when no credentials are returned: provider and issuance mode must be
-compatible, and secret-reference presence must match the mode. That keeps
-blocked credential attempts from projecting a weaker credential-root proof than
-storage-profile management would accept.
-Raw lineage-drain summaries now enforce that same nested storage-profile
-posture before returning compact event proof. A summary cannot carry a raw
-`secret-ref`, a short `location-prefix-hash`, a short `secret-ref-hash`, a
-provider/hash field when `secret-ref-present` is false, a missing provider/hash
-when it is true, or a provider/issuance-mode combination that service replay
-would reject. That closes the gap between accepted replay and the compact
-lineage-drain artifact QueryGraph later imports.
-The storage-profile and
-credential-vend service tests pin that producer-side `location-prefix-hash`
-evidence is already a full SHA-256 digest before QGLake receives the compact
-`locationPrefixHash` proof. The trusted-human credential-vending route test
-pins that the committed outbox payload contains this redacted proof for the
-audited raw-credential exception path. The blocked-agent route pins the other
-side of the same contract: when Sail-planned reads are required and no raw
-credentials are returned, the outbox records an explicit empty
-`credential-response-evidence` array rather than leaving replay to infer why no
-credential proof exists.
-A not-configured resolver error reports the provider label and a
-`secret-ref-hash=sha256:...` value, not the raw secret URI, so the operator can
-correlate configuration without leaking the credential root. Resolver validation
-errors for malformed Vault and TypeSec
-environment references follow the same rule: wrong schemes, missing Vault
-mounts or paths, and invalid environment-variable names produce hash evidence
-instead of echoing the malformed secret reference. Generic provider detection
-and resolver URI parsing follow that rule too, including unsupported provider
-schemes, so malformed credential-root strings cannot leak through production
-resolver diagnostics. Once a configured
-resolver is authorized to run, backend lookup and secret payload parse failures
-still stay hash-only: LakeCat returns the secret-reference hash and an
-error-detail hash instead of the environment variable name, Vault path, token,
-namespace, backend exception text, cloud secret-manager ARN or account path, or
-malformed secret fields. That rule applies both to the built-in Vault and
-environment resolvers and to explicitly configured AWS Secrets Manager, GCP
-Secret Manager, and Azure Key Vault style backend seams, including the
-file-backed provider roots. The file-backed roots are not a claim that LakeCat
-has cloud SDK support for those providers; they are a redacted built-in backend
-that lets the same production-shaped secret-ref dispatch run locally while SDK
-resolvers are added later.
-Secret payload parsing also rejects malformed credential configuration before
-issuance, including blank config keys in either object-shaped secrets,
-ConfigEntry-array secrets, or Vault's nested data object. That keeps
-secret-manager output from turning into ambiguous Iceberg client credential
-configuration.
-When storage-profile changes replay into lineage/OpenLineage evidence, LakeCat
-does not forward the full secret-store URI or raw storage root. The committed
-audit/outbox payload keeps `secret-ref-present` and `secret-ref-provider` so
-QueryGraph can verify that a production credential root exists without learning
-the Vault, cloud secret manager, or TypeSec environment path. It also records a
-full `location-prefix-hash` instead of raw `location-prefix`, so replayed
-evidence can bind a credential root to a storage scope without exposing the
-bucket, path, or local filesystem root to downstream consumers. Warehouse
-replay follows the same shape: `storage-root` becomes `storage-root-hash`
-before graph and lineage projection, keeping the tenant root replayable without
-exposing the raw root itself.
-The drain also rejects unsafe storage-profile upsert evidence before delivery:
-`storage-profile.upserted` must carry a full `location-prefix-hash` and must not
-carry raw `location-prefix` or raw `secret-ref` values. If secret-reference
-presence is true, the replay evidence must carry a provider and full
-`secret-ref-hash`; if presence is false, provider and hash evidence must be
-absent. The same admission check validates the credential-root identity before
-projection: profile id must be non-empty, the nested warehouse must be valid
-and match any top-level warehouse field, and provider plus issuance mode must
-use LakeCat's supported storage-profile vocabulary. Service admission also
-closes the nested `storage-profile` object over the redacted producer schema
-for both `storage-profile.upserted` and `credentials.vend-attempted` replay.
-Unexpected nested storage-profile fields fail before acknowledgement, graph
-projection, OpenLineage projection, or QGLake proof can inherit unverified
-credential-root or storage-scope claims.
-Provider and issuance-mode compatibility is replay-checked as well:
-`local-file-no-secret` is only valid for the file provider, and
-`short-lived-secret-ref` is only valid for cloud object providers.
-Secret-reference presence must also agree with issuance mode: short-lived
-secret-ref profiles must carry redacted secret-reference proof, while governed
-and no-secret profiles cannot carry secret-reference proof.
-The drain summary lifts the same proof into compact fields alongside the
-profile id and provider. QGLake replay verification now checks the provider and
-issuance-mode pair in both compact handoff summaries and raw lineage-drain
-artifacts, so a saved handoff cannot turn a local file credential root into an
-S3 root, or claim a secret-reference mode on a file provider, without being
-rejected before import. That means a saved handoff can prove the credential
-root was configured without handing the next system a secret path.
-Raw storage-profile summaries now use the same service replay validator before
-the compact proof is built. That matters because `storage-profile.upserted` is
-a LakeCat/TypeSec credential-root management event, not an Iceberg metadata
-extension. Standard Iceberg clients do not need it to load a table, but agents
-and QueryGraph need it to know which redacted storage root and secret-reference
-posture were admitted by the catalog. A raw lineage drain can no longer keep a
-storage-profile upsert while dropping the authorization receipt, drifting the
-top-level warehouse from the nested profile, using a malformed profile id,
-turning a file provider into a secret-ref profile, adding a raw
-`location-prefix`, or sneaking LakeCat-reserved public-config keys beside an
-otherwise hash-shaped credential-root proof.
+resource, and local file-backed roots let the same dispatch shape run in a
+single-node loop. Returned credentials must stay inside the selected storage
+profile prefix, carry the policy-derived TTL cap, and preserve LakeCat-owned
+profile/provider/mode/principal evidence. Replay records redacted prefix and
+issuer hashes, not credential material.
 
 ### A PySpark User Reads Iceberg
 
@@ -1332,8 +883,7 @@ For an unrestricted principal, the flow looks like a normal Iceberg read:
 
 For a governed principal, the more interesting path is server-side planning.
 The user request still looks ordinary, but LakeCat derives the mandatory
-restriction before Sail sees the plan. If policy allows only `event_id` and
-`severity`, then a wider client projection is narrowed:
+restriction before Sail sees the plan:
 
 ```text
 client asks:     event_id, severity, raw_payload
@@ -1342,30 +892,12 @@ Sail receives:   event_id, severity
 ```
 
 The catalog does not trust the client to remember that. The restriction is
-re-applied when scan tasks are fetched, and the audit payload records the
-policy hash, narrowed columns, row predicate, storage location, metadata
-location, principal, requested stats fields, and effective stats fields. The
-fetch response also carries LakeCat extension evidence for the exact
-`required-projection` and `required-filters` derived from the authorized
-capability. That makes a stateless `fetchScanTasks` replay prove the restriction
-was re-applied, not merely that the original policy object was echoed. The
-QGLake fixture verifier checks those fields directly when it fetches scan
-tasks, so a local acceptance run fails if the response drops either the narrowed
-projection or the mandatory row predicate proof. The same verifier now checks
-that the exported policy binding, scan planning extension, and fetch extension
-all preserve the server-derived purpose and policy-derived
-`max-credential-ttl-seconds` cap before compact replay proof can be accepted.
-The scan-planned replay proof also carries
-`plannedRequestedStatsFields` and `plannedEffectiveStatsFields`, so QGLake can
-prove a broader stats request, the server-derived narrowing, and the final
-effective stats fields that match the allowed columns. Saved handoff summaries
-and captured replay output are rejected if those fields disappear, widen, or
-drift apart. Planned and fetched scan replay also reject non-LakeCat,
-decorated, or credential-bearing `plan-task` values before graph, OpenLineage,
-or QGLake proof can inherit them.
-It also cross-checks the embedded ODRL policy projection against the structured
-binding so QueryGraph cannot import a stale copy while LakeCat verifies a
-different one.
+re-applied when scan tasks are fetched, and the audit payload records the policy
+hash, narrowed columns, row predicate, storage location, metadata location,
+principal, requested stats fields, and effective stats fields. QGLake handoff
+proof compares planned and fetched evidence so a saved artifact cannot widen the
+server-derived purpose, TTL cap, allowed columns, row predicate, stats fields,
+or policy hashes.
 
 ### A Notebook Requests Credentials
 
@@ -1390,25 +922,10 @@ For an agent bound by a fine-grained restriction, LakeCat should fail closed:
 
 That empty credential response is not a missing feature. It is the intended
 agentic posture. The agent should ask LakeCat to plan the read through Sail, not
-receive raw storage reach. The audit event records the decision and the lineage
-outbox can replay the credential-vend attempt with the same block reason.
-
-For a trusted human principal, policy can allow an audited raw credential
-exception. LakeCat still records the same context:
-
-```text
-principal: analyst:maya
-principal-kind: human
-table: local.default.events
-decision: raw credential exception allowed
-reason: trusted human principal
-restriction: present in receipt
-lineage: credential vend attempted
-```
-
-The contrast matters for operators. They can prove that agents were kept on
-the governed path while a human exception was explicit, policy-backed, and
-replayable.
+receive raw storage reach. For a trusted human principal, policy can allow an
+audited raw credential exception, but the audit and replay evidence still carry
+the principal, table, decision, reason, TTL cap, storage-profile anchor, and
+redacted returned-prefix hashes.
 
 ### A View Becomes Part Of The Catalog Story
 
@@ -1426,64 +943,24 @@ curl -s -X PUT \
     "dialect": "spark-sql",
     "schema-version": 1,
     "columns": [
-      {
-        "name": "event_id",
-        "data-type": {"type": "long"},
-        "nullable": false,
-        "comment": "Stable event identifier"
-      },
-      {
-        "name": "severity",
-        "data-type": {"type": "string"},
-        "nullable": false,
-        "comment": "Operational severity"
-      }
+      {"name": "event_id", "data-type": {"type": "long"}, "nullable": false},
+      {"name": "severity", "data-type": {"type": "string"}, "nullable": false}
     ],
-    "properties": {
-      "owner": "resilience-desk"
-    }
+    "properties": {"owner": "resilience-desk"}
   }'
 ```
 
 This is not Iceberg business metadata glued onto a table. It is catalog state
-about a view object. LakeCat records `view.listed`, `view.upserted`,
-`view.loaded`, and `view.dropped` audit events. Outbox replay projects listing
-reads to namespace-scoped graph and OpenLineage evidence, and projects
-single-view changes and reads to catalog-facing View graph events plus
-LakeCat OpenLineage view dataset receipts. QueryGraph bootstrap can then
-include views with OSI hashes, store-assigned view versions, view-aware graph
-edges, and OpenLineage view counts. Before any view lifecycle event is
-acknowledged from replay, LakeCat closes the top-level lifecycle payload over
-the fields current producers emit and checks that the nested `view` object
-contains only the catalog's view fields: warehouse, namespace, name,
-`view-version`, SQL, dialect, schema version, columns, and properties. That
-same replay gate rejects top-level warehouse or namespace evidence that drifts
-from the nested view object. That keeps a replay bundle from smuggling
-unverified graph, lineage, policy, QueryGraph, or application facts beside or
-inside view lifecycle evidence, and it prevents a view event from being
-projected under a different catalog scope than the view record itself.
-LakeCat applies the same posture one layer lower in the Turso local store:
-active-view load, namespace list, guarded mutation, and drop paths decode the
-view record and bind it back to the durable `views` row columns. A corrupted
-row cannot silently remap an active view into another namespace or name before
-that view becomes replay, graph, OpenLineage, or QueryGraph bootstrap
-evidence. The
-lineage-drain summary also carries compact view replay identity:
+about a view object. LakeCat records `view.listed`, `view.upserted`, `view.loaded`, and
+`view.dropped` audit events. Outbox replay projects listing reads to
+namespace-scoped graph and OpenLineage evidence, and projects single-view
+changes and reads to catalog-facing View graph events plus LakeCat OpenLineage
+view dataset receipts. QueryGraph bootstrap can then include views with OSI
+hashes, store-assigned view versions, view-aware graph edges, and OpenLineage
+view counts.
 
-```json
-{
-  "name": "events_view",
-  "view-version": 1,
-  "schema-version": 1,
-  "dialect": "sql"
-}
-```
-
-That `view-version` is assigned by the durable store on each upsert, not by the
-caller. It is the first compatibility bridge toward Iceberg view commit history:
-QueryGraph can compare a bootstrap view artifact with the catalog's current
-view version today. A caller that wants optimistic commit behavior can include
-`expected-view-version` on the next upsert:
+A caller that wants optimistic view behavior includes the version it believes is
+current:
 
 ```sh
 curl -s -X PUT \
@@ -1498,155 +975,23 @@ curl -s -X PUT \
 ```
 
 If another writer has already advanced the view, LakeCat returns a conflict
-before it replaces the current view or appends a receipt. Omitting the field
-keeps the compatibility behavior: the store assigns the next version. The guard
-must be a positive store-assigned version. `expected-view-version=0` is rejected
-as a bad request before LakeCat changes the active view or appends any
-view-version receipt. The same guard can protect deletion:
+before it replaces the current view or appends a receipt. Drop can use the same
+guard:
 
 ```sh
 curl -s -X DELETE \
   'http://127.0.0.1:3000/management/v1/warehouses/local/namespaces/default/views/events_view?expected-view-version=2'
 ```
 
-If the current view is no longer version 2, LakeCat returns a conflict before
-it removes the view or appends a tombstone receipt. Accepted guarded mutations
-also carry their `expected-view-version` into the audit/outbox payload. During
-lineage drain, LakeCat turns that into compact replay evidence, so QueryGraph
-can distinguish "the replacement happened at version 2" from "the replacement
-was guarded by version 1 and then produced version 2." Replay admission rejects
-view lifecycle evidence that omits the positive store-assigned `view-version`
-or carries a non-positive guarded `expected-view-version`, so graph and
-OpenLineage sinks never observe a versionless view lifecycle fact. Replay
-admission also checks the authorization receipt action: upsert uses
-`view-manage`, load uses `view-load`, and drop uses `view-drop`, so a valid
-view artifact cannot be replayed under a weaker or unrelated catalog action.
-
 LakeCat also writes a compact view-version receipt in the durable store. The
-receipt records the stable view id, assigned version, previous version,
-previous receipt hash, content hash, principal, operation, and timestamp. That
-makes the compact receipt list a hash chain: version 2 points at the version 1
-receipt hash, and a later tombstone points at the last upsert receipt hash.
-Fuller version-log semantics remain a Sail-aligned implementation target. When
-a view is dropped, LakeCat appends a compact tombstone receipt instead of
-inventing a new view version: the receipt keeps `view-version` at the last
-durable version, sets `operation` to `drop`, links to the previous receipt, and
-preserves the last content hash so QueryGraph or an operator can prove which
-catalog view state was removed. If the same view name is later recreated, the
-new upsert continues after the latest receipt in that durable chain. A create,
-drop, and recreate sequence therefore looks like version 1 upsert, version 1
-drop tombstone, version 2 upsert linked to the tombstone receipt, not two
-unrelated version-1 chains for the same stable view id.
+receipt records the stable view id, assigned version, previous version, previous
+receipt hash, content hash, principal, operation, and timestamp. A create, drop,
+and recreate sequence therefore looks like version 1 upsert, version 1 drop
+tombstone, version 2 upsert linked to the tombstone receipt, not two unrelated
+version-1 chains for the same stable view id.
 
-```json
-{
-  "event-type": "view.upserted",
-  "view-warehouse": "local",
-  "view-namespace": ["default"],
-  "view-name": "events_view",
-  "view-stable-id": "lakecat:view:local:default:events_view",
-  "view-version": 2,
-  "expected-view-version": 1,
-  "graph-events": 2,
-  "lineage-events": 1,
-  "replay-event-hashes": ["sha256:..."],
-  "replay-open-lineage-hashes": ["sha256:..."]
-}
-```
-
-A `view.listed` replay is intentionally namespace-scoped. It records the
-warehouse, namespace, view count, graph and lineage projection counts, and
-receipt hashes for the list read without fabricating a single
-`view-stable-id`.
-
-QGLake acceptance compares both that `view-stable-id` and `view-version` with
-the accepted QueryGraph bootstrap view artifacts. That closes a small but
-important gap: the bootstrap bundle may say a view was exported, and the drain
-evidence can now prove the corresponding view catalog event was replayed at the
-same durable catalog version with graph and lineage receipts. When the event
-was guarded, QGLake replay JSON also includes `expectedViewVersion`, preserving
-the optimistic version that LakeCat checked before accepting the mutation.
-The live QGLake fixture uses that path for deletion: after QueryGraph accepts
-the transient view in the bootstrap bundle, the fixture drops it with
-`expected-view-version` equal to the accepted durable view version.
-
-When QueryGraph bootstrap is replayed through the outbox, LakeCat includes only
-compact receipt hashes:
-
-```json
-{
-  "event-type": "querygraph.bootstrap",
-  "view-artifact-count": 1,
-  "view-version-receipt-hashes": ["sha256:..."]
-}
-```
-
-QGLake acceptance requires one non-empty receipt hash for each accepted view
-artifact. That keeps normal Iceberg view access standard, but gives the
-QueryGraph handoff a durable proof that the exported view version came from
-LakeCat's catalog spine. Compact handoff verification also binds those
-bootstrap receipt hashes to `viewReceiptChainProof.views[].acceptedReceiptHash`
-exactly, so a saved summary cannot splice a valid-looking QueryGraph bootstrap
-receipt array from another accepted view proof. Raw lineage-drain summary
-construction now also rejects malformed `table-artifacts` or `view-artifacts`
-fields instead of counting them as zero, so a corrupted bootstrap artifact
-claim cannot vanish from the handoff evidence before QueryGraph import.
-The fixture also exercises the
-deletion side of the same workflow: it creates a transient view, accepts a
-QueryGraph bootstrap that contains that view, drops the view, reads the receipt
-chain through the governed management endpoints by view name and namespace, and
-then requires lineage-drain replay to include `view.dropped`,
-`view.version-receipts-listed`, and `view.version-receipt-chains-listed`
-evidence with non-empty tombstone receipt hashes and namespace chain hashes.
-The service route tests pin those produced `receipt-hash`, `view-hash`, and
-`chain-hash` fields as full SHA-256 digest evidence before the QGLake verifier
-consumes them.
-LakeCat also validates the ordered `previous-receipt-hash` links before marking
-a namespace chain as `chain-verified`, so QueryGraph can reject a replay that
-contains hashes but not a coherent chain.
-The lower store layer now applies the same structural guard when view receipts
-are read: both memory and Turso-backed receipt reads reject forged
-`previous-receipt-hash` links before service replay, OpenLineage projection, or
-QGLake handoff can consume the chain.
-The mutation path uses that same guard before extending history. A guarded or
-unguarded view upsert/drop first validates the existing durable receipt chain,
-then computes the latest receipt hash, and only then appends the next receipt.
-If a stored receipt has a forged `previous-receipt-hash`, LakeCat rejects the
-new mutation before changing the active view record or writing another receipt.
-For the Turso-backed store, LakeCat also compares the decoded receipt JSON to
-the row/query scope. A receipt row selected for one warehouse, namespace, and
-view cannot carry JSON that claims another view and still be returned, grouped
-into a namespace chain, or used as the latest receipt for the next mutation.
-That comparison now includes the durable receipt row columns themselves:
-`view_version_receipts.warehouse`, `namespace_path`, and `view_name` must agree
-with the decoded receipt before LakeCat returns receipt history or appends the
-next receipt. A valid-looking receipt body cannot ride a corrupted row index
-into another namespace or view.
-
-The verifier is fail-closed on version progression too. The first receipt must
-be a version-1 upsert with no previous version or receipt hash; zero-version
-chains, first-receipt tombstones, and first receipts with forged previous-link
-fields fail before the chain can be marked verified. Later upserts must point at
-the previous receipt hash and advance exactly one durable view version. Drop
-tombstones must point at the previous receipt hash, cite the previous view
-version, and keep `view-version` equal to the accepted version that was deleted.
-Unsupported operations and forged `previous-receipt-hash` links fail the same
-check. That lets QueryGraph reject a chain that is cryptographically linked but
-lies about how the catalog view advanced.
-Replay admission also binds the chain header back to the receipt body. A
-verified chain cannot claim a larger `receipt-count`, a different
-`latest-view-version`, a different `latest-operation`, or a tombstone flag that
-does not agree with the last receipt. That prevents namespace-level
-receipt-chain evidence from shedding receipts or presenting a forged head while
-keeping individually plausible receipt links.
-The top-level hash arrays are bound to the same structure: `chain-hashes`,
-`receipt-hashes`, and `drop-receipt-hashes` must exactly cover the nested
-verified chains, receipt bodies, and tombstone receipts. A replay event cannot
-declare a convenient hash set that is merely SHA-256-shaped while the embedded
-chain tells a different story.
-
-QueryGraph and operators can also read the compact receipt chain directly from
-the governed management surface:
+QueryGraph and operators can read the compact receipt chain directly from the
+governed management surface:
 
 ```sh
 curl -s \
@@ -1654,137 +999,18 @@ curl -s \
   -H 'x-lakecat-agent-did: did:example:resilience-agent'
 ```
 
-```json
-{
-  "receipts": [
-    {
-      "stable-id": "lakecat:view:local:default:events_view",
-      "view-version": 1,
-      "previous-view-version": null,
-      "operation": "upsert",
-      "view-hash": "sha256:...",
-      "receipt-hash": "sha256:..."
-    },
-    {
-      "stable-id": "lakecat:view:local:default:events_view",
-      "view-version": 1,
-      "previous-view-version": 1,
-      "previous-receipt-hash": "sha256:...",
-      "operation": "drop",
-      "view-hash": "sha256:...",
-      "receipt-hash": "sha256:..."
-    },
-    {
-      "stable-id": "lakecat:view:local:default:events_view",
-      "view-version": 2,
-      "previous-view-version": 1,
-      "previous-receipt-hash": "sha256:...",
-      "operation": "upsert",
-      "view-hash": "sha256:...",
-      "receipt-hash": "sha256:..."
-    }
-  ]
-}
-```
-
-The response is catalog evidence, not Iceberg table metadata. It lets
-QueryGraph verify the version chain, including tombstones after the current
-view row is gone, while keeping the richer view history model available for a
-future Sail-owned implementation.
-
-When the caller needs discovery rather than a known view name, the management
-surface can return all view receipt chains in a namespace, including chains for
-views that no longer appear in the active view list:
-
-```sh
-curl -s \
-  http://127.0.0.1:3000/management/v1/warehouses/local/namespaces/default/view-version-receipt-chains \
-  -H 'x-lakecat-agent-did: did:example:resilience-agent'
-```
-
-```json
-{
-  "chains": [
-    {
-      "stable-id": "lakecat:view:local:default:events_view",
-      "chain-hash": "sha256:...",
-      "chain-verified": true,
-      "latest-view-version": 1,
-      "latest-operation": "drop",
-      "tombstoned": true,
-      "receipt-count": 2,
-      "receipts": ["..."]
-    }
-  ]
-}
-```
-
-That tombstone read is replayable too. LakeCat projects
-`view.version-receipts-listed` and `view.version-receipt-chains-listed` as
-lineage evidence, not as graph topology. The graph taxonomy stays in Grust;
-LakeCat only proves that the governed read saw the tombstone receipt needed to
-explain why a previously accepted view is now deleted. The namespace response
-also carries a deterministic `chain-hash` over the chain identity and ordered
-receipt hashes, and lineage-drain summaries replay that value as
-`view-version-receipt-chain-hashes` together with a verified-chain count. The
-QGLake fixture now fails if the namespace-level receipt-chain read, its chain
-hash, or its verified-chain evidence is absent from lineage-drain replay, so
-QueryGraph acceptance can depend on compact chain evidence without scraping
-store internals.
+The response is catalog evidence, not Iceberg table metadata. It lets QueryGraph
+verify the version chain, including tombstones after the current view row is
+gone, while keeping the richer view history model available for a future
+Sail-owned implementation. Appendix C captures the exact receipt-chain rules.
 
 ### QueryGraph Bootstrap
 
 QueryGraph should import LakeCat facts through a verified handoff, not by
 scraping service internals. The bootstrap endpoint publishes a bundle with
-artifact hashes:
-
-The exported graph includes a tenant spine:
-
-```text
-Catalog HAS_SERVER Server
-Server HAS_PROJECT Project
-Project HAS_WAREHOUSE Warehouse
-Warehouse HAS_NAMESPACE Namespace
-```
-
-When LakeCat has durable management rows, those graph nodes come from the
-stored `ServerRecord`, `ProjectRecord`, and `WarehouseRecord`. That means a
-QueryGraph import can see the real server id, project id, warehouse id, display
-names, and tenant relationships that operators manage through LakeCat's
-management API. Replay evidence deliberately redacts storage roots and server
-endpoint URLs into hashes, so QueryGraph can prove which management state was
-observed without inheriting local paths, bucket roots, query tokens, URI
-fragments, or userinfo. In the bootstrap graph, `Server` nodes carry
-`endpointUrlHash` and `Warehouse` nodes carry `storageRootHash`; they do not
-carry the raw endpoint URL or storage root. The projection code and service
-route tests both pin those emitted fields as full SHA-256 digest evidence, so
-the producer and verifier agree on the shape before QueryGraph import.
-Authorized management responses can still show the configured endpoint URL or
-storage root to an operator; graph and lineage replay receive hash-only
-evidence. When those records do not exist yet, LakeCat falls back to the old
-deterministic default anchors so bootstrap remains compatible with minimal
-embedded tests and older import flows.
-
-LakeCat also keeps the older `Catalog HAS_NAMESPACE Namespace` edge in the
-bundle so existing QueryGraph importers can keep working while newer flows read
-the tenant path. The tenant anchors and warehouse-to-namespace edges are part
-of the manifest-covered graph hash, so an importer or handoff verifier can
-reject a bundle whose namespace is silently detached from the warehouse or
-rebound to a different durable tenant chain.
-The local QGLake verifier enforces that shape: an accepted bootstrap must prove
-`Catalog -> Server -> Project -> Warehouse -> Namespace -> Table`, not merely
-that a table node exists somewhere in the graph. It also rejects bundles whose
-tenant graph nodes expose raw `endpointUrl` or `storageRoot` properties, even
-if the graph hash and bundle hash have been recomputed around those raw values.
-Accepted handoffs must use hash-only `endpointUrlHash` and `storageRootHash`
-evidence for those roots. Those fields are not merely labels with a
-`sha256:` prefix: the QGLake verifier requires a full 64-hex SHA-256 digest,
-so an importer cannot accept a rewritten bundle that replaces raw roots with
-placeholder hash text after the fact.
-The saved handoff verifier repeats that check against the archived
-`lakecat-bootstrap.json` artifact, so a later replay cannot pass with a compact
-summary whose bundle file has lost the tenant path or drifted from the summary
-hashes.
+catalog tables, views, policy bindings, graph artifacts, OpenLineage artifacts,
+Croissant/CDIF/OSI/ODRL projections, and a manifest that hashes what was
+emitted:
 
 ```sh
 curl -s \
@@ -1793,47 +1019,26 @@ curl -s \
   -o target/qglake/lakecat-bootstrap.json
 ```
 
-The bundle contains catalog tables, views, policy bindings, graph artifacts,
-OpenLineage artifacts, Croissant/CDIF/OSI/ODRL projections, and a manifest that
-hashes what was emitted. The manifest is the import contract. QueryGraph can
-refuse a bundle whose graph hash, OpenLineage hash, table artifact hash, view
-artifact hash, or QueryGraph import-compatibility hash does not match. For
-view-bearing bundles, the import contract also carries compact receipt evidence
-for each exported view version:
+The exported graph includes the tenant spine:
 
-```json
-{
-  "querygraph-import": {
-    "schema-version": "lakecat.querygraph.import-compat.v1",
-    "view-count": 1,
-    "view-receipt-evidence": [
-      {
-        "stable-id": "lakecat:view:local:default:events_view",
-        "view-version": 1,
-        "receipt-hash": "sha256:...",
-        "receipt-chain-hash": "sha256:..."
-      }
-    ],
-    "view-receipt-evidence-hash": "sha256:..."
-  }
-}
+```text
+Catalog HAS_SERVER Server
+Server HAS_PROJECT Project
+Project HAS_WAREHOUSE Warehouse
+Warehouse HAS_NAMESPACE Namespace
+Namespace HAS_TABLE Table
 ```
 
-That gives QueryGraph a manifest-covered way to reject a view bootstrap that
-lost the accepted catalog receipt or detached the ordered receipt chain before
-the richer graph import begins.
+When LakeCat has durable management rows, those graph nodes come from the stored
+`ServerRecord`, `ProjectRecord`, and `WarehouseRecord`. Replay evidence redacts storage
+roots and server endpoint URLs into hashes, so QueryGraph can prove which
+management state was observed without inheriting local paths, bucket roots,
+query tokens, URI fragments, or userinfo. The tenant anchors and
+warehouse-to-namespace edges are manifest-covered, so an importer can reject a
+bundle whose namespace is detached from the warehouse or rebound to a different
+durable tenant chain.
 
-LakeCat also enforces the same binding when a `querygraph.bootstrap` outbox
-event is replayed. The authorization receipt must carry a valid principal and
-the `graph-read` action, table artifact stable IDs must match the
-`verified-tables` manifest exactly, view artifact stable IDs must match
-`verified-views`, and view-version receipt stable IDs must match
-`verified-views`. A saved replay event that keeps valid-looking hashes while
-dropping actor proof, drifting to a lineage-read action, swapping in another table
-artifact, or borrowing another view's receipt evidence fails before graph or
-OpenLineage projection.
-
-The QueryGraph side should verify the same bundle before importing it:
+The QueryGraph side verifies the bundle before importing it:
 
 ```sh
 cd /Users/alexy/src/querygraph/qg-rust
@@ -1846,14 +1051,11 @@ cargo run -- lakecat-import \
   --output .querygraph/lakecat/import-plan.json
 ```
 
-The importer checks the outer bundle hash, the manifest hashes, the
-QueryGraph-import compatibility hash, the graph hash, and view receipt
-evidence, including the accepted receipt hash and receipt-chain hash for each
-exported view. The graph envelope must be valid as a graph, not just valid JSON:
-for example, a table and a view in the same namespace must share one namespace
-node, not emit duplicate vertex ids. That validation belongs on the
-QueryGraph/Grust side, while LakeCat is responsible for producing a clean
-catalog-facing graph projection.
+The importer checks the outer bundle hash, manifest hashes, QueryGraph-import
+compatibility hash, graph hash, OpenLineage hash, view receipt evidence, and the
+accepted receipt-chain hash for each exported view. Graph validation belongs on
+the QueryGraph/Grust side; LakeCat is responsible for producing the clean
+catalog-facing graph projection and the replayable anchors.
 
 For the full local handoff, LakeCat carries a script that runs both sides
 without writing generated artifacts into the QueryGraph checkout:
@@ -1862,640 +1064,14 @@ without writing generated artifacts into the QueryGraph checkout:
 scripts/qglake-handoff-local.sh
 ```
 
-The script starts LakeCat on `127.0.0.1:18181`, uses a Turso-backed local store
-under `target/qglake-handoff/`, generates the paired QGLake bootstrap bundle
-and lineage-drain response, runs `qglake-verify-replay`, then runs
-QueryGraph's `lakecat-verify` and `lakecat-import` against the same bundle. The
-resulting import plan is written to
-`target/qglake-handoff/querygraph-import-plan.json`. The same run also writes
-`target/qglake-handoff/handoff-summary.json`, a compact machine-readable record
-under the `lakecat.qglake.handoff-summary.v1` schema. It records the catalog
-URL, principal, table scope, LakeCat replay status from
-`lakecat.qglake.replay-verification.v1`, QueryGraph-verified table/view
-counts, and semantic bundle/graph/OpenLineage/import hashes plus standards
-accepted only after LakeCat replay, `lakecat-verify`, and `lakecat-import`
-agree. Before writing that compact summary, the harness also requires the
-governed scan replay evidence to include planned requested/effective projection,
-planned requested/effective stats fields, fetched required/effective projection,
-and fetched filters, with effective projection matching the server-derived read
-restriction. The compact verifier requires the catalog URL to be an absolute HTTP(S)
-endpoint and requires warehouse, namespace, and table scope to be present before
-accepting the summary. It rejects captured QueryGraph verify/import output
-whose warehouse no longer matches the summary.
-The compact handoff also carries `catalogConfigProof`, so the compatibility
-contract advertised by `/catalog/v1/config` remains present beside bootstrap,
-scan, management, credential, view, and commit-history proof. That object must
-preserve the same v4 bridge defaults, endpoint list, `catalog-config`
-authorization action, graph count, replay hashes, and OpenLineage hashes as the
-captured LakeCat replay output. A saved handoff therefore cannot pass raw drain
-verification and then silently drop or rewrite the config-read contract in the
-summary or sidecar. Both the compact `catalogConfigProof` object and the
-captured LakeCat replay `catalogConfig` object are closed over those compared
-fields, so neither can append an extra unverified v4 bridge, endpoint,
-authorization, graph, replay, or OpenLineage claim beside the accepted
-config-read proof. The saved LakeCat handoff verifier output repeats that same
-object under `lineageDrainArtifactSemantics.catalogConfigProof`, binding the
-verifier's statement about the raw drain artifact to the config proof actually
-carried by that artifact. Both the compact summary verifier and the saved
-lineage-drain verifier reject a config proof that drops required routes,
-including the standard Iceberg REST plan endpoint and the QueryGraph bootstrap
-endpoint. The same check covers the warehouse-prefixed plan route, so a saved
-handoff cannot keep default catalog discovery while silently weakening
-warehouse-scoped Iceberg planning. It also covers default and
-warehouse-prefixed `fetch-scan-tasks`, preserving the governed task-fetch
-surface that follows a Sail-planned scan, and default and warehouse-prefixed
-credential endpoints, preserving the audited credential-decision surface.
-The lineage-drain replay summaries are bound back to the drain-level
-`eventTypes` manifest as well. A saved handoff cannot add a compact replay
-summary for `storage-profile.upserted`, `querygraph.bootstrap`, or any other
-catalog event type unless the drain itself declared that event type as
-delivered. LakeCat checks this as a multiset rather than a simple set: repeated
-event types such as credential vending or scan-task fetching must appear in the
-same multiplicity in `eventTypes` and in the replay summary array. It also
-checks order: `eventTypes[i]` must name the same event type as replay summary
-`events[i]`. That makes the manifest a compact replay sequence proof instead
-of a loose inventory that could be reordered after the fact.
-The service applies the same discipline to replay summary identities before
-returning the drain response: every summary event id must be nonblank and
-duplicate-free. That keeps later QGLake proof from inheriting an ambiguous
-event sequence even when counts and event types still add up.
-The standalone QGLake lineage-drain verifier checks the same identity rule for
-saved artifacts, so archived handoff bundles cannot bypass the live service
-manifest guard by editing only the replay summary event ids.
-It also embeds `querygraphVerification.verifiedTables` and `verifiedViews`
-directly in the compact summary. `verifiedTables` must include the stable LakeCat
-table id derived from that scope, such as `lakecat:table:local:default:events`;
-`verifiedViews` must include every accepted stable view id from LakeCat replay,
-such as `lakecat:view:local:default:active_customers_view`; and both arrays must
-match the QueryGraph table/view counts. LakeCat rejects duplicate entries in
-those manifests at outbox admission before graph or OpenLineage projection, and
-the compact handoff verifier repeats the check for archived summaries. Captured
-QueryGraph verify/import output must match those compact arrays exactly, which
-keeps a verified artifact set from being replayed against the wrong catalog
-tenant, table, or view. The
-`querygraphImportVerification` object is also a compact proof, not only a
-boolean: it repeats the QueryGraph import table/view ids, counts, bundle hash,
-graph hash, OpenLineage hash, QueryGraph import hash, and standards, and LakeCat
-rejects a summary unless those fields are SHA-256-shaped and match both
-`querygraphVerification` and the captured `lakecat-import` output. It also
-records structured
-request-identity, scan, management,
-credential, table-commit, and view replay evidence, plus compact
-`requestIdentityProof`, `queryGraphBootstrapProof`, `governedScanProof`,
-`tableCommitHistoryProof`, `viewReceiptChainProof`,
-`managementProof`, `storageProfileUpsertProof`, and `credentialVendingProof`
-objects that lift the replay principal proof, QueryGraph bootstrap/import
-proof, governed scan counts, pointer-log read proof, view version and
-receipt-chain proof, management-list counts, redacted credential-root proof,
-and credential-vending decision out of the full replay tree. The identity proof
-shows the principal subject and kind used for the
-replay, the request-identity source and state, the authorization receipt hash,
-and sanitized TypeDID envelope/proof hashes when a TypeDID envelope is present.
-The local QGLake fixture currently records the agent-header source with null
-TypeDID hash slots; a future TypeDID-envelope run can fill those slots without
-changing the handoff schema. The QueryGraph bootstrap proof shows the accepted
-bundle, graph, OpenLineage, and QueryGraph import hashes, the table and view
-artifact counts, standards, policy-binding count, agent delegation and summary
-signature hashes, view-version receipt hashes, and replay/OpenLineage sink
-hashes. Those core bootstrap hash anchors must also be SHA-256-shaped before
-the verifier compares them with QueryGraph's verify/import proof. In the
-compact handoff verifier, the QueryGraph bundle, graph, OpenLineage, import,
-bootstrap replay, and bootstrap OpenLineage anchors must be full
-`sha256:`-prefixed 64-hex digests, so saved summaries cannot use prefix-shaped
-placeholders as QueryGraph acceptance evidence. The scan
-proof shows LakeCat planned and fetched scan tasks through the
-governed path, including file, delete-file, and child plan-task counts with
-replay and OpenLineage hashes. Planned and fetched scan replay admission
-validates any carried `plan-task` as LakeCat-issued evidence, not as arbitrary
-client text. The
-commit-history proof shows the catalog
-pointer log was read back with commit count, sequence numbers, commit hashes,
-positive graph event evidence, and replay/OpenLineage hashes. The view
-receipt-chain proof shows QueryGraph's
-accepted view versions together with accepted receipt hashes, accepted
-`expectedViewVersion` guard evidence when a mutation was guarded, tombstone
-receipt hashes, namespace chain hashes, verified-chain counts, positive graph
-event evidence for accepted view replay, and replay/OpenLineage hashes. The
-credential proof shows the restricted agent was
-blocked onto Sail-planned reads while the trusted human path used the audited
-raw-credential exception. The summary also records artifact paths, raw file
-hashes, captured LakeCat replay output, captured LakeCat handoff-summary
-verification output,
-captured QueryGraph verification output, captured QueryGraph import output,
-captured-output hashes for the LakeCat replay and QueryGraph verify/import
-JSON files, and service log path. The handoff verifier does not stop at byte
-hashes: it parses the saved LakeCat replay JSON and QueryGraph verify/import
-JSON captures and checks their replay schema/status, table and view counts,
-warehouse, verified table ids, bundle hash, graph hash, OpenLineage hash,
-QueryGraph import hash, and standards against the compact summary. It compares
-those standards across sections and independently requires the full QGLake
-standards set, so a compact handoff cannot omit ODRL or another required
-contract simply by making every section omit it consistently. It compares
-the captured LakeCat
-`replay-evidence.requestIdentity` and `replay-evidence.queryGraphBootstrap`
-objects with the compact request-identity and bootstrap proofs, including the
-principal, authorization hash, TypeDID hash slots, delegation and summary
-signature hashes, artifact counts, standards, replay hashes, and the accepted
-bundle, graph, OpenLineage, and QueryGraph import hashes. The compact verifier
-depends on the bootstrap manifest verifier having already rejected duplicate
-stable IDs across table projections, table artifact manifests, view
-projections, and view artifact manifests. That duplicate-free rule is not an
-Iceberg REST requirement for ordinary table reads; it is LakeCat/QGLake import
-proof. It prevents a semantic bundle from satisfying table or view counts by
-repeating the same stable ID, then letting QueryGraph believe it verified more
-catalog objects than the manifest uniquely proved.
-The compact verifier
-also requires the bootstrap proof to carry the same request-identity source and
-verification state as `requestIdentityProof`. The authorization receipt hashes
-are intentionally distinct proof slots: `requestIdentityProof` records the
-lineage-drain read receipt, while `queryGraphBootstrapProof` records the
-original bootstrap event receipt. The verifier requires both hashes to be
-full `sha256:`-prefixed 64-hex digests and requires their actions to keep the
-correct meaning: compact `requestIdentityProof` must be `lineage-read`, and
-compact `queryGraphBootstrapProof` must be `graph-read`. Those values are then
-bound back to their captured replay sections rather than forcing the receipt
-hashes to be equal. The same full-digest rule applies to the required agent
-delegation and agent summary-signature hashes in the bootstrap proof, so a
-saved handoff cannot replace those proof anchors with short readable
-placeholders. The compact `requestIdentityProof` object and the captured
-LakeCat replay `requestIdentity` object are also closed over their compared
-fields. A saved summary or replay sidecar cannot append an extra unverified
-actor, identity-source, TypeDID, authorization, or drain-read action claim
-beside the accepted request-identity proof.
-The compact `queryGraphBootstrapProof` object and captured LakeCat replay
-`queryGraphBootstrap` object are closed the same way. A saved summary or
-replay sidecar cannot append extra unverified bundle/import, artifact-count,
-standards, identity, TypeDID, authorization, delegation, view-receipt, replay,
-or OpenLineage claims beside the accepted bootstrap proof.
-The compact verifier
-also validates the TypeDID hash-slot shape directly: envelope and proof slots
-must be null or full `sha256:`-prefixed 64-hex digests, and a TypeDID proof
-hash cannot appear without the paired envelope hash. As with authorization
-receipts, the request and bootstrap TypeDID hash slots are independently shaped
-replay evidence because they may come from different requests in the captured
-workflow. That keeps the compact handoff self-describing without moving TypeDID
-trust semantics out of TypeSec. Live request parsing now enforces the same
-boundary earlier: a caller that sends `x-lakecat-typedid-proof` without
-`x-lakecat-typedid-envelope`
-receives a hash-only `typedid-proof-hash` rejection, and a caller that sends
-agent delegation or agent summary proof headers without an agent-shaped
-identity receives only the matching proof hash. Those failures happen before
-governance or capability receipt creation, so raw proof material cannot become
-either policy context or operator-facing diagnostics. TypeDID verifier failures
-follow the same rule: malformed or rejected envelopes report only the envelope
-hash and error-detail hash, and a verified-subject mismatch reports only hashes
-of the verified and supplied principals before governance dispatch. LakeCat
-applies that redaction at the verifier trait boundary, so a custom TypeDID
-verifier can choose the error class without leaking raw envelope, DID, gateway,
-or payload text into the catalog response. The JSON output from
-`lakecat-cli qglake-verify-handoff` also carries
-the accepted lineage-drain identity source, identity state, and TypeDID
-envelope/proof hash slots in `lineageDrainArtifactSemantics`, so QueryGraph can
-index the verified drain boundary without reparsing the raw drain artifact.
-Before that boundary is accepted, the verifier reconciles the drain artifact's
-top-level delivered count, `eventTypes` list, graph event count, and lineage
-event count against the replay summary array. If
-a saved `lakecatHandoffVerifyOutput` artifact is named, LakeCat first requires
-its full `lakecatHandoffVerifyOutputHash`, then binds those saved drain
-identity semantics back to the compact `requestIdentityProof`, so a rehash
-cannot disguise drift in principal, authorization receipt, source/state, or
-TypeDID hash-slot evidence. The same self-verification pass compares the saved
-verifier output's delivered count, `eventTypes`, graph event count, and lineage
-event count with the archived lineage-drain artifact, so a rehashed verifier
-output cannot rewrite the drain manifest while keeping the artifact
-hash set intact. It compares captured
-`replay-evidence.scan` with `governedScanProof`, requiring positive plan task,
-scan-plan graph event, file task, delete file, and child plan task counts plus
-the planned and fetched read-restriction objects and the fetch-side required
-projection/filter evidence.
-The verifier rejects a summary if the fetched restriction drifts from the
-planned restriction, so the compact handoff proves the narrowed allowed
-columns, row predicate, and policy hashes alongside the planned/fetched replay
-and OpenLineage hashes that prove the Sail-planned read path. The compact Rust
-verifier requires both planned and fetched replay/OpenLineage arrays to contain
-full `sha256:`-prefixed 64-hex digests, so automation can reject incomplete or
-placeholder scan lineage without falling back to the shell harness. The compact
-`governedScanProof` object and the captured LakeCat replay
-`replay-evidence.scan` object are also closed over the fields LakeCat compares:
-counts, principal and authorization receipt evidence, read restrictions,
-requested and effective projection, stats-field evidence, fetch filters,
-replay hashes, and OpenLineage hashes. A handoff therefore cannot attach an
-extra unverified scan claim beside the checked proof and ask QueryGraph to
-index it as if it were part of the Sail-planned read. The planned/fetched
-read-restriction objects are closed too, as are their row-predicate children,
-so an archived proof cannot smuggle an unverified purpose, policy, predicate,
-projection, or credential-scope claim inside a restriction object whose core
-fields happen to match. The service outbox admission path enforces the same
-closed schema before graph or OpenLineage projection, so the handoff verifier is
-confirming evidence that was already constrained at the catalog boundary rather
-than cleaning it up after delivery. Captured
-scan replay-line recomputation also reuses the governed read-restriction guard,
-so an archived replay artifact cannot make empty planned or fetched
-`allowed-columns` look like a readable operator summary. It also compares the captured
-`replay-evidence.tableCommitHistory` object with
-`tableCommitHistoryProof`, including the commit count, sequence numbers, commit
-hashes, replay principal subject/kind, authorization receipt hash/action, graph
-event count, replay hashes, and OpenLineage hashes that prove the pointer-log
-commit history was not rewritten between replay and summary and that the
-commit-history replay projected catalog graph evidence for the accepted actor.
-The compact verifier also requires the commit-history principal subject and
-kind to match the accepted QGLake handoff principal, requires the authorization
-receipt hash to be a full SHA-256 digest, requires the authorization action to
-be the read-side `table-load` action for `table.commits-listed`, requires the
-commit count to match the sequence-number and commit-hash arrays, requires
-every sequence number to be positive and strictly increasing, requires commit
-hashes to be duplicate-free, and requires positive graph event evidence plus
-replay and OpenLineage receipt hashes. Captured
-raw lineage-drain regressions cover both missing and drifted commit-history
-principal subject, principal kind, and authorization action, and raw summaries
-also re-check receipt principal, action, allowed decision, engine, and RFC3339
-`checked_at` evidence when receipt evidence is present, so actor, action, and
-decision provenance must survive before the compact handoff proof exists. The service admission layer now rejects
-`table.commits-listed` source replay whose authorization receipt principal is
-missing or malformed, whose top-level `principal-subject` or `principal-kind`
-is missing, or whose top-level actor summary drifts from the receipt before
-acknowledgement, catalog graph projection, or OpenLineage projection, so the
-raw lineage-drain summary is never built from an actorless pointer-log read.
-It also binds the replayed warehouse, namespace, and table evidence to the
-durable outbox table identity before projection, so a source replay cannot
-project one table's pointer log as another table's history. Captured
-LakeCat replay-line recomputation enforces the same sequence invariant even
-when the captured replay JSON and compact summary agree on malformed sequence
-evidence, so operator-readable `table-commit-history-replay` text cannot
-launder zero, duplicated, or reordered pointer-log proof. It compares the captured
-`replay-evidence.views` object with `viewReceiptChainProof`, including accepted
-view receipts, accepted-view graph event counts, expected-version guard
-evidence, tombstone receipts, namespace receipt-chain hashes, and their
-replay/OpenLineage hashes, so durable view history stays tied to the saved
-LakeCat replay artifact. It also compares the
-tombstone branch's `expectedViewVersion` with the accepted view version, so a
-handoff cannot claim a governed deletion unless the saved LakeCat replay proves
-that deletion used the catalog's optimistic version guard; the standalone
-`qglake-verify-handoff` command enforces this match even when a summary is
-checked outside the local shell harness. The same standalone verifier now
-requires the compact view proof to keep `viewCount` consistent with the accepted
-view list, carry stable warehouse/namespace/name identity, prove
-`viewVersion == acceptedViewVersion`, and carry accepted receipt hashes,
-accepted receipt-chain hashes, positive accepted-view graph event evidence,
-tombstone receipt hashes, positive verified-chain counts, receipt-chain
-warehouse/namespace identity, namespace chain hashes, and replay/OpenLineage
-hashes. It also derives the expected `lakecat:view:<warehouse>:<namespace>:<name>`
-stable ID from each accepted view's warehouse, namespace, and view name, so a
-saved handoff cannot keep a verified stable ID while drifting the visible
-component fields. Tombstone receipt entries use the same component binding
-before their `expectedViewVersion` guard evidence is accepted, so deletion proof
-cannot drift from the stable view identity either. The verifier also checks that
-each namespace receipt-chain summary's `verifiedChainCount` equals the number
-of structural `chains[]` entries and that every chain entry is covered by
-`chainHashes`. The compact proof and captured LakeCat replay sidecar are also
-closed over their verified view schema: top-level `viewReceiptChainProof`, each
-accepted-view entry, each tombstone entry, each receipt-chain group, each
-structural chain, and each receipt may carry only the fields LakeCat compares or
-uses in the structural digests. A saved handoff therefore cannot append
-unverified view lifecycle, tombstone, receipt-chain, principal, replay, or
-OpenLineage claims beside the checked view proof. The compact proof carries
-`chains[]` entries inside each
-namespace receipt-chain summary.
-Each chain entry keeps only catalog-facing evidence: stable view identity, the
-chain hash, the verified flag, latest view version, latest operation, tombstone
-state, receipt count, and per-receipt version, operation, view hash, principal
-subject, principal kind, recorded timestamp, receipt hash, and previous-link
-fields.
-The chain warehouse and namespace must match the enclosing namespace
-receipt-chain summary, and every receipt's stable ID, warehouse, namespace, and
-view name must match the chain identity. Each structural chain stable ID is
-also checked against its own warehouse, namespace, and view-name components, so
-compact evidence cannot splice receipts across views or namespaces while
-preserving hash-shaped fields. LakeCat now applies the same scope rule at raw
-service replay time: a `view.version-receipt-chains-listed` outbox event is
-rejected if any nested chain or receipt warehouse/namespace drifts from the
-top-level payload, if a chain stable ID does not match its warehouse,
-namespace, and view name, or if a receipt stable ID or view name does not match
-the chain identity before acknowledgement, graph projection, or OpenLineage
-projection. Structural chain bodies cannot repeat a `chainHash`. The enclosing
-namespace `chainHashes` and `receiptHashes` arrays are duplicate-free summaries
-of those same structural chains, and
-`receiptHashes` must match the structural per-receipt hashes exactly, so a
-compact proof cannot hide extra receipt hashes or omit receipts from the
-ordered chain bodies. Each structural `chainHash` is also recomputed from the
-same content-derived digest LakeCat service uses for view receipt chains: stable
-view identity, latest version, latest operation, tombstone state, and the
-ordered receipt hashes. A compact proof therefore cannot pair an accepted
-receipt-chain hash with a different ordered receipt body.
-LakeCat enforces the duplicate-free part before compact proof generation as
-well: outbox replay rejects duplicate `receipt-hashes`,
-`drop-receipt-hashes`, or `chain-hashes` in view receipt-list and receipt-chain
-events before graph or OpenLineage projection. For verified receipt chains, raw
-service replay also recomputes each structural `chain-hash` from the chain
-identity, latest state, tombstone posture, and ordered receipt hashes before
-projection, so an archived outbox event cannot simply invent a full SHA and
-repeat it in `chain-hashes`.
-Each structural `receiptHash` is recomputed too, using the same
-content-derived view-version receipt digest LakeCat service emits over stable
-view identity, version, previous-link fields, operation, view hash, principal,
-and recorded timestamp. That closes the gap between a valid-looking chain over
-opaque receipt hashes and a chain whose individual receipt bodies are
-themselves durable catalog facts.
-`qglake-verify-handoff` rejects a chain whose first receipt is not version 1
-`upsert`, whose previous links do not point to the prior receipt, whose upsert
-skips a version, whose drop advances the durable version, whose operation is
-unsupported, or whose latest receipt does not match the chain head. In the
-compact verifier, accepted-view receipt hashes, accepted receipt-chain hashes,
-tombstone receipts, namespace receipt/chain hashes, per-receipt hashes, and
-view replay/OpenLineage hashes must all be full `sha256:`-prefixed 64-hex
-digests, so a saved handoff cannot use readable placeholder strings as view
-acceptance evidence. It also requires
-`queryGraphBootstrapProof.viewVersionReceiptHashes` to match the accepted view
-receipt hashes exactly, so the compact summary cannot combine bootstrap view
-receipt evidence from one run with accepted-view proof from another. Accepted
-receipt-chain hashes and tombstone receipt hashes must be covered by structural
-`chains[]` evidence for the same stable view, not merely by another chain in
-the same namespace receipt-chain summary. A tombstoned view therefore carries
-both the accepted pre-drop chain and a structural drop chain whose final receipt
-is the tombstone. Tombstoned views must also include tombstone receipt evidence
-whose `expectedViewVersion` preserves the accepted view version. A consumer can
-reject a handoff whose view history claim lacks identity, accepted-version,
-count-aligned hash-chain evidence, duplicate-free exact structural receipt-hash
-coverage, content-derived chain-hash agreement, same-view accepted-chain
-coverage, tombstone guard evidence, same-view tombstone receipt coverage, or
-replay evidence before
-parsing the full replay tree. It compares captured LakeCat replay
-`replay-evidence.management` list counts with compact
-`lakecatReplayVerification.managementProof`, requiring positive server,
-project, warehouse, and storage-profile counts, positive graph event counts for
-server, project, warehouse, policy-binding, and storage-profile list replay,
-and a policy-binding count that matches the QueryGraph bootstrap proof. Those
-management-list counts are receipt-backed: the compact proof and captured
-replay must also agree on replay and OpenLineage hash arrays for
-`server.listed`, `project.listed`, `warehouse.listed`, `policy-binding.listed`,
-and `storage-profile.listed`.
-The same admission rule applies to the outbox event envelope itself. The store
-requires the top-level pending outbox payload to name the event type, and the
-service projection path now also requires a hash-bound durable row's inner
-replay payload to carry the same `event-type` before Grust, OpenLineage,
-QGLake, or QueryGraph sees it. A forged row cannot say "this is a table event"
-in the outer envelope while projecting an unbound inner payload into the graph
-or lineage stream.
-It also compares the captured LakeCat replay
-`replay-evidence.management.storageProfileUpsert` object with the compact
-`lakecatReplayVerification.storageProfileUpsertProof`, including the
-profile id, provider, issuance mode, location-prefix hash, secret-reference
-presence/provider/hash, replay hashes, and OpenLineage hashes. The compact
-verifier also requires those replay and OpenLineage arrays to contain full
-`sha256:`-prefixed 64-hex digests. It requires that location-prefix value to be
-a full `sha256:`-prefixed 64-hex digest and requires a redacted
-secret-reference provider plus full-digest `secretRefHash` whenever the proof
-says a secret reference is present. If the proof says no secret reference is
-present, the provider and hash may be omitted or null, but any other
-provider/hash value is rejected. The saved LakeCat replay must normalize the
-same way as the compact summary: omitted absent secret-reference provider/hash
-fields are accepted only when both the compact proof and captured replay omit
-them under `secretRefPresent=false`. The local QGLake handoff script applies the
-same nonblank provider rule to compact credential storage-profile proof, so
-credential proof cannot claim secret-reference presence while omitting the
-provider anchor. Source replay enforces the same full-digest
-secret-reference rule before compact proof generation, so the saved summary
-cannot launder short placeholder credential-root hashes through the
-lineage-drain artifact. The positive QGLake acceptance fixture covers the
-production-shaped case too: when the storage profile uses a secret reference,
-the compact handoff accepts the proof only when the storage-profile branch and
-both credential branches agree on the redacted provider and full
-`secretRefHash`, and the operator replay line carries
-`secret_ref_hash=sha256:...` rather than a raw secret URI. Those
-operator-facing management and credential replay lines also fail closed when
-secret-backed evidence has only a prefix-shaped or placeholder hash, so the
-human-readable proof cannot be weaker than the structured verifier. The
-storage-profile proof objects themselves are closed over the compared schema:
-`storageProfileUpsertProof` and captured
-`replay-evidence.management.storageProfileUpsert` may carry only the profile
-identity, provider, issuance mode, redacted location and secret-reference
-posture, principal and authorization receipt evidence, graph count, replay
-hashes, and OpenLineage hashes that LakeCat verifies. QueryGraph should treat
-any extra credential-root claim as untrusted until it is promoted into that
-closed proof contract and backed by replay evidence. This is a LakeCat/TypeSec
-governance extension around Iceberg access, not an Iceberg table-metadata
-extension. Raw lineage-drain summaries also apply the same storage-profile
-redaction and secret-reference posture before compact proof generation:
-nested storage-profile evidence must use the closed producer schema, full
-location and secret-reference hashes, coherent secret-ref presence/provider/hash
-fields, and a valid provider/issuance-mode pairing. A saved lineage-drain
-artifact therefore cannot hide a raw secret reference or launder a malformed
-credential root by silently dropping the bad fields. Raw lineage-drain
-management summaries now apply the same
-inventory posture to control-plane ID arrays: project ids, server ids,
-warehouse names, policy ids, and storage-profile ids must be string-shaped,
-nonblank, and duplicate-free before QGLake proof can inherit them. It also
-compares
-the captured `replay-evidence.credentials` restricted-agent and trusted-human
-branches with the compact `credentialVendingProof`, so a saved handoff cannot
-claim that agents were blocked onto Sail-planned reads or that humans used an
-audited exception unless the captured LakeCat replay proves the same decision.
-That equality includes `credentialPrefixHashes`, `authorizationReceiptHash`,
-and `authorizationReceiptAction`, which closes the gap where a captured replay
-artifact could report a different redacted returned-credential set or
-authorization action while the compact summary still looked valid.
-The credential proof envelope is closed at three levels: the top-level
-`credentialVendingProof` object may only contain the restricted-agent and
-trusted-human branches; each branch may only contain the principal, credential
-count, redacted prefix hashes, raw-exception decision, TTL cap, storage-profile
-anchor, authorization receipt, replay hashes, and OpenLineage hashes LakeCat
-checks; and each nested storage-profile anchor may only contain the redacted
-profile identity, provider, issuance mode, storage-scope hash, secret-reference
-posture, and graph count. Extra raw credential or storage-scope claims are not
-Iceberg metadata, and QueryGraph should not treat them as catalog truth unless
-LakeCat promotes them into this checked proof contract.
-The raw-exception decision itself is also closed in raw replay before compact
-handoff proof can inherit it: both the top-level and authorization receipt
-context `lakecat:raw-credential-exception` objects may carry only the requested
-posture, allowed/blocked posture, and reason that LakeCat compares. A captured
-replay artifact cannot smuggle an additional raw-credential entitlement beside
-an otherwise valid blocked-agent or trusted-human branch.
-Both credential branches must carry a full authorization receipt hash, the
-`credentials-vend` authorization action, and replay/OpenLineage arrays whose
-entries are full `sha256:`-prefixed 64-hex digests, so the compact proof cannot
-replace credential receipt evidence with prefix-shaped placeholders or a
-different catalog action. They also carry `credentialPrefixHashes`: the
-restricted-agent branch must prove the array is empty when zero credentials
-were returned, while the trusted-human branch must prove the array length
-matches `credentialCount`, every entry is a full SHA-256 digest, and no prefix
-hash is repeated.
-The verifier also binds the operator-facing replay text back to the same
-proof fields. The captured top-level `scan-replay` line is recomputed from
-`governedScanProof`, including plan/fetch task counts, the policy-derived
-purpose, and the TTL cap. The captured top-level `credential-replay` line is
-recomputed from `credentialVendingProof`, including the restricted-agent block,
-trusted-human exception, TTL caps, and redacted storage-profile anchors. The
-captured `management-replay` line is also recomputed from `managementProof` and
-`storageProfileUpsertProof`, while `table-commit-history-replay` is recomputed
-from `tableCommitHistoryProof`. A saved artifact therefore cannot keep valid
-structured proof while presenting a different terminal transcript or
-principal-attribution story to an operator.
-Each credential branch carries the same redacted storage-scope anchor as the
-storage-profile upsert proof: `locationPrefixHash` binds the credential-vend
-attempt to the configured storage root without replaying the raw prefix. That
-anchor must be a full `sha256:`-prefixed 64-hex digest in both the
-storage-profile proof and each credential branch. LakeCat checks the
-storage-scope hash at lineage-drain replay time before the compact handoff
-summary is accepted, and the operator-readable credential replay line prints
-the same hash so captured terminal output cannot look complete while omitting
-the credential-root boundary.
-Source replay validates secret-reference shape on the credential branches
-themselves: if a credential-root proof says a secret reference is present, it
-must carry a non-empty provider and full `sha256:`-prefixed 64-hex
-`secretRefHash`; if it says no secret reference is present, provider and hash
-evidence must be absent.
-LakeCat now applies the same discipline before the outbox event is delivered:
-`credentials.vend-attempted` must carry a `credential-count` that matches its
-credential-response evidence, full SHA-256 prefix and issuer-config hashes for
-each returned credential, a full storage-profile `location-prefix-hash`, and
-non-contradictory secret-reference state. The event must also carry a valid
-authorization receipt principal before delivery, including blocked
-zero-credential attempts where no returned credential entry exists to repeat
-actor evidence. The top-level `storage-profile-id`
-must match the nested `storage-profile.profile-id`, even when no raw
-credentials were returned, and the nested `storage-profile.warehouse` must
-match the event table warehouse. The replay payload's `table` hint must also
-match the durable outbox table identity before acknowledgement, graph
-projection, or OpenLineage projection, so a credential decision for one table
-cannot be replayed as another table's credential-root evidence. If the
-top-level `secret-ref-present` field is missing, non-boolean, or different
-from `storage-profile.secret-ref-present`, the replay event is rejected before
-delivery. Raw lineage-drain summaries enforce the same binding before compact
-QGLake proof is built. That duplicate field is small, but it keeps compact
-credential proof from omitting whether the selected credential root depends on
-an external secret reference.
-Each returned credential entry must also agree with the catalog-derived
-storage-profile id, catalog profile id, storage provider, credential mode,
-authorization principal, receipt principal, governed-read marker, and any
-policy-derived TTL cap. Returned credential entries must be duplicate-free by
-`prefix-hash`, and service replay now rejects unexpected fields inside each
-credential-response entry, so a replay event cannot count the same redacted
-credential twice or attach an unverified credential-scope claim beside the
-catalog-derived proof. The issuer config stays redacted, but its proof is still
-internally checked: when `issuer-config-entry-count` is zero,
-`issuer-config-hash` must match LakeCat's canonical hash of the empty issuer
-config array. Non-zero issuer config remains represented by count plus full
-digest evidence, without storing or replaying raw credential config. LakeCat
-carries those redacted prefix hashes into the raw lineage-drain summary as
-`credentialPrefixHashes`, and the QGLake verifier rejects the drain before
-compact proof generation if the prefix hashes are missing, count-drifted, short,
-or duplicated. A malformed credential replay event therefore remains pending
-instead of becoming graph or OpenLineage evidence. The raw service summary
-builder now applies the same fail-closed
-posture before the verifier runs: non-array credential response evidence,
-missing prefix hashes, malformed prefix hashes, duplicate prefix hashes,
-malformed issuer-config hashes, unsigned issuer-config entry counts, or a zero
-issuer-config entry count paired with a non-canonical empty issuer hash reject
-the raw lineage-drain summary instead of silently omitting redacted
-credential proof. It also reuses the service credential-response binding, so a
-raw summary cannot drift the returned credential away from the catalog
-storage-profile id, storage provider, issuance mode, receipt principal,
-governed-read posture, secret-ref posture, or authorized TTL while preserving a
-valid-looking redacted prefix hash.
-Credential replay also rejects a governed `read-restriction` that is missing
-from, or different from, the authorization receipt context, so credential TTL
-and blocked-agent evidence cannot drift away from the receipt that authorized
-the decision. The credential replay boundary now also treats a governed
-restriction without a nonblank purpose or a positive
-`max-credential-ttl-seconds` cap as malformed before acknowledgement, graph
-projection, or OpenLineage projection. That keeps a blocked zero-credential
-agent decision from becoming QGLake evidence unless it still proves the policy
-purpose and TTL cap that made raw credential vending inappropriate.
-Source replay and compact handoff verification both reserve
-`rawCredentialExceptionReason` for the audited trusted-human path; a restricted
-agent proof must be blocked with `blockReason` and cannot carry a raw
-exception reason. The local handoff harness now preserves the lineage-drain
-artifact before replay verification, so if any of these proof checks fail the
-operator still has the exact failed drain JSON for diagnosis.
-The compact handoff verifier also validates that credential proof directly:
-the restricted branch must name the accepted agent principal, carry the
-Sail-planned-read block reason, prove zero credentials, carry the
-policy-derived `maxCredentialTtlSeconds` cap, explicitly set
-`rawCredentialExceptionAllowed` to false, reject any non-null
-`rawCredentialExceptionReason`, and include replay/OpenLineage hashes;
-the trusted-human branch must name a human principal, prove a positive
-credential count, carry the same policy-derived TTL cap, carry the exact
-audited raw-credential exception reason, prove `blockReason` is null, and
-include replay/OpenLineage hashes. Both branches must also carry
-count-aligned, duplicate-free `credentialPrefixHashes`, with an empty array for
-the blocked branch and full SHA-256 returned-prefix hashes for any issued
-credential.
-The compact verifier has direct negative coverage for the credential-branch
-secret-reference rules too: blank providers are rejected when a secret ref is
-present, and non-null provider/hash evidence is rejected when no secret ref is
-present. That way a handoff cannot hide malformed provider or hash evidence
-behind an otherwise matching storage-profile upsert proof.
-The local handoff harness now preserves those replay fields while building the
-compact summary, rather than relying on the nested raw replay blob alone: scan
-graph events and fetch-side projection/filter requirements, management graph
-events, storage-profile graph events, credential block/exception fields, and
-table commit-history graph events all move into the verifier-facing proof
-sections before `qglake-verify-handoff` runs.
-That makes the handoff repeatable from the LakeCat repo while keeping
-QueryGraph responsible for graph validation and import semantics.
-The handoff script refuses to write the summary unless LakeCat replay JSON
-contains request-identity evidence for the expected agent principal, an
-explicit identity source/state, an authorization receipt hash, and explicit
-TypeDID envelope/proof hash slots that are either null or full
-`sha256:`-prefixed 64-hex digests. A proof hash is valid only when the matching
-envelope hash is present. It also
-refuses to write the summary unless LakeCat replay JSON
-contains redacted `storageProfileUpsert` evidence with replay and OpenLineage
-hashes, and the accepted summary repeats that evidence as
-`lakecatReplayVerification.storageProfileUpsertProof`. QueryGraph gets proof
-that the credential root was configured, including the provider, issuance mode,
-the configured location-prefix hash, and a full `sha256:`-prefixed 64-hex
-digest of the secret reference, without receiving the underlying secret-store
-URI or full storage prefix in the compact proof. That compact proof must also
-name the principal subject and kind, carry a full authorization receipt hash,
-and prove the receipt action was `storage-profile-manage`. Captured LakeCat
-replay and the compact QGLake summary are compared field by field, so a saved
-handoff cannot turn an authorized storage-profile management action into an
-actorless credential-root fact or replay it under a weaker catalog action. The
-operator-readable management replay line now prints the same storage-scope hash
-and redacted secret-reference state, so a captured transcript cannot describe
-the credential root only by provider while omitting its redacted storage scope or
-secret-reference boundary. The saved handoff verifier recomputes that
-management line from compact proof fields before accepting captured output. The
-script also
-refuses to write a summary unless LakeCat
-replay proves both sides of credential vending: untrusted agents get no raw
-credentials, trusted humans receive only the audited standard exception, and
-both branches preserve the `max-credential-ttl-seconds` restriction as
-`maxCredentialTtlSeconds` in compact evidence.
-For reads, the summary similarly refuses to omit proof that scan planning and
-scan-task fetch both replayed with full digest-shaped sink receipt hashes. The
-compact scan proof must preserve the server-derived read restriction as a full
-restriction, not only as columns and filters: allowed columns, row predicate,
-purpose, full `sha256:`-prefixed policy-hash evidence, and
-`max-credential-ttl-seconds` must be present, and the planned and fetched
-restrictions must agree. Short readable policy anchors such as
-`sha256:policy-name` are rejected before QueryGraph receives the compact
-handoff proof. The fetched
-required filters must also be exactly the mandatory row predicate evidence, not
-a prefix with extra unverified filters appended. For catalog state, it refuses to omit proof
-that the table commit-history read replayed with sequence-number and
-commit-hash evidence. For views, it refuses to omit proof that accepted
-view versions line up with their receipt hashes and that the namespace-level
-tombstone and receipt-chain reads replayed with chain hashes and verified-chain
-counts. The service-side lineage-drain summary preserves the full receipt hash
-set from receipt-list reads and nested namespace receipt-chain payloads, so the
-QGLake verifier can prove that both upsert and tombstone receipts are covered
-by the replayed namespace chain.
-
-This gives the semantic layer a responsible starting point. LakeCat says:
-
-```text
-Here are the governed catalog objects.
-Here are the policies that shaped planning.
-Here are stable dataset and field anchors.
-Here is the graph envelope.
-Here is the OpenLineage replay evidence.
-Here are the hashes that bind the handoff.
-```
-
-QueryGraph then owns the richer semantic work: metrics, dimensions, joins,
-business names, multi-dataset reasoning, and agent-facing synthesis.
+The script starts LakeCat on `127.0.0.1:18181`, uses a Turso-backed local store,
+generates the paired QGLake bootstrap bundle and lineage-drain response, runs
+`qglake-verify-replay`, then runs QueryGraph's `lakecat-verify` and
+`lakecat-import` against the same bundle. The compact
+`handoff-summary.json` records the catalog URL, principal, table scope,
+LakeCat replay status, QueryGraph-verified table/view counts, and semantic
+bundle/graph/OpenLineage/import hashes plus accepted standards. Appendix D is
+the detailed handoff proof map.
 
 ### Draining The Outbox
 
@@ -2511,736 +1087,8 @@ curl -s -X POST \
 
 A useful drain response includes delivered event types, graph projection counts,
 lineage projection counts, receipt hashes, and the authorization proof for the
-drain request itself. That last part is easy to overlook. Reading the replay
-stream is also privileged, so LakeCat records that the drainer was allowed to
-read lineage evidence. Before LakeCat returns that raw lineage-drain summary or
-acknowledges delivery, it also checks the projection receipt arrays produced by
-the graph/lineage sink boundary: replay hashes and OpenLineage hashes must be
-count-aligned with lineage events, full SHA-256-shaped, and duplicate-free. That
-keeps a malformed sink receipt from inflating the proof QGLake later archives.
-Standard catalog reads replay too:
-`catalog.config-read` records a warehouse-scoped graph/OpenLineage fact for the
-Iceberg REST configuration entrypoint; `namespace.listed` records the namespace
-listing at the warehouse; and `namespace.loaded` records the specific namespace
-resolved through the standard catalog route. For view events, the response
-includes the warehouse, namespace, view name, and QueryGraph-compatible stable
-id, so downstream acceptance can check replay identity without parsing the full
-audit payload. Table restores replay as table graph evidence plus a restore
-OpenLineage receipt, so a soft-deleted table returning to service is visible to
-QueryGraph without forcing LakeCat to invent restore-specific graph taxonomy.
-Management list reads for policy bindings, projects, servers, storage profiles,
-and warehouses replay as OpenLineage receipts too. They intentionally do not
-create list-specific graph nodes in LakeCat; Grust owns the reusable hierarchy
-and traversal model. The durable audit/outbox payload carries only the redacted
-stable ID arrays beside the counts: policy ids, project ids, server ids,
-storage-profile ids, and warehouse names. Before projection, LakeCat rejects a
-management-list event when the required ID array is missing, malformed,
-contains an invalid identifier, repeats an identifier, or no longer matches the
-recorded count. LakeCat also requires the authorization receipt to carry a
-valid principal, the event-matching catalog action, an affirmative allow
-decision, a non-empty engine, and an RFC3339 checked-at timestamp before
-acknowledging the event, so QueryGraph never has to accept actorless or
-action-drifted management inventory replay. Service replay also closes the
-top-level payload schema for `namespace.listed`, `view.listed`, and management
-list events, so an archived inventory read cannot attach unverified namespace,
-view, management, replay, OpenLineage, or QueryGraph claims beside the checked
-count and ID/name/path evidence. The drain response lifts their
-counts, ID arrays, and management scope into compact fields, so QueryGraph can
-verify the control-plane read evidence without opening the raw lineage payload.
-It also carries replay and OpenLineage hash arrays for those management-list
-reads, so a compact handoff cannot prove only that the right number of
-management records existed while losing the identities or receipt evidence for
-the reads. The lineage-drain verifier rejects those source replay events when
-the ID arrays
-are missing, empty, duplicate-inflated, count-drifted, or when the receipt
-arrays are empty or not full SHA-256-shaped, or when the event no longer
-preserves nonblank principal subject/kind evidence and a full authorization
-receipt hash, so the compact `managementProof` starts from verified replay
-evidence rather than untrusted text. This is deliberately LakeCat/QGLake/TypeSec
-control-plane proof: the underlying namespace, table, warehouse, policy, and
-storage-profile inventory remains standard catalog state, while the actor,
-authorization, replay, and OpenLineage receipts prove how that state was read
-and projected for QueryGraph. The compact handoff
-verifier repeats that check with the stricter full `sha256:`-prefixed 64-hex
-digest shape for every management replay and OpenLineage array, and it verifies
-that `serverIds`, `projectIds`, `warehouseNames`, `policyIds`, and
-`storageProfileIds` match their recorded counts and are duplicate-free. When
-`warehouseProjectId` is present, it must be a non-empty listed project id.
-Saved summaries therefore cannot preserve only prefix-shaped placeholders for
-control-plane read receipts, inflate a count with repeated valid identities,
-detach a project-filtered warehouse inventory from the project list, or
-normalize malformed management identities later. Captured replay agreement
-checks the same ID arrays against the saved compact `managementProof`, so a
-handoff cannot keep valid artifact hashes while swapping the server, project,
-warehouse, policy, or storage-profile identities between source replay and the
-summary. When an operator preserves the verifier output as
-`lakecat-handoff-verify.json`, LakeCat re-checks the saved
-`capturedOutputSemantics.lakecatReplay` proof against the compact summary for
-every replay section, including management IDs, governed scans, commit history,
-view receipt chains, storage-profile evidence, and credential-vending proof.
-That makes the verifier output a replayable audit artifact instead of a second
-place where compact proof drift can hide. It also rejects management-list source
-replay without catalog graph projection evidence, keeping the durable
-server/project/warehouse, policy, and storage-profile facts visible to
-QueryGraph through Grust-facing graph events. Compact `managementProof` carries
-those graph event counts too, and captured replay agreement checks them, so the
-graph evidence cannot disappear between source replay and handoff verification.
-Policy binding upserts add a content anchor to that management proof. A policy
-list can prove that `agent-columns` was listed; it cannot prove which ODRL
-document `agent-columns` meant. LakeCat now carries a compact
-`policyUpsertProof` with `policyId`, `odrlHash`, graph event count, replay
-hashes, OpenLineage hashes, principal subject/kind, a full authorization
-receipt hash, and the `policy-manage` action. The raw lineage-drain verifier
-requires a matching `policy-binding.upserted` replay event, requires the policy
-id to be present in the policy list, requires the ODRL hash to be a full
-SHA-256 digest, and rejects action drift away from `policy-manage`. Captured
-replay agreement compares the same object against the saved summary. That keeps
-QueryGraph from accepting a management proof that preserved the policy name but
-lost or swapped the policy document anchor or the authority under which it was
-recorded.
-Tenant-root upserts get the same hash-binding treatment. When a server replay
-event carries an `endpoint-url`, LakeCat recomputes `endpoint-url-hash` from
-that value before projection. When a warehouse replay event carries a
-`storage-root`, LakeCat recomputes `storage-root-hash` from that value before
-projection. This is not an Iceberg table-access rule; it is LakeCat/QGLake
-management proof. It keeps a replay event from pairing one raw endpoint or
-storage root with a valid-looking hash for another value, then asking Grust,
-OpenLineage, or QueryGraph to trust the mismatched tenant-root evidence. Raw
-lineage-drain summaries apply the same redaction-hash check before compact
-handoff proof is built, so the archived summary path cannot become weaker than
-delivery replay.
-The write side also checks ancestry before extending the tenant tree. Project
-upserts validate their parent server record, and warehouse upserts validate
-their parent project record. In proof terms, the child record does not inherit
-authority from a mere key lookup; it inherits from a decoded, scoped, valid
-parent management record.
-The QGLake acceptance workflow now
-establishes its server/project/warehouse tenant spine, performs governed
-server, project, warehouse, policy-list, policy-upsert, storage-profile-list,
-scan-planning, scan-task-fetch, and table commit-history reads before bootstrap,
-and rejects a
-drain that does not replay matching `server.listed`, `project.listed`,
-`warehouse.listed`, `policy-binding.listed`, `policy-binding.upserted`,
-`storage-profile.listed`, `table.scan-planned`, `table.scan-tasks-fetched`, and
-`table.commits-listed` evidence. Request-identity and bootstrap replay are
-checked before any compact
-handoff proof is built: the drain authorization, bootstrap authorization,
-QueryGraph bundle/import hashes, agent delegation hash, agent summary signature
-hash, and TypeDID envelope/proof hashes must be full `sha256:`-prefixed 64-hex
-digests, and a TypeDID proof hash cannot appear without its paired envelope
-hash. For scan replay, the typed drain summary carries scan-plan task counts,
-scan-plan graph event
-evidence, fetched file-scan, delete-file, and child-plan task counts, along with
-planned and fetched OpenLineage receipt hashes. Source replay validation now
-also requires planned/fetched replay and OpenLineage receipt arrays to be full
-SHA-256 digests, and the compact handoff verifier repeats that full-digest
-check for the saved `governedScanProof` arrays. The scan read restriction
-itself is part of that proof: both source replay and compact
-`plannedReadRestriction`/`fetchedReadRestriction` evidence require
-`policy-hashes` to be non-empty full `sha256:`-prefixed 64-hex digests, so a
-self-consistent handoff cannot smuggle placeholder policy names or empty policy
-anchors through a field that later readers treat as integrity evidence. The
-outbox drain checks the same digest shape and non-empty requirement before
-acknowledging any pending event that carries
-`read-restriction.policy-hashes`, including the copy embedded in the
-authorization receipt context, so malformed source evidence is stopped before
-it becomes delivered replay material. Scan replay also requires the top-level
-read restriction to match the authorization receipt context exactly before
-delivery, so policy narrowing cannot be asserted in one replay field and absent
-from the durable receipt. Scan replay also requires the authorization receipt
-itself to be complete before delivery: a valid principal, the event-matching
-`table-plan-scan` catalog action, an affirmative allowed decision, a non-empty
-receipt engine, and an RFC3339 `checked_at` timestamp. Valid-but-wrong actions
-such as table load or commit actions are rejected before governed scan proof
-reaches graph or lineage sinks. This is LakeCat replay admission, not Sail
-planning logic; Sail remains responsible for producing reusable table-format
-and scan-planning behavior, while LakeCat refuses to turn actorless or
-action-drifted scan evidence into graph or lineage proof. QGLake preserves the
-same actor and action evidence in compact handoff proof: planned and fetched
-scan proof carry principal subject/kind, full authorization receipt hashes, and
-`table-plan-scan` actions, and captured LakeCat replay must match those fields.
-That keeps archived handoffs from retaining only the restriction and task counts
-while dropping who was authorized to perform the governed scan. Scan replay now
-gets the same
-drain-side admission check before Grust or OpenLineage projection:
-planned-scan events must carry
-matching table identity, unsigned task counts,
-requested/effective projection arrays, and requested/effective stats-field
-arrays; fetched-task events must carry matching table identity, fetched
-file/delete/child-plan counts, required filters, and required/effective
-projection arrays. Those scan proof arrays must be non-empty, non-blank, and
-duplicate-free; present-but-empty projection or stats evidence is malformed,
-not an implicit unrestricted read. Planned and fetched governed
-`required-filters` evidence must be present and must exactly preserve the
-governed row predicate at service admission, so an event with missing, empty, or
-drifted filter proof is rejected before graph or OpenLineage projection. When
-there is no read-restriction row predicate, replay must keep
-`required-filters` empty; a non-empty array without that governing predicate is
-an unsourced filter claim, not evidence. When a governed read restriction is
-present, the effective projection and effective stats fields must remain inside
-the allowed columns, empty allowed-column arrays fail closed for both planned
-and fetched replay, and explicit effective projection or stats evidence cannot
-widen beyond the caller-requested or server-required evidence it claims to
-preserve.
-QueryGraph bootstrap replay is
-also checked at the drain boundary before it becomes accepted handoff material:
-the event must carry a valid warehouse, table/view counts matching the verified
-ids and artifact arrays, full SHA-256 bundle/graph/OpenLineage/import hashes,
-full table/view artifact hashes, view receipt and receipt-chain hashes for
-accepted views, the expected standards list, and full optional TypeDID or agent
-proof hashes when those slots are present. The nested table artifact, view
-artifact, and view-version receipt entries are closed over their verified
-fields as well: a replay sidecar cannot attach an extra semantic artifact,
-standards, graph, lineage, or view receipt claim beside the stable id and hash
-evidence that LakeCat actually checked. View receipt replay follows the
-same fail-closed rule at the drain boundary. A
-`view.version-receipts-listed` event is not acknowledged unless its
-warehouse, namespace, view, and authorization receipt principal are valid, its
-authorization receipt action is `view-load`, its `receipt-count` matches full
-SHA-256 receipt hashes, and every drop receipt hash is included in the listed
-receipts. The receipt-list payload is also closed over the fields current
-producers emit, so an archived read cannot attach unverified view-history,
-lineage, graph, QueryGraph, or application claims beside checked receipt hashes
-and authorization evidence. LakeCat also closes the wrapped receipt-read
-outbox envelope for `view.version-receipts-listed` and
-`view.version-receipt-chains-listed`, so those claims cannot ride beside an
-otherwise valid checked receipt-list or receipt-chain payload. A verified
-`view.version-receipt-chains-listed` event is not acknowledged unless its
-warehouse, namespace, authorization receipt principal, read-side `view-load`
-authorization action, chain count, receipt count, and tombstone count are valid
-and count-aligned, each verified chain and receipt carries full SHA-256 digest
-evidence, the first receipt is a version 1 upsert without previous links, and
-every later upsert or drop links to the previous receipt with the expected
-view-version transition. The receipt-chain summary payload plus the nested
-receipt-chain and receipt objects are closed over the fields LakeCat verifies,
-so a replay sidecar cannot attach extra view-history, principal, lifecycle,
-graph, lineage, QueryGraph, or application claims beside a valid chain hash or
-receipt hash. Raw lineage-drain summary construction also decodes the archived
-receipt-chain objects and requires `chain-verified-count` to match the decoded
-verified chains, so compact QGLake proof cannot inflate verified view-history
-by changing a count beside otherwise valid structural chain evidence. That
-keeps malformed or drifted view-history evidence out of both graph projection
-and OpenLineage replay before QueryGraph ever sees a compact handoff. The
-verifier also requires
-table-commit replay to be internally consistent before delivery:
-`table.commit` must carry a commit object, unsigned sequence number, stable
-table identity, matching nested commit-table identity, a valid commit principal
-and a valid authorization receipt principal with matching values, an
-authorization receipt whose action is a known LakeCat catalog action matching
-the `table.commit` event, whose `allowed` decision is true, whose engine is
-non-empty, whose `checked_at` timestamp is RFC3339, an RFC3339 commit
-`committed_at` timestamp, and commit hash evidence that is full SHA-256 before
-graph or OpenLineage projection can start.
-Raw lineage-drain summary construction uses the same table-commit admission
-shape: duplicate snake-case/kebab-case aliases for the same pointer or proof
-field fail closed, and nested `commit`, top-level payload, and wrapper objects
-are closed over the fields LakeCat actually verifies. A compact QGLake commit
-summary therefore cannot smuggle an extra graph, lineage, storage, policy, or
-application claim beside otherwise valid request/response hashes and pointer
-evidence.
-The action, decision, engine, and timestamp fields are deliberately small but
-important: replay evidence must prove which catalog action was authorized,
-prove the catalog acted under an affirmative authorization decision, say which
-engine made that decision, preserve when the authorization check happened, and
-preserve when the catalog accepted the pointer transition. Local/default
-receipts identify the local allow-all
-compatibility engine, while real TypeSec-backed receipts identify TypeSec. That
-keeps replay evidence from becoming actorful but action-less, decision-less,
-engine-less, or timeless proof.
-The compact QGLake handoff now preserves the same action proof instead of
-collapsing it into a receipt hash. The lineage-drain response carries
-`authorizationReceiptAction` for the drain read itself and for each replayed
-event summary. The QGLake verifier requires the drain read to prove
-`lineage-read`, requires each replayed event summary to carry a non-empty
-action, and rejects valid-but-wrong action drift, such as `table-commit`
-attached to `table.commits-listed`. Captured replay agreement checks the same
-field in saved handoff artifacts, so an archive cannot keep valid hash-shaped
-proof while silently changing what catalog action was authorized. The compact
-handoff summary now makes the same requirement before captured-output
-comparison: request identity proves `lineage-read`, and QueryGraph bootstrap
-proves `graph-read`. The saved self-verifier sidecar carries top-level copies
-of both compact proof objects, and artifact verification rejects those copies
-if either authorization action drifts from the summary.
-The saved self-verifier sidecar repeats that binding for
-`lineageDrainArtifactSemantics`: its drain-read `authorizationReceiptAction`
-must still match the compact request-identity proof, so a rehashed
-`lakecat-handoff-verify.json` cannot describe a different lineage-read action.
-Commit-history replay has the same shape:
-`table.commits-listed` event must carry a `commit-count` that matches both
-full SHA-256 commit hashes and unsigned sequence numbers, plus
-`principal-subject` and `principal-kind` fields that match the authorization
-receipt principal, a known authorization receipt action matching
-`table.commits-listed`, specifically the read-side `table-load` action rather
-than a mutation action such as `table-commit`, an affirmative authorization
-receipt decision, and a non-empty authorization receipt engine with an RFC3339
-`checked_at` timestamp; compact QGLake proof also binds that pointer-log replay
-to the accepted principal subject/kind, a full authorization receipt hash, and
-the `table-load` action. Service replay closes the top-level
-`table.commits-listed` payload over the fields LakeCat producers emit, so an
-archived commit-history read cannot attach unverified commit, pointer, lineage,
-graph, QueryGraph, or application claims beside checked table scope, count,
-sequence, commit hash, principal, and authorization evidence. It also closes
-the wrapped `table.commits-listed` outbox envelope over the producer fields,
-so those unverified commit-history claims cannot be placed beside an otherwise
-valid checked inner pointer-log proof. Raw lineage-drain summary construction
-now reuses that same service replay validator before returning compact proof,
-so a valid-looking table history summary cannot quietly carry an extra
-commit-history, lineage, graph, QueryGraph, or application claim that full
-delivery replay would have rejected. The compact
-`tableCommitHistoryProof` object and the
-captured LakeCat replay `tableCommitHistory` object are closed over those
-compared fields, so a saved summary or captured replay sidecar cannot append an
-extra unverified pointer-log claim beside accepted commit count, sequence,
-hash, principal, authorization, graph, replay, and OpenLineage evidence. The
-raw QGLake lineage-drain verifier checks the same accepted-principal, agent
-kind, receipt hash, and action before compact handoff proof is generated, so
-malformed, denied, actor-drifted, action-drifted, action-less, decision-less,
-engine-less, or timeless pointer-log summaries cannot become delivered replay
-evidence.
-Individual `table.commit` replay is held to the same commit envelope before
-graph or OpenLineage delivery: it must include a positive sequence number,
-non-empty new metadata pointer evidence, non-blank previous pointer evidence
-when present, matching commit and authorization principals, the `table-commit`
-receipt action, positive Iceberg format-version evidence, non-negative
-snapshot-id evidence, and full SHA-256 request, response, and idempotency-key
-hashes. The store path now supplies explicit `snapshot_id: 0` proof for
-metadata with no current snapshot, keeping empty-table or schema-only commits
-compatible with the replay contract. The policy hash is the only optional hash
-in that envelope, because some standard commits do not pass through a policy
-binding. The nested `commit` object is also closed over the exact fields
-LakeCat verifies, so replay cannot smuggle an extra unverified commit, policy,
-storage, graph, or QueryGraph claim into the sidecar before QGLake proof is
-generated. The wrapped `table.commit` outbox envelope is closed as well, so
-those claims cannot be placed beside an otherwise valid checked inner commit
-payload.
-The verifier also normalizes the legacy alias boundary: snake_case and
-kebab-case commit fields are both accepted, but duplicate aliases for the same
-semantic value are rejected before acknowledgement or projection.
-Credential-vend replay gets the same treatment: `credentials.vend-attempted`
-must carry a
-matching credential count, full duplicate-free credential-response prefix
-hashes, a full redacted storage-profile location hash, a valid authorization
-receipt principal, a full authorization receipt hash, the `credentials-vend`
-authorization action that matches the outbox event type, internally consistent
-secret-reference presence/provider/hash fields, a top-level storage-profile id
-that agrees with nested storage-profile evidence, a nested storage-profile
-warehouse that agrees with the event table warehouse, required top-level
-secret-reference presence evidence that agrees with nested storage-profile
-evidence, and
-credential-response metadata that agrees with the selected storage profile and
-authorization receipt before delivery.
-The top-level `credentials.vend-attempted` payload is also closed over the
-fields LakeCat actually emits and verifies. A replay record cannot append
-unverified credential, storage-scope, issuer, graph, OpenLineage, QueryGraph,
-or application claims beside otherwise valid read-restriction,
-raw-credential-exception, storage-profile, response-evidence, and authorization
-proof.
-Storage-profile upsert replay must likewise reject raw secret references and contradictory
-secret-reference-state evidence before delivery. Policy-binding upsert replay
-must carry valid catalog scope evidence before delivery, including policy id,
-warehouse, optional namespace/table scope, enforcement state, captured ODRL
-material, and a matching `odrl-hash`. Namespace lifecycle replay must carry a
-valid warehouse and namespace path or component array before create/load/drop
-events can be delivered.
-Catalog config and namespace-list read replay must likewise carry a valid
-warehouse, and namespace listing must preserve both an unsigned namespace count
-and count-aligned `namespace-paths` evidence. Those paths are parsed as
-namespace identities and must be non-empty and duplicate-free before standard
-catalog reads become delivered graph/OpenLineage evidence. Catalog config,
-namespace list, namespace lifecycle, view list, and view lifecycle replay must
-also carry valid authorization receipt principals, so saved replay cannot turn
-standard Iceberg control-plane activity into actorless QueryGraph facts.
-Management-list read replay applies the same rule to operational discovery:
-policy, project, server, storage-profile, and warehouse list events must carry
-unsigned counts, valid warehouse scope when warehouse-scoped, and valid optional
-project scope before delivery. The warehouse-list project scope is parsed as a
-project identifier, not accepted as an arbitrary string, so compact management
-proof cannot smuggle malformed project filters into QueryGraph or OpenLineage.
-QGLake preserves that scope as `warehouseProjectId` in compact
-`managementProof`, and the verifier requires it to match one of the compact
-`projectIds`. A saved handoff therefore cannot pair a project-filtered
-warehouse inventory with an unrelated or malformed project identity.
-View list and lifecycle replay must carry valid warehouse, namespace, view
-name, count, and receipt principal evidence before those view events become
-graph/OpenLineage material for QueryGraph. View-list replay also carries
-count-aligned `view-names` evidence. Each name must parse as a valid catalog
-view/table name and the array must be duplicate-free, so an archived
-`view.listed` event cannot inflate view discovery by repeating or forging view
-identities. The receipt action must be `view-load`, matching the compact
-QGLake action contract; `view-manage` remains mutation proof for
-`view.upserted`, while `view.loaded` uses `view-load` and `view.dropped` uses
-`view-drop`. View lifecycle replay with a drifted action is rejected before
-graph or OpenLineage projection, and top-level view lifecycle payloads are
-closed over the checked event type, optional interface, warehouse, namespace,
-view, expected-version, and authorization evidence. Top-level warehouse and
-namespace evidence must also match the nested view object. QueryGraph cannot
-accept a view mutation or read under the wrong catalog permission or scope, nor
-can a replay sidecar append unverified view lifecycle, lineage, graph, or
-application claims beside otherwise valid view evidence. LakeCat also closes
-the wrapped outbox envelope for `view.upserted`, `view.loaded`, and
-`view.dropped`, so those claims cannot be placed beside an otherwise valid
-checked inner view lifecycle payload.
-Table lifecycle replay applies the same identity discipline before delivery:
-`table.created`, `table.loaded`, `table.deleted`, and `table.restored` must
-carry a decodable table identity, optional payload scope hints must match it,
-delete replay must carry soft-delete evidence that points at the same table
-with a positive unsigned version, and the authorization receipt must carry a
-valid principal plus the matching lifecycle action.
-Create, load, and restore replay must also carry the unsigned table `version`
-emitted by the catalog producer plus positive Iceberg `format-version`
-evidence. Delete replay carries the same generation and table-format evidence
-inside the required positive soft-delete record, accepting the durable Rust
-record spelling `format_version` and the Iceberg-style proof spelling
-`format-version`. Full table identity objects are closed over warehouse,
-namespace, and name, and soft-delete evidence is closed over the durable
-delete-proof fields LakeCat verifies. A replay sidecar cannot attach extra
-table-scope, delete-state, principal, storage, or application claims beside the
-checked lifecycle identity or soft-delete record.
-LakeCat also closes the top-level table lifecycle payload before delivery.
-That means an otherwise valid `table.created`, `table.loaded`,
-`table.deleted`, or `table.restored` replay cannot append unverified lifecycle,
-storage, lineage, graph, QueryGraph, or application claims beside checked table
-identity, version, format-version, location, soft-delete, and authorization
-evidence. It also closes the wrapped outbox envelope for those table lifecycle
-events, including delete-side `soft-delete` wrapper evidence, so those claims
-cannot be placed beside an otherwise valid checked inner lifecycle payload. The
-nested `metadata-graph` summary used for graph projection is
-closed over its current schema and snapshot summary fields as well; richer
-graph taxonomy and query behavior still belong in Grust, not in the catalog
-validator.
-When those lifecycle events carry table `metadata-location`, table `location`,
-or soft-delete `metadata-location` evidence, the values must be non-empty before
-the event is acknowledged or projected. The Iceberg table operation remains the
-standard catalog action; the stricter non-empty replay evidence is LakeCat's
-control-plane proof that QueryGraph and OpenLineage did not accept an empty
-pointer, table-format, or storage-location claim from a corrupted outbox record.
-Project, server, and warehouse upsert replay must carry valid
-tenant-root evidence too: project ids, server scopes, endpoint URLs, storage
-roots, identifiers, properties, and pre-redacted hash anchors are checked
-before delivery. Policy-binding, project, server, storage-profile, and
-warehouse upsert replay must also carry a valid authorization receipt
-principal, an event-matching catalog action, an affirmative allow decision, a
-non-empty receipt engine, and an RFC3339 checked-at timestamp before delivery,
-so compact QueryGraph proof can attribute management mutations to the actor and
-TypeSec-style action accepted by LakeCat. It also requires
-planned and fetched read restrictions to match before compact proof generation,
-requires both requested/effective projection and
-requested/effective stats-field evidence, requires effective projection to be a
-narrowed subset of the requested projection and to match the planned allowed
-columns, and requires effective stats fields to be both inside the planned
-allowed columns and a narrowed subset of the requested stats fields in source
-replay and compact handoff proof. Empty allowed-column evidence is rejected in
-planned and fetched replay instead of being interpreted as unrestricted replay.
-It also requires the fetched projection and filter requirements to exactly
-preserve the fetched allowed columns and row predicate. A fetched
-response that omits required-filter proof is rejected just like one that widens
-or changes that proof, and the compact handoff summary applies the same
-missing-proof check before accepting governed scan evidence. Credential
-replay applies the same policy-proof discipline to the two credential branches:
-the restricted-agent denial and trusted-human audited raw-credential exception
-must both carry a complete read restriction, and those restrictions must match
-before credential proof can feed the compact handoff summary. For
-commit-history replay, the
-typed drain summary carries the commit count,
-committed sequence numbers, commit hashes, replay hashes, and OpenLineage
-hashes. The handoff verifier rejects compact scan proofs without those
-OpenLineage hashes and compact commit-history proofs whose counts, sequences,
-or hash arrays do not align. It also requires the compact commit, replay, and
-OpenLineage arrays to contain full `sha256:`-prefixed 64-hex digests, not
-prefix-shaped placeholders. Source replay validation applies the same
-pointer-history discipline before compact proof generation: the table commit
-count must match the sequence-number and commit-hash arrays, commit sequences
-must be positive and strictly increasing, and commit hashes must be
-full SHA-256-shaped before pointer-history evidence can enter the compact handoff
-proof. The store-level source of that proof is also row-bound: decoded commit
-records must match durable pointer-log table identity and principal evidence
-before those records can be summarized. The graph projection helper applies the
-same fail-closed posture to the
-commit-history summary it consumes: missing, count-drifted, or non-string
-`commit-hashes` fail before commit graph nodes are emitted, so graph evidence
-cannot silently carry a null commit hash if a future internal path bypasses the
-replay validator. A table with no recorded commit entries is still valid pointer-history
-evidence: it drains as an explicit zero-count read, emits lineage proof, and
-does not fabricate loaded commit graph nodes. The compact QGLake verifier
-accepts that zero-count proof only when the sequence-number and commit-hash
-arrays are also empty; once entries exist, they must satisfy the normal
-positive-sequence, full-hash, duplicate-free invariants. Service route coverage
-pins the producer side too: request hashes,
-response hashes, idempotency-key hashes, and commit hashes are full SHA-256
-digests across the route response, pointer-log outbox payload, lineage-drain
-summary, and graph projection. The QGLake fixture verifier also checks the
-management commit-history response itself, so short readable placeholders are
-rejected before the later lineage-drain and compact handoff checks run.
-QueryGraph can therefore verify the governed
-Sail-planned read and pointer-history inspection without parsing the full
-lineage payload. The
-core QueryGraph bundle, graph, OpenLineage, and import anchors must be
-SHA-256-shaped in compact verify/import/bootstrap proof before a matching
-summary can pass; matching strings are not enough. The bootstrap, scan,
-credential, view, receipt-chain, and commit-history receipt arrays must also
-carry full SHA-256 digest evidence before compact proof generation can consume
-them. The same full-digest check applies to accepted-view receipt evidence:
-bootstrap view-version receipt hashes, tombstone receipt hashes, and namespace
-receipt-chain hashes must be full SHA-256 digest evidence before accepted-view
-proof feeds the compact handoff summary. Raw lineage-drain verification also
-rejects short `sha256:` placeholders for credential replay sink receipts and
-table commit-history replay/OpenLineage receipts before those arrays can become
-compact QueryGraph proof.
-The raw request/bootstrap side follows the same rule: lineage-read
-authorization, bootstrap authorization, core QueryGraph
-bundle/graph/OpenLineage/import hashes, agent delegation and summary signature
-hashes, and TypeDID envelope/proof hashes must all be full SHA-256 digest
-evidence before request identity or QueryGraph bootstrap proof can feed the
-compact handoff.
-Raw lineage-drain summary construction now applies the structural shape rule
-too: every `view-version-receipt-chains` entry must decode as a
-`ViewVersionReceiptChainResponse`, and a present `chain-verified-count` must be
-an unsigned count. A malformed chain object can no longer disappear from the raw
-summary just because its `chain-hash` looked valid.
-Dropped and active accepted-view source replay also compares the bootstrap
-view-version receipt hashes with the accepted QueryGraph verification set, so a
-valid-looking receipt array cannot be spliced from another bootstrap proof.
-The compact handoff verifier repeats the same binding against
-`viewReceiptChainProof.views[].acceptedReceiptHash` and
-`viewReceiptChainProof.views[].acceptedReceiptChainHash`, including tombstoned
-accepted views, catching drift even when an operator validates only the saved
-summary.
-Dropped accepted-view source replay also binds the namespace receipt-chain read
-back to the accepted view warehouse/namespace and rejects verified-chain count
-or receipt-hash coverage drift before compact handoff proof is generated. The
-lineage-drain summary now carries the nested chain receipts as full receipt
-hash coverage before that check runs. Summary construction also fails closed
-when top-level or nested view receipt and receipt-chain hashes are malformed,
-or when a nested receipt-chain object or verified-count field is malformed,
-instead of omitting bad values from the raw replay summary. Raw
-lineage-drain summaries now also reuse the full view receipt-list and
-receipt-chain replay validators before returning compact proof, so otherwise
-valid view-history summaries cannot append extra lineage, graph, QueryGraph, or
-application claims that delivery replay would have rejected. Generated replay
-evidence also preserves each accepted view's `acceptedReceiptChainHash` inside
-the namespace
-`receiptChains[].chainHashes` set, even when the namespace read has its own
-chain hash, so the compact summary can prove the accepted chain is covered by
-the namespace proof it verifies. The same replay now emits catalog-facing
-`Commit` graph events for the listed sequences, leaving traversal and query
-semantics to Grust.
-
-For handoff testing, LakeCat can verify a saved bootstrap bundle and a saved
-drain response together:
-
-```sh
-cargo run -p lakecat-cli -- qglake-verify-replay \
-  --bundle target/qglake/lakecat-bootstrap.json \
-  --drain target/qglake/lineage-drain.json \
-  --principal did:example:agent
-```
-
-That offline check replays the same boundary assertions used by the live
-QGLake fixture: the bundle manifest must verify, the QueryGraph import
-compatibility contract must match, and the lineage drain must carry matching
-bootstrap hashes, credential-denial receipts, management-list evidence,
-scan/fetch task evidence, and table commit-history receipt evidence, plus view
-receipt evidence when views are present. On success, the command prints the
-accepted bundle and QueryGraph import hashes, table/view counts, and compact
-control-plane lines such as:
-
-```text
-scan replay plan_tasks=1 plan_graph_events=1 planned_ttl=300 planned_purpose=qglake-agent-demo file_tasks=1 delete_files=1 child_plan_tasks=1 fetched_ttl=300 fetched_purpose=qglake-agent-demo
-management replay servers=1 projects=1 warehouses=1 policies=1 storage_profiles=1 storage_profile_upserts=1 credential_root=events-local:file:local-file-no-secret:location_prefix_hash=sha256:2222222222222222222222222222222222222222222222222222222222222222:secret_ref=none
-credential replay restricted=blocked:sail-planned-read-required restricted_count=0 restricted_ttl=300 restricted_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:2222222222222222222222222222222222222222222222222222222222222222:secret_ref=none:graph_events=2 human=allowed:trusted-human-audited-raw human_count=1 human_ttl=300 human_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:2222222222222222222222222222222222222222222222222222222222222222:secret_ref=none:graph_events=2
-table commit history commits=1 sequences=1 hashes=sha256:... graph_events=1
-```
-
-Those lines are intentionally small enough for QueryGraph handoff scripts and
-operator logs, but they still come from the same typed lineage-drain summaries
-that the verifier requires before accepting replay. The saved handoff verifier
-recomputes each line from compact proof fields, including the management
-credential-root anchor and the table commit-history sequence/hash summary,
-before accepting captured LakeCat replay output. LakeCat service replay now
-requires table commit-history sequence numbers to be positive and strictly
-increasing, and commit hashes to be duplicate-free, before graph or OpenLineage
-projection. The compact pointer-log summary therefore cannot inherit duplicated
-or reordered catalog evidence.
-
-The scan line keeps the planned and fetched credential TTL caps visible beside
-the task counts, while JSON mode carries the full read-restriction evidence
-tree. Scan planning records both requested and effective projection evidence;
-scan-task fetch records the server-derived required projection and mirrors it
-as `effective-projection`, so replay can compare both stages with the same
-policy-narrowed vocabulary. QGLake acceptance now rejects handoffs where the
-fetched effective projection is missing or drifts away from the fetched read
-restriction, which means a compact replay summary cannot quietly widen what
-the server actually planned. The live handoff harness performs that projection
-check before writing `handoff-summary.json`, so the artifact is born with the
-same proof shape the verifier later enforces.
-
-After the full local handoff writes `handoff-summary.json`, LakeCat can also
-verify the compact summary itself:
-
-```sh
-cargo run -p lakecat-cli -- qglake-verify-handoff \
-  --summary target/qglake-handoff/handoff-summary.json \
-  --json
-```
-
-That command validates the `lakecat.qglake.handoff-summary.v1` schema,
-QueryGraph verify/import agreement, LakeCat replay agreement, and the compact
-proof objects for request identity, QueryGraph bootstrap, governed scan,
-pointer history, view receipt chains, storage-profile upsert, and credential
-vending. It also recomputes the raw file hashes for the bundle, lineage-drain
-response, and QueryGraph import plan named in the summary, rejecting stale or
-tampered artifact files before automation consumes them. Those declared
-artifact hashes must be full `sha256:`-prefixed 64-hex digests, so a handoff
-cannot present readable placeholder hashes as structurally valid integrity
-anchors before the byte comparison runs. It parses the saved
-bootstrap bundle and reruns the tenant graph and semantic hash verifier. It
-also parses the saved QueryGraph import plan and requires its embedded
-verification, table/view stable ids, semantic hashes, standards, and graph
-node/edge evidence to match the compact QueryGraph import proof. The saved
-import-plan artifact is schema-closed before those values become proof: the
-root object, nested `verification` object, table import entries, and view import
-entries may carry only the fields QueryGraph's current `lakecat-import` plan
-emits and LakeCat verifies. Extra import-plan claims are rejected even when the
-declared artifact hash matches the bytes on disk. The verifier requires the
-compact `verifiedTables` and `verifiedViews` manifests to be duplicate-free as
-well as count-aligned, matching service-side outbox admission, so a saved
-handoff cannot inflate the number of accepted tables or views by repeating an
-already accepted stable id.
-Raw lineage-drain replay summaries and compact handoff proof sections both
-keep replay, OpenLineage, credential prefix, view receipt, and view
-receipt-chain hash arrays duplicate-free, not only `sha256:` shaped. That
-covers the bootstrap, governed scan, management, table commit-history, view
-tombstone/receipt-chain, storage-profile upsert, and credential-vending proof
-sections, so a source replay or archived handoff cannot make an evidence set
-look larger by repeating an already accepted digest. The service applies the
-first version of that rule before a drain summary is returned at all:
-projection receipt hash arrays must match the lineage-event count and must not
-contain malformed or repeated replay or OpenLineage hashes. Commit-history
-summary construction now applies the same fail-closed posture to
-`commit-count`, `sequence-numbers`, and `commit-hashes`, so malformed or
-count-drifted commit-history entries cannot disappear from raw QGLake replay
-proof or inflate compact pointer-history evidence. Governed scan summary arrays
-for required/requested/effective projection and requested/effective stats
-fields also reject malformed, blank, or duplicate strings before raw replay
-proof is returned, so a malformed Sail-planned read summary cannot hide missing
-projection or stats evidence. Planned and fetched scan summary construction
-applies the same second-line check to `required-filters`: when row-predicate
-evidence is present, the field must remain array-shaped and exactly preserve
-that server-derived predicate rather than widening or omitting the mandatory
-filter inside raw QGLake proof. The raw summary regression suite covers both
-planned and fetched scan replay, so either half of the governed scan can fail
-closed before compact proof is returned.
-The verifier
-also compares those QueryGraph import-plan graph node and edge counts with the
-verified bootstrap bundle graph counts, so an import plan cannot keep the
-semantic hashes and table/view ids while silently dropping graph material. It
-also parses
-the saved lineage-drain response, reruns the typed QGLake replay verifier, and
-regenerates the LakeCat replay evidence that proves request identity,
-QueryGraph bootstrap replay, governed scan replay, pointer history, view
-receipt chains, storage-profile replay, and credential-vending decisions. It
-then compares that regenerated replay evidence to the compact
-`lakecatReplayVerification` proof. The governed scan proof includes both the
-requested and effective stats-field arrays from the scan-planned replay, and the
-verifier rejects handoffs where the effective fields no longer match the
-allowed columns or no longer prove policy narrowing. Credential-vending proof
-is not just a count:
-each restricted-agent and trusted-human branch carries the redacted
-`storageProfile` graph anchor and `maxCredentialTtlSeconds`, including profile
-id, provider, issuance mode, secret-reference presence, and the graph event
-count emitted by replay. The storage-profile upsert proof also carries its own
-positive `graphEvents` count, and captured LakeCat replay must match it. The
-verifier also rejects a handoff when the
-credential branches do not bind back to the same storage-profile upsert proof:
-profile id, provider, issuance mode, location-prefix hash, and secret-reference
-state must all match the replayed management event. A saved handoff is rejected
-if the archived lineage drain proves lineage receipt hashes but omits that
-credential TTL cap or credential-root graph projection. It also recomputes the
-captured LakeCat replay and QueryGraph verify/import output hashes, so terminal
-captures cannot drift from the compact summary. It compares the legacy string
-path aliases for the LakeCat replay, QueryGraph verify, and QueryGraph import
-captures with the hashed `capturedOutputs` paths they duplicate. It also hashes
-the service log through a full-digest `serviceLogHash`, so archived operational
-logs cannot drift behind a stable path or a short placeholder hash. The final
-local summary also binds the first LakeCat handoff-verifier capture with a
-required full-digest `lakecatHandoffVerifyOutputHash`. A saved handoff that
-names `lakecat-handoff-verify.json` but omits that hash, sets it to `null`, or
-uses a short placeholder is rejected. Because that output can only exist after
-a successful verifier run, the harness performs a second sidecar self-check:
-first it writes
-`target/qglake-handoff/lakecat-handoff-verify.json`, then it records the file's
-hash in the summary, then it verifies the summary again without overwriting the
-declared artifact. The verifier checks that saved JSON is a
-`lakecat.qglake.handoff-verification.v1` success for the same principal,
-catalog URL, warehouse, namespace, and table, and that its table/view counts,
-stable ids, standards, request-identity proof, and QueryGraph bootstrap proof
-still match the compact handoff summary. It also checks the saved
-self-verifier output's bundle, lineage-drain, QueryGraph import-plan,
-captured-output, and service-log hashes against the summary's artifact
-manifest. The compact summary's own `artifacts.lineageDrain` and
-`artifacts.querygraphImportPlan` objects are also closed over a single
-full-digest `sha256` field before the saved self-verifier layer is trusted, so
-short placeholders and extra unverified hash mirrors fail at the summary
-boundary. The saved sidecar must keep the core `artifactFiles.bundle`,
-`artifactFiles.lineageDrain`, and `artifactFiles.querygraphImportPlan` hash
-objects present, and it must keep the nested
-`artifactFiles.capturedOutputs` manifest present before any captured LakeCat or
-QueryGraph output hash is trusted. The lineage-drain and QueryGraph import-plan
-artifact hashes must still match the compact handoff summary; an archived
-sidecar cannot rewrite either nested artifact digest and then recompute only
-the outer verifier-output hash. Their saved hash objects are closed over a
-single full-digest `sha256` field as well, so short placeholders or extra
-unverified fields fail before those artifacts are trusted. The saved sidecar
-must also keep the
-`artifactFiles.capturedOutputs.lakecatReplay`,
-`artifactFiles.capturedOutputs.querygraphVerify`, and
-`artifactFiles.capturedOutputs.querygraphImport` hash objects present before
-the captured LakeCat replay or QueryGraph transcripts are trusted. Each capture
-hash object is closed over a single full-digest `sha256` field; short
-placeholder hashes or extra unverified hash fields fail before the saved
-QueryGraph verify/import transcripts can be trusted. Those saved QueryGraph
-verify/import hashes must also match the compact handoff summary, so an
-archived sidecar cannot rewrite the nested transcript digest and then recompute
-only the outer verifier-output hash. The regression suite covers the core
-bundle, lineage-drain, QueryGraph import-plan, and captured-output hash objects
-as required saved-sidecar entries. The saved output cannot keep a valid
-verifier-output hash while
-rewriting `artifactFiles.serviceLogHash`; that operational log digest must
-still be present, non-null, full-length, and match the compact handoff summary.
-The regression suite covers each saved-sidecar shape explicitly: missing,
-`null`, short placeholder, and drifted service-log hashes all fail before the
-archived handoff proof is accepted.
-Artifact paths are checked before hashing as well: every path must
-resolve under the handoff summary directory, so an archived summary cannot
-splice in an absolute path or `..` traversal to matching bytes outside the
-bundle. The semantic readers use the same bundle-local resolver, so parsing the
-captured outputs, bootstrap bundle, QueryGraph import plan, and lineage drain
-cannot bypass the containment rule that hash verification already enforced. It
-also checks the saved self-verifier output's own semantic sections: captured
-replay semantics must match the compact LakeCat and QueryGraph proof, bundle
-artifact semantics must match QueryGraph verification, import-plan semantics
-must match QueryGraph import verification, lineage-drain semantics must match
-the accepted replay proof, and saved import-plan graph counts must still match
-the saved bundle graph counts. Then it parses the archived lineage-drain
-artifact and requires the saved
-lineage-drain semantics' delivered count, event type list, graph event count,
-lineage event count, and drain authorization action to match before accepting
-the verifier-output hash.
-The archived drain itself must also reconcile those same top-level counts with
-its replay summary array, including repeated event-type multiplicity and the
-exact `eventTypes` to replay-summary order. Then it parses those captured JSON
-files and checks that the replay schema/status,
-table/view counts, semantic hashes, standards, request-identity proof,
-QueryGraph bootstrap proof, governed scan proof, storage-profile upsert proof,
-and credential-vending proof inside the captures still match the summary. It
-also rejects malformed TypeDID hash slots in the request-identity and
-QueryGraph bootstrap proofs before a consumer has to interpret those slots. The
-local handoff harness runs it automatically and writes the captured verifier
-output to `target/qglake-handoff/lakecat-handoff-verify.json`. Before the
-harness writes compact proof, it checks the replay and OpenLineage hash arrays
-it lifts from LakeCat replay evidence as full SHA-256-shaped and
-duplicate-free, so malformed compact proof is rejected before the archived
-handoff summary is treated as accepted.
+drain request itself. Reading the replay stream is privileged, so LakeCat
+records that the drainer was allowed to read lineage evidence.
 
 The end-to-end result is a chain:
 
@@ -3256,29 +1104,10 @@ catalog write
 If graph or lineage sinks are down, catalog state should not be lost or rolled
 back accidentally. The outbox lets LakeCat retry projection from committed
 state. A drain acknowledges delivery only after every projection in the batch
-succeeds. If OpenLineage fails after a graph event has already been emitted, the
-drain fails and the catalog event remains pending, so recovery starts from the
-committed outbox rather than from guesswork. If the graph sink fails first,
-LakeCat fails the drain before emitting lineage and still leaves the outbox
-event pending, so graph and lineage consumers recover from the same committed
-catalog fact instead of diverging.
-
-Replay order is part of that contract. LakeCat selects undelivered outbox events
-by `created_at,event_id` in both embedded memory tests and the durable Turso
-store, so a QGLake replay does not depend on writer interleaving or database
-row-return quirks. Delivery acknowledgement is duplicate-safe as well: if a
-drainer accidentally reports the same event id twice, LakeCat marks the event
-once and the receipt count remains tied to committed catalog facts. Pending
-batch validation happens before projection: if a store returns duplicate event
-IDs in the same drain batch, LakeCat fails the drain with only the duplicate
-event-id hash and does not emit graph, OpenLineage, or acknowledgement side
-effects for that batch. The same redaction rule applies to malformed pending
-records. If a custom or corrupted store hands the drain an event whose payload
-cannot be projected, LakeCat reports only the outbox event-id hash and stops
-before graph emission, lineage emission, or delivery acknowledgement. Malformed
-table and principal identity JSON decode failures, as well as unsupported event
-types, follow that same pattern: they carry event-hash evidence for correlation
-without echoing the raw event identifier into diagnostics.
+succeeds. Replay order is part of that contract: LakeCat selects undelivered
+outbox events by `created_at,event_id` in both embedded memory tests and the durable
+Turso store, and duplicate or malformed pending records fail with hash-only
+evidence before graph emission, lineage emission, or acknowledgement.
 
 ### An Agentic QGLake Flow
 
@@ -3296,9 +1125,9 @@ Imagine a resilience supervisor agent investigating incidents:
 9. LakeCat records scan and credential decisions into audit/outbox.
 10. QueryGraph imports graph, policy, lineage, and bootstrap evidence.
 
-The key point is the absence of raw storage reach. The specialist agent does
-not need broad cloud credentials to do its job. It needs a governed plan, a
-bounded task set, and a receipt trail.
+The key point is the absence of raw storage reach. The specialist agent does not
+need broad cloud credentials to do its job. It needs a governed plan, a bounded
+task set, and a receipt trail.
 
 The local fixture compresses this story into a short artifact-producing
 sequence:
@@ -3312,62 +1141,20 @@ cargo run -p lakecat-cli -- qglake-verify-replay \
   --bundle target/qglake/lakecat-bootstrap.json \
   --drain target/qglake/lineage-drain.json \
   --principal did:example:agent
-```
-
-The fixture generator opts into `lakecat-cli`'s `qglake-fixture` feature because
-it writes local Iceberg metadata and manifest files through Sail. Verification
-commands stay in the default CLI surface, which keeps ordinary catalog
-inspection, replay, and handoff checks available without pulling in the local
-fixture writer.
-
-The one-command handoff wraps the same evidence in a live local service run and
-then asks QueryGraph to verify and import it:
-
-```sh
 scripts/qglake-handoff-local.sh
 cargo run -p lakecat-cli -- qglake-verify-handoff \
   --summary target/qglake-handoff/handoff-summary.json \
   --json
-cat target/qglake-handoff/handoff-summary.json
 ```
 
-That fixture creates the sample table shape, installs a restricted policy,
+The fixture creates the sample table shape, installs a restricted policy,
 verifies governed scan planning, verifies fetch-scan-task reapplication,
-checks requested/effective stats-field narrowing in replay and handoff proof,
 exercises delete manifest handling, probes credential-vend behavior for agents
 and trusted humans, verifies compact table commit-history evidence, exports
 QueryGraph bootstrap artifacts, drains the outbox, and proves the resulting
-bundle through QueryGraph's Rust verifier/importer. It then asks LakeCat to
-verify its own compact handoff summary and recompute the raw artifact file
-hashes, making the summary a first-class acceptance artifact rather than an
-unchecked convenience file. The compact handoff summary root is closed over its
-known fields before any artifact is accepted, so an archived summary cannot add
-an unverified top-level proof claim beside a valid LakeCat replay and
-QueryGraph import result. The saved self-verifier output is checked too: its
-internal `artifactFiles` entries for the bootstrap bundle, lineage drain,
-QueryGraph import plan, captured LakeCat and QueryGraph outputs, and service
-log must carry full SHA-256 digests before they are compared with the compact
-summary. The saved sidecar also has to stay closed over that known manifest:
-extra top-level artifact claims and extra nested captured-output claims are
-rejected instead of being carried as unverified evidence beside the accepted
-hashes. Each nested artifact and captured-output hash object is also closed
-over `sha256` only, so an otherwise accepted hash cannot carry an alternate
-unverified hash claim beside it. The sidecar root and `capturedOutputSemantics`
-object are closed over their known schema keys for the same reason: a saved
-verifier output should not append proof sections that no verifier compares. The
-individual LakeCat, QueryGraph, bundle, import-plan, and lineage-drain semantic
-sections are closed the same way; a saved `querygraphImportPlanSemantics` block
-cannot append an extra import-plan proof beside matched graph counts and hashes.
-The import-plan artifact itself now follows the same rule: extra root fields,
-verification fields, table-entry fields, or view-entry fields fail before the
-artifact's semantic hashes, standards, stable ids, and graph counts can be
-accepted.
-It is small, but it is not decorative. It is
-the acceptance story for a catalog that participates in the user workflow from
-notebook to agent. The summary file gives automation a single stable place to
-find the accepted table/view counts, semantic hashes, bundle, lineage drain,
-import plan, captured verifier outputs, and raw artifact hashes without
-scraping terminal text.
+bundle through QueryGraph's Rust verifier/importer. It is small, but it is not
+decorative. It is the acceptance story for a catalog that participates in the
+user workflow from notebook to agent.
 
 ## Operating The Book's Example System
 
@@ -3954,42 +1741,118 @@ storage-profile upsert proof in the distinct sections the verifier compares.
 That is the local substitute for cloud hope: the artifact graph is checked
 before the summary is accepted.
 
-For this release, replay admission is part of that local proof rather than a
-best-effort projection filter. `catalog.config-read` replay is closed over the
-checked warehouse, defaults, overrides, advertised endpoints, and authorization
-receipt, with defaults and overrides closed again as `key`/`value` entries and
-tenant-root records closed over their known record fields. Optional raw server
-endpoint and warehouse storage-root values in those config tenant records are
-also bound back to matching full hash evidence before graph, OpenLineage,
-QGLake, or QueryGraph import can accept them.
-`table.commit` replay is closed over the checked table identity or scope hints,
-authorization receipt, and nested commit evidence, and the nested commit object
-is closed over the pointer transition, principal, hashes, format, snapshot, and
-timestamp fields LakeCat verifies. The new and previous metadata-location
-evidence in that commit object must also remain undecorated and free of
-credential-like material before graph, OpenLineage, QGLake, or QueryGraph
-proof can inherit it.
-`querygraph.bootstrap` replay is closed over the checked warehouse, counts,
-verified table/view manifests, artifact hashes, view-version receipts,
-standards, bundle hash, graph hash, OpenLineage hash, QueryGraph import hash,
-and authorization receipt. Its request-identity object is also closed over the
-known envelope fields for principal, source, TypeDID hashes, delegation hashes,
-token hash, attestation state, and raw-secret posture. That means an old or
-corrupted outbox row cannot add
-an unverified compatibility claim, endpoint claim, graph claim, standards claim,
-OpenLineage claim, QueryGraph claim, or application claim and have it flow into
-Grust, OpenLineage, QGLake, or QueryGraph import proof.
-The raw lineage-drain summary follows the same posture for bootstrap standards:
-if `standards` is present, it must be a string-array-shaped claim without
-blank, non-string, duplicate, or unsupported entries. Compact QGLake handoff
-verification applies the same exact expected standards set, so an archived
-handoff cannot append a future-looking or local-only standards claim beside the
-accepted Iceberg, Croissant, CDIF, OSI, Grust, OpenLineage, and ODRL evidence.
-Malformed standards evidence now rejects the summary instead of disappearing
-from the QGLake proof that QueryGraph later compares. The same summary path
-treats `table-artifacts` and `view-artifacts` as evidence arrays: malformed
-non-array artifact fields are rejected rather than summarized as zero artifact
-counts.
+For this release, replay admission is part of the local proof rather than a
+best-effort projection filter. The service closes event payloads before graph,
+OpenLineage, QGLake, or QueryGraph import can inherit them; the compact handoff
+verifier then repeats the same checks against saved artifacts. Appendix A lists
+the replay-admission contract, Appendix B captures credential redaction,
+Appendix C captures view receipt chains, and Appendix D maps the QGLake handoff
+proof.
+
+## Appendix A: Replay Admission Matrix
+
+Replay admission is the line between durable catalog fact and downstream proof.
+An outbox row may be stored, but it is not allowed to become graph, OpenLineage,
+QGLake, or QueryGraph evidence until LakeCat has checked its shape, scope,
+authority, and redaction posture. The matrix below keeps the best review version
+of those checks in one place.
+
+| Event family | Must prove | Rejects | Why it matters |
+| --- | --- | --- | --- |
+| `catalog.config-read` | Warehouse scope, v4 bridge defaults, overrides, advertised standard REST endpoints, governed plan/fetch/credential endpoints, bootstrap and lineage-drain endpoints, authorization receipt | Duplicate config keys, unsupported `lakecat.format.v4*` claims, missing standard or governed endpoints, extra unverified config fields | QueryGraph imports the same compatibility contract LakeCat advertised, without turning config into a free-form claims bag |
+| Namespace lifecycle | Warehouse, namespace path or components, matching lifecycle action, valid principal | Malformed namespace paths, count drift, action drift, unclosed wrapper fields | Standard catalog discovery stays attributable and replayable |
+| Table lifecycle | Root table identity, warehouse/namespace/table hints matching that identity, action receipt, soft-delete format evidence when present | Scope drift, action drift, conflicting `format-version`/`format_version` aliases, undecorated-location violations | Table proof follows the Iceberg object it claims to describe |
+| Table commit | Table scope, authorization receipt, pointer transition, principal, idempotency/request/response/policy hashes, format, snapshot, timestamp | Credential-bearing or decorated metadata-location evidence, unclosed nested commit fields, forged event type | Commit proof stays tied to the accepted pointer movement without leaking object paths |
+| Governed scan and fetch | Principal, `table-plan-scan` action, requested/effective projections, requested/effective stats fields, required filters, matching top-level and receipt read restrictions, non-empty full policy hashes, positive TTL cap | Actorless scan proof, action drift, missing or widening projection/filter evidence, placeholder policy hashes, non-LakeCat or credential-bearing plan-task values | A saved scan proof shows the same TypeSec restriction Sail planned and LakeCat replayed |
+| Management upserts | Valid server/project/warehouse/profile/policy IDs, parent scope, ODRL hash for policies, valid principal/action/engine/time | Unknown wrapper fields, actorless mutations, endpoint/storage-root hash drift, malformed IDs, ODRL hash drift | QueryGraph sees tenant and policy state as accepted catalog control-plane facts |
+| Management lists | Count-aligned duplicate-free ID arrays, valid warehouse/project scope, event-matching read action, principal evidence | Count inflation, duplicate IDs, project/warehouse detachment, missing receipt hashes | Inventory proof cannot turn a list response into anonymous or inflated management state |
+| View lifecycle | Warehouse, namespace, view name, store-assigned positive version, expected-version guard when present, action-specific receipt | Versionless lifecycle facts, non-positive guards, action drift, nested view scope drift | View bootstrap evidence is tied to the catalog view object that produced it |
+| QueryGraph bootstrap | Warehouse, table/view counts, verified stable IDs, artifact hashes, standards, bundle/graph/OpenLineage/import hashes, request identity, authorization receipt | Missing standards, malformed artifact arrays, duplicate stable IDs, short hashes, extra unverified bootstrap fields | The semantic bundle can be imported only if it matches accepted catalog state |
+| Credential vend attempt | Table scope, selected storage profile, credential count, prefix hashes, issuer-config hashes, principal, `credentials-vend` action, read restriction and TTL posture | Raw credential material, count drift, broadened prefix, malformed issuer proof, missing principal on zero-credential attempts | Credential evidence stays useful without becoming a credential leak |
+| Outbox envelope | Outer event type, inner `event-type`, event id, payload hash, created order | Event-type mismatch, duplicate event IDs in one batch, malformed pending payloads, unsupported event types | Graph and lineage drains cannot reinterpret one event family as another |
+
+The pattern is deliberately repetitive in code but not in the narrative: every
+event must be scoped, actor-bound, action-bound, closed over the fields LakeCat
+actually verifies, and redacted before it becomes downstream evidence.
+
+## Appendix B: Credential And Redaction Contract
+
+Credential handling is where catalog convenience can become security risk.
+LakeCat's posture is therefore narrow: governed Sail-planned reads are the
+default for agents, while raw credentials are explicit audited exceptions.
+
+| Surface | Accepted shape | Redaction rule | Failure posture |
+| --- | --- | --- | --- |
+| Warehouse storage root | Plain URI rooted in the warehouse; no query, fragment, userinfo, or dot traversal | Return `warehouse-storage-root-hash` rather than raw root on errors | Reject before memory or Turso persistence |
+| Storage-profile prefix | Provider-compatible URI prefix, longest-prefix match, no ambiguous tie | Return `storage-profile-prefix-hash` or `location-prefix-hash` | Fail closed rather than guessing a credential root |
+| Public config | Non-secret string hints such as region, endpoint labels, or purpose | Return `public-config-key-hash` for rejected keys/values | Reject secret-looking keys, values, and LakeCat-reserved proof keys |
+| Secret reference | Clean external locator such as `vault://`, `aws-sm://`, `gcp-sm://`, or `azure-kv://` | Store and replay `secret-ref-present`, provider, and full `secret-ref-hash` | Reject decorated URIs, unsupported schemes, traversal, userinfo, query, fragment |
+| Resolver dispatch | TypeSec authorizes the exact secret-ref resource before lookup | Resolver failures report provider plus secret/error hashes | Denied decisions do not call the resolver |
+| Returned credentials | Prefix remains inside the selected profile; TTL honors policy cap; LakeCat-owned evidence is canonical | Replay prefix hashes and issuer-config hashes, never raw secret material | Reject widened prefixes before recording `credentials.vend-attempted` |
+| Restricted agent branch | Zero credentials, explicit block reason, raw exception false, TTL cap present | Empty credential-response evidence is explicit proof, not absence | Agent is steered to governed Sail-planned reads |
+| Trusted human branch | Positive credential count only when policy allows raw exception | Returned prefixes are full hashes; exception reason is recorded | Raw credentials remain auditable exceptions, not the default path |
+
+The important distinction is that storage-profile management proves a credential
+root exists, while credential vending proves whether a caller received raw
+storage reach. QueryGraph can reason over both without seeing the raw root,
+secret URI, backend error, token, or returned credential material.
+
+## Appendix C: View Receipt-Chain Rules
+
+LakeCat's first release does not claim full Iceberg view-history semantics. It
+keeps a compact, catalog-owned receipt chain so QueryGraph can prove which view
+version was exported, updated, dropped, or tombstoned. Richer view semantics
+remain a Sail-aligned future target.
+
+| Rule | Required evidence | Rejects |
+| --- | --- | --- |
+| Stable identity | `lakecat:view:<warehouse>:<namespace>:<name>` plus matching component fields | Stable IDs that do not match warehouse/namespace/name |
+| First receipt | Version 1 `upsert`, no previous version, no previous receipt hash | Zero-version chains, first tombstones, forged first previous-link fields |
+| Later upsert | Previous receipt hash points at the prior receipt; version advances by exactly one | Skipped versions, unsupported operations, broken previous links |
+| Drop tombstone | Operation `drop`, previous receipt hash set, `view-version` remains the deleted version | Drops that advance the version or omit the previous receipt |
+| Recreate | New upsert links after the tombstone and advances to the next version | A second unrelated version-1 chain for the same stable view id |
+| Chain header | `receipt-count`, latest version, latest operation, and tombstone flag agree with the last receipt | Headers that shed receipts or present a forged head |
+| Hash coverage | `receipt-hashes`, `drop-receipt-hashes`, and `chain-hashes` exactly cover the nested receipt bodies and chains | Convenient full-looking hashes that do not match the embedded chain |
+| Durable row binding | Turso row warehouse/namespace/view columns agree with decoded receipt JSON | A valid-looking receipt body riding a corrupted row index into another view |
+| QueryGraph handoff | Accepted view receipt hashes match bootstrap view artifacts and compact handoff proof | Spliced receipt arrays from another view or another run |
+
+The receipt chain is intentionally compact: it proves catalog state changes and
+tombstones, not full SQL engine view semantics. That is enough for QueryGraph to
+reject a bootstrap that lost or borrowed view proof while LakeCat keeps richer
+view interpretation out of the catalog.
+
+## Appendix D: QGLake Handoff Proof Map
+
+The QGLake handoff is a compact acceptance artifact over several raw artifacts:
+the LakeCat bootstrap bundle, lineage-drain response, QueryGraph import plan,
+captured verifier output, captured replay output, and service log. The summary
+is useful only because every compact field can be traced back to a parsed raw
+artifact and a replay-admitted catalog event.
+
+| Proof section | Binds | Compared against |
+| --- | --- | --- |
+| `requestIdentityProof` | Principal subject/kind, identity source/state, lineage-drain receipt, TypeDID hash slots | Captured LakeCat replay request identity and saved handoff-verifier output |
+| `queryGraphBootstrapProof` | Bundle hash, graph hash, OpenLineage hash, QueryGraph import hash, standards, artifact counts, policy count, view receipt hashes | Bootstrap replay event, bundle manifest, QueryGraph verify/import output |
+| `governedScanProof` | Planned/fetched task counts, projections, stats fields, filters, read restrictions, policy hashes, TTL cap | Scan replay sections and operator replay text |
+| `tableCommitHistoryProof` | Commit count, positive increasing sequence numbers, duplicate-free commit hashes, replay/OpenLineage hashes | Pointer-log read replay and compact summary |
+| `viewReceiptChainProof` | Accepted view versions, receipt hashes, receipt-chain hashes, tombstone receipts, verified-chain counts | View replay sections, bootstrap view artifacts, receipt-chain reads |
+| `managementProof` | Server/project/warehouse/policy/storage-profile counts, ID arrays, graph event counts, replay/OpenLineage hashes | Management-list replay sections and QueryGraph bootstrap policy count |
+| `policyUpsertProof` | Policy id, ODRL hash, principal/action, graph events, replay/OpenLineage hashes | Policy upsert replay and policy-list proof |
+| `storageProfileUpsertProof` | Profile id, provider, issuance mode, location-prefix hash, secret-ref posture, principal/action | Storage-profile upsert replay and credential branches |
+| `credentialVendingProof` | Restricted-agent block, trusted-human exception, credential counts, prefix hashes, TTL caps, storage-profile anchor | Credential replay sections and operator replay text |
+| Artifact manifest | Bundle, lineage drain, import plan, captured outputs, service log, saved handoff verifier output | Recomputed file hashes under the handoff summary directory |
+
+The verifier enforces three global rules. First, artifact paths resolve under the
+handoff summary directory before hashing or parsing, so a summary cannot splice
+matching bytes from outside the bundle. Second, all integrity anchors are full
+`sha256:`-prefixed 64-hex digests, not readable placeholders. Third, saved
+sidecars are closed over the schema LakeCat compares; a hash match does not make
+extra unverified fields part of the proof.
+
+This is why the handoff is a release acceptance artifact instead of a convenient
+log bundle. It proves that LakeCat replay, graph projection, OpenLineage,
+QueryGraph verification, and QueryGraph import all agreed on the same catalog
+state.
 
 ## Future Work
 

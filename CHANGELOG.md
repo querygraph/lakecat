@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Consolidated the book's second-pass workflow narrative. Dense replay,
+  credential-redaction, view receipt-chain, and QGLake handoff proof details now
+  live in appendices with review matrices, while the main workflow chapter stays
+  focused on user journeys from local catalog startup through PySpark,
+  credentials, views, QueryGraph bootstrap, outbox drain, and agentic QGLake.
 - Added the feline release map in `docs/RELEASES.md`. The original `v0.1.0`
   release is Bobcat; planned names remain non-binding codenames beside SemVer.
 - Archived the original foundational goal as `docs/completed/GOAL1.md` and
