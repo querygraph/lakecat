@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- `lakecat-store`: split the ~16.9k-line `lib.rs` (16,852 → 3,802 lines) by
+  extracting the `turso-local` backend into `turso_store/mod.rs` and its inline
+  test module into `turso_store/tests.rs`, and the memory-backend test module
+  into `memory_tests.rs`. Verbatim, path-preserving moves (the turso backend
+  already used explicit `crate::` paths); behavior unchanged. Verified green on
+  default (65 tests) and `turso-local` (183 tests), warning-clean and fmt-clean,
+  with the 183 `#[test]` count preserved.
 - `lakecat-service`: split the ~58k-line monolithic `lib.rs` into focused
   modules by responsibility (`state`, `identity`, `commit`, `outbox`, `scan`,
   `location`, `router`, `responses`, `error`, `handlers`, `lineage_summary`,
