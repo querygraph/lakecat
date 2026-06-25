@@ -24,6 +24,13 @@ use lakecat_api::{
     UpsertStorageProfileRequest, UpsertViewRequest, UpsertWarehouseRequest, ViewColumnResponse,
     ViewResponse, ViewVersionReceiptChainResponse, ViewVersionReceiptResponse, WarehouseResponse,
 };
+#[cfg(not(feature = "sail-local"))]
+use lakecat_core::sail::DeferredSailCatalogEngine;
+#[cfg(not(feature = "sail-local"))]
+use lakecat_core::sail::FetchScanTasksRequest as SailFetchScanTasksRequest;
+#[cfg(not(feature = "sail-local"))]
+use lakecat_core::sail::ScanPlanningRequest;
+use lakecat_core::sail::{CommitPreparationRequest, SailCatalogEngine};
 use lakecat_core::{
     LakeCatError, LakeCatResult, Namespace, Principal, PrincipalKind, TableIdent, TableName,
     WarehouseName, content_hash_bytes, content_hash_json,
@@ -35,17 +42,10 @@ use lakecat_lineage::{
 use lakecat_querygraph::{
     QueryGraphBootstrap, QueryGraphTenantProjection, QueryGraphViewReceiptEvidence,
 };
-#[cfg(not(feature = "sail-local"))]
-use lakecat_core::sail::DeferredSailCatalogEngine;
-#[cfg(not(feature = "sail-local"))]
-use lakecat_core::sail::FetchScanTasksRequest as SailFetchScanTasksRequest;
-#[cfg(not(feature = "sail-local"))]
-use lakecat_core::sail::ScanPlanningRequest;
 #[cfg(feature = "sail-local")]
 use lakecat_sail::catalog_provider::{
     LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
 };
-use lakecat_core::sail::{CommitPreparationRequest, SailCatalogEngine};
 use lakecat_security::{
     AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
     CatalogConfigCapability, CredentialsVendCapability, GovernanceEngine, GraphReadCapability,
@@ -1035,7 +1035,11 @@ pub fn app(state: LakeCatState) -> Router {
         )
         .route(
             "/catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}",
-            get(load_table_for_warehouse).delete(delete_table_for_warehouse),
+            // Iceberg REST `updateTable` is a bare POST on the table path. The
+            // `/commit` route below is kept as a LakeCat alias.
+            get(load_table_for_warehouse)
+                .post(commit_table_for_warehouse)
+                .delete(delete_table_for_warehouse),
         )
         .route(
             "/catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/commit",
@@ -1082,7 +1086,11 @@ pub fn app(state: LakeCatState) -> Router {
         )
         .route(
             "/catalog/v1/namespaces/{namespace}/tables/{table}",
-            get(load_table).delete(delete_table),
+            // Iceberg REST `updateTable` is a bare POST on the table path. The
+            // `/commit` route below is kept as a LakeCat alias.
+            get(load_table)
+                .post(commit_table)
+                .delete(delete_table),
         )
         .route(
             "/catalog/v1/namespaces/{namespace}/tables/{table}/commit",
@@ -45059,6 +45067,38 @@ mod tests {
         assert_eq!(
             lineage_events[0].payload["standards"],
             serde_json::json!(bootstrap_standards)
+        );
+    }
+
+    #[tokio::test]
+    async fn commit_table_accepts_bare_iceberg_rest_update_path() {
+        // Iceberg REST `updateTable` is a bare POST on the table path, with no
+        // `/commit` segment. A stock PyIceberg/Spark/Trino client commits there,
+        // so LakeCat must accept it (the `/commit` route is a LakeCat alias).
+        let app = test_app();
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"name":"events","location":"file:///tmp/events","metadata-location":"file:///tmp/events/metadata/00000.json","metadata":{"format-version":3,"table-uuid":"11111111-1111-1111-1111-111111111111","location":"file:///tmp/events","last-sequence-number":7,"last-updated-ms":1710000000000,"last-column-id":1,"schemas":[{"type":"struct","schema-id":1,"fields":[{"id":1,"name":"id","type":"string","required":true,"doc":"Event identifier."}]}],"current-schema-id":1,"partition-specs":[{"spec-id":0,"fields":[]}],"default-spec-id":0,"current-snapshot-id":42,"snapshots":[{"snapshot-id":42,"sequence-number":7,"timestamp-ms":1710000000000,"manifest-list":"file:///tmp/events/metadata/snap-42.avro","summary":{"operation":"append"},"schema-id":1}],"snapshot-log":[{"timestamp-ms":1710000000000,"snapshot-id":42}]}}"#,
+            ))
+            .unwrap();
+        assert_eq!(
+            app.clone().oneshot(create).await.unwrap().status(),
+            StatusCode::OK
+        );
+
+        // Bare path (spec updateTable), not `.../events/commit`.
+        let commit = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables/events")
+            .header("content-type", "application/json")
+            .body(Body::from(r#"{"requirements":[],"updates":[]}"#))
+            .unwrap();
+        assert_eq!(
+            app.clone().oneshot(commit).await.unwrap().status(),
+            StatusCode::OK
         );
     }
 
