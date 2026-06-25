@@ -125,6 +125,43 @@ persist, so this IS the task list.
 - Pragmas (`migrate()`, `turso_store/mod.rs:~80`) currently set `journal_mode=WAL` +
   `busy_timeout=10000` only on the migrate conn (finding I2). MVCC: switch to
   `journal_mode=mvcc` and apply both on **every** `connect()`.
+
+### Turso MVCC — EMPIRICAL SPIKE RESULTS (this session; resolves the open question)
+Ran a 2-writer file-backed probe (A holds tx ~300ms, B acts ~50ms in) across the
+matrix. Decisive outcomes:
+| journal | begin style | different rows | same row |
+|---|---|---|---|
+| `wal` | `conn.transaction()` | B = `database is locked` | B = `database is locked` |
+| `mvcc` | `conn.transaction()` | B = `database is locked` | B = `database is locked` |
+| `mvcc` | **raw `BEGIN CONCURRENT`** | **A=Ok, B=Ok** | A=`commit: Write-write conflict`, B=Ok |
+
+**ANSWER to the open question:** the binding's typed `conn.transaction()` issues
+`BEGIN DEFERRED` and **stays single-writer even under `journal_mode=mvcc`** — a
+second writer to a DIFFERENT row still fails `database is locked`. MVCC concurrency
+requires issuing **`BEGIN CONCURRENT` explicitly via `conn.execute_batch`** (the
+typed `TransactionBehavior` enum has only Deferred/Immediate/Exclusive — no
+Concurrent). With `mvcc` + `BEGIN CONCURRENT`: different-row commits run truly
+concurrently; a same-row race yields exactly one winner and the loser gets
+**`Write-write conflict` at COMMIT** (not eagerly at insert, in this pre-release).
+
+**Revised implementation (evidence-based, supersedes the checkpoint's MVCC spec):**
+1. `migrate()` + every write connection: `PRAGMA journal_mode=mvcc; PRAGMA
+   busy_timeout=…;`.
+2. New `write_txn` does NOT use `conn.transaction()`. It: `connect()` → set pragmas
+   → `execute_batch("BEGIN CONCURRENT")` → run the body on `&Connection` (the
+   existing bodies use `tx.execute`, and `Transaction` derefs to `Connection`, so
+   the executes port over unchanged to `conn.execute`) → `execute_batch("COMMIT")`.
+   On a retryable error at COMMIT (`Write-write conflict` / `Busy` / `BusySnapshot`)
+   → `execute_batch("ROLLBACK")` + bounded backoff retry. Body must be re-runnable
+   (`AsyncFnMut`) and must NOT consume owned data needed across retries.
+3. **Relax `write_guard`** off the BEGIN CONCURRENT path so different-table commits
+   run concurrently. The metadata-pointer CAS still fail-closes genuine same-table
+   races: a retried same-table conflict re-reads the winner's snapshot, the
+   conditional UPDATE guard mismatches (`updated_rows==0`) → existing `Conflict`
+   (409). So bounded retry converges correctly; cap retries to avoid livelock.
+4. FW-16 test: N concurrent `commit_table` to DIFFERENT tables on a file-backed
+   store all succeed (no `database is locked`); concurrent commits to the SAME table
+   → exactly one winner + one `Conflict`. (The spike's `probe` is the seed for this.)
 6. **Turso MVCC concurrent writes** (the user's explicit request — see full spec in
    "Turso MVCC" section below). Do this AFTER step 5 so it lands on the `write_txn`
    helper.
