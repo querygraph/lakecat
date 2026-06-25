@@ -2,3 +2,5 @@
 .DS_Store
 **/*.rs.bk
 docs/book/dist/* (*).epub
+docs/book/dist/* (*).pdf
+.linux-target/
