@@ -98,16 +98,45 @@ persist, so this IS the task list.
    **Gates:** `cargo check -p lakecat-store` (default) **0 warnings**; `--features
    turso-local` **0 warnings**; `cargo test`: default **65**, `turso-local` **183**
    (== baseline). `cargo fmt` clean. **Test-fn count 183 → 183 (0 lost).**
-   - ⏳ **REMAINING in step 5:** (a) *optional* further split of the ~3.8k root
-     `lib.rs` into `records.rs` / `memory.rs` / `helpers.rs` (lower-value; needs
-     `pub(crate)` bumps on moved free fns + glob re-export — `turso_store` imports
-     ~15 of them via `crate::{…}`). (b) **The `write_txn` DRY helper — DEFERRED into
-     step 6** because its signature is dictated by the MVCC retry loop (must be
-     **re-runnable**, i.e. `AsyncFnMut(&Transaction)`, not a one-shot `FnOnce` that
-     moves owned data). Doing it as a throwaway `FnOnce` now then reworking all ~13
-     sites again for retry would be wasted churn. ~13 write sites all share:
-     `let _write = self.write_guard().await; … let mut conn = self.connect()?; let tx
-     = conn.transaction().await.map_err(turso_error)?; … tx.commit()…?;`.
+   - ✅ **`write_txn` DRY helper landed as part of step 6 (MVCC, below).** All 15
+     write methods now route through it; the `write_guard`/`write_lock` are gone.
+   - ⏳ **REMAINING in step 5 (optional):** further split of the ~3.8k root `lib.rs`
+     into `records.rs` / `memory.rs` / `helpers.rs` (lower-value; needs `pub(crate)`
+     bumps on moved free fns + glob re-export — `turso_store` imports ~15 of them via
+     `crate::{…}`).
+
+### ✅ Step 6 — Turso MVCC concurrent writes: DONE & PROVEN (this session)
+Implemented per the evidence-based design (BEGIN CONCURRENT, since the spike proved
+plain `conn.transaction()` stays single-writer under mvcc). In `turso_store/mod.rs`:
+- **`write_txn<T, F>`**: `connect()` → `apply_write_pragmas` (`journal_mode=mvcc` +
+  `busy_timeout`, best-effort/ignored as before) → `execute_batch("BEGIN CONCURRENT")`
+  → run body on `&Connection` → `execute_batch("COMMIT")`; on a retryable conflict at
+  commit (`Write-write conflict`/`Busy`/`BusySnapshot`, classified by
+  `is_retryable_conflict(&turso::Error)`) → `ROLLBACK` + exponential `backoff` +
+  retry, capped at `WRITE_TXN_MAX_ATTEMPTS=8`. Body signature is
+  `for<'c> FnMut(&'c Connection) -> Pin<Box<dyn Future<Output=LakeCatResult<T>> + Send + 'c>>`
+  (`WriteTxnFuture` alias) — boxed + `Send` to satisfy `#[async_trait]` and be
+  re-runnable. **Async closures (`AsyncFnMut`) did NOT work** — they hit a
+  `Send is not general enough` HRTB error under `#[async_trait]`; the boxed-future
+  form is required. Re-runnability pattern: closure is `move`, clones owned inputs
+  per attempt (`let x = x.clone();`) and the inner `async move` copies references —
+  never moves data the retry needs.
+- **`write_guard()` + the `write_lock: Arc<Mutex>` field REMOVED.** `migrate()` now
+  uses `journal_mode=mvcc` via `apply_write_pragmas`.
+- The 3 `&Transaction` helpers (`latest_turso_view_receipt_evidence`,
+  `latest_turso_view_receipt_hash`, `tx_insert_outbox_event`→renamed
+  `insert_outbox_event`) now take `&Connection`.
+- **Same-table race correctness:** loser gets `Write-write conflict` at COMMIT →
+  `write_txn` retries → on the new snapshot the metadata-pointer CAS pre-check
+  mismatches → terminal `Conflict` (409). So bounded retry converges to exactly one
+  winner + Conflicts (no livelock).
+- **FW-16 proof (2 new file-backed, multi-thread tests in `turso_store/tests.rs`):**
+  `turso_concurrent_commits_to_distinct_tables_all_succeed` (8 tables, all Ok, no
+  "database is locked") and `turso_concurrent_commits_to_same_table_yield_one_winner`
+  (1 Ok + 7 `Conflict`).
+  **Gates:** `cargo test -p lakecat-store`: default **65**, `turso-local` **185**
+  (183 baseline + 2 FW-16). 0 warnings, fmt clean. (Also fixes finding **I2** —
+  pragmas now apply to every write connection, not just `migrate()`.)
 
 ### Turso MVCC — corrected facts (verified against pinned `turso 0.7.0-pre.10` this session)
 - The binding `turso::Error` (`turso-0.7.0-pre.10/src/lib.rs:85`) has **`Busy(String)`

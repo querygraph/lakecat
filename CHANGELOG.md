@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- `lakecat-store`: enabled concurrent catalog writes on the Turso backend via MVCC.
+  Write transactions now run under `PRAGMA journal_mode=mvcc` with an explicit
+  `BEGIN CONCURRENT` (an empirical spike confirmed the binding's typed
+  `conn.transaction()` stays single-writer even under mvcc, so the raw concurrent
+  begin is required), through a new `write_txn` helper that commits on success and
+  retries with bounded backoff on a `Write-write conflict`/`Busy` at commit. The
+  global per-store write mutex (`write_lock`) is removed, so commits to different
+  tables/warehouses no longer serialize or hit "database is locked"; a genuine
+  same-table race still resolves fail-closed to exactly one winner plus a metadata-
+  pointer `Conflict`. Per-connection `busy_timeout`/journal pragmas now apply to
+  every write connection (previously only `migrate()`). Added two file-backed,
+  multi-threaded concurrency tests proving distinct-table commits all succeed and
+  same-table commits yield one winner.
 - `scripts/check-local-dependency-contract.sh`: repointed the six `require_pattern`
   guards that were pinned to the pre-refactor `lakecat-cli/src/main.rs` and
   `lakecat-service/src/lib.rs` monoliths at the files those guarantees now live in

@@ -6741,3 +6741,150 @@ async fn turso_store_rejects_soft_delete_row_scope_drift_on_restore() {
     ));
     assert_eq!(row_key_store.count_rows("soft_deletes").await.unwrap(), 1);
 }
+
+// --- FW-16: MVCC concurrent-write proof (file-backed, multi-thread) -----------
+//
+// These exercise the BEGIN CONCURRENT write path with the per-store write lock
+// removed. They must run on a file-backed store (concurrency is meaningless on a
+// fresh `:memory:` db) and a multi-thread runtime so the commits genuinely race.
+
+fn fw16_db_path(tag: &str) -> String {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    std::env::temp_dir()
+        .join(format!(
+            "lakecat-fw16-{tag}-{}-{nanos}.db",
+            std::process::id()
+        ))
+        .to_str()
+        .unwrap()
+        .to_string()
+}
+
+fn fw16_table(ident: &TableIdent, metadata_location: &str) -> TableRecord {
+    TableRecord::new(
+        ident.clone(),
+        "file:///tmp/fw16".to_string(),
+        Some(metadata_location.to_string()),
+        serde_json::json!({"format-version": 3}),
+        Principal::anonymous(),
+    )
+}
+
+fn fw16_commit(prev: &str, next: &str) -> TableCommit {
+    // No idempotency key: every commit genuinely races on the metadata-pointer CAS
+    // rather than replaying.
+    TableCommit {
+        requirements: vec![],
+        updates: vec![serde_json::json!({"action": "noop"})],
+        expected_previous_metadata_location: Some(prev.to_string()),
+        new_metadata_location: Some(next.to_string()),
+        new_metadata: None,
+        idempotency_key: None,
+        idempotency_request_hash: None,
+        principal: Principal::anonymous(),
+        authorization_receipt: None,
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn turso_concurrent_commits_to_distinct_tables_all_succeed() {
+    let path = fw16_db_path("distinct");
+    let store = TursoCatalogStore::connect_local(&path).await.unwrap();
+    let warehouse = WarehouseName::new("local").unwrap();
+    let namespace = "default".parse::<Namespace>().unwrap();
+    store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
+
+    const N: usize = 8;
+    let mut setup = Vec::new();
+    for i in 0..N {
+        let ident = TableIdent::new(
+            warehouse.clone(),
+            namespace.clone(),
+            TableName::new(format!("t{i}")).unwrap(),
+        );
+        let initial = format!("file:///tmp/fw16/t{i}/metadata/00000.json");
+        store
+            .create_table(fw16_table(&ident, &initial))
+            .await
+            .unwrap();
+        setup.push((ident, initial));
+    }
+
+    let mut handles = Vec::new();
+    for (i, (ident, initial)) in setup.into_iter().enumerate() {
+        let store = store.clone();
+        handles.push(tokio::spawn(async move {
+            let next = format!("file:///tmp/fw16/t{i}/metadata/00001.json");
+            store
+                .commit_table(&ident, fw16_commit(&initial, &next))
+                .await
+        }));
+    }
+    for handle in handles {
+        let record = handle
+            .await
+            .unwrap()
+            .expect("concurrent commit to a distinct table must not be locked out");
+        assert_eq!(record.version, 1);
+    }
+    let _ = std::fs::remove_file(&path);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn turso_concurrent_commits_to_same_table_yield_one_winner() {
+    let path = fw16_db_path("same");
+    let store = TursoCatalogStore::connect_local(&path).await.unwrap();
+    let warehouse = WarehouseName::new("local").unwrap();
+    let namespace = "default".parse::<Namespace>().unwrap();
+    store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
+    let ident = TableIdent::new(warehouse, namespace, TableName::new("events").unwrap());
+    let initial = "file:///tmp/fw16/events/metadata/00000.json";
+    store
+        .create_table(fw16_table(&ident, initial))
+        .await
+        .unwrap();
+
+    const N: usize = 8;
+    let mut handles = Vec::new();
+    for i in 0..N {
+        let store = store.clone();
+        let ident = ident.clone();
+        let initial = initial.to_string();
+        handles.push(tokio::spawn(async move {
+            let next = format!("file:///tmp/fw16/events/metadata/{:05}.json", i + 1);
+            store
+                .commit_table(&ident, fw16_commit(&initial, &next))
+                .await
+        }));
+    }
+
+    let mut winners = 0usize;
+    let mut conflicts = 0usize;
+    for handle in handles {
+        match handle.await.unwrap() {
+            Ok(record) => {
+                assert_eq!(record.version, 1);
+                winners += 1;
+            }
+            Err(LakeCatError::Conflict(_)) => conflicts += 1,
+            Err(other) => panic!("expected Conflict for a losing commit, got: {other}"),
+        }
+    }
+    assert_eq!(winners, 1, "exactly one commit to the same table must win");
+    assert_eq!(
+        conflicts,
+        N - 1,
+        "every other commit must fail with Conflict"
+    );
+    assert_eq!(store.load_table(&ident).await.unwrap().version, 1);
+    let _ = std::fs::remove_file(&path);
+}

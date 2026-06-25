@@ -1,3 +1,5 @@
+use std::future::Future;
+use std::pin::Pin;
 use std::{collections::BTreeSet, sync::Arc};
 
 use async_trait::async_trait;
@@ -23,13 +25,6 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct TursoCatalogStore {
     db: Database,
-    // The local Turso/libsql file is single-writer. The `turso` crate gives
-    // async (non-blocking) I/O, but concurrent write transactions to one
-    // file still collide ("database is locked"); multi-writer concurrency is
-    // still in development upstream. The catalog is single-writer by design,
-    // so we serialize all write transactions through this lock. Reads are
-    // unaffected. When Turso ships concurrent writes/MVCC this can be relaxed.
-    write_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl TursoCatalogStore {
@@ -50,10 +45,7 @@ impl TursoCatalogStore {
     }
 
     pub async fn from_database(db: Database) -> LakeCatResult<Arc<Self>> {
-        let store = Arc::new(Self {
-            db,
-            write_lock: Arc::new(tokio::sync::Mutex::new(())),
-        });
+        let store = Arc::new(Self { db });
         store.migrate().await?;
         Ok(store)
     }
@@ -62,21 +54,66 @@ impl TursoCatalogStore {
         &self.db
     }
 
-    /// Acquire exclusive write access. Held for the duration of a write
-    /// transaction so only one writer touches the single-writer file at a
-    /// time. Returns an owned guard so callers don't fight borrow lifetimes.
-    async fn write_guard(&self) -> tokio::sync::OwnedMutexGuard<()> {
-        self.write_lock.clone().lock_owned().await
+    /// Run `body` inside an MVCC `BEGIN CONCURRENT` write transaction on a fresh
+    /// connection, committing on success.
+    ///
+    /// Turso MVCC (`journal_mode=mvcc`) gives snapshot isolation with eager
+    /// write-write conflict detection, so writes to *different* rows commit
+    /// concurrently — no global write lock is needed. A write-write conflict (or
+    /// transient `Busy`) at commit is rolled back and the body retried with
+    /// bounded backoff. A genuine same-row logical race (two commits to one
+    /// table) converges to the metadata-pointer CAS `Conflict`: the retried body
+    /// re-reads the winner's snapshot, the conditional UPDATE then matches zero
+    /// rows, and the existing `Conflict` is returned.
+    ///
+    /// The body MUST be re-runnable: it can be invoked more than once, so it must
+    /// borrow (not consume) any state it needs across attempts. Owned data used
+    /// in the body should be reborrowed (`let x = &x;`) before the call so the
+    /// `async move` future copies the reference rather than moving the value.
+    async fn write_txn<T, F>(&self, mut body: F) -> LakeCatResult<T>
+    where
+        T: Send,
+        F: for<'c> FnMut(&'c Connection) -> WriteTxnFuture<'c, T> + Send,
+    {
+        let mut attempt = 0u32;
+        loop {
+            attempt += 1;
+            let conn = self.connect()?;
+            apply_write_pragmas(&conn).await;
+            conn.execute_batch("BEGIN CONCURRENT")
+                .await
+                .map_err(turso_error)?;
+            match body(&conn).await {
+                Ok(value) => match conn.execute_batch("COMMIT").await {
+                    Ok(()) => return Ok(value),
+                    Err(err) if is_retryable_conflict(&err) && attempt < WRITE_TXN_MAX_ATTEMPTS => {
+                        let _ = conn.execute_batch("ROLLBACK").await;
+                        backoff(attempt).await;
+                    }
+                    Err(err) => {
+                        let _ = conn.execute_batch("ROLLBACK").await;
+                        return Err(turso_error(err));
+                    }
+                },
+                Err(err) => {
+                    let _ = conn.execute_batch("ROLLBACK").await;
+                    // This pre-release surfaces write-write conflicts at COMMIT,
+                    // but a conflict observed mid-body is still retryable;
+                    // everything else (including the unique-violation `Conflict`)
+                    // is terminal.
+                    if is_retryable_lakecat(&err) && attempt < WRITE_TXN_MAX_ATTEMPTS {
+                        backoff(attempt).await;
+                    } else {
+                        return Err(err);
+                    }
+                }
+            }
+        }
     }
 
     async fn migrate(&self) -> LakeCatResult<()> {
         let conn = self.connect()?;
-        // Best-effort durability/concurrency pragmas. WAL is persisted in the
-        // db header (helps readers run alongside the serialized writer);
-        // busy_timeout is per-connection. Ignore errors so an unsupported
-        // pragma in a Turso pre-release does not break startup.
-        let _ = conn.execute_batch("PRAGMA journal_mode=WAL;").await;
-        let _ = conn.execute_batch("PRAGMA busy_timeout=10000;").await;
+        apply_write_pragmas(&conn).await;
         conn.execute_batch(TURSO_MIGRATION.join(";\n"))
             .await
             .map_err(turso_error)?;
@@ -108,20 +145,26 @@ impl CatalogStore for TursoCatalogStore {
         warehouse: &WarehouseName,
         namespace: Namespace,
     ) -> LakeCatResult<()> {
-        let _write = self.write_guard().await;
-        let conn = self.connect()?;
-        conn.execute(
-            "insert or ignore into namespaces (warehouse, namespace_path, namespace_json)
+        let warehouse = warehouse.clone();
+        self.write_txn(move |conn| {
+            let warehouse = warehouse.clone();
+            let namespace = namespace.clone();
+            Box::pin(async move {
+                conn.execute(
+                    "insert or ignore into namespaces (warehouse, namespace_path, namespace_json)
                  values (?1, ?2, ?3)",
-            (
-                warehouse.as_str(),
-                namespace.path(),
-                encode_json(namespace.parts())?,
-            ),
-        )
+                    (
+                        warehouse.as_str(),
+                        namespace.path(),
+                        encode_json(namespace.parts())?,
+                    ),
+                )
+                .await
+                .map_err(turso_error)?;
+                Ok(())
+            })
+        })
         .await
-        .map_err(turso_error)?;
-        Ok(())
     }
 
     async fn list_namespaces(&self, warehouse: &WarehouseName) -> LakeCatResult<Vec<Namespace>> {
@@ -185,38 +228,46 @@ impl CatalogStore for TursoCatalogStore {
         warehouse: &WarehouseName,
         namespace: &Namespace,
     ) -> LakeCatResult<Namespace> {
-        let _write = self.write_guard().await;
         let namespace = self.load_namespace(warehouse, namespace).await?;
-        let conn = self.connect()?;
-        let namespace_path = namespace.path();
-        if count_matching_rows(&conn, "tables", warehouse.as_str(), namespace_path.as_str()).await?
-            > 0
-        {
-            return Err(namespace_not_empty(&namespace, "tables"));
-        }
-        if count_matching_rows(&conn, "views", warehouse.as_str(), namespace_path.as_str()).await?
-            > 0
-        {
-            return Err(namespace_not_empty(&namespace, "views"));
-        }
-        if count_matching_rows(
-            &conn,
-            "policy_bindings",
-            warehouse.as_str(),
-            namespace_path.as_str(),
-        )
-        .await?
-            > 0
-        {
-            return Err(namespace_not_empty(&namespace, "policy bindings"));
-        }
-        conn.execute(
-            "delete from namespaces where warehouse = ?1 and namespace_path = ?2",
-            (warehouse.as_str(), namespace_path),
-        )
+        let warehouse = warehouse.clone();
+        self.write_txn(move |conn| {
+            let warehouse = warehouse.clone();
+            let namespace = namespace.clone();
+            Box::pin(async move {
+                let namespace_path = namespace.path();
+                if count_matching_rows(conn, "tables", warehouse.as_str(), namespace_path.as_str())
+                    .await?
+                    > 0
+                {
+                    return Err(namespace_not_empty(&namespace, "tables"));
+                }
+                if count_matching_rows(conn, "views", warehouse.as_str(), namespace_path.as_str())
+                    .await?
+                    > 0
+                {
+                    return Err(namespace_not_empty(&namespace, "views"));
+                }
+                if count_matching_rows(
+                    conn,
+                    "policy_bindings",
+                    warehouse.as_str(),
+                    namespace_path.as_str(),
+                )
+                .await?
+                    > 0
+                {
+                    return Err(namespace_not_empty(&namespace, "policy bindings"));
+                }
+                conn.execute(
+                    "delete from namespaces where warehouse = ?1 and namespace_path = ?2",
+                    (warehouse.as_str(), namespace_path),
+                )
+                .await
+                .map_err(turso_error)?;
+                Ok(namespace)
+            })
+        })
         .await
-        .map_err(turso_error)?;
-        Ok(namespace)
     }
 
     async fn list_tables(&self, warehouse: &WarehouseName) -> LakeCatResult<Vec<TableRecord>> {
@@ -256,53 +307,53 @@ impl CatalogStore for TursoCatalogStore {
     }
 
     async fn create_table(&self, table: TableRecord) -> LakeCatResult<TableRecord> {
-        let _write = self.write_guard().await;
         table.validate()?;
-        let mut conn = self.connect()?;
-        let tx = conn.transaction().await.map_err(turso_error)?;
-        tx.execute(
-            "insert or ignore into namespaces (warehouse, namespace_path, namespace_json)
+        self.write_txn(move |conn| {
+            let table = table.clone();
+            Box::pin(async move {
+                conn.execute(
+                    "insert or ignore into namespaces (warehouse, namespace_path, namespace_json)
                  values (?1, ?2, ?3)",
-            (
-                table.ident.warehouse.as_str(),
-                table.ident.namespace.path(),
-                encode_json(table.ident.namespace.parts())?,
-            ),
-        )
-        .await
-        .map_err(turso_error)?;
+                    (
+                        table.ident.warehouse.as_str(),
+                        table.ident.namespace.path(),
+                        encode_json(table.ident.namespace.parts())?,
+                    ),
+                )
+                .await
+                .map_err(turso_error)?;
 
-        let result = tx
-            .execute(
-                "insert into tables (
+                let result = conn
+                    .execute(
+                        "insert into tables (
                     table_key, warehouse, namespace_path, table_name,
                     metadata_location, version, record_json, updated_at
                  )
                  values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                (
-                    table_key(&table.ident),
-                    table.ident.warehouse.as_str(),
-                    table.ident.namespace.path(),
-                    table.ident.name.as_str(),
-                    table.metadata_location.as_deref(),
-                    checked_i64(table.version, "table version")?,
-                    encode_json(&table)?,
-                    table.updated_at.to_rfc3339(),
-                ),
-            )
-            .await;
+                        (
+                            table_key(&table.ident),
+                            table.ident.warehouse.as_str(),
+                            table.ident.namespace.path(),
+                            table.ident.name.as_str(),
+                            table.metadata_location.as_deref(),
+                            checked_i64(table.version, "table version")?,
+                            encode_json(&table)?,
+                            table.updated_at.to_rfc3339(),
+                        ),
+                    )
+                    .await;
 
-        match result {
-            Ok(_) => {
-                tx.commit().await.map_err(turso_error)?;
-                Ok(table)
-            }
-            Err(err) if is_unique_violation(&err) => Err(LakeCatError::Conflict(format!(
-                "table already exists: {}",
-                table.ident.stable_id()
-            ))),
-            Err(err) => Err(turso_error(err)),
-        }
+                match result {
+                    Ok(_) => Ok(table),
+                    Err(err) if is_unique_violation(&err) => Err(LakeCatError::Conflict(format!(
+                        "table already exists: {}",
+                        table.ident.stable_id()
+                    ))),
+                    Err(err) => Err(turso_error(err)),
+                }
+            })
+        })
+        .await
     }
 
     async fn load_table(&self, ident: &TableIdent) -> LakeCatResult<TableRecord> {
@@ -346,10 +397,13 @@ impl CatalogStore for TursoCatalogStore {
         ident: &TableIdent,
         commit: TableCommit,
     ) -> LakeCatResult<TableRecord> {
-        let _write = self.write_guard().await;
         commit.validate()?;
-        let mut conn = self.connect()?;
-        let tx = conn.transaction().await.map_err(turso_error)?;
+        let ident = ident.clone();
+        self.write_txn(move |conn| {
+            let ident = ident.clone();
+            let commit = commit.clone();
+            Box::pin(async move {
+                let ident = &ident;
         let request_hash = content_hash_json(&serde_json::json!({
             "requirements": &commit.requirements,
             "updates": &commit.updates,
@@ -363,7 +417,7 @@ impl CatalogStore for TursoCatalogStore {
             .unwrap_or_else(|| request_hash.clone());
         if let Some(idempotency_key) = &commit.idempotency_key {
             let idem_key = idempotency_record_key(ident, idempotency_key);
-            let mut rows = tx
+            let mut rows = conn
                     .query(
                         "select table_key, request_hash, response_json from idempotency_records where idem_key = ?1",
                         (idem_key,),
@@ -382,12 +436,11 @@ impl CatalogStore for TursoCatalogStore {
                 }
                 let table = decode_json(row_string(&row, 2)?)?;
                 crate::validate_table_record_identity(&table, ident)?;
-                tx.commit().await.map_err(turso_error)?;
                 return Ok(table);
             }
         }
 
-        let mut rows = tx
+        let mut rows = conn
             .query(
                 "select record_json, table_key, warehouse, namespace_path, table_name
                      from tables t
@@ -435,7 +488,7 @@ impl CatalogStore for TursoCatalogStore {
         table.metadata["lakecat:version"] = serde_json::json!(table.version);
         table.metadata["lakecat:last-request-hash"] = serde_json::json!(request_hash);
 
-        let updated_rows = tx
+        let updated_rows = conn
             .execute(
                 "update tables
                  set metadata_location = ?2, version = ?3, record_json = ?4, updated_at = ?5
@@ -478,7 +531,7 @@ impl CatalogStore for TursoCatalogStore {
             idempotency_key_sha256,
             committed_at: table.updated_at,
         };
-        tx.execute(
+        conn.execute(
             "insert into metadata_pointer_log (
                     table_key, sequence_number, previous_metadata_location,
                     new_metadata_location, principal_json, request_hash,
@@ -506,7 +559,7 @@ impl CatalogStore for TursoCatalogStore {
             "authorization-receipt": commit.authorization_receipt,
         });
         let audit_payload_hash = content_hash_json(&audit_payload)?;
-        tx.execute(
+        conn.execute(
             "insert into audit_events (
                     event_id, event_type, table_key, principal_json,
                     request_hash, event_json, created_at
@@ -532,7 +585,7 @@ impl CatalogStore for TursoCatalogStore {
             "commit": record,
             "authorization-receipt": audit_payload["authorization-receipt"].clone(),
         });
-        tx.execute(
+        conn.execute(
             "insert into outbox_events (
                     event_id, sink, event_type, payload_json, created_at
                  )
@@ -549,7 +602,7 @@ impl CatalogStore for TursoCatalogStore {
         .map_err(turso_error)?;
 
         if let Some(idempotency_key) = commit.idempotency_key {
-            tx.execute(
+            conn.execute(
                 "insert into idempotency_records (
                         idem_key, table_key, request_hash, response_json, created_at
                      )
@@ -569,8 +622,10 @@ impl CatalogStore for TursoCatalogStore {
             .map_err(turso_error)?;
         }
 
-        tx.commit().await.map_err(turso_error)?;
         Ok(table)
+            })
+        })
+        .await
     }
 
     async fn replay_table_commit(
@@ -612,123 +667,129 @@ impl CatalogStore for TursoCatalogStore {
         principal: lakecat_core::Principal,
         authorization_receipt: Option<JsonValue>,
     ) -> LakeCatResult<TableRecord> {
-        let _write = self.write_guard().await;
-        let mut conn = self.connect()?;
-        let tx = conn.transaction().await.map_err(turso_error)?;
-        let mut rows = tx
-            .query(
-                "select record_json, table_key, warehouse, namespace_path, table_name
+        let ident = ident.clone();
+        self.write_txn(move |conn| {
+            let ident = ident.clone();
+            let principal = principal.clone();
+            let authorization_receipt = authorization_receipt.clone();
+            Box::pin(async move {
+                let ident = &ident;
+                let mut rows = conn
+                    .query(
+                        "select record_json, table_key, warehouse, namespace_path, table_name
                      from tables t
                      where t.table_key = ?1
                        and not exists (
                          select 1 from soft_deletes d where d.table_key = t.table_key
                        )",
-                (table_key(ident),),
-            )
-            .await
-            .map_err(turso_error)?;
-        let Some(row) = rows.next().await.map_err(turso_error)? else {
-            return Err(LakeCatError::NotFound {
-                object: "table",
-                name: ident.stable_id(),
-            });
-        };
-        let table: TableRecord = decode_json(row_string(&row, 0)?)?;
-        crate::validate_table_record_scope(
-            &table,
-            ident,
-            &row_string(&row, 1)?,
-            &row_string(&row, 2)?,
-            &row_string(&row, 3)?,
-            &row_string(&row, 4)?,
-        )?;
-        let deleted_at = Utc::now();
-        let record = SoftDeleteRecord {
-            table: ident.clone(),
-            metadata_location: table.metadata_location.clone(),
-            version: table.version,
-            format_version: crate::table_commit_format_version(&table),
-            principal: principal.clone(),
-            authorization_receipt,
-            deleted_at,
-        };
-        record.validate_for_table(ident, &table)?;
-        tx.execute(
-            "insert into soft_deletes (
+                        (table_key(ident),),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                let Some(row) = rows.next().await.map_err(turso_error)? else {
+                    return Err(LakeCatError::NotFound {
+                        object: "table",
+                        name: ident.stable_id(),
+                    });
+                };
+                let table: TableRecord = decode_json(row_string(&row, 0)?)?;
+                crate::validate_table_record_scope(
+                    &table,
+                    ident,
+                    &row_string(&row, 1)?,
+                    &row_string(&row, 2)?,
+                    &row_string(&row, 3)?,
+                    &row_string(&row, 4)?,
+                )?;
+                let deleted_at = Utc::now();
+                let record = SoftDeleteRecord {
+                    table: ident.clone(),
+                    metadata_location: table.metadata_location.clone(),
+                    version: table.version,
+                    format_version: crate::table_commit_format_version(&table),
+                    principal: principal.clone(),
+                    authorization_receipt,
+                    deleted_at,
+                };
+                record.validate_for_table(ident, &table)?;
+                conn.execute(
+                    "insert into soft_deletes (
                     table_key, warehouse, namespace_path, table_name,
                     metadata_location, version, principal_json,
                     authorization_receipt_json, record_json, deleted_at
                  )
                  values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-            (
-                table_key(ident),
-                ident.warehouse.as_str(),
-                ident.namespace.path(),
-                ident.name.as_str(),
-                table.metadata_location.as_deref(),
-                checked_i64(table.version, "table version")?,
-                encode_json(&principal)?,
-                record
-                    .authorization_receipt
-                    .as_ref()
-                    .map(encode_json)
-                    .transpose()?,
-                encode_json(&record)?,
-                deleted_at.to_rfc3339(),
-            ),
-        )
-        .await
-        .map_err(turso_error)?;
+                    (
+                        table_key(ident),
+                        ident.warehouse.as_str(),
+                        ident.namespace.path(),
+                        ident.name.as_str(),
+                        table.metadata_location.as_deref(),
+                        checked_i64(table.version, "table version")?,
+                        encode_json(&principal)?,
+                        record
+                            .authorization_receipt
+                            .as_ref()
+                            .map(encode_json)
+                            .transpose()?,
+                        encode_json(&record)?,
+                        deleted_at.to_rfc3339(),
+                    ),
+                )
+                .await
+                .map_err(turso_error)?;
 
-        let audit_payload = serde_json::json!({
-            "event-type": "table.deleted",
-            "table": ident,
-            "soft-delete": record,
-            "authorization-receipt": record.authorization_receipt,
-        });
-        let audit_event_id = content_hash_json(&audit_payload)?;
-        tx.execute(
-            "insert into audit_events (
+                let audit_payload = serde_json::json!({
+                    "event-type": "table.deleted",
+                    "table": ident,
+                    "soft-delete": record,
+                    "authorization-receipt": record.authorization_receipt,
+                });
+                let audit_event_id = content_hash_json(&audit_payload)?;
+                conn.execute(
+                    "insert into audit_events (
                     event_id, event_type, table_key, principal_json,
                     request_hash, event_json, created_at
                  )
                  values (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            (
-                audit_event_id.as_str(),
-                "table.deleted",
-                table_key(ident),
-                encode_json(&principal)?,
-                audit_event_id.as_str(),
-                encode_json(&audit_payload)?,
-                deleted_at.to_rfc3339(),
-            ),
-        )
-        .await
-        .map_err(turso_error)?;
-        let outbox_payload = serde_json::json!({
-            "audit-event-id": audit_event_id,
-            "event-type": "table.deleted",
-            "table": ident,
-            "soft-delete": audit_payload["soft-delete"].clone(),
-            "authorization-receipt": audit_payload["authorization-receipt"].clone(),
-        });
-        tx.execute(
-            "insert into outbox_events (
+                    (
+                        audit_event_id.as_str(),
+                        "table.deleted",
+                        table_key(ident),
+                        encode_json(&principal)?,
+                        audit_event_id.as_str(),
+                        encode_json(&audit_payload)?,
+                        deleted_at.to_rfc3339(),
+                    ),
+                )
+                .await
+                .map_err(turso_error)?;
+                let outbox_payload = serde_json::json!({
+                    "audit-event-id": audit_event_id,
+                    "event-type": "table.deleted",
+                    "table": ident,
+                    "soft-delete": audit_payload["soft-delete"].clone(),
+                    "authorization-receipt": audit_payload["authorization-receipt"].clone(),
+                });
+                conn.execute(
+                    "insert into outbox_events (
                     event_id, sink, event_type, payload_json, created_at
                  )
                  values (?1, ?2, ?3, ?4, ?5)",
-            (
-                content_hash_json(&outbox_payload)?,
-                "lakecat.lineage-and-graph",
-                "table.deleted",
-                encode_json(&outbox_payload)?,
-                deleted_at.to_rfc3339(),
-            ),
-        )
+                    (
+                        content_hash_json(&outbox_payload)?,
+                        "lakecat.lineage-and-graph",
+                        "table.deleted",
+                        encode_json(&outbox_payload)?,
+                        deleted_at.to_rfc3339(),
+                    ),
+                )
+                .await
+                .map_err(turso_error)?;
+                Ok(table)
+            })
+        })
         .await
-        .map_err(turso_error)?;
-        tx.commit().await.map_err(turso_error)?;
-        Ok(table)
     }
 
     async fn restore_table(
@@ -737,106 +798,112 @@ impl CatalogStore for TursoCatalogStore {
         principal: lakecat_core::Principal,
         authorization_receipt: Option<JsonValue>,
     ) -> LakeCatResult<TableRecord> {
-        let _write = self.write_guard().await;
-        let mut conn = self.connect()?;
-        let tx = conn.transaction().await.map_err(turso_error)?;
-        let mut rows = tx
-            .query(
-                "select t.record_json, t.table_key, t.warehouse, t.namespace_path,
+        let ident = ident.clone();
+        self.write_txn(move |conn| {
+            let ident = ident.clone();
+            let principal = principal.clone();
+            let authorization_receipt = authorization_receipt.clone();
+            Box::pin(async move {
+                let ident = &ident;
+                let mut rows = conn
+                    .query(
+                        "select t.record_json, t.table_key, t.warehouse, t.namespace_path,
                             t.table_name, d.table_key, d.warehouse, d.namespace_path,
                             d.table_name, d.metadata_location, d.version,
                             d.deleted_at, d.record_json
                      from tables t
                      join soft_deletes d on d.table_key = t.table_key
                      where t.table_key = ?1",
-                (table_key(ident),),
-            )
-            .await
-            .map_err(turso_error)?;
-        let Some(row) = rows.next().await.map_err(turso_error)? else {
-            return Err(LakeCatError::NotFound {
-                object: "soft-deleted table",
-                name: ident.stable_id(),
-            });
-        };
-        let table: TableRecord = decode_json(row_string(&row, 0)?)?;
-        crate::validate_table_record_scope(
-            &table,
-            ident,
-            &row_string(&row, 1)?,
-            &row_string(&row, 2)?,
-            &row_string(&row, 3)?,
-            &row_string(&row, 4)?,
-        )?;
-        let soft_delete: SoftDeleteRecord = decode_json(row_string(&row, 12)?)?;
-        soft_delete.validate_for_table(ident, &table)?;
-        validate_turso_soft_delete_row(&soft_delete, ident, &row, 5)?;
-        let restored_at = Utc::now();
-        let changed = tx
-            .execute(
-                "delete from soft_deletes where table_key = ?1",
-                (table_key(ident),),
-            )
-            .await
-            .map_err(turso_error)?;
-        if changed == 0 {
-            return Err(LakeCatError::NotFound {
-                object: "soft-deleted table",
-                name: ident.stable_id(),
-            });
-        }
+                        (table_key(ident),),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                let Some(row) = rows.next().await.map_err(turso_error)? else {
+                    return Err(LakeCatError::NotFound {
+                        object: "soft-deleted table",
+                        name: ident.stable_id(),
+                    });
+                };
+                let table: TableRecord = decode_json(row_string(&row, 0)?)?;
+                crate::validate_table_record_scope(
+                    &table,
+                    ident,
+                    &row_string(&row, 1)?,
+                    &row_string(&row, 2)?,
+                    &row_string(&row, 3)?,
+                    &row_string(&row, 4)?,
+                )?;
+                let soft_delete: SoftDeleteRecord = decode_json(row_string(&row, 12)?)?;
+                soft_delete.validate_for_table(ident, &table)?;
+                validate_turso_soft_delete_row(&soft_delete, ident, &row, 5)?;
+                let restored_at = Utc::now();
+                let changed = conn
+                    .execute(
+                        "delete from soft_deletes where table_key = ?1",
+                        (table_key(ident),),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                if changed == 0 {
+                    return Err(LakeCatError::NotFound {
+                        object: "soft-deleted table",
+                        name: ident.stable_id(),
+                    });
+                }
 
-        let audit_payload = serde_json::json!({
-            "event-type": "table.restored",
-            "table": ident,
-            "authorization-receipt": authorization_receipt,
-            "metadata-location": table.metadata_location,
-            "format-version": crate::table_commit_format_version(&table),
-            "version": table.version,
-        });
-        let audit_event_id = content_hash_json(&audit_payload)?;
-        tx.execute(
-            "insert into audit_events (
+                let audit_payload = serde_json::json!({
+                    "event-type": "table.restored",
+                    "table": ident,
+                    "authorization-receipt": authorization_receipt,
+                    "metadata-location": table.metadata_location,
+                    "format-version": crate::table_commit_format_version(&table),
+                    "version": table.version,
+                });
+                let audit_event_id = content_hash_json(&audit_payload)?;
+                conn.execute(
+                    "insert into audit_events (
                     event_id, event_type, table_key, principal_json,
                     request_hash, event_json, created_at
                  )
                  values (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            (
-                audit_event_id.as_str(),
-                "table.restored",
-                table_key(ident),
-                encode_json(&principal)?,
-                audit_event_id.as_str(),
-                encode_json(&audit_payload)?,
-                restored_at.to_rfc3339(),
-            ),
-        )
-        .await
-        .map_err(turso_error)?;
-        let outbox_payload = serde_json::json!({
-            "audit-event-id": audit_event_id,
-            "event-type": "table.restored",
-            "table": ident,
-            "payload": audit_payload,
-            "authorization-receipt": audit_payload["authorization-receipt"].clone(),
-        });
-        tx.execute(
-            "insert into outbox_events (
+                    (
+                        audit_event_id.as_str(),
+                        "table.restored",
+                        table_key(ident),
+                        encode_json(&principal)?,
+                        audit_event_id.as_str(),
+                        encode_json(&audit_payload)?,
+                        restored_at.to_rfc3339(),
+                    ),
+                )
+                .await
+                .map_err(turso_error)?;
+                let outbox_payload = serde_json::json!({
+                    "audit-event-id": audit_event_id,
+                    "event-type": "table.restored",
+                    "table": ident,
+                    "payload": audit_payload,
+                    "authorization-receipt": audit_payload["authorization-receipt"].clone(),
+                });
+                conn.execute(
+                    "insert into outbox_events (
                     event_id, sink, event_type, payload_json, created_at
                  )
                  values (?1, ?2, ?3, ?4, ?5)",
-            (
-                content_hash_json(&outbox_payload)?,
-                "lakecat.lineage-and-graph",
-                "table.restored",
-                encode_json(&outbox_payload)?,
-                restored_at.to_rfc3339(),
-            ),
-        )
+                    (
+                        content_hash_json(&outbox_payload)?,
+                        "lakecat.lineage-and-graph",
+                        "table.restored",
+                        encode_json(&outbox_payload)?,
+                        restored_at.to_rfc3339(),
+                    ),
+                )
+                .await
+                .map_err(turso_error)?;
+                Ok(table)
+            })
+        })
         .await
-        .map_err(turso_error)?;
-        tx.commit().await.map_err(turso_error)?;
-        Ok(table)
     }
 
     async fn table_commit_records(
@@ -876,23 +943,23 @@ impl CatalogStore for TursoCatalogStore {
     }
 
     async fn upsert_server(&self, server: ServerRecord) -> LakeCatResult<ServerRecord> {
-        let _write = self.write_guard().await;
         server.validate()?;
-        let mut conn = self.connect()?;
-        let tx = conn.transaction().await.map_err(turso_error)?;
-        let mut rows = tx
-            .query(
-                "select record_json, server_id from servers where server_id = ?1",
-                (server.server_id.as_str(),),
-            )
-            .await
-            .map_err(turso_error)?;
-        if let Some(row) = rows.next().await.map_err(turso_error)? {
-            let existing: ServerRecord = decode_json(row_string(&row, 0)?)?;
-            crate::validate_server_record_scope(&existing, &row_string(&row, 1)?)?;
-        }
-        tx.execute(
-            "insert into servers (
+        self.write_txn(move |conn| {
+            let server = server.clone();
+            Box::pin(async move {
+                let mut rows = conn
+                    .query(
+                        "select record_json, server_id from servers where server_id = ?1",
+                        (server.server_id.as_str(),),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                if let Some(row) = rows.next().await.map_err(turso_error)? {
+                    let existing: ServerRecord = decode_json(row_string(&row, 0)?)?;
+                    crate::validate_server_record_scope(&existing, &row_string(&row, 1)?)?;
+                }
+                conn.execute(
+                    "insert into servers (
                     server_id, display_name, endpoint_url, record_json, updated_at
                  )
                  values (?1, ?2, ?3, ?4, ?5)
@@ -901,18 +968,20 @@ impl CatalogStore for TursoCatalogStore {
                     endpoint_url = excluded.endpoint_url,
                     record_json = excluded.record_json,
                     updated_at = excluded.updated_at",
-            (
-                server.server_id.as_str(),
-                server.display_name.as_deref(),
-                server.endpoint_url.as_deref(),
-                encode_json(&server)?,
-                server.updated_at.to_rfc3339(),
-            ),
-        )
+                    (
+                        server.server_id.as_str(),
+                        server.display_name.as_deref(),
+                        server.endpoint_url.as_deref(),
+                        encode_json(&server)?,
+                        server.updated_at.to_rfc3339(),
+                    ),
+                )
+                .await
+                .map_err(turso_error)?;
+                Ok(server)
+            })
+        })
         .await
-        .map_err(turso_error)?;
-        tx.commit().await.map_err(turso_error)?;
-        Ok(server)
     }
 
     async fn list_servers(&self) -> LakeCatResult<Vec<ServerRecord>> {
@@ -935,40 +1004,40 @@ impl CatalogStore for TursoCatalogStore {
     }
 
     async fn upsert_project(&self, project: ProjectRecord) -> LakeCatResult<ProjectRecord> {
-        let _write = self.write_guard().await;
         project.validate()?;
-        let mut conn = self.connect()?;
-        let tx = conn.transaction().await.map_err(turso_error)?;
-        if let Some(server_id) = project.server_id.as_deref() {
-            let mut rows = tx
+        self.write_txn(move |conn| {
+            let project = project.clone();
+            Box::pin(async move {
+                if let Some(server_id) = project.server_id.as_deref() {
+                    let mut rows = conn
                 .query(
                     "select record_json, server_id from servers where server_id = ?1 limit 1",
                     (server_id,),
                 )
                 .await
                 .map_err(turso_error)?;
-            let Some(row) = rows.next().await.map_err(turso_error)? else {
-                return Err(LakeCatError::NotFound {
-                    object: "server",
-                    name: server_id.to_string(),
-                });
-            };
-            let parent: ServerRecord = decode_json(row_string(&row, 0)?)?;
-            crate::validate_server_record_scope(&parent, &row_string(&row, 1)?)?;
-        }
-        let mut rows = tx
-            .query(
-                "select record_json, project_id from projects where project_id = ?1",
-                (project.project_id.as_str(),),
-            )
-            .await
-            .map_err(turso_error)?;
-        if let Some(row) = rows.next().await.map_err(turso_error)? {
-            let existing: ProjectRecord = decode_json(row_string(&row, 0)?)?;
-            crate::validate_project_record_scope(&existing, &row_string(&row, 1)?)?;
-        }
-        tx.execute(
-            "insert into projects (
+                    let Some(row) = rows.next().await.map_err(turso_error)? else {
+                        return Err(LakeCatError::NotFound {
+                            object: "server",
+                            name: server_id.to_string(),
+                        });
+                    };
+                    let parent: ServerRecord = decode_json(row_string(&row, 0)?)?;
+                    crate::validate_server_record_scope(&parent, &row_string(&row, 1)?)?;
+                }
+                let mut rows = conn
+                    .query(
+                        "select record_json, project_id from projects where project_id = ?1",
+                        (project.project_id.as_str(),),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                if let Some(row) = rows.next().await.map_err(turso_error)? {
+                    let existing: ProjectRecord = decode_json(row_string(&row, 0)?)?;
+                    crate::validate_project_record_scope(&existing, &row_string(&row, 1)?)?;
+                }
+                conn.execute(
+                    "insert into projects (
                     project_id, display_name, record_json, updated_at
                  )
                  values (?1, ?2, ?3, ?4)
@@ -976,17 +1045,19 @@ impl CatalogStore for TursoCatalogStore {
                     display_name = excluded.display_name,
                     record_json = excluded.record_json,
                     updated_at = excluded.updated_at",
-            (
-                project.project_id.as_str(),
-                project.display_name.as_deref(),
-                encode_json(&project)?,
-                project.updated_at.to_rfc3339(),
-            ),
-        )
+                    (
+                        project.project_id.as_str(),
+                        project.display_name.as_deref(),
+                        encode_json(&project)?,
+                        project.updated_at.to_rfc3339(),
+                    ),
+                )
+                .await
+                .map_err(turso_error)?;
+                Ok(project)
+            })
+        })
         .await
-        .map_err(turso_error)?;
-        tx.commit().await.map_err(turso_error)?;
-        Ok(project)
     }
 
     async fn list_projects(&self) -> LakeCatResult<Vec<ProjectRecord>> {
@@ -1009,48 +1080,48 @@ impl CatalogStore for TursoCatalogStore {
     }
 
     async fn upsert_warehouse(&self, warehouse: WarehouseRecord) -> LakeCatResult<WarehouseRecord> {
-        let _write = self.write_guard().await;
         warehouse.validate()?;
-        let mut conn = self.connect()?;
-        let tx = conn.transaction().await.map_err(turso_error)?;
-        {
-            let mut rows = tx
+        self.write_txn(move |conn| {
+            let warehouse = warehouse.clone();
+            Box::pin(async move {
+                {
+                    let mut rows = conn
                 .query(
                     "select record_json, project_id from projects where project_id = ?1 limit 1",
                     (warehouse.project_id.as_str(),),
                 )
                 .await
                 .map_err(turso_error)?;
-            let Some(row) = rows.next().await.map_err(turso_error)? else {
-                return Err(LakeCatError::NotFound {
-                    object: "project",
-                    name: warehouse.project_id.clone(),
-                });
-            };
-            let parent: ProjectRecord = decode_json(row_string(&row, 0)?)?;
-            crate::validate_project_record_scope(&parent, &row_string(&row, 1)?)?;
-        }
-        let mut rows = tx
-            .query(
-                "select record_json, warehouse, project_id, storage_root
+                    let Some(row) = rows.next().await.map_err(turso_error)? else {
+                        return Err(LakeCatError::NotFound {
+                            object: "project",
+                            name: warehouse.project_id.clone(),
+                        });
+                    };
+                    let parent: ProjectRecord = decode_json(row_string(&row, 0)?)?;
+                    crate::validate_project_record_scope(&parent, &row_string(&row, 1)?)?;
+                }
+                let mut rows = conn
+                    .query(
+                        "select record_json, warehouse, project_id, storage_root
                      from warehouses
                      where warehouse = ?1",
-                (warehouse.warehouse.as_str(),),
-            )
-            .await
-            .map_err(turso_error)?;
-        if let Some(row) = rows.next().await.map_err(turso_error)? {
-            let existing: WarehouseRecord = decode_json(row_string(&row, 0)?)?;
-            let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
-            crate::validate_warehouse_record_scope(
-                &existing,
-                &row_warehouse,
-                &row_string(&row, 2)?,
-                row_optional_string(&row, 3)?.as_deref(),
-            )?;
-        }
-        tx.execute(
-            "insert into warehouses (
+                        (warehouse.warehouse.as_str(),),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                if let Some(row) = rows.next().await.map_err(turso_error)? {
+                    let existing: WarehouseRecord = decode_json(row_string(&row, 0)?)?;
+                    let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
+                    crate::validate_warehouse_record_scope(
+                        &existing,
+                        &row_warehouse,
+                        &row_string(&row, 2)?,
+                        row_optional_string(&row, 3)?.as_deref(),
+                    )?;
+                }
+                conn.execute(
+                    "insert into warehouses (
                     warehouse, project_id, storage_root, record_json, updated_at
                  )
                  values (?1, ?2, ?3, ?4, ?5)
@@ -1059,18 +1130,20 @@ impl CatalogStore for TursoCatalogStore {
                     storage_root = excluded.storage_root,
                     record_json = excluded.record_json,
                     updated_at = excluded.updated_at",
-            (
-                warehouse.warehouse.as_str(),
-                warehouse.project_id.as_str(),
-                warehouse.storage_root.as_deref(),
-                encode_json(&warehouse)?,
-                warehouse.updated_at.to_rfc3339(),
-            ),
-        )
+                    (
+                        warehouse.warehouse.as_str(),
+                        warehouse.project_id.as_str(),
+                        warehouse.storage_root.as_deref(),
+                        encode_json(&warehouse)?,
+                        warehouse.updated_at.to_rfc3339(),
+                    ),
+                )
+                .await
+                .map_err(turso_error)?;
+                Ok(warehouse)
+            })
+        })
         .await
-        .map_err(turso_error)?;
-        tx.commit().await.map_err(turso_error)?;
-        Ok(warehouse)
     }
 
     async fn load_warehouse(&self, warehouse: &WarehouseName) -> LakeCatResult<WarehouseRecord> {
@@ -1184,64 +1257,64 @@ impl CatalogStore for TursoCatalogStore {
         view: ViewRecord,
         expected_view_version: Option<u64>,
     ) -> LakeCatResult<ViewRecord> {
-        let _write = self.write_guard().await;
         view.validate()?;
         if let Some(expected) = expected_view_version {
             validate_expected_view_version(expected)?;
         }
-        let mut conn = self.connect()?;
-        let tx = conn.transaction().await.map_err(turso_error)?;
-        let view_key = view_key(&view);
-        let principal = view.created.principal.clone();
-        let previous = tx
-            .query(
-                "select record_json, warehouse, namespace_path, view_name from views
+        self.write_txn(move |conn| {
+            let view = view.clone();
+            Box::pin(async move {
+                let view_key = view_key(&view);
+                let principal = view.created.principal.clone();
+                let previous = conn
+                    .query(
+                        "select record_json, warehouse, namespace_path, view_name from views
                      where view_key = ?1
                      limit 1",
-                (view_key.as_str(),),
-            )
-            .await
-            .map_err(turso_error)?
-            .next()
-            .await
-            .map_err(turso_error)?
-            .map(|row| {
-                let view = decode_json::<ViewRecord>(row_string(&row, 0)?)?;
-                let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
-                let row_namespace = row_string(&row, 2)?.parse::<Namespace>()?;
-                let row_view = TableName::new(row_string(&row, 3)?)?;
-                crate::validate_view_record_scope(
-                    &view,
-                    &row_warehouse,
-                    &row_namespace,
-                    &row_view,
-                )?;
-                Ok(view)
-            })
-            .transpose()?;
-        if let Some(expected) = expected_view_version {
-            require_expected_view_version(previous.as_ref(), expected)?;
-        }
-        let latest_receipt = latest_turso_view_receipt_evidence(
-            &tx,
-            view_key.as_str(),
-            &view.warehouse,
-            &view.namespace,
-            &view.name,
-        )
-        .await?;
-        let latest_receipt_version = latest_receipt
-            .as_ref()
-            .map(|(view_version, _)| *view_version);
-        let previous_receipt_hash = latest_receipt.map(|(_, receipt_hash)| receipt_hash);
-        let previous_view_version = previous
-            .as_ref()
-            .map(|view| view.view_version)
-            .or(latest_receipt_version);
-        let view =
-            view.with_next_version_after_history(previous.as_ref(), latest_receipt_version)?;
-        tx.execute(
-            "insert into views (
+                        (view_key.as_str(),),
+                    )
+                    .await
+                    .map_err(turso_error)?
+                    .next()
+                    .await
+                    .map_err(turso_error)?
+                    .map(|row| {
+                        let view = decode_json::<ViewRecord>(row_string(&row, 0)?)?;
+                        let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
+                        let row_namespace = row_string(&row, 2)?.parse::<Namespace>()?;
+                        let row_view = TableName::new(row_string(&row, 3)?)?;
+                        crate::validate_view_record_scope(
+                            &view,
+                            &row_warehouse,
+                            &row_namespace,
+                            &row_view,
+                        )?;
+                        Ok(view)
+                    })
+                    .transpose()?;
+                if let Some(expected) = expected_view_version {
+                    require_expected_view_version(previous.as_ref(), expected)?;
+                }
+                let latest_receipt = latest_turso_view_receipt_evidence(
+                    conn,
+                    view_key.as_str(),
+                    &view.warehouse,
+                    &view.namespace,
+                    &view.name,
+                )
+                .await?;
+                let latest_receipt_version = latest_receipt
+                    .as_ref()
+                    .map(|(view_version, _)| *view_version);
+                let previous_receipt_hash = latest_receipt.map(|(_, receipt_hash)| receipt_hash);
+                let previous_view_version = previous
+                    .as_ref()
+                    .map(|view| view.view_version)
+                    .or(latest_receipt_version);
+                let view = view
+                    .with_next_version_after_history(previous.as_ref(), latest_receipt_version)?;
+                conn.execute(
+                    "insert into views (
                     view_key, warehouse, namespace_path, view_name, dialect, record_json, updated_at
                  )
                  values (?1, ?2, ?3, ?4, ?5, ?6, ?7)
@@ -1249,55 +1322,57 @@ impl CatalogStore for TursoCatalogStore {
                     dialect = excluded.dialect,
                     record_json = excluded.record_json,
                     updated_at = excluded.updated_at",
-            (
-                view_key.as_str(),
-                view.warehouse.as_str(),
-                view.namespace.path().as_str(),
-                view.name.as_str(),
-                view.dialect.as_str(),
-                encode_json(&view)?,
-                view.updated_at.to_rfc3339(),
-            ),
-        )
-        .await
-        .map_err(turso_error)?;
-        let receipt = ViewVersionReceipt::upsert(
-            previous_view_version,
-            previous_receipt_hash,
-            &view,
-            principal,
-        )?;
-        let receipt_id = view_receipt_hash(&receipt)?;
-        let previous_view_version = receipt
-            .previous_view_version
-            .map(|version| checked_i64(version, "previous view version"))
-            .transpose()?;
-        tx.execute(
-            "insert into view_version_receipts (
+                    (
+                        view_key.as_str(),
+                        view.warehouse.as_str(),
+                        view.namespace.path().as_str(),
+                        view.name.as_str(),
+                        view.dialect.as_str(),
+                        encode_json(&view)?,
+                        view.updated_at.to_rfc3339(),
+                    ),
+                )
+                .await
+                .map_err(turso_error)?;
+                let receipt = ViewVersionReceipt::upsert(
+                    previous_view_version,
+                    previous_receipt_hash,
+                    &view,
+                    principal,
+                )?;
+                let receipt_id = view_receipt_hash(&receipt)?;
+                let previous_view_version = receipt
+                    .previous_view_version
+                    .map(|version| checked_i64(version, "previous view version"))
+                    .transpose()?;
+                conn.execute(
+                    "insert into view_version_receipts (
                     receipt_id, view_key, warehouse, namespace_path, view_name,
                     view_version, previous_view_version, operation, view_hash,
                     principal_json, receipt_json, recorded_at
                  )
                  values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
-            (
-                receipt_id.as_str(),
-                view_key.as_str(),
-                receipt.warehouse.as_str(),
-                receipt.namespace.path().as_str(),
-                receipt.name.as_str(),
-                checked_i64(receipt.view_version, "view version")?,
-                previous_view_version,
-                "upsert",
-                receipt.view_hash.as_str(),
-                encode_json(&receipt.principal)?,
-                encode_json(&receipt)?,
-                receipt.recorded_at.to_rfc3339(),
-            ),
-        )
+                    (
+                        receipt_id.as_str(),
+                        view_key.as_str(),
+                        receipt.warehouse.as_str(),
+                        receipt.namespace.path().as_str(),
+                        receipt.name.as_str(),
+                        checked_i64(receipt.view_version, "view version")?,
+                        previous_view_version,
+                        "upsert",
+                        receipt.view_hash.as_str(),
+                        encode_json(&receipt.principal)?,
+                        encode_json(&receipt)?,
+                        receipt.recorded_at.to_rfc3339(),
+                    ),
+                )
+                .await
+                .map_err(turso_error)?;
+                Ok(view)
+            })
+        })
         .await
-        .map_err(turso_error)?;
-        tx.commit().await.map_err(turso_error)?;
-        Ok(view)
     }
 
     async fn list_view_version_receipts(
@@ -1415,87 +1490,103 @@ impl CatalogStore for TursoCatalogStore {
         principal: Principal,
         expected_view_version: Option<u64>,
     ) -> LakeCatResult<ViewRecord> {
-        let _write = self.write_guard().await;
         if let Some(expected) = expected_view_version {
             validate_expected_view_version(expected)?;
         }
-        let mut conn = self.connect()?;
-        let view_key = view_key_parts(warehouse, namespace, view);
-        let tx = conn.transaction().await.map_err(turso_error)?;
-        let record = tx
-            .query(
-                "select record_json, warehouse, namespace_path, view_name from views
+        let warehouse = warehouse.clone();
+        let namespace = namespace.clone();
+        let view = view.clone();
+        self.write_txn(move |conn| {
+            let warehouse = warehouse.clone();
+            let namespace = namespace.clone();
+            let view = view.clone();
+            let principal = principal.clone();
+            Box::pin(async move {
+                let warehouse = &warehouse;
+                let namespace = &namespace;
+                let view = &view;
+                let view_key = view_key_parts(warehouse, namespace, view);
+                let record = conn
+                    .query(
+                        "select record_json, warehouse, namespace_path, view_name from views
                      where view_key = ?1
                      limit 1",
-                (view_key.as_str(),),
-            )
-            .await
-            .map_err(turso_error)?
-            .next()
-            .await
-            .map_err(turso_error)?
-            .map(|row| {
-                let view = decode_json::<ViewRecord>(row_string(&row, 0)?)?;
-                let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
-                let row_namespace = row_string(&row, 2)?.parse::<Namespace>()?;
-                let row_view = TableName::new(row_string(&row, 3)?)?;
-                crate::validate_view_record_scope(
-                    &view,
-                    &row_warehouse,
-                    &row_namespace,
-                    &row_view,
-                )?;
-                Ok(view)
-            })
-            .transpose()?
-            .ok_or_else(|| LakeCatError::NotFound {
-                object: "view",
-                name: view.as_str().to_string(),
-            })?;
-        if let Some(expected) = expected_view_version {
-            require_expected_view_version(Some(&record), expected)?;
-        }
-        let previous_receipt_hash =
-            latest_turso_view_receipt_hash(&tx, view_key.as_str(), warehouse, namespace, view)
+                        (view_key.as_str(),),
+                    )
+                    .await
+                    .map_err(turso_error)?
+                    .next()
+                    .await
+                    .map_err(turso_error)?
+                    .map(|row| {
+                        let view = decode_json::<ViewRecord>(row_string(&row, 0)?)?;
+                        let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
+                        let row_namespace = row_string(&row, 2)?.parse::<Namespace>()?;
+                        let row_view = TableName::new(row_string(&row, 3)?)?;
+                        crate::validate_view_record_scope(
+                            &view,
+                            &row_warehouse,
+                            &row_namespace,
+                            &row_view,
+                        )?;
+                        Ok(view)
+                    })
+                    .transpose()?
+                    .ok_or_else(|| LakeCatError::NotFound {
+                        object: "view",
+                        name: view.as_str().to_string(),
+                    })?;
+                if let Some(expected) = expected_view_version {
+                    require_expected_view_version(Some(&record), expected)?;
+                }
+                let previous_receipt_hash = latest_turso_view_receipt_hash(
+                    conn,
+                    view_key.as_str(),
+                    warehouse,
+                    namespace,
+                    view,
+                )
                 .await?;
-        let receipt = ViewVersionReceipt::drop(&record, previous_receipt_hash, principal)?;
-        let receipt_id = view_receipt_hash(&receipt)?;
-        let previous_view_version = receipt
-            .previous_view_version
-            .map(|version| checked_i64(version, "previous view version"))
-            .transpose()?;
-        tx.execute(
-            "delete from views where view_key = ?1",
-            (view_key.as_str(),),
-        )
-        .await
-        .map_err(turso_error)?;
-        tx.execute(
-            "insert into view_version_receipts (
+                let receipt = ViewVersionReceipt::drop(&record, previous_receipt_hash, principal)?;
+                let receipt_id = view_receipt_hash(&receipt)?;
+                let previous_view_version = receipt
+                    .previous_view_version
+                    .map(|version| checked_i64(version, "previous view version"))
+                    .transpose()?;
+                conn.execute(
+                    "delete from views where view_key = ?1",
+                    (view_key.as_str(),),
+                )
+                .await
+                .map_err(turso_error)?;
+                conn.execute(
+                    "insert into view_version_receipts (
                     receipt_id, view_key, warehouse, namespace_path, view_name,
                     view_version, previous_view_version, operation, view_hash,
                     principal_json, receipt_json, recorded_at
                  )
                  values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
-            (
-                receipt_id.as_str(),
-                view_key.as_str(),
-                receipt.warehouse.as_str(),
-                receipt.namespace.path().as_str(),
-                receipt.name.as_str(),
-                checked_i64(receipt.view_version, "view version")?,
-                previous_view_version,
-                "drop",
-                receipt.view_hash.as_str(),
-                encode_json(&receipt.principal)?,
-                encode_json(&receipt)?,
-                receipt.recorded_at.to_rfc3339(),
-            ),
-        )
+                    (
+                        receipt_id.as_str(),
+                        view_key.as_str(),
+                        receipt.warehouse.as_str(),
+                        receipt.namespace.path().as_str(),
+                        receipt.name.as_str(),
+                        checked_i64(receipt.view_version, "view version")?,
+                        previous_view_version,
+                        "drop",
+                        receipt.view_hash.as_str(),
+                        encode_json(&receipt.principal)?,
+                        encode_json(&receipt)?,
+                        receipt.recorded_at.to_rfc3339(),
+                    ),
+                )
+                .await
+                .map_err(turso_error)?;
+                Ok(record)
+            })
+        })
         .await
-        .map_err(turso_error)?;
-        tx.commit().await.map_err(turso_error)?;
-        Ok(record)
     }
 
     async fn list_views(
@@ -1526,34 +1617,36 @@ impl CatalogStore for TursoCatalogStore {
     }
 
     async fn record_audit_event(&self, event: CatalogAuditEvent) -> LakeCatResult<()> {
-        let _write = self.write_guard().await;
         event.validate_recordable()?;
-        let mut conn = self.connect()?;
-        let tx = conn.transaction().await.map_err(turso_error)?;
-        let event_id = crate::audit_event_id(&event)?;
-        tx.execute(
-            "insert into audit_events (
+        self.write_txn(move |conn| {
+            let event = event.clone();
+            Box::pin(async move {
+                let event_id = crate::audit_event_id(&event)?;
+                conn.execute(
+                    "insert into audit_events (
                     event_id, event_type, table_key, principal_json,
                     request_hash, event_json, created_at
                  )
                  values (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            (
-                event_id.as_str(),
-                event.event_type.as_str(),
-                event.table.as_ref().map(table_key),
-                encode_json(&event.principal)?,
-                event.request_hash.as_deref(),
-                encode_json(&event.payload)?,
-                event.created_at.to_rfc3339(),
-            ),
-        )
-        .await
-        .map_err(turso_error)?;
+                    (
+                        event_id.as_str(),
+                        event.event_type.as_str(),
+                        event.table.as_ref().map(table_key),
+                        encode_json(&event.principal)?,
+                        event.request_hash.as_deref(),
+                        encode_json(&event.payload)?,
+                        event.created_at.to_rfc3339(),
+                    ),
+                )
+                .await
+                .map_err(turso_error)?;
 
-        let outbox_payload = crate::audit_outbox_payload(&event_id, &event);
-        tx_insert_outbox_event(&tx, &outbox_payload, event.created_at).await?;
-        tx.commit().await.map_err(turso_error)?;
-        Ok(())
+                let outbox_payload = crate::audit_outbox_payload(&event_id, &event);
+                insert_outbox_event(conn, &outbox_payload, event.created_at).await?;
+                Ok(())
+            })
+        })
+        .await
     }
 
     async fn pending_outbox_events(
@@ -1597,62 +1690,64 @@ impl CatalogStore for TursoCatalogStore {
     }
 
     async fn mark_outbox_delivered(&self, event_ids: &[String]) -> LakeCatResult<usize> {
-        let _write = self.write_guard().await;
         if event_ids.is_empty() {
             return Ok(0);
         }
         for event_id in event_ids {
             crate::validate_outbox_event_id_shape(event_id)?;
         }
-        let event_ids = event_ids.iter().collect::<BTreeSet<_>>();
-        let mut conn = self.connect()?;
-        let tx = conn.transaction().await.map_err(turso_error)?;
-        let delivered_at = Utc::now().to_rfc3339();
-        let mut validated_event_ids = Vec::new();
-        for event_id in event_ids {
-            let mut rows = tx
-                .query(
-                    "select event_id, sink, event_type, payload_json, created_at, delivered_at
+        let event_ids = event_ids.iter().cloned().collect::<BTreeSet<String>>();
+        self.write_txn(move |conn| {
+            let event_ids = event_ids.clone();
+            Box::pin(async move {
+                let delivered_at = Utc::now().to_rfc3339();
+                let mut validated_event_ids = Vec::new();
+                for event_id in &event_ids {
+                    let mut rows = conn
+                        .query(
+                            "select event_id, sink, event_type, payload_json, created_at, delivered_at
                          from outbox_events
                          where event_id = ?1 and delivered_at is null",
-                    (event_id.as_str(),),
-                )
-                .await
-                .map_err(turso_error)?;
-            let Some(row) = rows.next().await.map_err(turso_error)? else {
-                continue;
-            };
-            let event = outbox_event_from_row(&row)?;
-            event.validate_pending()?;
-            validated_event_ids.push(event_id);
-        }
-        let mut delivered = 0usize;
-        for event_id in validated_event_ids {
-            let changed = tx
-                .execute(
-                    "update outbox_events
+                            (event_id.as_str(),),
+                        )
+                        .await
+                        .map_err(turso_error)?;
+                    let Some(row) = rows.next().await.map_err(turso_error)? else {
+                        continue;
+                    };
+                    let event = outbox_event_from_row(&row)?;
+                    event.validate_pending()?;
+                    validated_event_ids.push(event_id);
+                }
+                let mut delivered = 0usize;
+                for event_id in validated_event_ids {
+                    let changed = conn
+                        .execute(
+                            "update outbox_events
                          set delivered_at = ?2
                          where event_id = ?1 and delivered_at is null",
-                    (event_id.as_str(), delivered_at.as_str()),
-                )
-                .await
-                .map_err(turso_error)?;
-            delivered += changed as usize;
-        }
-        tx.commit().await.map_err(turso_error)?;
-        Ok(delivered)
+                            (event_id.as_str(), delivered_at.as_str()),
+                        )
+                        .await
+                        .map_err(turso_error)?;
+                    delivered += changed as usize;
+                }
+                Ok(delivered)
+            })
+        })
+        .await
     }
 
     async fn upsert_storage_profile(
         &self,
         profile: StorageProfile,
     ) -> LakeCatResult<StorageProfile> {
-        let _write = self.write_guard().await;
         profile.validate()?;
-        let mut conn = self.connect()?;
-        let tx = conn.transaction().await.map_err(turso_error)?;
+        self.write_txn(move |conn| {
+            let profile = profile.clone();
+            Box::pin(async move {
         let profile_key = storage_profile_key(&profile.warehouse, &profile.profile_id);
-        let mut rows = tx
+        let mut rows = conn
                 .query(
                     "select profile_json, profile_key, profile_id, location_prefix, provider, issuance_mode
                      from storage_profiles
@@ -1673,7 +1768,7 @@ impl CatalogStore for TursoCatalogStore {
                 &row_string(&row, 5)?,
             )?;
         }
-        tx.execute(
+        conn.execute(
             "insert into storage_profiles (
                     profile_key, profile_id, warehouse, location_prefix,
                     provider, issuance_mode, profile_json, updated_at
@@ -1698,8 +1793,10 @@ impl CatalogStore for TursoCatalogStore {
         )
         .await
         .map_err(turso_error)?;
-        tx.commit().await.map_err(turso_error)?;
         Ok(profile)
+            })
+        })
+        .await
     }
 
     async fn list_storage_profiles(
@@ -1744,33 +1841,33 @@ impl CatalogStore for TursoCatalogStore {
     }
 
     async fn upsert_policy_binding(&self, binding: PolicyBinding) -> LakeCatResult<PolicyBinding> {
-        let _write = self.write_guard().await;
         binding.validate()?;
-        let mut conn = self.connect()?;
-        let tx = conn.transaction().await.map_err(turso_error)?;
-        let policy_key = policy_binding_key(&binding.warehouse, &binding.policy_id);
-        let mut rows = tx
-            .query(
-                "select binding_json, policy_id, namespace_path, table_name, enforced
+        self.write_txn(move |conn| {
+            let binding = binding.clone();
+            Box::pin(async move {
+                let policy_key = policy_binding_key(&binding.warehouse, &binding.policy_id);
+                let mut rows = conn
+                    .query(
+                        "select binding_json, policy_id, namespace_path, table_name, enforced
                      from policy_bindings
                      where policy_key = ?1",
-                (policy_key.as_str(),),
-            )
-            .await
-            .map_err(turso_error)?;
-        if let Some(row) = rows.next().await.map_err(turso_error)? {
-            let existing: PolicyBinding = decode_json(row_string(&row, 0)?)?;
-            crate::validate_policy_binding_scope(
-                &existing,
-                &binding.warehouse,
-                row_string(&row, 1)?.as_str(),
-                row_optional_string(&row, 2)?.as_deref(),
-                row_optional_string(&row, 3)?.as_deref(),
-                row_i64(&row, 4)? != 0,
-            )?;
-        }
-        tx.execute(
-            "insert into policy_bindings (
+                        (policy_key.as_str(),),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                if let Some(row) = rows.next().await.map_err(turso_error)? {
+                    let existing: PolicyBinding = decode_json(row_string(&row, 0)?)?;
+                    crate::validate_policy_binding_scope(
+                        &existing,
+                        &binding.warehouse,
+                        row_string(&row, 1)?.as_str(),
+                        row_optional_string(&row, 2)?.as_deref(),
+                        row_optional_string(&row, 3)?.as_deref(),
+                        row_i64(&row, 4)? != 0,
+                    )?;
+                }
+                conn.execute(
+                    "insert into policy_bindings (
                     policy_key, policy_id, warehouse, namespace_path, table_name,
                     enforced, binding_json, updated_at
                  )
@@ -1781,21 +1878,23 @@ impl CatalogStore for TursoCatalogStore {
                     enforced = excluded.enforced,
                     binding_json = excluded.binding_json,
                     updated_at = excluded.updated_at",
-            (
-                policy_key.as_str(),
-                binding.policy_id.as_str(),
-                binding.warehouse.as_str(),
-                binding.namespace.as_ref().map(Namespace::path),
-                binding.table.as_ref().map(TableName::as_str),
-                if binding.enforced { 1_i64 } else { 0_i64 },
-                encode_json(&binding)?,
-                binding.updated_at.to_rfc3339(),
-            ),
-        )
+                    (
+                        policy_key.as_str(),
+                        binding.policy_id.as_str(),
+                        binding.warehouse.as_str(),
+                        binding.namespace.as_ref().map(Namespace::path),
+                        binding.table.as_ref().map(TableName::as_str),
+                        if binding.enforced { 1_i64 } else { 0_i64 },
+                        encode_json(&binding)?,
+                        binding.updated_at.to_rfc3339(),
+                    ),
+                )
+                .await
+                .map_err(turso_error)?;
+                Ok(binding)
+            })
+        })
         .await
-        .map_err(turso_error)?;
-        tx.commit().await.map_err(turso_error)?;
-        Ok(binding)
     }
 
     async fn list_policy_bindings(
@@ -2031,13 +2130,13 @@ fn row_i64(row: &Row, idx: usize) -> LakeCatResult<i64> {
 }
 
 async fn latest_turso_view_receipt_evidence(
-    tx: &turso::transaction::Transaction<'_>,
+    conn: &Connection,
     view_key: &str,
     warehouse: &WarehouseName,
     namespace: &Namespace,
     view: &TableName,
 ) -> LakeCatResult<Option<(u64, String)>> {
-    let mut rows = tx
+    let mut rows = conn
         .query(
             "select receipt_json, warehouse, namespace_path, view_name from view_version_receipts
              where view_key = ?1
@@ -2065,13 +2164,13 @@ async fn latest_turso_view_receipt_evidence(
 }
 
 async fn latest_turso_view_receipt_hash(
-    tx: &turso::transaction::Transaction<'_>,
+    conn: &Connection,
     view_key: &str,
     warehouse: &WarehouseName,
     namespace: &Namespace,
     view: &TableName,
 ) -> LakeCatResult<Option<String>> {
-    latest_turso_view_receipt_evidence(tx, view_key, warehouse, namespace, view)
+    latest_turso_view_receipt_evidence(conn, view_key, warehouse, namespace, view)
         .await
         .map(|evidence| evidence.map(|(_, hash)| hash))
 }
@@ -2210,12 +2309,12 @@ fn parse_turso_datetime(value: String, name: &str) -> LakeCatResult<chrono::Date
         .map_err(|err| LakeCatError::Internal(format!("failed to parse {name} timestamp: {err}")))
 }
 
-async fn tx_insert_outbox_event(
-    tx: &turso::transaction::Transaction<'_>,
+async fn insert_outbox_event(
+    conn: &Connection,
     payload: &JsonValue,
     created_at: chrono::DateTime<Utc>,
 ) -> LakeCatResult<()> {
-    tx.execute(
+    conn.execute(
         "insert into outbox_events (
                 event_id, sink, event_type, payload_json, created_at
              )
@@ -2239,6 +2338,59 @@ fn is_unique_violation(err: &turso::Error) -> bool {
 
 fn turso_error(err: turso::Error) -> LakeCatError {
     LakeCatError::Internal(format!("Turso catalog store error: {err}"))
+}
+
+/// The future returned by a [`TursoCatalogStore::write_txn`] body for a given
+/// connection borrow `'c`. Boxed + `Send` so the retry loop can re-invoke the
+/// body and the enclosing `#[async_trait]` method future stays `Send`.
+type WriteTxnFuture<'c, T> = Pin<Box<dyn Future<Output = LakeCatResult<T>> + Send + 'c>>;
+
+/// Bounded attempts for a write transaction that loses an MVCC write-write
+/// conflict (or hits a transient `Busy`) at commit. This only bounds livelock:
+/// a genuine same-row logical race converges to the metadata-pointer CAS
+/// `Conflict` within a couple of attempts.
+const WRITE_TXN_MAX_ATTEMPTS: u32 = 8;
+
+/// Best-effort per-connection pragmas for write transactions. `journal_mode`
+/// returns a row, so `execute_batch` reports it as an error even though the mode
+/// is applied; ignore it (as the prior WAL path always did). `busy_timeout`
+/// bounds how long a connection waits on a contended page before erroring.
+async fn apply_write_pragmas(conn: &Connection) {
+    let _ = conn.execute_batch("PRAGMA journal_mode=mvcc;").await;
+    let _ = conn.execute_batch("PRAGMA busy_timeout=10000;").await;
+}
+
+/// True for the raw `turso::Error`s that a `BEGIN CONCURRENT` commit raises when
+/// it loses an MVCC write-write race or hits transient contention — all safe to
+/// retry on a fresh snapshot.
+fn is_retryable_conflict(err: &turso::Error) -> bool {
+    matches!(err, turso::Error::Busy(_) | turso::Error::BusySnapshot(_))
+        || matches!(
+            err,
+            turso::Error::Error(message)
+                if message.contains("Write-write conflict")
+                    || message.contains("Commit dependency aborted")
+        )
+}
+
+/// True for a `LakeCatError` that wraps a retryable MVCC conflict surfaced mid-
+/// body (every error goes through `turso_error` -> `Internal`, so match on the
+/// preserved Display text). The unique-violation `Conflict` is deliberately NOT
+/// matched — it is a terminal logical conflict, not a retryable race.
+fn is_retryable_lakecat(err: &LakeCatError) -> bool {
+    matches!(
+        err,
+        LakeCatError::Internal(message)
+            if message.contains("Write-write conflict")
+                || message.contains("Commit dependency aborted")
+    )
+}
+
+async fn backoff(attempt: u32) {
+    // Exponential and capped: 2, 4, 8, ... 64ms. Small enough for tests, enough
+    // to de-correlate retries of a genuinely contended commit.
+    let millis = 1u64 << attempt.min(6);
+    tokio::time::sleep(std::time::Duration::from_millis(millis)).await;
 }
 
 #[cfg(test)]
