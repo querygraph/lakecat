@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Synced `Cargo.lock` with the current sibling dependency graph (dropped the
+  unused `arrow-pyarrow`/`pyo3` chain, bumped `jiter`), reflecting upstream Sail
+  and Grust path-dependency resolution.
 - Rebuilt and published corrected book artifacts for current source head
   `bbdaa0bb`, producing the versioned EPUB link
   `lakecat (0.1.1-bbdaa0bb).epub` with fixed chapter numbering.
