@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `lakecat-sail`: removed a dead import so the default build is warning-clean.
 - Synced `Cargo.lock` with the current sibling dependency graph (dropped the
   unused `arrow-pyarrow`/`pyo3` chain, bumped `jiter`), reflecting upstream Sail
   and Grust path-dependency resolution.

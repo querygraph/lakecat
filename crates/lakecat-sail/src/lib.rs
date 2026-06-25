@@ -8,8 +8,6 @@ pub use lakecat_core::sail::{
     validate_lakecat_metadata_format,
 };
 
-use lakecat_core::{LakeCatResult, Principal, TableIdent};
-
 #[cfg(feature = "catalog-provider")]
 pub mod catalog_provider {
     use std::sync::Arc;
@@ -2731,14 +2729,13 @@ pub mod sail_integration {
                         .unwrap_or(0);
                     apply_table_updates(&mut metadata, &typed_updates, now_ms)
                         .map_err(|err| LakeCatError::InvalidArgument(err.to_string()))?;
-                    let new_metadata: Value = serde_json::from_slice(
-                        &metadata.to_json().map_err(|err| {
+                    let new_metadata: Value =
+                        serde_json::from_slice(&metadata.to_json().map_err(|err| {
                             LakeCatError::Internal(format!(
                                 "failed to serialize updated table metadata: {err}"
                             ))
-                        })?,
-                    )
-                    .map_err(|err| LakeCatError::Internal(err.to_string()))?;
+                        })?)
+                        .map_err(|err| LakeCatError::Internal(err.to_string()))?;
                     let location = next_metadata_location(&metadata.location, now_ms);
                     (new_metadata, Some(location), true)
                 } else {
