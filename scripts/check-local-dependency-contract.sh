@@ -227,11 +227,11 @@ require_pattern 'grust_turso_store' scripts/check-release-readiness.sh \
   "release-readiness gate must run the Grust Turso graph persistence, traversal, and Cypher tests"
 require_pattern 'grust_turso_store_runs_cypher_over_lakecat_catalog_projection_boundary' scripts/check-release-readiness.sh \
   "release-readiness gate must keep the explicit Grust Turso Cypher projection row"
-require_pattern 'grust_turso_store_runs_cypher_over_lakecat_catalog_projection_boundary' crates/lakecat-graph/src/lib.rs \
+require_pattern 'grust_turso_store_runs_cypher_over_lakecat_catalog_projection_boundary' crates/lakecat-graph/src/grust_integration/tests.rs \
   "LakeCat graph tests must prove Grust Cypher over the Turso-backed catalog projection"
 require_pattern 'grust_turso_store_patches_lakecat_catalog_projection_nodes' scripts/check-release-readiness.sh \
   "release-readiness gate must prove Grust Turso matched-node patches over LakeCat catalog projection nodes"
-require_pattern 'grust_turso_store_patches_lakecat_catalog_projection_nodes' crates/lakecat-graph/src/lib.rs \
+require_pattern 'grust_turso_store_patches_lakecat_catalog_projection_nodes' crates/lakecat-graph/src/grust_integration/tests.rs \
   "LakeCat graph tests must prove Grust Turso matched-node patches stay in Grust"
 forbid_pattern '(^|[^[:alnum:]_])turso::' crates/lakecat-graph/src/lib.rs \
   "lakecat-graph must not use the Turso crate directly; durable graph persistence belongs in Grust grust-turso"
@@ -346,7 +346,7 @@ require_pattern 'grust-turso-local = \["grust-local", "dep:grust-turso"\]' crate
   "lakecat-graph must expose Turso-backed Grust projection behind an explicit feature"
 require_pattern 'grust_turso::TursoGraphStore' crates/lakecat-service/src/main.rs \
   "lakecat-service must configure Turso graph projection through the dedicated grust-turso crate"
-require_pattern 'grust_turso::TursoGraphStore' crates/lakecat-graph/src/lib.rs \
+require_pattern 'grust_turso::TursoGraphStore' crates/lakecat-graph/src/grust_integration/tests.rs \
   "LakeCat graph tests must exercise the dedicated grust-turso backend crate"
 lakecat_graph_turso_tree="$tmpdir/lakecat-graph-turso-tree.txt"
 cargo tree -p lakecat-graph --features grust-turso-local -i turso > "$lakecat_graph_turso_tree"

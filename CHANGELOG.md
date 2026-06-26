@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Reconciled the dependency-contract gate with the human-reviewability refactor:
+  the three `crates/lakecat-graph/src/lib.rs` assertions for the Grust-Turso Cypher
+  projection tests (`grust_turso_store_runs_cypher_over_lakecat_catalog_projection_boundary`,
+  `grust_turso_store_patches_lakecat_catalog_projection_nodes`, and the
+  `grust_turso::TursoGraphStore` exercise) now point at
+  `crates/lakecat-graph/src/grust_integration/tests.rs`, where the refactor moved
+  those tests. Intent unchanged; the graph prod code (`grust_integration/mod.rs`)
+  uses only the dedicated `grust_turso` crate, no raw `turso::`.
 - Split `lakecat-cli`'s `fixture.rs` (4,245 lines) into a `fixture/` directory of
   nine topic modules (behavior-preserving): `setup`, `bootstrap`, `listings`,
   `scan`, `credentials`, `lineage`, `replay`, `management`, `writers` (each ≤ 721
