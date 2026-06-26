@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Split `lakecat-cli`'s `fixture.rs` (4,245 lines) into a `fixture/` directory of
+  nine topic modules (behavior-preserving): `setup`, `bootstrap`, `listings`,
+  `scan`, `credentials`, `lineage`, `replay`, `management`, `writers` (each ≤ 721
+  lines). Items were extracted verbatim with their per-item cfg attributes; each
+  module re-uses `use crate::*` (the file's only import). `fixture/mod.rs` gates
+  each `mod`/re-export with the union of its items' cfg conditions so the default
+  build sees no empty modules. Verified: 492 default + 499 `qglake-fixture` tests
+  pass (== baseline); both builds warning-free; fmt clean.
 - Split `lakecat-store`'s root `lib.rs` (3,802 → 285 lines) into focused modules
   (behavior-preserving): `records.rs` (record types + validation), `memory.rs`
   (`MemoryCatalogStore`), and `helpers.rs` (free helpers); `lib.rs` now holds the
