@@ -50,7 +50,7 @@ lakecat-store = { path = "crates/lakecat-store", version = "0.2.0" }
 
 grust-graph = { package = "grust-graph", version = "0.11.0", default-features = false }
 grust-turso = { package = "grust-turso", version = "0.11.0", default-features = false }
-typesec = { version = "0.10.0", default-features = false }
+typesec = { version = "0.11.0", default-features = false }
 sail-catalog = { git = "https://github.com/querygraph/sail.git", branch = "lakecat" }
 sail-catalog-iceberg = { git = "https://github.com/querygraph/sail.git", branch = "lakecat" }
 sail-common-datafusion = { git = "https://github.com/querygraph/sail.git", branch = "lakecat" }

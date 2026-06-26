@@ -2,12 +2,12 @@
 
 ## Unreleased
 
-- Deps: update TypeSec to the published **0.10.0** crates (from 0.8.0). TypeSec
-  0.10.0 depends on Grust 0.11.0 — the same line LakeCat uses — so this **unifies
-  Grust on a single 0.11.0 version**, dropping the leftover `grust 0.9.1` copy that
-  `typesec-rbac 0.8.0` previously dragged in. Verified: 25 `lakecat-security` +
-  465 `lakecat-service` typesec-local governance tests pass; dependency contract
-  intact. Bumped the contract's typesec assertions 0.8.0 → 0.10.0.
+- Deps: update TypeSec to the published **0.11.0 (Burano)** crates (from 0.8.0).
+  TypeSec 0.11.0 depends on Grust 0.11.0 — the same line LakeCat uses — so this
+  **unifies Grust on a single 0.11.0 version**, dropping the leftover `grust 0.9.1`
+  copy that `typesec-rbac 0.8.0` previously dragged in. Verified: 25
+  `lakecat-security` + 465 `lakecat-service` typesec-local governance tests pass.
+  Bumped the contract's typesec assertions 0.8.0 → 0.11.0.
 - Build: depend on the **published Grust 0.11.0 crates** from crates.io
   (`grust-graph`, `grust-turso`) instead of a git/path dependency. Grust merged its
   `turso-mvcc` work (the `BEGIN CONCURRENT` MVCC backend) to main and cut the 0.11.0

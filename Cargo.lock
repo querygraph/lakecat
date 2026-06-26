@@ -7424,9 +7424,9 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "typesec"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3e460e1e0442ba75b9f5a3ae1e53b8e627ac36fd9d149da5f4e67128b60b204"
+checksum = "964cfa679b8797edfbada93144e5eee543e0f47f3ae43a1161b011cd36691ee7"
 dependencies = [
  "typesec-core",
  "typesec-integrations",
@@ -7435,11 +7435,12 @@ dependencies = [
 
 [[package]]
 name = "typesec-core"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e71fb751330c6bf76c0cae2774ebc76a0ef2ee6abdf981591f46c2b28a56fe06"
+checksum = "015ddfd57ca348d4d92d6c52b42b259b0115384b33be1533596616f8a96946a0"
 dependencies = [
  "chrono",
+ "glob",
  "thiserror",
  "tracing",
  "zeroize",
@@ -7447,9 +7448,9 @@ dependencies = [
 
 [[package]]
 name = "typesec-integrations"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38392c4f6b39306d1830e7cf0f12d3fc0deec6cd558011a6d24ae712238cf868"
+checksum = "c2681790ceabb38cabf0383425e7dc9e2cb908bb99947ace85caca88e50789e6"
 dependencies = [
  "chacha20poly1305",
  "chrono",
@@ -7468,9 +7469,9 @@ dependencies = [
 
 [[package]]
 name = "typesec-rbac"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82719b3ba58b0bd75a2dea66cfdbc86ee1a87d5e7aa4dfc5a6ca8030c0e49f99"
+checksum = "7e96beeedcd127dc4de33386663315a747759a7dcb80f0effcfc891df1e5ea32"
 dependencies = [
  "garde",
  "glob",
