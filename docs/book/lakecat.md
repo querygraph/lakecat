@@ -1701,7 +1701,9 @@ active proof references, but it allows the current clean `HEAD` to become the
 next proof commit. After the heavy gate passes, the follow-up documentation and
 book artifact refresh records that new proof commit.
 
-The already-published `v0.1.0` tag is a baseline, not something to move. While
+The already-published `v0.1.0` tag is a baseline, not something to move.
+The already-published `v0.2.0` tag is a baseline, not something to move either.
+While
 the workspace version remains `0.1.0` and `HEAD` is past `v0.1.0`, post-tag
 hardening stays under `Unreleased`. The release version contract checks that
 shape directly so a follow-up proof commit cannot accidentally look like a

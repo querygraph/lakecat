@@ -193,6 +193,8 @@ of truth yet.
 ## Tagging
 
 For the already-published `v0.1.0` baseline, do not run another tag command.
+For the already-published `v0.2.0` baseline, do not run another tag command
+either — both `v0.1.0` (Bobcat) and `v0.2.0` (Lynx) are fixed published tags.
 Post-`v0.1.0` hardening should keep changes under `Unreleased` until the
 workspace version moves forward. The release version contract enforces that
 post-tag state: if `v$workspace_version` already exists and `HEAD` is past that
