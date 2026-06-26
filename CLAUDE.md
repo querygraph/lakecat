@@ -1,21 +1,31 @@
 # LakeCat — agent context
 
 Rust-native, Iceberg-compatible **REST catalog foundation** for QueryGraph
-(workspace `0.1.1`, edition 2024). The catalog boundary is deliberately **thin**:
+(workspace `0.2.0`, edition 2024). The catalog boundary is deliberately **thin**:
 identity/tenancy, Iceberg REST compatibility, metadata-pointer state, policy
 gates, and integration events live here; reusable semantics are pushed to
-siblings — **Sail** (`../sail`: Iceberg format/scan/pruning/engine), **Grust**
-(`../grust`: graph), **TypeSec** (`../typesec`, published `0.8.0`:
-governance/policy/receipts), **QueryGraph** (`../querygraph`: end-to-end target).
+siblings — **Sail** (Iceberg format/scan/pruning/engine; consumed as a **git dep**
+on `querygraph/sail#lakecat`, see below), **Grust** (`../grust`: graph), **TypeSec**
+(`../typesec`, published `0.8.0`: governance/policy/receipts), **QueryGraph**
+(`../querygraph`: end-to-end target).
 
 **Binding guidance:** `AGENTS.md`, `GOAL.md`, `DESIGN.md` (living design surface).
-This file records the state of a **full project + book review (2026-06-25)** and
-the **human-reviewability refactor** that follows from it. Don't duplicate
-AGENTS.md/GOAL.md — read them first.
+Don't duplicate AGENTS.md/GOAL.md — read them first.
 
-> **Live state:** see **SESSION CHECKPOINT** immediately below. The
-> "Build & verification status (as of 2026-06-25 review)" section further down is
-> the *review-time* snapshot; the checkpoint supersedes it for current state.
+> ## 🟢 CURRENT STATE — v0.2.0 (Lynx) released (2026-06-26)
+> The human-reviewability refactor is **complete** (no monolithic source files;
+> tests in separate files) and **v0.2.0 (Lynx) is tagged + pushed** to
+> `origin` (`querygraph/lakecat`) at `master`/`f503c528`. Headline changes this
+> release: (1) the refactor; (2) **Sail switched from `../sail` path deps to a
+> Cargo git dependency on `querygraph/sail#lakecat`** with the `ci/sail-patches`
+> bridge **retired**; (3) book + release-gate reconciliation; (4) workspace
+> `0.1.1 → 0.2.0`. The full `scripts/check-release-readiness.sh --release-candidate`
+> gate passed from clean head **`6f5c1739`** (proof ref); release-note commits on
+> top are docs-only. All version/proof/dependency contracts green.
+>
+> The detailed **SESSION CHECKPOINT** below is the prior refactor-in-progress
+> log (now done); the "Build & verification status (2026-06-25 review)" section is
+> the original review snapshot. Both are historical context superseded by this note.
 
 ---
 
