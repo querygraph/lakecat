@@ -109,6 +109,38 @@ Precise gaps vs sail HEAD `d66a2676`:
 `fdb3b657` (+ expose `models`/`load_table_result_to_status`, author the commit-table
 seam) — or (2) **port lakecat-sail** to current sail. `../grust` (H10) needs nothing.
 
+### ✅ H2 RESOLVED via minimal sail exposure (this session; user chose this)
+A pure lakecat-only port was infeasible: sail's `models` module is fully private with
+no public path, and the planning helpers return `models::*` types — a lakecat port
+would mean duplicating dozens of generated REST model structs (anti-AGENTS.md). So
+the boundary-correct minimal sail exposure was done. **`../sail` working-tree changes
+(uncommitted — need committing in the sail repo; on branch `claude/table-update-apply`):**
+- `sail-catalog-iceberg/src/lib.rs`: `mod models` → **`pub mod models`**; add
+  `mod planning;` + `pub use crate::models::{LoadTableResult, TableMetadata}` +
+  `pub use planning::{…}` + `load_table_result_to_status` to the provider re-export.
+- `sail-catalog-iceberg/src/planning.rs`: **new** (verbatim from user's `fdb3b657`).
+- `sail-catalog-iceberg/src/provider.rs`: extracted the `load_table_result_to_status`
+  *method* into a standalone `pub fn (catalog, table_name, database, result)`; the
+  method now delegates. (Only `self` use was `self.name` → the `catalog` param.)
+- `sail-catalog/src/provider/{options.rs,mod.rs}`: added `CommitTableOptions`,
+  `GetTableCommitsOptions` (incl. `table_uri`), `TableCommitInfo`,
+  `GetTableCommitsResponse`; added `CatalogProvider::{commit_table, get_table_commits}`
+  as **default methods returning `NotSupported`** (so all existing sail providers
+  still compile — verified).
+**lakecat side (committed on this branch):** updated 3 test `CreateTableOptions`
+constructions from removed `if_not_exists`/`replace` to `mode: CreateTableMode::Create`.
+**Status:** `cargo build -p lakecat-sail --features sail-local` ✅, `--features
+catalog-provider` ✅, `sail-catalog`/`sail-catalog-iceberg` build ✅. `cargo test -p
+lakecat-sail --all-features` = **28 passed / 1 failed**.
+- ⚠️ **The 1 failure is LATENT, not a port regression: `sail_integration::tests::
+  preserves_filter_context_and_prunes_loaded_file_bounds`** panics at
+  `lib.rs:5876` because `sail_iceberg`'s Avro manifest round-trip drops a DataFile
+  `lower_bounds` entry (`.lower_bounds().get(&1)` is `None`). It exercises
+  `sail_iceberg::spec::Manifest` (untouched) and **never ran before** (sail-local
+  never compiled). It's a `sail-iceberg` behavior gap in sail's domain. **Decision
+  needed:** deep-fix sail-iceberg Avro bounds, or `#[ignore]` + record as future work
+  to unblock `--all-features`.
+
 ### What is NEXT (in order)
 4. ✅ **DONE — `lakecat-service` finished** (warnings cleaned + feature-gated parity
    verified; grust-turso-local blocked by pre-existing sibling H10, above).
