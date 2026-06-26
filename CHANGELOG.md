@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Refactored the remaining crates for human-reviewability (behavior-preserving):
+  moved every inline `#[cfg(test)] mod tests` into a separate `tests.rs`, and split
+  the feature-gated integration modules into directory modules with their own test
+  files — `lakecat-sail` (`lib.rs` 6,388 → 15 lines; `catalog_provider/` and
+  `sail_integration/` each `mod.rs` + `tests.rs`), `lakecat-graph`
+  (`grust_integration/`), `lakecat-security` (`typesec_integration/`), plus
+  `lakecat-api`/`lakecat-lineage`/`lakecat-querygraph` test extraction. All
+  `#[test]` counts preserved (api 3, lineage 6, querygraph 13, graph 35, security
+  25, sail 29); default + `grust-local`/`typesec-local`/`sail-local`/
+  `catalog-provider` builds green; fmt clean.
 - `lakecat-store`: enabled concurrent catalog writes on the Turso backend via MVCC.
   Write transactions now run under `PRAGMA journal_mode=mvcc` with an explicit
   `BEGIN CONCURRENT` (an empirical spike confirmed the binding's typed

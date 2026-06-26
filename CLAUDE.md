@@ -307,10 +307,27 @@ concurrently; a same-row race yields exactly one winner and the loser gets
 6. **Turso MVCC concurrent writes** (the user's explicit request — see full spec in
    "Turso MVCC" section below). Do this AFTER step 5 so it lands on the `write_txn`
    helper.
-7. **Refactor remaining crates** `sail` (~6.4k), `security` (~2.2k), `querygraph`
-   (~2.4k), `graph` (~1.4k), `lineage` (~1.0k), `core` (~0.6k), `api` (~0.85k):
-   split where large, move all `#[cfg(test)]` modules into separate files, DRY.
-   (`sail`'s feature paths are blocked by H2 — refactor what builds.)
+7. ✅ **DONE — remaining crates refactored** (behavior-preserving, this session;
+   H2 now resolved so sail's feature paths build). Every inline `#[cfg(test)] mod
+   tests` moved to `tests.rs`; feature-gated integration modules extracted to
+   directory modules + their own test files:
+   - `lakecat-sail`: `lib.rs` **6,388 → 15 lines** (re-export header + 2 mod decls);
+     `catalog_provider/{mod 1472, tests 1098}`, `sail_integration/{mod 2283,
+     tests 1434}`.
+   - `lakecat-graph`: `lib.rs` 1,443 → 415; `tests.rs` 266; `grust_integration/
+     {mod 72, tests 680}`.
+   - `lakecat-security`: `lib.rs` 2,219 → 986; `tests.rs` 983;
+     `typesec_integration/{mod 98, tests 128}`.
+   - `lakecat-querygraph` (`lib.rs` 1,576 + `tests.rs` 816), `lakecat-lineage`
+     (497 + 521), `lakecat-api` (790 + 60): trailing test extraction.
+   - `lakecat-core` left as-is (small; 254-line `lib.rs` + 356-line `sail.rs` with a
+     31-line inline test — not a monolith).
+   **No monsters remain** (largest prod file is `sail_integration/mod.rs` 2,283,
+   down from a 58k/31k/16k/6.4k era). `#[test]` counts preserved (api 3, lineage 6,
+   querygraph 13, graph 35, security 25, sail 29); default +
+   `grust-local`/`typesec-local`/`sail-local`/`catalog-provider`/`--all-features`
+   green; fmt clean. *Optional future polish:* sub-split `sail_integration/mod.rs`
+   (2.3k) and `querygraph/lib.rs` (1.6k) by responsibility.
 8. **Final verification + docs:** `cargo fmt --all -- --check`; `cargo test
    --workspace` (and `--all-features` once H2 resolved); run the repo contract
    checks in `scripts/` (`check-release-readiness.sh`, `check-release-version/proof/
