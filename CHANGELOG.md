@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Refactor (DRY): extracted a new lean **`qglake-bundle`** crate holding the
+  QueryGraph bootstrap-bundle **wire format + validation** (the `QueryGraph*` serde
+  types, `validate_view_receipt_evidence`, `view_receipt_evidence_hash`,
+  `verify_hash`). It depends only on `serde`/`serde_json`/`chrono`/`lakecat-core` —
+  **not** `lakecat-store` — so a bundle *consumer* (the QueryGraph importer in
+  `qg-rust`) can depend on it instead of **copying** these types into a separate
+  repo. `lakecat-querygraph` (1576 → 859 lines) keeps the store-coupled builders,
+  now free functions (`bootstrap_from_*`, `*_projection_from_*`, `catalog_graph_*`)
+  since Rust's orphan rule forbids inherent impls on another crate's types, and
+  re-exports the wire types (`pub use qglake_bundle::*`) so caller type-paths are
+  unchanged. No wire-shape/field/serde-rename/hashing change. Verified: 13
+  `lakecat-querygraph` tests preserved, default + `qglake-fixture` builds green, fmt
+  clean. (Follow-ups: publish `lakecat-core 0.2.0` + `qglake-bundle`, then point
+  `qg-rust` at the crate and delete its copy + the cross-repo dep-contract greps.)
 - Deps: update TypeSec to the published **0.11.0 (Burano)** crates (from 0.8.0).
   TypeSec 0.11.0 depends on Grust 0.11.0 — the same line LakeCat uses — so this
   **unifies Grust on a single 0.11.0 version**, dropping the leftover `grust 0.9.1`

@@ -2,7 +2,7 @@ use super::*;
 use lakecat_store::ViewColumnRecord;
 use std::collections::BTreeMap;
 
-use lakecat_core::{Namespace, Principal, TableName};
+use lakecat_core::{Namespace, Principal, TableIdent, TableName};
 
 fn is_full_sha256_hash(value: &str) -> bool {
     let Some(digest) = value.strip_prefix("sha256:") else {
@@ -76,9 +76,7 @@ fn projects_iceberg_table_into_querygraph_bundle() {
         Principal::anonymous(),
     );
 
-    let bundle =
-        QueryGraphBootstrap::from_tables(WarehouseName::new("local").unwrap(), vec![table])
-            .unwrap();
+    let bundle = bootstrap_from_tables(WarehouseName::new("local").unwrap(), vec![table]).unwrap();
 
     assert_eq!(bundle.tables.len(), 1);
     assert_eq!(bundle.tables[0].format_version, Some(3));
@@ -284,11 +282,8 @@ fn projects_policy_bindings_into_querygraph_bundle() {
     )
     .unwrap();
 
-    let bundle = QueryGraphBootstrap::from_tables_with_policy_bindings(
-        warehouse,
-        vec![(table, vec![policy])],
-    )
-    .unwrap();
+    let bundle =
+        bootstrap_from_tables_with_policy_bindings(warehouse, vec![(table, vec![policy])]).unwrap();
 
     assert_eq!(bundle.tables[0].policy_bindings.len(), 1);
     assert_eq!(bundle.tables[0].policy_bindings[0].policy_id, "agent-read");
@@ -335,19 +330,16 @@ fn projects_catalog_views_into_querygraph_bundle() {
     ])
     .unwrap();
 
-    let bundle = QueryGraphBootstrap::from_tables_views_with_policy_bindings(
-        warehouse,
-        Vec::new(),
-        vec![view],
-    )
-    .unwrap()
-    .with_view_receipt_evidence(vec![QueryGraphViewReceiptEvidence {
-        stable_id: "lakecat:view:local:default:active_customers".to_string(),
-        view_version: 1,
-        receipt_hash: "sha256:view-version-receipt".to_string(),
-        receipt_chain_hash: "sha256:view-receipt-chain".to_string(),
-    }])
-    .unwrap();
+    let bundle =
+        bootstrap_from_tables_views_with_policy_bindings(warehouse, Vec::new(), vec![view])
+            .unwrap()
+            .with_view_receipt_evidence(vec![QueryGraphViewReceiptEvidence {
+                stable_id: "lakecat:view:local:default:active_customers".to_string(),
+                view_version: 1,
+                receipt_hash: "sha256:view-version-receipt".to_string(),
+                receipt_chain_hash: "sha256:view-receipt-chain".to_string(),
+            }])
+            .unwrap();
 
     assert_eq!(bundle.tables.len(), 0);
     assert_eq!(bundle.views.len(), 1);
@@ -469,7 +461,7 @@ fn tenant_records_project_full_hash_evidence_without_raw_roots() {
         Principal::anonymous(),
     )
     .unwrap();
-    let tenant = QueryGraphTenantProjection::from_records(
+    let tenant = tenant_projection_from_records(
         &warehouse,
         Some(&warehouse_record),
         Some(&project),
@@ -489,8 +481,7 @@ fn tenant_records_project_full_hash_evidence_without_raw_roots() {
             .is_some_and(is_full_sha256_hash)
     );
 
-    let graph =
-        QueryGraphCatalogGraph::from_tables_and_views_for_warehouse(&warehouse, &[], &[], &tenant);
+    let graph = catalog_graph_from_tables_and_views_for_warehouse(&warehouse, &[], &[], &tenant);
     let server_node = graph
         .nodes
         .iter()
@@ -567,7 +558,7 @@ fn querygraph_catalog_graph_deduplicates_shared_namespace_nodes() {
     )
     .unwrap();
 
-    let bundle = QueryGraphBootstrap::from_tables_views_with_policy_bindings(
+    let bundle = bootstrap_from_tables_views_with_policy_bindings(
         warehouse,
         vec![(table, Vec::new())],
         vec![view],
@@ -632,12 +623,9 @@ fn verification_rejects_missing_view_receipt_evidence() {
     )
     .unwrap();
 
-    let bundle = QueryGraphBootstrap::from_tables_views_with_policy_bindings(
-        warehouse,
-        Vec::new(),
-        vec![view],
-    )
-    .unwrap();
+    let bundle =
+        bootstrap_from_tables_views_with_policy_bindings(warehouse, Vec::new(), vec![view])
+            .unwrap();
 
     let err = bundle.verify_manifest().unwrap_err();
     assert!(
@@ -668,8 +656,7 @@ fn verification_rejects_querygraph_bundle_hash_mismatch() {
         Principal::anonymous(),
     );
     let mut bundle =
-        QueryGraphBootstrap::from_tables(WarehouseName::new("local").unwrap(), vec![table])
-            .unwrap();
+        bootstrap_from_tables(WarehouseName::new("local").unwrap(), vec![table]).unwrap();
     bundle.bundle_hash = "sha256:bad".to_string();
 
     let err = bundle.verify_manifest().unwrap_err();
@@ -679,7 +666,7 @@ fn verification_rejects_querygraph_bundle_hash_mismatch() {
 #[test]
 fn verification_rejects_duplicate_table_projection_stable_ids() {
     let table = querygraph_test_table("events");
-    let bundle = QueryGraphBootstrap::from_tables(
+    let bundle = bootstrap_from_tables(
         WarehouseName::new("local").unwrap(),
         vec![table.clone(), table],
     )
@@ -694,7 +681,7 @@ fn verification_rejects_duplicate_table_projection_stable_ids() {
 
 #[test]
 fn verification_rejects_duplicate_table_artifact_stable_ids() {
-    let mut bundle = QueryGraphBootstrap::from_tables(
+    let mut bundle = bootstrap_from_tables(
         WarehouseName::new("local").unwrap(),
         vec![
             querygraph_test_table("events"),
@@ -715,7 +702,7 @@ fn verification_rejects_duplicate_table_artifact_stable_ids() {
 #[test]
 fn verification_rejects_duplicate_view_projection_stable_ids() {
     let view = querygraph_test_view("active_events");
-    let bundle = QueryGraphBootstrap::from_tables_views_with_policy_bindings(
+    let bundle = bootstrap_from_tables_views_with_policy_bindings(
         WarehouseName::new("local").unwrap(),
         Vec::new(),
         vec![view.clone(), view],
@@ -731,7 +718,7 @@ fn verification_rejects_duplicate_view_projection_stable_ids() {
 
 #[test]
 fn verification_rejects_duplicate_view_artifact_stable_ids() {
-    let mut bundle = QueryGraphBootstrap::from_tables_views_with_policy_bindings(
+    let mut bundle = bootstrap_from_tables_views_with_policy_bindings(
         WarehouseName::new("local").unwrap(),
         Vec::new(),
         vec![
@@ -772,8 +759,7 @@ fn verification_rejects_querygraph_graph_hash_mismatch() {
         Principal::anonymous(),
     );
     let mut bundle =
-        QueryGraphBootstrap::from_tables(WarehouseName::new("local").unwrap(), vec![table])
-            .unwrap();
+        bootstrap_from_tables(WarehouseName::new("local").unwrap(), vec![table]).unwrap();
     bundle.graph.nodes.clear();
 
     let err = bundle.verify_manifest().unwrap_err();
@@ -802,8 +788,7 @@ fn verification_rejects_querygraph_import_hash_mismatch() {
         Principal::anonymous(),
     );
     let mut bundle =
-        QueryGraphBootstrap::from_tables(WarehouseName::new("local").unwrap(), vec![table])
-            .unwrap();
+        bootstrap_from_tables(WarehouseName::new("local").unwrap(), vec![table]).unwrap();
     bundle
         .manifest
         .querygraph_import

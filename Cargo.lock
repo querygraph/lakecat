@@ -3857,6 +3857,7 @@ dependencies = [
  "chrono",
  "lakecat-core",
  "lakecat-store",
+ "qglake-bundle",
  "serde",
  "serde_json",
 ]
@@ -5199,6 +5200,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "qglake-bundle"
+version = "0.2.0"
+dependencies = [
+ "chrono",
+ "lakecat-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

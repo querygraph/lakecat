@@ -1070,7 +1070,7 @@ pub(crate) fn qglake_handoff_fixture_graph_counts(summary: &Value) -> (usize, us
         })
         .collect::<Vec<_>>();
     let warehouse = lakecat_core::WarehouseName::new("local").unwrap();
-    let graph = lakecat_querygraph::QueryGraphCatalogGraph::from_tables_and_views_for_warehouse(
+    let graph = lakecat_querygraph::catalog_graph_from_tables_and_views_for_warehouse(
         &warehouse,
         &tables,
         &views,
@@ -3076,7 +3076,7 @@ pub(crate) fn qglake_querygraph_bundle(
             output
         })
         .collect::<Vec<_>>();
-    let graph = lakecat_querygraph::QueryGraphCatalogGraph::from_tables(&tables);
+    let graph = lakecat_querygraph::catalog_graph_from_tables(&tables);
     let graph_hash = content_hash_json(&serde_json::to_value(&graph).unwrap()).unwrap();
     let open_lineage = serde_json::json!({
         "eventType": "COMPLETE",

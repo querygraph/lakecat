@@ -398,7 +398,7 @@ pub(crate) async fn querygraph_bootstrap(
     }
     let tenant = querygraph_tenant_projection(&state).await?;
     let view_version_receipts = querygraph_view_version_receipts(&state, &views).await?;
-    let bundle = QueryGraphBootstrap::from_tables_views_with_policy_bindings_and_tenant(
+    let bundle = lakecat_querygraph::bootstrap_from_tables_views_with_policy_bindings_and_tenant(
         state.warehouse.clone(),
         table_policy_bindings,
         views,
@@ -479,7 +479,7 @@ pub(crate) async fn querygraph_tenant_projection(
                 .find(|server| server.server_id == *server_id)
                 .cloned()
         });
-    Ok(QueryGraphTenantProjection::from_records(
+    Ok(lakecat_querygraph::tenant_projection_from_records(
         &state.warehouse,
         warehouse_record.as_ref(),
         project_record.as_ref(),

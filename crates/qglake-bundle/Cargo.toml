@@ -1,15 +1,13 @@
 [package]
-name = "lakecat-querygraph"
+name = "qglake-bundle"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "LakeCat Croissant/CDIF/OSI/ODRL/OpenLineage bootstrap projection types for QueryGraph"
+description = "QueryGraph bootstrap bundle wire format and verification types (serde-only, store-independent)"
 
 [dependencies]
 chrono = { workspace = true }
 lakecat-core = { workspace = true }
-lakecat-store = { workspace = true }
-qglake-bundle = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
