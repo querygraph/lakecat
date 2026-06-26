@@ -38,19 +38,24 @@ CONCURRENT`): commits to different tables run truly concurrently, while a same-t
 race converges to exactly one winner through the pointer CAS and bounded retry. No
 global write lock, no `database is locked`.
 
-## How fast is a catalog, really?
+## The Commit Benchmark
 
-To measure the part TPC-DS/TPC-H ignore — the commit transaction itself — we built
-[`catalog-commit-bench`](https://github.com/querygraph/catalog-commit-bench): an
-impartial harness where LakeCat, Apache Nessie, Apache Gravitino, and Apache Polaris
-all do the *identical* unit of work to the *same* MinIO bucket. After two
-connection-reuse fixes — cache the S3 client, pool the write connection — LakeCat's
-median commit dropped from ~12.6 ms to ~4.5 ms: **second of four** on both
-per-commit latency and concurrent throughput, ahead of Gravitino and Polaris. The
-small remaining gap to Nessie is exactly the audit + outbox + idempotency work
-LakeCat does per commit that leaner stores don't — **features, not language**. The
-full story (and why a Rust catalog has to *earn* its speed against warm JVM servers)
-is the book's *The Commit Benchmark* chapter.
+How fast is a catalog, *really*? TPC-DS/TPC-H measure query engines and touch the
+catalog only incidentally, so we built
+[`catalog-commit-bench`](https://github.com/querygraph/catalog-commit-bench) to
+measure the part they ignore — the commit transaction itself. It is an **impartial**
+harness: LakeCat, Apache Nessie, Apache Gravitino, and Apache Polaris all do the
+*identical* unit of work — validate, write a fresh `metadata.json`, move the pointer
+under CAS — to the **same MinIO/S3 bucket**, so you compare catalogs, not object
+stores. (The repo's README has the one-command Docker/MinIO setup.)
+
+The result: after two connection-reuse fixes — cache the S3 client, pool the write
+connection — LakeCat's median commit dropped from ~12.6 ms to ~4.5 ms, landing
+**second of four** on both per-commit latency and concurrent throughput, ahead of
+Gravitino and Polaris. The small remaining gap to Nessie is exactly the audit +
+outbox + idempotency work LakeCat does per commit that leaner stores don't —
+**features, not language**. The full story (and why a Rust catalog has to *earn* its
+speed against warm JVM servers) is the book's *The Commit Benchmark* chapter.
 
 ## Check it out
 
