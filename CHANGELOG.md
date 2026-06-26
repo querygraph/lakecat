@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Split `lakecat-store`'s root `lib.rs` (3,802 → 285 lines) into focused modules
+  (behavior-preserving): `records.rs` (record types + validation), `memory.rs`
+  (`MemoryCatalogStore`), and `helpers.rs` (free helpers); `lib.rs` now holds the
+  `CatalogStore` trait plus glob re-exports so the public API and all `crate::`
+  paths are unchanged. Cross-module helpers/structs bumped to `pub(crate)`; test
+  files given their own `lakecat_core`/`chrono` imports (previously inherited
+  through the root module). Verified: default 65 + `turso-local` 185 tests pass
+  (== baseline), dependent `lakecat-service` builds, fmt clean.
 - Refactored the remaining crates for human-reviewability (behavior-preserving):
   moved every inline `#[cfg(test)] mod tests` into a separate `tests.rs`, and split
   the feature-gated integration modules into directory modules with their own test

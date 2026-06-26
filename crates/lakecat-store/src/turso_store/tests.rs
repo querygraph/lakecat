@@ -4438,7 +4438,7 @@ async fn turso_store_rejects_blank_pending_outbox_event_types() {
         "event-type": " ",
         "manifest-hash": "lakecat:test"
     });
-    let blank_payload_hash = crate::content_hash_json(&blank_payload).unwrap();
+    let blank_payload_hash = lakecat_core::content_hash_json(&blank_payload).unwrap();
     let conn = store.connect().unwrap();
     conn.execute(
         "update outbox_events
@@ -4503,7 +4503,7 @@ async fn turso_store_rejects_blank_pending_outbox_payload_event_types() {
         "event-type": " ",
         "manifest-hash": "lakecat:test"
     });
-    let blank_payload_hash = crate::content_hash_json(&blank_payload).unwrap();
+    let blank_payload_hash = lakecat_core::content_hash_json(&blank_payload).unwrap();
     let conn = store.connect().unwrap();
     conn.execute(
         "update outbox_events
@@ -4570,7 +4570,7 @@ async fn turso_store_rejects_missing_pending_outbox_payload_event_types() {
     let missing_payload = serde_json::json!({
         "manifest-hash": "lakecat:test"
     });
-    let missing_payload_hash = crate::content_hash_json(&missing_payload).unwrap();
+    let missing_payload_hash = lakecat_core::content_hash_json(&missing_payload).unwrap();
     let conn = store.connect().unwrap();
     conn.execute(
         "update outbox_events
