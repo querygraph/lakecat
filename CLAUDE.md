@@ -322,12 +322,27 @@ concurrently; a same-row race yields exactly one winner and the loser gets
      (497 + 521), `lakecat-api` (790 + 60): trailing test extraction.
    - `lakecat-core` left as-is (small; 254-line `lib.rs` + 356-line `sail.rs` with a
      31-line inline test — not a monolith).
-   **No monsters remain** (largest prod file is `sail_integration/mod.rs` 2,283,
-   down from a 58k/31k/16k/6.4k era). `#[test]` counts preserved (api 3, lineage 6,
-   querygraph 13, graph 35, security 25, sail 29); default +
+   `#[test]` counts preserved (api 3, lineage 6, querygraph 13, graph 35, security
+   25, sail 29); default +
    `grust-local`/`typesec-local`/`sail-local`/`catalog-provider`/`--all-features`
-   green; fmt clean. *Optional future polish:* sub-split `sail_integration/mod.rs`
-   (2.3k) and `querygraph/lib.rs` (1.6k) by responsibility.
+   green; fmt clean.
+   - ✅ **`lakecat-store` root split** (this session): `lib.rs` **3,802 → 285**
+     (the `CatalogStore` trait + glob re-exports); `records.rs` 1,486, `memory.rs`
+     1,089, `helpers.rs` 1,013. Cross-module helpers/structs → `pub(crate)`; test
+     files given their own `lakecat_core`/`chrono` imports. Default 65 + `turso-local`
+     185 tests pass; dependent `lakecat-service` builds; fmt clean.
+   - ✅ **`lakecat-cli` `fixture.rs` split** (this session): **4,245 → `fixture/`**
+     of 9 topic modules (`setup, bootstrap, listings, scan, credentials, lineage,
+     replay, management, writers`, each ≤ 721). `fixture/mod.rs` gates each
+     `mod`/re-export with the union of its items' cfg conditions. 492 default + 499
+     `qglake-fixture` tests pass; both builds warning-free; fmt clean.
+   **No monsters remain.** Largest prod files are now all cohesive
+   single-responsibility modules ≤ ~2.4k: `store/turso_store/mod.rs` 2,397,
+   `sail/sail_integration/mod.rs` 2,283, `cli/verify_proof.rs` 2,230,
+   `service/handlers.rs` 1,692, `querygraph/lib.rs` 1,576 — down from the
+   58k/31k/16k/6.4k era. *Optional future polish (a clear tier below the splits
+   done):* sub-split `turso_store/mod.rs`, `sail_integration/mod.rs`,
+   `verify_proof.rs`, and `querygraph/lib.rs` by responsibility.
 8. **Final verification + docs:** `cargo fmt --all -- --check`; `cargo test
    --workspace` (and `--all-features` once H2 resolved); run the repo contract
    checks in `scripts/` (`check-release-readiness.sh`, `check-release-version/proof/
