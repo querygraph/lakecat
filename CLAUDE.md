@@ -145,10 +145,27 @@ lakecat-sail --all-features` = **28 passed / 1 failed**.
 ### ✅ H2 FULLY RESOLVED — `../sail` committed (2 commits on `claude/table-update-apply`)
 - `32dbf172 fix(iceberg): round-trip manifest lower/upper bounds through Avro`
 - `b09d7bda feat(catalog): expose Iceberg planning helpers + commit-table provider seam`
-Both `sail-local` and `catalog-provider` now build AND test green. The remaining
-proof blocker is the **book taxonomy/ledger/readiness drift** (3 contract checks in
-`check-local-dependency-contract.sh` vs `docs/book/lakecat.md`) — a deliberate
-book-rebuild release action, separate from H2/H10.
+Both `sail-local` and `catalog-provider` now build AND test green.
+
+### ✅✅ `cargo test --workspace --all-features` PASSES (EXIT 0) — the headline H2/H3 gate
+The full all-features workspace test — red all session (H2/H3) — is now **green, 0
+failures**. Fixes that got it there: H3 (cli, earlier), H2 (sail exposure + the
+manifest-bounds bug fix), and one refactor-induced visibility nit
+(`CasRaceStore::new` → `pub(crate)`, only compiled under all-features).
+- ⚠️ **`../sail` branch fragility:** lakecat builds from `../sail`'s *working tree*.
+  Mid-session it got switched to `claude/table-update` (which lacks both my changes
+  AND `apply_table_updates`), breaking the build; I restored it to
+  **`claude/table-update-apply`** (HEAD now my `b09d7bda`). If sail is switched off
+  that branch, lakecat-sail's feature builds break again.
+- Minor: ~18 unused-import **warnings** under all-features in `lakecat-service`
+  (feature-combination leftovers) — don't fail the gate; clean later.
+
+### Remaining proof blocker (only one left)
+**Book taxonomy/ledger/readiness drift** — 3 `check-local-dependency-contract.sh`
+guards expect sections in `docs/book/lakecat.md` that the `bbdaa0bb` book rebuild
+removed. Pre-existing, unrelated to H2/H10. Needs a deliberate book reconciliation
+(GOAL.md: book rebuild is a release action), then the full `--release-candidate`
+gate can run + the proof ref can advance.
 
 ### What is NEXT (in order)
 4. ✅ **DONE — `lakecat-service` finished** (warnings cleaned + feature-gated parity
