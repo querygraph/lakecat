@@ -73,15 +73,41 @@ persist, so this IS the task list.
      lakecat. The 2026-06-25 review's build matrix never covered this gate.
 
 ### NEW build finding (this session)
-- **H10 · build/feature-gate · confirmed** — `lakecat-service --features
-  grust-turso-local` (and `--all-features`) fails: transitive sibling `grust-cypher`
-  doesn't compile under the features lakecat selects. Errors: `E0277` (`BTreeMap<String,
-  grust_core::Value>: TypeHints` unsatisfied) + `E0061` (fn takes 6 args, 7 supplied)
-  — classic grust-core/grust-cypher version skew. `grust-cypher` builds clean in
-  `../grust` alone, so it's a dependency-resolution/version-pin issue, like H2/FW-3.
-  **Maintainer decision (which grust commit/pins):** do NOT edit `../grust` without
-  the user. Analogous to H2; add `grust-turso-local` to the feature-matrix build gate
-  (FW-3). Until resolved, verify on default + `turso-local` + `typesec-local` only.
+- **H10 · build/feature-gate · ✅ RESOLVED (self-resolved; re-verified)** — was:
+  `grust-turso-local` failed because the path `grust-cypher 0.10.0` got compiled
+  against the crates.io `grust-core 0.9.1` (pulled transitively by published
+  `typesec-rbac 0.8.0`), a stale dependency-resolution artifact. After the committed
+  `Cargo.lock` re-resolution + clean rebuilds it no longer reproduces:
+  `cargo test -p lakecat-service --features grust-turso-local` = **451 passed**
+  (448 + 3 grust-turso), `--no-run` compiles clean. grust/grust-graph/grust-turso
+  also build standalone (incl. `cypher,memory`). No `../grust` edit was needed.
+
+### Sibling-commit investigation (this session) — H2 is NOT pinnable
+Exhaustive `../sail` history search: the symbols `lakecat-sail` needs were spread
+across **never-merged fork branches** and the current main line **redesigned the
+`CatalogProvider` trait** (now `crates/sail-catalog/src/provider/mod.rs`). No single
+sail commit has them all — so H2 cannot be fixed by pinning `../sail` to a commit.
+Precise gaps vs sail HEAD `d66a2676`:
+- **`sail-local` (only 2 errors — small):** (a) `sail_catalog_iceberg::models` is now
+  private (`mod models;`); lakecat imports `sail_catalog_iceberg::models::…`. (b) the
+  two planning helpers `completed_planning_with_id_result_from_values` /
+  `fetch_scan_tasks_result_from_values` are absent. **Both are exactly the existing
+  user-authored commit `fdb3b657 "Expose Iceberg planning result helpers"`** (adds
+  `sail-catalog-iceberg/src/planning.rs` + `pub use`; `planning.rs` is a clean add on
+  HEAD). Fix = cherry-pick `fdb3b657` onto sail HEAD + `pub mod models` (or targeted
+  `pub use crate::models::{…}`).
+- **`catalog-provider` (4 errors — larger):** needs `fdb3b657` (planning) PLUS
+  `load_table_result_to_status` as a crate-root `pub use` (it exists as a provider
+  method at `sail-catalog-iceberg/src/provider.rs:540`, parent fork commit
+  `68631016`) PLUS a `CatalogProvider`-trait seam that **never cleanly existed**:
+  `commit_table`/`get_table_commits` methods + `CommitTableOptions`/
+  `GetTableCommitsOptions`/`GetTableCommitsResponse`/`TableCommitInfo` types. Current
+  sail has `commit_table_request` (`provider.rs:301`) instead. So catalog-provider
+  needs either authoring that seam in sail or porting lakecat-sail's `catalog_provider`
+  module to the new API.
+**Conclusion:** no commit to pin. Resolve by (1) **surgical sail edits** — cherry-pick
+`fdb3b657` (+ expose `models`/`load_table_result_to_status`, author the commit-table
+seam) — or (2) **port lakecat-sail** to current sail. `../grust` (H10) needs nothing.
 
 ### What is NEXT (in order)
 4. ✅ **DONE — `lakecat-service` finished** (warnings cleaned + feature-gated parity
