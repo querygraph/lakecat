@@ -19,6 +19,35 @@ AGENTS.md/GOAL.md — read them first.
 
 ---
 
+## 🔗 Sail dependency: the `lakecat` integration branch (READ THIS)
+
+LakeCat's `../sail` path-deps build from **whatever `../sail` is checked out on**.
+LakeCat's `sail-local` / `catalog-provider` features need Sail changes that are NOT
+in upstream `lakehq/sail` main, so:
+
+- **`../sail` MUST be on branch `lakecat`** for LakeCat to build those features.
+  Switching `../sail` to `main`/another branch breaks `sail-local`/`catalog-provider`
+  (and silently regresses behavior). Use a `git worktree` for other Sail work.
+- **`sail:lakecat`** = upstream `lakehq/sail` main + the minimal LakeCat-needed
+  commits, in order: (1) `apply_table_updates` (Iceberg metadata evolution; needs
+  the merged #2134 `TableUpdate` enums), (2) manifest `lower/upper_bounds` Avro
+  round-trip fix, (3) pruning type-mismatch guard, (4) the Iceberg planning/`models`
+  exposure + `CatalogProvider` commit-table seam. Pushed to `fork/lakecat` (alexy's
+  fork) for durability — **not a PR**.
+- **Why a branch, not PRs:** the Sail maintainers are actively redesigning catalog/
+  table internals and asked that uncoordinated PRs wait (PRs #2139 bounds, #2140
+  catalog seam are now **draft** upstream as coordination/bug-report artifacts, NOT
+  LakeCat's build dependency). The `lakecat` branch decouples LakeCat's velocity from
+  the upstream PR timeline.
+- **Maintenance:** rebase `sail:lakecat` onto upstream `main` periodically; the
+  branch shrinks as the maintainers land equivalents or LakeCat aligns to Sail's
+  catalog API. When everything LakeCat needs is in upstream `main`, retire the
+  branch and the path-deps build against `main`.
+- **Toolchain:** never run `cargo +nightly` (per AGENTS.md). Sail CI uses nightly
+  fmt; let Sail's CI handle that, don't run it locally.
+
+---
+
 ## 🟢 SESSION CHECKPOINT — resume from here (2026-06-25, handoff to CLI)
 
 A prior session did the review + started the refactor, then **stopped for handoff

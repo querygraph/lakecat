@@ -66,6 +66,11 @@ metadata-pointer state, policy gates, and integration events belong here.
 
 ## Verification
 
+- **Toolchain: stable only. Do NOT run `cargo +nightly`** (including
+  `cargo +nightly fmt`). LakeCat builds, formats, and lints on the stable
+  toolchain; never invoke the nightly toolchain. If a sibling repo's CI requires
+  nightly formatting (e.g. Sail), let that repo's CI handle it rather than
+  running nightly locally.
 - For LakeCat changes, prefer:
   - `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`
   - `cargo fmt -p lakecat-cli -- --check` when CLI behavior or fixtures change
