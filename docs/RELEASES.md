@@ -9,6 +9,7 @@ existing release commit.
 | SemVer | Codename | Scope |
 | --- | --- | --- |
 | `v0.1.0` | Bobcat | Original Rust catalog foundation: Iceberg REST surface, Turso catalog spine, governed Sail planning boundary, TypeSec receipts, Grust projection boundary, and QGLake acceptance. |
+| `v0.2.0` | Lynx | Published Sail helper bridge (Iceberg planning/model exposure + commit-table seam, manifest-bounds round-trip fix), Turso MVCC concurrent writes, the human-reviewability refactor (no monolithic source files), and a reconciled book and release-gate surface. |
 
 `bobcat` is an annotated companion tag for the immutable `v0.1.0` commit. It
 exists for discovery only; package versioning and dependency resolution use the
@@ -22,7 +23,6 @@ ready.
 
 | Planned line | Codename | Intended emphasis |
 | --- | --- | --- |
-| `0.2` | Lynx | Published Sail helper bridge and broader engine-owned planning. |
 | `0.3` | Ocelot | Governed access and TypeSec capability hardening. |
 | `0.4` | Caracal | QueryGraph/QGLake operational integration. |
 | `0.5` | Serval | Catalog management and durable tenancy operations. |

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.2.0 - 2026-06-26
+
+- Bumped the workspace to 0.2.0 (codename Lynx) and aligned every intra-workspace
+  crate dependency pin to 0.2.0. This release folds the previously prepared but
+  never-tagged 0.1.1 work (recorded in the 0.1.1 section below) together with the
+  human-reviewability refactor and book/gate reconciliation into the first
+  versioned line above the published v0.1.0 (Bobcat) baseline.
 - Reconciled the book and dependency-contract gate with the restructured book and
   the 0.1.1 workspace version. (a) Re-added the genuinely-dropped LakeCat/Sail
   responsibility ledger ("The handoff between LakeCat and Sail should therefore be
