@@ -1581,9 +1581,10 @@ dependency-boundary cleanup rather than a new conceptual layer. The broad local
 gate has already been recorded from the current handoff path, including
 QueryGraph verification and import under `--locked`; the release task is to
 keep that gate green after each dependency-boundary change and rerun it from
-the final release commit. The temporary Sail helper bridge is release-explicit:
-LakeCat depends on local Sail paths plus checked-in helper patches until the
-required Sail APIs are published. The Grust contract is likewise explicit:
+the final release commit. The Sail dependency is release-explicit: LakeCat builds
+Sail from a Cargo git dependency on the `lakecat` branch of
+`github.com/querygraph/sail` until the required Sail APIs are published. The Grust
+contract is likewise explicit:
 LakeCat and QueryGraph follow the active local Grust 0.10 path checkout, and
 LakeCat binds Turso-backed graph projection to the dedicated `grust-turso`
 crate. `grust-local` keeps fast memory-backed projection tests, while
@@ -1639,20 +1640,20 @@ scripts/check-book-artifact-contract.sh docs/book/dist
 scripts/check-local-dependency-contract.sh
 ```
 
-The current full local release-candidate proof was refreshed on June 24, 2026
-from clean head `72df4eed`. It passed with tracked book artifact validation,
+The current full local release-candidate proof was refreshed on June 26, 2026
+from clean head `6f5c1739`. It passed with tracked book artifact validation,
 the checked-in release-proof contract in clean candidate mode, the strengthened
 post-tag release-posture contract for the published `v0.1.0` baseline,
-stable `git patch-id` verification for the Sail helper patch bridge, temporary
+the querygraph/sail `lakecat` git-dependency source assertions, temporary
 book build, executable book artifact contract, QueryGraph locked verify/import,
 Grust Turso graph projection proof, bundle hash
-`sha256:ee1f996eeac976cc07edb468f41039bc24275adbaf11b8113c38b85a9b4d5a66`,
+`sha256:88e38f620068d13cb14cb3ad3f102558b694482a87b45f09c08419ed93cf17cb`,
 graph hash
-`sha256:2c32eaec43a9043c4a764e749afb851f68a59efcb471790ff9126fef5b8010ed`,
+`sha256:7c6aa85c544d67953edf7bd168a85d8cfaa87a2f48f2732b77cf443031db01a7`,
 OpenLineage hash
-`sha256:2b280c4fe4815dbc74c3a43a91c2ec2d7edae0c26b661cc1318f699afe7b778b`,
+`sha256:c86ce5e6a82ad241a67a99301e802b42c9f07b020869b3893103e9b780561aab`,
 QueryGraph import hash
-`sha256:3f86e0f8b7948b8cc97b7f8dda9af4c26f672c4fc8862541eee2110b45b56333`,
+`sha256:8c662182623d7c51bc1397ffffd8228c1c73c82130c4bb42f5ca9d1e08b4e220`,
 and the final clean-tree check.
 
 LakeCat also carries a smaller proof-freshness contract for the release docs
@@ -1868,8 +1869,9 @@ LakeCat is a direction more than a single release. The next stage should keep
 the architecture more true without pushing engine, graph, or security semantics
 back into the catalog.
 
-1. Replace temporary Sail patch bridges only after their helpers are published
-   upstream, then remove the corresponding LakeCat bridge contract.
+1. Point the Sail git dependency at upstream (or a published crate) only after
+   the required helpers land there, then retire the querygraph/sail `lakecat`
+   branch and its dependency-contract assertions.
 2. Keep pushing reusable table-status, planning, metadata-as-data, manifest,
    delete, and commit helpers into Sail.
 3. Treat typed Iceberg v4 as a Sail project after formal specification adoption.

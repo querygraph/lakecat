@@ -82,8 +82,9 @@ using `LAKECAT_GRUST_TURSO_PATH` when set and an in-memory Turso graph database
 otherwise. Startup connect/bootstrap failures for that graph sink are reported
 with `graph-store-path-hash` and `backend-error-hash` evidence, not raw graph
 database paths or backend text. TypeSec remains on the published `typesec`
-0.8.0 crate, and Sail integration still uses local Sail paths plus the
-checked-in helper patch bridge until the required Sail APIs are published.
+0.8.0 crate, and Sail integration builds from a Cargo git dependency on the
+`lakecat` branch of `github.com/querygraph/sail` until the required Sail APIs are
+published.
 
 The local QueryGraph handoff path has a separate compatibility contract:
 `/Users/alexy/src/querygraph/qg-rust` follows the local Grust 0.10.0 path
@@ -185,7 +186,7 @@ EPUB metadata and PDF layout validation, QGLake handoff proof, and
 The current full proof also verifies the Grust Turso graph projection evidence,
 including `graphProjectionProof.backend = grust-turso` and
 `graphProjectionProof.tablePrefix = lakecat_graph`; the latest clean
-release-candidate proof was refreshed from head `72df4eed`.
+release-candidate proof was refreshed from head `6f5c1739`.
 `scripts/check-release-proof-contract.sh` verifies that active release docs
 agree on that proof commit and that any later commits are limited to
 documentation and checked-in book artifacts; executable changes after the

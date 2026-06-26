@@ -4,6 +4,18 @@
 
 ## 0.2.0 - 2026-06-26
 
+- Refreshed the full local release-candidate proof from clean head `6f5c1739`.
+  `scripts/check-release-readiness.sh --release-candidate` passed from a clean tree
+  with the default and all-feature workspace matrix, the querygraph/sail `lakecat`
+  git-dependency source assertions, temporary out-of-tree book validation, the
+  Grust Turso QGLake handoff, and QueryGraph locked verify/import — bundle hash
+  `sha256:88e38f620068d13cb14cb3ad3f102558b694482a87b45f09c08419ed93cf17cb`,
+  graph hash
+  `sha256:7c6aa85c544d67953edf7bd168a85d8cfaa87a2f48f2732b77cf443031db01a7`,
+  OpenLineage hash
+  `sha256:c86ce5e6a82ad241a67a99301e802b42c9f07b020869b3893103e9b780561aab`,
+  QueryGraph import hash
+  `sha256:8c662182623d7c51bc1397ffffd8228c1c73c82130c4bb42f5ca9d1e08b4e220`.
 - Switched the Sail dependency from local `../sail` path deps to a Cargo **git
   dependency on the `lakecat` branch of `github.com/querygraph/sail`**. All four
   Sail crates LakeCat uses (`sail-catalog`, `sail-catalog-iceberg`,

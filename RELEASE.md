@@ -58,9 +58,9 @@ surface follows the active local Grust 0.10 path checkout, including the
 `grust-turso-local` durable graph sink and Grust-owned matched-node mutation
 plan over projected LakeCat table nodes. It also proves that QGLake handoff
 summaries bind the configured `lakecat_graph` Grust Turso table prefix, TypeSec
-stays on the published TypeSec crate, local Sail paths and patch bridge remain
-explicit, the checked-in Sail patch files match the local Sail helper commits
-by stable `git patch-id`, manual workflow triggers remain intentional, and the
+stays on the published TypeSec crate, the Sail git dependency on the
+querygraph/sail `lakecat` branch remains explicit, manual workflow triggers
+remain intentional, and the
 local QueryGraph handoff verifier stays aligned with the same active Grust path
 checkout.
 When manual GitHub Actions is intentionally triggered, it also runs the

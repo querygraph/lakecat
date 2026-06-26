@@ -324,8 +324,8 @@ The current working plan is:
    scope before returning or extending view-history evidence.
 6. Keep reproducibility ahead of integration claims. Run local gates before
    commit, keep cloud CI manual/disabled until it is known green, use published
-   Grust/TypeSec crates when available, and keep any Sail path/patch bridge
-   explicit until reusable Sail helpers are landed or pinned.
+   Grust/TypeSec crates when available, and keep the querygraph/sail `lakecat`
+   git dependency explicit until reusable Sail helpers are landed or published.
 
 ### Done-State Expectations
 
@@ -426,27 +426,27 @@ Turso-backed store, memory-store parity, commit CAS, idempotency, pointer
 logs, audit/outbox, replay admission, governed scan/fetch, credential receipt
 proof, management surfaces, view receipt chains, QueryGraph bootstrap,
 OpenLineage replay, and QGLake handoff/import proof.
-The broad local release gate was refreshed on June 24, 2026 from clean head
-`72df4eed`. `scripts/check-release-readiness.sh --release-candidate` passed
+The broad local release gate was refreshed on June 26, 2026 from clean head
+`6f5c1739`. `scripts/check-release-readiness.sh --release-candidate` passed
 locally, including shell-contract checks, dependency-contract checks, manual CI
 trigger contract checks, tracked book artifact validation, formatter checks,
 default and all-features workspace tests, explicit Turso/Sail/TypeSec/Grust
 feature gates, Grust Turso graph projection tests, explicit Rust
 `lakecat-cli qglake_handoff` verifier tests, the checked-in release-proof
 contract in clean candidate mode, the strengthened post-tag release-posture
-contract for the published `v0.1.0` baseline, stable `git patch-id` verification
-for the Sail helper patch bridge, out-of-tree book artifact validation plus the
+contract for the published `v0.1.0` baseline, the querygraph/sail `lakecat`
+git-dependency source assertions, out-of-tree book artifact validation plus the
 executable book artifact contract, local QGLake handoff replay verification
 with QueryGraph locked verify/import,
 `graphProjectionProof.backend = grust-turso` and
 `graphProjectionProof.tablePrefix = lakecat_graph`, bundle hash
-`sha256:ee1f996eeac976cc07edb468f41039bc24275adbaf11b8113c38b85a9b4d5a66`,
+`sha256:88e38f620068d13cb14cb3ad3f102558b694482a87b45f09c08419ed93cf17cb`,
 graph hash
-`sha256:2c32eaec43a9043c4a764e749afb851f68a59efcb471790ff9126fef5b8010ed`,
+`sha256:7c6aa85c544d67953edf7bd168a85d8cfaa87a2f48f2732b77cf443031db01a7`,
 OpenLineage hash
-`sha256:2b280c4fe4815dbc74c3a43a91c2ec2d7edae0c26b661cc1318f699afe7b778b`,
+`sha256:c86ce5e6a82ad241a67a99301e802b42c9f07b020869b3893103e9b780561aab`,
 QueryGraph import hash
-`sha256:3f86e0f8b7948b8cc97b7f8dda9af4c26f672c4fc8862541eee2110b45b56333`,
+`sha256:8c662182623d7c51bc1397ffffd8228c1c73c82130c4bb42f5ca9d1e08b4e220`,
 and `git diff --check`.
 This remains local release evidence; automatic cloud CI stays manual/disabled
 until local gates are consistently boring from the final release commit.
@@ -456,11 +456,11 @@ boundary cleanup rather than new architecture:
 
 - Keep the fresh full `scripts/check-release-readiness.sh` proof green after
   every dependency-boundary change and rerun it from the final release commit.
-- Keep the temporary Sail helper bridge release-explicit until the required
-  helper behavior is published upstream. The local dependency contract already
-  proves the expected Sail path dependencies, concrete helper exports, and
-  checked-in patch files against the corresponding local Sail helper commits
-  with stable `git patch-id` evidence.
+- Keep the Sail dependency release-explicit until the required helper behavior
+  is published upstream. LakeCat builds Sail from a Cargo git dependency on the
+  `lakecat` branch of `github.com/querygraph/sail`; the local dependency contract
+  proves that git source on every Sail crate in `Cargo.toml` and the pinned branch
+  rev in `Cargo.lock`.
 - Keep LakeCat and QueryGraph aligned with the active local Grust 0.10 path
   checkout and bind Turso-backed catalog graph projection to Grust's dedicated
   `grust-turso` crate. LakeCat's `grust-local` feature keeps the fast
@@ -624,8 +624,8 @@ visible, data columns are narrowed to none, and the receipt proves the decision.
   evidence, view receipt chains, accepted-view chain hashes, graph/import
   proofs, credential storage-scope hashes, and local verifier coverage.
 - Local dependency-contract checks guard the local Grust 0.10/Turso graph
-  feature surface, published TypeSec resolution, the remaining Sail local
-  path/patch bridge, concrete Sail helper APIs, the manual-only CI trigger, and
+  feature surface, published TypeSec resolution, the querygraph/sail `lakecat`
+  git-dependency source, concrete Sail helper APIs, the manual-only CI trigger, and
   the sibling QueryGraph Rust importer's `receipt-chain-hash` handling.
 - Automatic cloud CI remains deliberately disabled/manual until local gates are
   known to pass.
@@ -1581,7 +1581,8 @@ evidence.
 ### P6 Reproducibility And V4
 
 Keep local verification ahead of cloud CI. Land reusable Sail helpers upstream
-or pin published versions before removing local path/patch bridges. Replace v4
+or pin published versions before retiring the querygraph/sail `lakecat` git
+dependency. Replace v4
 JSON passthrough with typed Sail support when Sail exposes stable APIs.
 Catalog config should advertise the current bridge honestly:
 `lakecat.format.v4=extension-ready`,
