@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Book: added "The Commit Benchmark" chapter — what `catalog-commit-bench` measures,
+  the impartial same-MinIO setup, the 4-catalog results (LakeCat is #2 of four on
+  both per-commit latency and concurrent throughput), the connection-reuse fixes
+  that closed the gap, and the "Audit and idempotency" section explaining the
+  residual gap as durable feature cost (audit + transactional outbox + idempotency
+  per commit), not a language gap. Rebuilt the book artifacts.
 - Performance: pool pragma-warmed Turso write connections instead of opening a new
   connection and re-applying `PRAGMA journal_mode=mvcc` / `busy_timeout` on every
   commit. `write_txn` now checks a connection out of a bounded pool (creating and
