@@ -611,6 +611,16 @@ re-validates the signed plan task on `fetchScanTasks` so a stateless fetch can
 neither drift to a different manifest list nor widen the governed projection.
 Pruning and typed metadata-tree semantics wait for Sail-owned v4 support.
 
+The handoff between LakeCat and Sail should therefore be compact and typed:
+
+| Work item | LakeCat responsibility | Sail responsibility | Durable proof LakeCat should keep |
+| --- | --- | --- | --- |
+| Table load | Resolve warehouse, namespace, table, principal, and current metadata pointer. | Interpret table metadata and expose table status using reusable Iceberg types. | Table identity, pointer hash, format version, principal, and receipt/action context. |
+| Governed scan | Ask TypeSec for the effective restriction and bind it to the request. | Bind projection and predicates to field ids, prune manifests and files, attach deletes, and produce scan tasks. | Requested and effective projection hashes, predicate hash, snapshot, task count, delete posture, plan hash, and receipt hash. |
+| Fetch scan task | Check that a stateless task fetch belongs to the prior governed plan. | Reapply task interpretation without widening the plan. | Prior plan hash, task token hash, effective stats-field evidence, and receipt hash. |
+| Commit | Own CAS, idempotency, pointer-log, audit, and outbox state. | Validate table metadata, commit requirements, format-version behavior, and future v4 typed semantics. | Expected and new pointer hashes, format version, snapshot evidence, idempotency hash, audit id, and outbox id. |
+| Metadata-as-data | Authorize the request and record who asked. | Expose snapshots, manifests, files, deletes, partitions, and history as engine-shaped metadata views. | Metadata view name, pointer hash, result-shape hash, principal, and receipt hash. |
+
 ## The semantic handoff: Croissant, CDIF, OSI, OpenLineage
 
 QueryGraph needs a semantic picture, not just physical access. LakeCat publishes

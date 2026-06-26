@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Reconciled the book and dependency-contract gate with the restructured book and
+  the 0.1.1 workspace version. (a) Re-added the genuinely-dropped LakeCat/Sail
+  responsibility ledger ("The handoff between LakeCat and Sail should therefore be
+  compact and typed" + the per-work-item table with the durable-proof column) into
+  `## Sail and the v3→v4 path`; it was lost in the stage-2 book consolidation and
+  survived nowhere else. (b) Pointed the two gate patterns for sections that were
+  faithfully *renamed* (not dropped) at their surviving anchors — the
+  standard/extension/proposal taxonomy now lives under `## The Proper-Noun Test`,
+  and `First Release Readiness` was re-leveled `##`→`#` by the TOC-hierarchy fix.
+  (c) Bumped the two stale `cargo tree` version assertions
+  (`lakecat-graph`/`lakecat-service`) from `v0.1.0` to the current `v0.1.1`.
+  Rebuilt the book artifacts (`VERSION.md` now `0.1.1-687c9eea`); EPUB + PDF
+  artifact contracts pass. The dependency contract now passes every LakeCat-side
+  check.
 - Reconciled the dependency-contract gate with the human-reviewability refactor:
   the three `crates/lakecat-graph/src/lib.rs` assertions for the Grust-Turso Cypher
   projection tests (`grust_turso_store_runs_cypher_over_lakecat_catalog_projection_boundary`,

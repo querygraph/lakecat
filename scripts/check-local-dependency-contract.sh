@@ -321,13 +321,13 @@ require_pattern 'explicit Rust `lakecat-cli qglake_handoff` verifier row' README
   "README.md must include the focused Rust QGLake handoff verifier row in the full-gate summary"
 require_pattern 'EPUB metadata and PDF layout validation' README.md \
   "README.md must include book artifact validators in the full-gate summary"
-require_pattern '### Standard, Extension, Or Proposal\?' docs/book/lakecat.md \
-  "LakeCat book must keep the standard/extension/proposal taxonomy"
+require_pattern '## The Proper-Noun Test' docs/book/lakecat.md \
+  "LakeCat book must keep the standard/extension/proposal taxonomy (the Proper-Noun Test in the Standards And Engine Boundary Decision Record chapter)"
 require_pattern 'The handoff between LakeCat and Sail should therefore be compact and typed' docs/book/lakecat.md \
   "LakeCat book must keep the LakeCat/Sail responsibility ledger"
 require_pattern 'The already-published `v0\.1\.0` tag is a baseline, not something to move' docs/book/lakecat.md \
   "LakeCat book must preserve the post-v0.1.0 no-retag explanation"
-require_pattern '## First Release Readiness' docs/book/lakecat.md \
+require_pattern '# First Release Readiness' docs/book/lakecat.md \
   "LakeCat book must keep the first-release readiness section"
 require_pattern 'typed-sail=unavailable' docs/book/lakecat.md \
   "LakeCat book must preserve the honest typed Sail v4 posture"
@@ -354,7 +354,7 @@ require_pattern '^turso v0\.7\.0-pre\.10$' "$lakecat_graph_turso_tree" \
   "lakecat-graph Turso inverse tree must resolve the Turso crate used by grust-turso"
 require_pattern 'grust-turso v0\.10\.0 \(/Users/alexy/src/grust/crates/grust-turso\)' "$lakecat_graph_turso_tree" \
   "lakecat-graph must reach Turso only through the dedicated local grust-turso crate"
-require_pattern 'lakecat-graph v0\.1\.0 \(/Users/alexy/src/lakecat/crates/lakecat-graph\)' "$lakecat_graph_turso_tree" \
+require_pattern 'lakecat-graph v0\.1\.1 \(/Users/alexy/src/lakecat/crates/lakecat-graph\)' "$lakecat_graph_turso_tree" \
   "lakecat-graph Turso inverse tree must include LakeCat graph as a grust-turso consumer"
 lakecat_service_turso_tree="$tmpdir/lakecat-service-turso-tree.txt"
 cargo tree -p lakecat-service --features grust-turso-local -i turso > "$lakecat_service_turso_tree"
@@ -362,7 +362,7 @@ require_pattern '^turso v0\.7\.0-pre\.10$' "$lakecat_service_turso_tree" \
   "lakecat-service Turso inverse tree must resolve the Turso crate used by grust-turso"
 require_pattern 'grust-turso v0\.10\.0 \(/Users/alexy/src/grust/crates/grust-turso\)' "$lakecat_service_turso_tree" \
   "lakecat-service must reach Turso graph storage only through the dedicated local grust-turso crate"
-require_pattern 'lakecat-service v0\.1\.0 \(/Users/alexy/src/lakecat/crates/lakecat-service\)' "$lakecat_service_turso_tree" \
+require_pattern 'lakecat-service v0\.1\.1 \(/Users/alexy/src/lakecat/crates/lakecat-service\)' "$lakecat_service_turso_tree" \
   "lakecat-service Turso inverse tree must include the service as a grust-turso consumer"
 require_pattern 'typesec = \{ version = "0\.8\.0",' Cargo.toml \
   "typesec must use the published 0.8.0 crate"
