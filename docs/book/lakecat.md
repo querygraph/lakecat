@@ -1725,7 +1725,7 @@ scripts/check-local-dependency-contract.sh
 ```
 
 The current full local release-candidate proof was refreshed on June 26, 2026
-from clean head `6f5c1739`. It passed with tracked book artifact validation,
+from clean head `b6ade047`. It passed with tracked book artifact validation,
 the checked-in release-proof contract in clean candidate mode, the strengthened
 post-tag release-posture contract for the published `v0.1.0` baseline,
 the querygraph/sail `lakecat` git-dependency source assertions, temporary

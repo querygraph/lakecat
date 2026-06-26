@@ -17,7 +17,7 @@ Updated: 2026-06-24
   advertise only its extension-ready JSON bridge; typed model, planner, and
   compatibility work remains a Sail-owned pre-adoption task.
 - Latest release-candidate proof refresh: the broad local gate passed on June
-  26, 2026 from clean head `6f5c1739`. The gate covered shell and dependency
+  26, 2026 from clean head `b6ade047`. The gate covered shell and dependency
   contracts, default and all-feature Rust matrices, temporary book validation,
   Grust Turso QGLake handoff, QueryGraph locked verify/import, and the final
   clean-tree check. Its bundle hash was

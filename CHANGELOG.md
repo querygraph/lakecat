@@ -9,6 +9,10 @@ dependency modernization (published TypeSec/Grust 0.11), the `catalog-commit-ben
 documentation, and the `qglake-bundle` DRY extraction. No catalog wire-format,
 governance, or on-disk behavior change versus v0.2.0.
 
+- Refreshed the full local release-candidate proof from clean head `b6ade047`.
+  `scripts/check-release-readiness.sh --release-candidate` passed: shell + dependency
+  contracts, default and all-feature Rust matrices, temporary book validation, and
+  the Grust-Turso QGLake handoff with QueryGraph locked verify/import.
 - Refactor (DRY): extracted a new lean **`qglake-bundle`** crate holding the
   QueryGraph bootstrap-bundle **wire format + validation** (the `QueryGraph*` serde
   types, `validate_view_receipt_evidence`, `view_receipt_evidence_hash`,
