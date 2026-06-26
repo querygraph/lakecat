@@ -54,9 +54,10 @@ is the book's *The Commit Benchmark* chapter.
 
 ## Check it out
 
-LakeCat is open in the [QueryGraph org](https://github.com/querygraph). Sail and
-Grust are pulled as Cargo **git dependencies**, so it builds out of the box — no
-sibling checkouts required:
+LakeCat is open in the [QueryGraph org](https://github.com/querygraph). **Grust and
+TypeSec are published crates**, and **Sail** is pulled as a git dependency (a
+coordination fork branch); everything fetches automatically, so it builds out of the
+box — no sibling checkouts required:
 
 ```sh
 git clone https://github.com/querygraph/lakecat

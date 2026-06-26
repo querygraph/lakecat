@@ -48,8 +48,8 @@ lakecat-sail = { path = "crates/lakecat-sail", version = "0.2.0" }
 lakecat-security = { path = "crates/lakecat-security", version = "0.2.0" }
 lakecat-store = { path = "crates/lakecat-store", version = "0.2.0" }
 
-grust-graph = { package = "grust-graph", git = "https://github.com/querygraph/grust.git", branch = "turso-mvcc", default-features = false }
-grust-turso = { package = "grust-turso", git = "https://github.com/querygraph/grust.git", branch = "turso-mvcc", default-features = false }
+grust-graph = { package = "grust-graph", version = "0.11.0", default-features = false }
+grust-turso = { package = "grust-turso", version = "0.11.0", default-features = false }
 typesec = { version = "0.8.0", default-features = false }
 sail-catalog = { git = "https://github.com/querygraph/sail.git", branch = "lakecat" }
 sail-catalog-iceberg = { git = "https://github.com/querygraph/sail.git", branch = "lakecat" }

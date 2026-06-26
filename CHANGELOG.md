@@ -2,12 +2,16 @@
 
 ## Unreleased
 
-- Build: consume Grust as a Cargo **git dependency** on the `turso-mvcc` branch of
-  `github.com/querygraph/grust` (mirroring the Sail git dependency), so LakeCat
-  builds **out of the box** from a fresh clone — both non-published siblings now
-  fetch automatically and no local checkouts are required. Updated the
-  dependency-contract assertions (Cargo.toml, `cargo tree`, `cargo metadata`) from
-  the local Grust path to the git source.
+- Build: depend on the **published Grust 0.11.0 crates** from crates.io
+  (`grust-graph`, `grust-turso`) instead of a git/path dependency. Grust merged its
+  `turso-mvcc` work (the `BEGIN CONCURRENT` MVCC backend) to main and cut the 0.11.0
+  release, so LakeCat now consumes it as a registry dependency like TypeSec — no
+  git source needed for Grust. Sail remains a git dependency
+  (`querygraph/sail#lakecat`) until its needed changes are published. LakeCat still
+  builds **out of the box** from a fresh clone. Updated the dependency-contract
+  grust assertions from the git source to the published crates.io 0.11 line;
+  verified default + `grust-turso-local` builds (35 graph tests incl. the MVCC
+  Cypher-projection tests) and the dependency contract.
 - Book: added "The Commit Benchmark" chapter — what `catalog-commit-bench` measures,
   the impartial same-MinIO setup, the 4-catalog results (LakeCat is #2 of four on
   both per-commit latency and concurrent throughput), the connection-reuse fixes
