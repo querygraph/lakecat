@@ -489,7 +489,7 @@ boundary cleanup rather than new architecture:
   treat code, manifest, workflow, dependency, or release-script changes after
   the cited proof commit as covered by the old full gate.
 - For the already-published `v0.1.0`, do not retag.
-  For the already-published `v0.2.0`, do not retag. For a future version-bump
+  For the already-published `v0.2.1`, do not retag. For a future version-bump
   release, cut a tag only after the broad local gate, QGLake handoff,
   QueryGraph locked verify/import, dependency-contract check, and book build
   pass from a clean tree.
