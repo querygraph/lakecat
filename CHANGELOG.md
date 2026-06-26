@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Performance: cache `object_store` clients per scheme+authority (one client per
+  bucket) instead of reconstructing one — credential chain, HTTP client, and a
+  fresh connection — on every commit. The per-object `Path` is still derived per
+  call via `ObjectStoreScheme::parse` (identical to `parse_url_opts`). On the
+  S3-backed commit benchmark this nearly halved sequential commit latency
+  (p50 12.6 → 6.8 ms) by reusing keep-alive connections.
+
 ## 0.2.0 - 2026-06-26
 
 - Refreshed the full local release-candidate proof from clean head `6f5c1739`.

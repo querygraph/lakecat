@@ -3,16 +3,29 @@ use lakecat_core::{LakeCatError, content_hash_bytes};
 use lakecat_sail::catalog_provider::{
     LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
 };
+use std::collections::HashMap;
+use std::sync::{Arc, OnceLock, RwLock};
+
 use lakecat_store::StorageProfile;
 use object_store::path::Path as ObjectPath;
-use object_store::{ObjectStore, ObjectStoreExt, PutMode, PutPayload};
+use object_store::{ObjectStore, ObjectStoreExt, ObjectStoreScheme, PutMode, PutPayload};
 use url::Url;
 
 use crate::*;
 
+/// Process-global cache of constructed object stores, keyed by scheme+authority
+/// (one client per bucket/host). Building an object store — credential-chain
+/// resolution, the HTTP client, and its connection pool — is expensive; the
+/// per-object `Path` is cheap. So we derive the path on every call and reuse the
+/// client across commits instead of rebuilding it per request.
+fn object_store_cache() -> &'static RwLock<HashMap<String, Arc<dyn ObjectStore>>> {
+    static CACHE: OnceLock<RwLock<HashMap<String, Arc<dyn ObjectStore>>>> = OnceLock::new();
+    CACHE.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
 pub(crate) fn metadata_object_store(
     location: &str,
-) -> Result<(Box<dyn ObjectStore>, ObjectPath), LakeCatError> {
+) -> Result<(Arc<dyn ObjectStore>, ObjectPath), LakeCatError> {
     let url = Url::parse(location).map_err(|err| {
         LakeCatError::InvalidArgument(format!(
             "invalid metadata location {}; {}",
@@ -20,13 +33,38 @@ pub(crate) fn metadata_object_store(
             backend_error_hash_context(err)
         ))
     })?;
-    object_store::parse_url_opts(&url, std::env::vars()).map_err(|err| {
+    // Derive (scheme, object path) exactly as `object_store::parse_url_opts` does
+    // internally, without constructing a client.
+    let (scheme, object_path) = ObjectStoreScheme::parse(&url).map_err(|err| {
         LakeCatError::InvalidArgument(format!(
             "metadata object location {} is not supported or is not configured: {}",
             metadata_location_hash_context(location),
             backend_error_hash_context(err)
         ))
-    })
+    })?;
+    let cache_key = format!("{scheme:?}|{}", url.authority());
+    if let Some(store) = object_store_cache()
+        .read()
+        .unwrap_or_else(|poison| poison.into_inner())
+        .get(&cache_key)
+        .cloned()
+    {
+        return Ok((store, object_path));
+    }
+    // Cache miss: build the client once (the expensive step) and memoize it.
+    let (store, _path) = object_store::parse_url_opts(&url, std::env::vars()).map_err(|err| {
+        LakeCatError::InvalidArgument(format!(
+            "metadata object location {} is not supported or is not configured: {}",
+            metadata_location_hash_context(location),
+            backend_error_hash_context(err)
+        ))
+    })?;
+    let store: Arc<dyn ObjectStore> = Arc::from(store);
+    object_store_cache()
+        .write()
+        .unwrap_or_else(|poison| poison.into_inner())
+        .insert(cache_key, store.clone());
+    Ok((store, object_path))
 }
 
 pub(crate) async fn write_planned_metadata(
