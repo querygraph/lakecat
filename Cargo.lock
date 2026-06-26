@@ -2668,9 +2668,9 @@ checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
 [[package]]
 name = "grust-core"
-version = "0.9.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8223438575585cf3cd576394c270443808f07954725d46848e9ec20e69b0f65"
+checksum = "bdd879a85ddd80a3a665e02e8344beec20f2d8c4e9261d08aa49f679aa3f23b3"
 dependencies = [
  "async-trait",
  "garde",
@@ -2683,53 +2683,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "grust-core"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bdd879a85ddd80a3a665e02e8344beec20f2d8c4e9261d08aa49f679aa3f23b3"
-dependencies = [
- "async-trait",
- "quick-xml 0.40.1",
- "serde",
- "serde_json",
- "serde_yaml",
- "thiserror",
-]
-
-[[package]]
-name = "grust-cypher"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5bf7cfa090ad2ad3fee6625a96534ba5aff5618ffc908664ca72568e995b7b56"
-dependencies = [
- "async-trait",
- "grust-core 0.9.1",
- "serde",
- "serde_json",
- "uuid",
-]
-
-[[package]]
 name = "grust-cypher"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e6b07373aaea0480e7fa1bb02c19a7e512994f26ab5b2a9799936f43f0a9d79"
 dependencies = [
  "async-trait",
- "grust-core 0.11.0",
+ "grust-core",
  "serde",
  "serde_json",
  "uuid",
-]
-
-[[package]]
-name = "grust-graph"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a25d2f9a778314b9bed05a07c42ddcae675284c92235085d9579d59265430bbc"
-dependencies = [
- "grust-core 0.9.1",
- "serde_json",
 ]
 
 [[package]]
@@ -2738,8 +2701,8 @@ version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07fc69c129fa3faf06d546f89c1bd7a4bd4e2ec81ed9400e43ccde2086ee3f1b"
 dependencies = [
- "grust-core 0.11.0",
- "grust-cypher 0.11.0",
+ "grust-core",
+ "grust-cypher",
  "grust-memory",
  "serde_json",
 ]
@@ -2751,7 +2714,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b865d62db59911892afdece7b55a1ee2589dce55b338c840420c0e6cddf525d9"
 dependencies = [
  "async-trait",
- "grust-core 0.11.0",
+ "grust-core",
 ]
 
 [[package]]
@@ -2760,7 +2723,7 @@ version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e1b2b74225cdb507c3f735dfaa9a4a17f39388a7fac34dae3aff3dce1182c72"
 dependencies = [
- "grust-core 0.11.0",
+ "grust-core",
  "serde_json",
 ]
 
@@ -2771,7 +2734,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8c940523a1cbc64e2c3c5099b0517731911429f4c92e5122830a03be5fad31b"
 dependencies = [
  "async-trait",
- "grust-core 0.11.0",
+ "grust-core",
  "grust-sql-core",
  "serde_json",
  "turso",
@@ -3867,7 +3830,7 @@ version = "0.2.0"
 dependencies = [
  "async-trait",
  "chrono",
- "grust-graph 0.11.0",
+ "grust-graph",
  "grust-turso",
  "lakecat-core",
  "serde",
@@ -3942,7 +3905,7 @@ dependencies = [
  "async-trait",
  "axum",
  "chrono",
- "grust-graph 0.11.0",
+ "grust-graph",
  "grust-turso",
  "http",
  "lakecat-api",
@@ -7461,9 +7424,9 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "typesec"
-version = "0.8.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8292a3d7462a1a10341af4946be630cd952ac89a586f2820df2ce4be61d7fbe"
+checksum = "e3e460e1e0442ba75b9f5a3ae1e53b8e627ac36fd9d149da5f4e67128b60b204"
 dependencies = [
  "typesec-core",
  "typesec-integrations",
@@ -7472,12 +7435,11 @@ dependencies = [
 
 [[package]]
 name = "typesec-core"
-version = "0.8.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e749300147f3a391a22dbc050164f6d7eb6c70e05ff8172195be85bf168ff426"
+checksum = "e71fb751330c6bf76c0cae2774ebc76a0ef2ee6abdf981591f46c2b28a56fe06"
 dependencies = [
  "chrono",
- "serde",
  "thiserror",
  "tracing",
  "zeroize",
@@ -7485,9 +7447,9 @@ dependencies = [
 
 [[package]]
 name = "typesec-integrations"
-version = "0.8.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "893a67c368fa2a3ea16f6b2c26345c0c6a69e398b9ce63fe3d6c4946568a2655"
+checksum = "38392c4f6b39306d1830e7cf0f12d3fc0deec6cd558011a6d24ae712238cf868"
 dependencies = [
  "chacha20poly1305",
  "chrono",
@@ -7506,14 +7468,14 @@ dependencies = [
 
 [[package]]
 name = "typesec-rbac"
-version = "0.8.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e56834bb66dd3e5ba10bdaf155a22ab5a1eea5d2046444239768761efb176473"
+checksum = "82719b3ba58b0bd75a2dea66cfdbc86ee1a87d5e7aa4dfc5a6ca8030c0e49f99"
 dependencies = [
  "garde",
  "glob",
- "grust-cypher 0.9.1",
- "grust-graph 0.9.1",
+ "grust-cypher",
+ "grust-graph",
  "serde",
  "serde_json",
  "serde_norway",
