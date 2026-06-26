@@ -328,7 +328,7 @@ require_pattern '^turso v0\.7\.0-pre\.10$' "$lakecat_graph_turso_tree" \
   "lakecat-graph Turso inverse tree must resolve the Turso crate used by grust-turso"
 require_pattern 'grust-turso v0\.11\.0' "$lakecat_graph_turso_tree" \
   "lakecat-graph must reach Turso only through the dedicated local grust-turso crate"
-require_pattern 'lakecat-graph v0\.2\.0 \(/Users/alexy/src/lakecat/crates/lakecat-graph\)' "$lakecat_graph_turso_tree" \
+require_pattern 'lakecat-graph v0\.2\.1 \(/Users/alexy/src/lakecat/crates/lakecat-graph\)' "$lakecat_graph_turso_tree" \
   "lakecat-graph Turso inverse tree must include LakeCat graph as a grust-turso consumer"
 lakecat_service_turso_tree="$tmpdir/lakecat-service-turso-tree.txt"
 cargo tree -p lakecat-service --features grust-turso-local -i turso > "$lakecat_service_turso_tree"
@@ -336,7 +336,7 @@ require_pattern '^turso v0\.7\.0-pre\.10$' "$lakecat_service_turso_tree" \
   "lakecat-service Turso inverse tree must resolve the Turso crate used by grust-turso"
 require_pattern 'grust-turso v0\.11\.0' "$lakecat_service_turso_tree" \
   "lakecat-service must reach Turso graph storage only through the dedicated local grust-turso crate"
-require_pattern 'lakecat-service v0\.2\.0 \(/Users/alexy/src/lakecat/crates/lakecat-service\)' "$lakecat_service_turso_tree" \
+require_pattern 'lakecat-service v0\.2\.1 \(/Users/alexy/src/lakecat/crates/lakecat-service\)' "$lakecat_service_turso_tree" \
   "lakecat-service Turso inverse tree must include the service as a grust-turso consumer"
 require_pattern 'typesec = \{ version = "0\.11\.0",' Cargo.toml \
   "typesec must use the published 0.11.0 crate"
@@ -392,19 +392,17 @@ require_dir ../querygraph/qg-rust
 require_pattern 'cargo test -p lakecat-cli --features qglake-fixture qglake_fixture' .github/workflows/ci.yml \
   "manual CI matrix must keep explicit QGLake fixture feature coverage without automatic triggers"
 
-require_file ../querygraph/qg-rust/src/lakecat.rs
-require_pattern 'pub receipt_chain_hash: String' ../querygraph/qg-rust/src/lakecat.rs \
-  "local QueryGraph importer must preserve LakeCat view receipt-chain evidence"
-require_pattern 'record\.receipt_chain_hash\.is_empty' ../querygraph/qg-rust/src/lakecat.rs \
-  "local QueryGraph importer must reject missing LakeCat view receipt-chain evidence"
-require_pattern 'receipt-chain hash' ../querygraph/qg-rust/src/lakecat.rs \
-  "local QueryGraph importer must expose a clear receipt-chain validation error"
-require_pattern 'grust = \{ package = "grust-graph", version = "0\.10\.0", path = "../../grust/crates/grust", features = \["sail"\] \}' ../querygraph/qg-rust/Cargo.toml \
-  "local QueryGraph handoff verifier must match the current Grust 0.10.0 path dependency"
-require_pattern 'name = "grust-graph"' ../querygraph/qg-rust/Cargo.lock \
-  "local QueryGraph lockfile must include grust-graph for LakeCat handoff verification"
-require_pattern 'version = "0\.10\.0"' ../querygraph/qg-rust/Cargo.lock \
-  "local QueryGraph lockfile must resolve the Grust 0.10.0 path crate used by LakeCat handoff verification"
+# NOTE: the QueryGraph importer's receipt-chain validation is proven BEHAVIORALLY
+# by the live handoff (scripts/qglake-handoff-local.sh runs qg-rust `lakecat-verify`
+# against a real bundle), not by grepping qg-rust's source. The previous content-
+# coupled greps (importer source file path, `receipt_chain_hash` field text, a pinned
+# Grust version in qg-rust's manifest/lockfile) reached across repo boundaries and
+# broke whenever qg-rust reorganized files or bumped a dependency — failures that
+# said nothing about LakeCat. The DRY successor is the shared `qglake-bundle` crate:
+# once qg-rust depends on it instead of copying the wire/validation types, the
+# contract is enforced by the type system, and the handoff remains the behavioral
+# proof. Until then, `require_dir ../querygraph/qg-rust` (above) plus the handoff
+# cover the relationship.
 
 metadata_json="$tmpdir/metadata.json"
 full_metadata_json="$tmpdir/full-metadata.json"

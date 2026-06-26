@@ -3785,7 +3785,7 @@ dependencies = [
 
 [[package]]
 name = "lakecat-api"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "lakecat-core",
  "serde",
@@ -3794,7 +3794,7 @@ dependencies = [
 
 [[package]]
 name = "lakecat-cli"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chrono",
  "lakecat-api",
@@ -3811,7 +3811,7 @@ dependencies = [
 
 [[package]]
 name = "lakecat-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -3826,7 +3826,7 @@ dependencies = [
 
 [[package]]
 name = "lakecat-graph"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -3840,7 +3840,7 @@ dependencies = [
 
 [[package]]
 name = "lakecat-lineage"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -3852,7 +3852,7 @@ dependencies = [
 
 [[package]]
 name = "lakecat-querygraph"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chrono",
  "lakecat-core",
@@ -3864,7 +3864,7 @@ dependencies = [
 
 [[package]]
 name = "lakecat-sail"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "arrow-schema",
  "async-trait",
@@ -3888,7 +3888,7 @@ dependencies = [
 
 [[package]]
 name = "lakecat-security"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -3901,7 +3901,7 @@ dependencies = [
 
 [[package]]
 name = "lakecat-service"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-trait",
  "axum",
@@ -3932,7 +3932,7 @@ dependencies = [
 
 [[package]]
 name = "lakecat-store"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -5204,7 +5204,7 @@ dependencies = [
 
 [[package]]
 name = "qglake-bundle"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chrono",
  "lakecat-core",

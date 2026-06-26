@@ -10,6 +10,7 @@ existing release commit.
 | --- | --- | --- |
 | `v0.1.0` | Bobcat | Original Rust catalog foundation: Iceberg REST surface, Turso catalog spine, governed Sail planning boundary, TypeSec receipts, Grust projection boundary, and QGLake acceptance. |
 | `v0.2.0` | Lynx | Published Sail helper bridge (Iceberg planning/model exposure + commit-table seam, manifest-bounds round-trip fix), Turso MVCC concurrent writes, the human-reviewability refactor (no monolithic source files), and a reconciled book and release-gate surface. |
+| `v0.2.1` | Lynx | Maintenance: Turso/object-store commit-path performance (cached per-bucket object-store clients, pooled pragma-warmed write connections), dependency modernization (published TypeSec/Grust 0.11), the `catalog-commit-bench` harness and book chapter, and the `qglake-bundle` DRY extraction of the QueryGraph bootstrap-bundle wire contract. No wire-format or governance change vs `v0.2.0`. |
 
 `bobcat` is an annotated companion tag for the immutable `v0.1.0` commit. It
 exists for discovery only; package versioning and dependency resolution use the

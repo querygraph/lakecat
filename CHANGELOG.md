@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.2.1 - 2026-06-26
+
+Lynx-line maintenance release: Turso/object-store commit-path performance,
+dependency modernization (published TypeSec/Grust 0.11), the `catalog-commit-bench`
+documentation, and the `qglake-bundle` DRY extraction. No catalog wire-format,
+governance, or on-disk behavior change versus v0.2.0.
+
 - Refactor (DRY): extracted a new lean **`qglake-bundle`** crate holding the
   QueryGraph bootstrap-bundle **wire format + validation** (the `QueryGraph*` serde
   types, `validate_view_receipt_evidence`, `view_receipt_evidence_hash`,
@@ -14,8 +21,15 @@
   re-exports the wire types (`pub use qglake_bundle::*`) so caller type-paths are
   unchanged. No wire-shape/field/serde-rename/hashing change. Verified: 13
   `lakecat-querygraph` tests preserved, default + `qglake-fixture` builds green, fmt
-  clean. (Follow-ups: publish `lakecat-core 0.2.0` + `qglake-bundle`, then point
-  `qg-rust` at the crate and delete its copy + the cross-repo dep-contract greps.)
+  clean. (Follow-up: point `qg-rust` at the published crate and delete its copy.)
+- Contract: removed the brittle cross-repo qg-rust **source/version greps** from
+  `check-local-dependency-contract.sh` (importer source-file path, `receipt_chain_hash`
+  field text, a pinned Grust version in qg-rust's manifest/lockfile). They reached
+  across the repo boundary and broke whenever qg-rust reorganized files or bumped a
+  dependency — failures unrelated to LakeCat. The importer's receipt-chain validation
+  is proven **behaviorally** by the live handoff (`qglake-handoff-local.sh` runs
+  qg-rust `lakecat-verify`); the DRY successor is the shared `qglake-bundle` crate.
+  Bumped the contract's `cargo tree` version pins 0.2.0 → 0.2.1.
 - Deps: update TypeSec to the published **0.11.0 (Burano)** crates (from 0.8.0).
   TypeSec 0.11.0 depends on Grust 0.11.0 — the same line LakeCat uses — so this
   **unifies Grust on a single 0.11.0 version**, dropping the leftover `grust 0.9.1`
