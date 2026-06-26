@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Performance: pool pragma-warmed Turso write connections instead of opening a new
+  connection and re-applying `PRAGMA journal_mode=mvcc` / `busy_timeout` on every
+  commit. `write_txn` now checks a connection out of a bounded pool (creating and
+  warming one only on an empty pool) and returns it after a clean COMMIT/ROLLBACK;
+  a connection that fails to even begin is dropped. Each concurrent writer still
+  checks out a *distinct* connection and runs its own `BEGIN CONCURRENT`, so MVCC
+  concurrency is unchanged — verified by the FW-16 same-table/distinct-table
+  concurrency tests. On the S3-backed commit benchmark this took sequential p50
+  6.8 → 4.14 ms (133 → 207 commits/s) on top of the object-store client cache.
 - Performance: cache `object_store` clients per scheme+authority (one client per
   bucket) instead of reconstructing one — credential chain, HTTP client, and a
   fresh connection — on every commit. The per-object `Path` is still derived per

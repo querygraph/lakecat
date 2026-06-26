@@ -1,6 +1,9 @@
 use std::future::Future;
 use std::pin::Pin;
-use std::{collections::BTreeSet, sync::Arc};
+use std::{
+    collections::BTreeSet,
+    sync::{Arc, Mutex},
+};
 
 use async_trait::async_trait;
 use chrono::Utc;
@@ -25,6 +28,13 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct TursoCatalogStore {
     db: Database,
+    /// Pool of pragma-warmed write connections, reused across commits so the
+    /// per-commit path skips `connect()` + re-applying `journal_mode=mvcc` /
+    /// `busy_timeout`. Each concurrent writer still checks out a *distinct*
+    /// connection and runs its own `BEGIN CONCURRENT`, so MVCC concurrency is
+    /// unchanged — only the per-commit connection setup is amortized. `Arc` so a
+    /// cloned store shares the pool (and the underlying database).
+    write_pool: Arc<Mutex<Vec<Connection>>>,
 }
 
 impl TursoCatalogStore {
@@ -45,7 +55,10 @@ impl TursoCatalogStore {
     }
 
     pub async fn from_database(db: Database) -> LakeCatResult<Arc<Self>> {
-        let store = Arc::new(Self { db });
+        let store = Arc::new(Self {
+            db,
+            write_pool: Arc::new(Mutex::new(Vec::new())),
+        });
         store.migrate().await?;
         Ok(store)
     }
@@ -75,23 +88,28 @@ impl TursoCatalogStore {
         T: Send,
         F: for<'c> FnMut(&'c Connection) -> WriteTxnFuture<'c, T> + Send,
     {
+        let conn = self.checkout_write_conn().await?;
         let mut attempt = 0u32;
         loop {
             attempt += 1;
-            let conn = self.connect()?;
-            apply_write_pragmas(&conn).await;
-            conn.execute_batch("BEGIN CONCURRENT")
-                .await
-                .map_err(turso_error)?;
+            // A failure to even begin the transaction means the connection is in
+            // an unknown state; drop it (do not return it to the pool).
+            if let Err(err) = conn.execute_batch("BEGIN CONCURRENT").await {
+                return Err(turso_error(err));
+            }
             match body(&conn).await {
                 Ok(value) => match conn.execute_batch("COMMIT").await {
-                    Ok(()) => return Ok(value),
+                    Ok(()) => {
+                        self.return_write_conn(conn);
+                        return Ok(value);
+                    }
                     Err(err) if is_retryable_conflict(&err) && attempt < WRITE_TXN_MAX_ATTEMPTS => {
                         let _ = conn.execute_batch("ROLLBACK").await;
                         backoff(attempt).await;
                     }
                     Err(err) => {
                         let _ = conn.execute_batch("ROLLBACK").await;
+                        self.return_write_conn(conn);
                         return Err(turso_error(err));
                     }
                 },
@@ -104,10 +122,39 @@ impl TursoCatalogStore {
                     if is_retryable_lakecat(&err) && attempt < WRITE_TXN_MAX_ATTEMPTS {
                         backoff(attempt).await;
                     } else {
+                        self.return_write_conn(conn);
                         return Err(err);
                     }
                 }
             }
+        }
+    }
+
+    /// Check out a pragma-warmed write connection from the pool, or create and
+    /// warm a fresh one if the pool is empty.
+    async fn checkout_write_conn(&self) -> LakeCatResult<Connection> {
+        if let Some(conn) = self
+            .write_pool
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .pop()
+        {
+            return Ok(conn);
+        }
+        let conn = self.connect()?;
+        apply_write_pragmas(&conn).await;
+        Ok(conn)
+    }
+
+    /// Return a clean (post-COMMIT or post-ROLLBACK) connection to the pool for
+    /// reuse, up to a bounded size; excess connections are dropped.
+    fn return_write_conn(&self, conn: Connection) {
+        let mut pool = self
+            .write_pool
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        if pool.len() < WRITE_POOL_MAX_IDLE {
+            pool.push(conn);
         }
     }
 
@@ -2350,6 +2397,11 @@ type WriteTxnFuture<'c, T> = Pin<Box<dyn Future<Output = LakeCatResult<T>> + Sen
 /// a genuine same-row logical race converges to the metadata-pointer CAS
 /// `Conflict` within a couple of attempts.
 const WRITE_TXN_MAX_ATTEMPTS: u32 = 8;
+
+/// Maximum idle write connections retained in the pool. Caps memory/file handles
+/// while comfortably covering the expected concurrent-writer count; connections
+/// beyond this are dropped on return rather than pooled.
+const WRITE_POOL_MAX_IDLE: usize = 16;
 
 /// Best-effort per-connection pragmas for write transactions. `journal_mode`
 /// returns a row, so `execute_batch` reports it as an error even though the mode
