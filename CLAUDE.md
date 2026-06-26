@@ -132,14 +132,23 @@ constructions from removed `if_not_exists`/`replace` to `mode: CreateTableMode::
 **Status:** `cargo build -p lakecat-sail --features sail-local` ✅, `--features
 catalog-provider` ✅, `sail-catalog`/`sail-catalog-iceberg` build ✅. `cargo test -p
 lakecat-sail --all-features` = **28 passed / 1 failed**.
-- ⚠️ **The 1 failure is LATENT, not a port regression: `sail_integration::tests::
-  preserves_filter_context_and_prunes_loaded_file_bounds`** panics at
-  `lib.rs:5876` because `sail_iceberg`'s Avro manifest round-trip drops a DataFile
-  `lower_bounds` entry (`.lower_bounds().get(&1)` is `None`). It exercises
-  `sail_iceberg::spec::Manifest` (untouched) and **never ran before** (sail-local
-  never compiled). It's a `sail-iceberg` behavior gap in sail's domain. **Decision
-  needed:** deep-fix sail-iceberg Avro bounds, or `#[ignore]` + record as future work
-  to unblock `--all-features`.
+- ✅ **The 1 failure was ROOT-CAUSED + FIXED upstream in sail (real bug):**
+  `IntBytesMapEntry.value: Vec<u8>` (manifest `_serde.rs`) is typed Avro `bytes`, but
+  serde's default `Vec<u8>` serialization emits an Avro **array**, which fails to
+  resolve against the `bytes` schema → the nullable `lower_bounds`/`upper_bounds`
+  maps were silently written as **null**, dropping every column bound on round-trip.
+  Fixed with byte-string (de)serialization on the entry value (tolerating the legacy
+  array form on read). This is a genuine `sail-iceberg` bug affecting ALL Iceberg
+  manifest bounds, not just LakeCat. **`lakecat-sail --all-features` = 29 passed / 0
+  failed; `sail-iceberg` own tests = 79 passed.**
+
+### ✅ H2 FULLY RESOLVED — `../sail` committed (2 commits on `claude/table-update-apply`)
+- `32dbf172 fix(iceberg): round-trip manifest lower/upper bounds through Avro`
+- `b09d7bda feat(catalog): expose Iceberg planning helpers + commit-table provider seam`
+Both `sail-local` and `catalog-provider` now build AND test green. The remaining
+proof blocker is the **book taxonomy/ledger/readiness drift** (3 contract checks in
+`check-local-dependency-contract.sh` vs `docs/book/lakecat.md`) — a deliberate
+book-rebuild release action, separate from H2/H10.
 
 ### What is NEXT (in order)
 4. ✅ **DONE — `lakecat-service` finished** (warnings cleaned + feature-gated parity
