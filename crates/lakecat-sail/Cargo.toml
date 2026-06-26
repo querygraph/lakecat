@@ -30,9 +30,9 @@ object_store = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sail-catalog = { workspace = true, optional = true }
-sail-catalog-iceberg = { path = "../../../sail/crates/sail-catalog-iceberg", optional = true }
+sail-catalog-iceberg = { workspace = true, optional = true }
 sail-common-datafusion = { workspace = true, optional = true }
-sail-iceberg = { path = "../../../sail/crates/sail-iceberg", optional = true }
+sail-iceberg = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true }

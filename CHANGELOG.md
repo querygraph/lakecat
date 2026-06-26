@@ -4,6 +4,16 @@
 
 ## 0.2.0 - 2026-06-26
 
+- Switched the Sail dependency from local `../sail` path deps to a Cargo **git
+  dependency on the `lakecat` branch of `github.com/querygraph/sail`**. All four
+  Sail crates LakeCat uses (`sail-catalog`, `sail-catalog-iceberg`,
+  `sail-common-datafusion`, `sail-iceberg`) are now centralized in
+  `[workspace.dependencies]` as that git source and referenced via
+  `{ workspace = true }`; `Cargo.lock` pins the exact branch rev. Cargo fetches Sail
+  directly, so no Sail checkout is needed to build (locally or in CI). Retired the
+  `ci/sail-patches` bridge accordingly: removed the patch files, the CI
+  Sail-checkout + patch-apply steps, the `.gitattributes` exemption, and the
+  dependency-contract patch/path checks, replacing them with git-source assertions.
 - Bumped the workspace to 0.2.0 (codename Lynx) and aligned every intra-workspace
   crate dependency pin to 0.2.0. This release folds the previously prepared but
   never-tagged 0.1.1 work (recorded in the 0.1.1 section below) together with the

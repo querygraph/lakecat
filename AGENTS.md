@@ -7,9 +7,12 @@ metadata-pointer state, policy gates, and integration events belong here.
 ## Repo Boundaries
 
 - Push Iceberg format, manifest, scan-planning, pruning, delete handling,
-  metadata-as-data, and engine work into Sail (`/Users/alexy/src/sail`) whenever
-  it can be reusable. LakeCat should prefer Sail APIs and generated Iceberg REST
-  models over local reimplementation.
+  metadata-as-data, and engine work into Sail whenever it can be reusable. LakeCat
+  should prefer Sail APIs and generated Iceberg REST models over local
+  reimplementation. LakeCat consumes Sail as a Cargo **git dependency on the
+  `lakecat` branch of `github.com/querygraph/sail`** (develop locally in a Sail
+  checkout, then push that branch and `cargo update` the locked rev — see
+  `CLAUDE.md`).
 - Push graph schema, graph taxonomy, projection logic, graph stores, traversal,
   and graph query behavior into Grust (`/Users/alexy/src/grust`). LakeCat should
   keep only catalog-facing graph sink/projection boundaries and call Grust APIs.

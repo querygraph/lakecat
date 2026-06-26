@@ -62,30 +62,6 @@ forbid_cargo_dependency() {
   fi
 }
 
-require_patch_matches_commit() {
-  local patch_file="$1"
-  local sail_commit="$2"
-  local description="$3"
-
-  require_file "$patch_file"
-  git -C ../sail rev-parse -q --verify "$sail_commit^{commit}" >/dev/null || \
-    fail "$description: missing Sail commit $sail_commit"
-
-  local patch_id
-  local commit_patch_id
-  patch_id="$(git patch-id --stable < "$patch_file" | awk '{ print $1; exit }')"
-  commit_patch_id="$(
-    git -C ../sail show --format=email --no-renames "$sail_commit" \
-      | git patch-id --stable \
-      | awk '{ print $1; exit }'
-  )"
-
-  [[ -n "$patch_id" ]] || fail "$description: could not compute patch id for $patch_file"
-  [[ -n "$commit_patch_id" ]] || fail "$description: could not compute patch id for Sail commit $sail_commit"
-  [[ "$patch_id" == "$commit_patch_id" ]] || \
-    fail "$description: $patch_file patch-id $patch_id does not match Sail commit $sail_commit patch-id $commit_patch_id"
-}
-
 require_manual_only_workflows() {
   local workflow
   local workflow_files=()
@@ -189,8 +165,6 @@ require_pattern 'LAKECAT_RELEASE_PROOF_CANDIDATE=1' scripts/check-release-readin
   "release-candidate gate must run the release proof contract in candidate mode"
 require_pattern 'LAKECAT_RELEASE_PROOF_CANDIDATE' scripts/check-release-proof-contract.sh \
   "release proof contract must support clean candidate mode"
-require_pattern 'ci/sail-patches/\*\.patch -whitespace' .gitattributes \
-  "Sail patch bridge files must be marked as patch artifacts for git diff whitespace checks"
 require_pattern 'scripts/check-book-artifact-contract.sh docs/book/dist' scripts/check-release-readiness.sh \
   "release-readiness gate must run the tracked book artifact contract"
 require_pattern 'require_file CHANGELOG\.md' scripts/check-release-version-contract.sh \
@@ -372,13 +346,15 @@ require_pattern 'version = "0\.10\.0"' Cargo.lock \
   "Cargo.lock must keep local Grust crates on the active 0.10.0 line"
 require_pattern 'version = "0\.7\.0-pre\.10"' Cargo.lock \
   "Cargo.lock must use the Turso crate line required by grust-turso"
-require_pattern 'sail-catalog = \{ path = "../sail/crates/sail-catalog" \}' Cargo.toml \
-  "sail-catalog must stay an explicit local Sail path until the needed Sail API is published"
-require_pattern 'sail-common-datafusion = \{ path = "../sail/crates/sail-common-datafusion" \}' Cargo.toml \
-  "sail-common-datafusion must stay an explicit local Sail path until the needed Sail API is published"
+for sail_crate in sail-catalog sail-catalog-iceberg sail-common-datafusion sail-iceberg; do
+  require_pattern "$sail_crate = \\{ git = \"https://github.com/querygraph/sail.git\", branch = \"lakecat\" \\}" Cargo.toml \
+    "$sail_crate must build from the querygraph/sail lakecat branch as a Cargo git dependency"
+done
+require_pattern 'git\+https://github.com/querygraph/sail.git\?branch=lakecat' Cargo.lock \
+  "Cargo.lock must pin Sail to the querygraph/sail lakecat branch git source"
 require_pattern 'qglake-fixture = \["dep:sail-iceberg"\]' crates/lakecat-cli/Cargo.toml \
   "lakecat-cli qglake-fixture must keep its Sail fixture writer behind an explicit feature"
-require_pattern 'sail-iceberg = \{ path = "../../../sail/crates/sail-iceberg", optional = true \}' crates/lakecat-cli/Cargo.toml \
+require_pattern 'sail-iceberg = \{ workspace = true, optional = true \}' crates/lakecat-cli/Cargo.toml \
   "lakecat-cli must keep sail-iceberg optional outside the qglake-fixture feature"
 require_pattern 'cargo run -p lakecat-cli --features qglake-fixture -- qglake-fixture' scripts/qglake-handoff-local.sh \
   "local QGLake handoff must opt into the fixture feature only for the generator step"
@@ -411,61 +387,8 @@ require_pattern 'const graphEdges = graphCount\("graph-edges"\)' scripts/qglake-
 require_pattern 'require_graph_projection_proof' crates/lakecat-cli/src/verify_proof.rs \
   "LakeCat handoff verifier must require graph projection proof"
 
-for sibling in ../sail/crates/sail-catalog ../sail/crates/sail-common-datafusion; do
-  require_dir "$sibling"
-done
 require_dir ../querygraph/qg-rust
 
-for patch in \
-  ci/sail-patches/0001-Expose-Iceberg-table-status-conversion.patch \
-  ci/sail-patches/0002-Expose-Iceberg-planning-result-helpers.patch \
-  ci/sail-patches/0003-Expose-Iceberg-generated-model-module.patch
-do
-  require_file "$patch"
-done
-require_patch_matches_commit \
-  ci/sail-patches/0001-Expose-Iceberg-table-status-conversion.patch \
-  68631016 \
-  "Sail table-status helper patch bridge must match the local helper commit"
-require_patch_matches_commit \
-  ci/sail-patches/0002-Expose-Iceberg-planning-result-helpers.patch \
-  fdb3b657 \
-  "Sail planning helper patch bridge must match the local helper commit"
-require_patch_matches_commit \
-  ci/sail-patches/0003-Expose-Iceberg-generated-model-module.patch \
-  a6964906 \
-  "Sail generated-model helper patch bridge must match the local helper commit"
-
-require_file ../sail/crates/sail-catalog-iceberg/src/lib.rs
-require_file ../sail/crates/sail-catalog-iceberg/src/planning.rs
-require_file ../sail/crates/sail-catalog-iceberg/src/provider.rs
-require_pattern 'pub mod models;' ../sail/crates/sail-catalog-iceberg/src/lib.rs \
-  "local Sail bridge must expose the generated Iceberg REST model module"
-require_pattern 'pub use crate::models::\{LoadTableResult, TableMetadata\};' ../sail/crates/sail-catalog-iceberg/src/lib.rs \
-  "local Sail bridge must expose LakeCat's typed table metadata inputs"
-require_pattern 'completed_planning_result_from_values' ../sail/crates/sail-catalog-iceberg/src/lib.rs \
-  "local Sail bridge must expose completed planning result helpers"
-require_pattern 'completed_planning_with_id_result_from_values' ../sail/crates/sail-catalog-iceberg/src/lib.rs \
-  "local Sail bridge must expose plan-id planning result helpers"
-require_pattern 'fetch_scan_tasks_result_from_values' ../sail/crates/sail-catalog-iceberg/src/lib.rs \
-  "local Sail bridge must expose fetchScanTasks result helpers"
-require_pattern 'load_table_result_to_status' ../sail/crates/sail-catalog-iceberg/src/lib.rs \
-  "local Sail bridge must expose table-status conversion"
-require_pattern 'pub fn completed_planning_result_from_values' ../sail/crates/sail-catalog-iceberg/src/planning.rs \
-  "local Sail planning helper module must define completed planning conversion"
-require_pattern 'pub fn completed_planning_with_id_result_from_values' ../sail/crates/sail-catalog-iceberg/src/planning.rs \
-  "local Sail planning helper module must define completed planning-with-id conversion"
-require_pattern 'pub fn fetch_scan_tasks_result_from_values' ../sail/crates/sail-catalog-iceberg/src/planning.rs \
-  "local Sail planning helper module must define fetchScanTasks conversion"
-require_pattern 'pub fn load_table_result_to_status' ../sail/crates/sail-catalog-iceberg/src/provider.rs \
-  "local Sail provider module must define table-status conversion"
-
-require_pattern 'git -C sail' .github/workflows/ci.yml \
-  "manual CI must apply the LakeCat Sail helper patches"
-require_pattern 'ci/sail-patches' .github/workflows/ci.yml \
-  "manual CI must reference ci/sail-patches"
-require_pattern 'repository: lakehq/sail' .github/workflows/ci.yml \
-  "manual CI must check out the Sail sibling repository"
 require_pattern 'cargo test -p lakecat-cli --features qglake-fixture qglake_fixture' .github/workflows/ci.yml \
   "manual CI matrix must keep explicit QGLake fixture feature coverage without automatic triggers"
 

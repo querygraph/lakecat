@@ -39,19 +39,9 @@ jobs:
         with:
           path: lakecat
 
-      - name: Checkout Sail
-        uses: actions/checkout@v4
-        with:
-          repository: lakehq/sail
-          path: sail
-
-      - name: Apply LakeCat Sail helper patches
-        run: |
-          PATCH_DIR="$PWD/lakecat/ci/sail-patches"
-          git -C sail \
-            -c user.name=lakecat-ci \
-            -c user.email=lakecat-ci@users.noreply.github.com \
-            am "$PATCH_DIR"/*.patch
+      # Sail is consumed as a Cargo git dependency on the querygraph/sail `lakecat`
+      # branch (see Cargo.toml); Cargo fetches it directly, so there is no Sail
+      # checkout or patch-apply step to run here.
 
       - name: Install protoc
         run: |

@@ -1,4 +1,3 @@
-# Patch bridge files preserve mail-patch context markers that can look like
-# trailing whitespace to `git diff --check`. The dependency contract verifies
-# these files against local Sail commits with stable `git patch-id` evidence.
-ci/sail-patches/*.patch -whitespace
+# LakeCat sources Sail from the querygraph/sail `lakecat` branch as a Cargo git
+# dependency (see Cargo.toml). The former ci/sail-patches bridge — and its
+# `-whitespace` exemption — was retired with that move.

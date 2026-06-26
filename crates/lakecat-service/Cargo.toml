@@ -40,5 +40,5 @@ url = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
-sail-catalog-iceberg = { path = "../../../sail/crates/sail-catalog-iceberg" }
-sail-iceberg = { path = "../../../sail/crates/sail-iceberg" }
+sail-catalog-iceberg = { workspace = true }
+sail-iceberg = { workspace = true }
