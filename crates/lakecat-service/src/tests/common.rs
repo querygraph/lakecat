@@ -749,7 +749,7 @@ pub(crate) struct CasRaceStore {
 
 #[cfg(feature = "sail-local")]
 impl CasRaceStore {
-    fn new(inner: Arc<dyn CatalogStore>, racing_metadata_location: String) -> Arc<Self> {
+    pub(crate) fn new(inner: Arc<dyn CatalogStore>, racing_metadata_location: String) -> Arc<Self> {
         Arc::new(Self {
             inner,
             racing_metadata_location,
