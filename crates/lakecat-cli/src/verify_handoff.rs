@@ -1190,6 +1190,12 @@ pub(crate) const QUERYGRAPH_IMPORT_PLAN_ARTIFACT_FIELDS: &[&str] = &[
     "graph-edges",
     "tables",
     "views",
+    // Informational, derived by the QueryGraph importer from the (graph-hash-
+    // covered) catalog-graph projection: the distinct node labels and the
+    // `MATCH (t:Table)` node count. Allowed but not separately verified — their
+    // integrity rides on the verified graph hash.
+    "catalog-labels",
+    "table-count",
 ];
 pub(crate) const QUERYGRAPH_IMPORT_PLAN_VERIFICATION_FIELDS: &[&str] = &[
     "warehouse",

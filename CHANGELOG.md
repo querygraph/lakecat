@@ -22,6 +22,14 @@ governance, or on-disk behavior change versus v0.2.0.
   unchanged. No wire-shape/field/serde-rename/hashing change. Verified: 13
   `lakecat-querygraph` tests preserved, default + `qglake-fixture` builds green, fmt
   clean. (Follow-up: point `qg-rust` at the published crate and delete its copy.)
+- Handoff: the QGLake handoff verifier now recognizes the two informational
+  top-level fields the QueryGraph importer emits in its import-plan artifact —
+  `catalog-labels` (the catalog graph's distinct node labels) and `table-count`
+  (the `MATCH (t:Table)` node count), both derived from the graph-hash-covered
+  projection. They are allowed but not separately verified — their integrity rides
+  on the verified graph hash. The strict closed-field set is otherwise intact
+  (unknown fields still rejected; verification/tables/views shapes unchanged); fixes
+  the handoff `qglake-verify-handoff` step against the current importer.
 - Contract: removed the brittle cross-repo qg-rust **source/version greps** from
   `check-local-dependency-contract.sh` (importer source-file path, `receipt_chain_hash`
   field text, a pinned Grust version in qg-rust's manifest/lockfile). They reached
