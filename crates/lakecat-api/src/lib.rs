@@ -51,6 +51,7 @@ impl Default for CatalogConfigResponse {
                 "POST /v1/{prefix}/namespaces".to_string(),
                 "GET /v1/{prefix}/namespaces/{namespace}".to_string(),
                 "DELETE /v1/{prefix}/namespaces/{namespace}".to_string(),
+                "GET /v1/{prefix}/namespaces/{namespace}/tables".to_string(),
                 "POST /v1/{prefix}/namespaces/{namespace}/tables".to_string(),
                 "GET /v1/{prefix}/namespaces/{namespace}/tables/{table}".to_string(),
                 "POST /v1/{prefix}/namespaces/{namespace}/tables/{table}".to_string(),
@@ -65,6 +66,7 @@ impl Default for CatalogConfigResponse {
                 "POST /catalog/v1/namespaces".to_string(),
                 "GET /catalog/v1/namespaces/{namespace}".to_string(),
                 "DELETE /catalog/v1/namespaces/{namespace}".to_string(),
+                "GET /catalog/v1/namespaces/{namespace}/tables".to_string(),
                 "POST /catalog/v1/namespaces/{namespace}/tables".to_string(),
                 "GET /catalog/v1/namespaces/{namespace}/tables/{table}".to_string(),
                 "DELETE /catalog/v1/namespaces/{namespace}/tables/{table}".to_string(),
@@ -78,6 +80,7 @@ impl Default for CatalogConfigResponse {
                 "POST /catalog/v1/{warehouse}/namespaces".to_string(),
                 "GET /catalog/v1/{warehouse}/namespaces/{namespace}".to_string(),
                 "DELETE /catalog/v1/{warehouse}/namespaces/{namespace}".to_string(),
+                "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables".to_string(),
                 "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables".to_string(),
                 "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}".to_string(),
                 "DELETE /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}"
@@ -226,6 +229,11 @@ impl NamespaceResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ListNamespacesResponse {
     pub namespaces: Vec<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ListTablesResponse {
+    pub identifiers: Vec<TableIdentifier>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

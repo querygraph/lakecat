@@ -164,6 +164,46 @@ fn catalog_config_endpoints_advertise_table_create_routes() {
 }
 
 #[test]
+fn list_tables_response_serializes_as_identifier_objects() {
+    let response = ListTablesResponse {
+        identifiers: vec![
+            TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            TableIdentifier {
+                namespace: vec!["a".to_string(), "b".to_string()],
+                name: "metrics".to_string(),
+            },
+        ],
+    };
+    let value = serde_json::to_value(&response).unwrap();
+    assert_eq!(
+        value["identifiers"],
+        serde_json::json!([
+            {"namespace": ["default"], "name": "events"},
+            {"namespace": ["a", "b"], "name": "metrics"},
+        ])
+    );
+    let parsed: ListTablesResponse = serde_json::from_value(value).unwrap();
+    assert_eq!(parsed, response);
+}
+
+#[test]
+fn catalog_config_endpoints_advertise_table_list_routes() {
+    let endpoints = CatalogConfigResponse::default()
+        .endpoints
+        .into_iter()
+        .collect::<std::collections::BTreeSet<_>>();
+
+    // listTables: GET on the `/tables` collection, advertised in all three
+    // route families (canonical `/v1/{prefix}`, default, and `{warehouse}`).
+    assert!(endpoints.contains("GET /v1/{prefix}/namespaces/{namespace}/tables"));
+    assert!(endpoints.contains("GET /catalog/v1/namespaces/{namespace}/tables"));
+    assert!(endpoints.contains("GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables"));
+}
+
+#[test]
 fn catalog_config_endpoints_advertise_querygraph_integration_routes() {
     let endpoints = CatalogConfigResponse::default()
         .endpoints
