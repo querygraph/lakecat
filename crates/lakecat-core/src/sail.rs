@@ -176,6 +176,23 @@ impl DeferredSailCatalogEngine {
 #[async_trait]
 impl SailCatalogEngine for DeferredSailCatalogEngine {
     async fn prepare_commit(&self, request: CommitPreparationRequest) -> LakeCatResult<CommitPlan> {
+        // The deferred engine cannot evolve table metadata by Iceberg `updates`
+        // (applying add-snapshot / schema / spec changes is Sail table-format work,
+        // available with the `sail-local` feature). When a commit carries updates
+        // but no replacement metadata document, the catalog is expected to apply
+        // them server-side — which this build cannot do. Reject honestly with
+        // `NotSupported` rather than silently returning the table unchanged, which
+        // looks like a successful commit while dropping every update. Register-style
+        // commits that carry the full `new_metadata` are still served, and a commit
+        // with no updates is a no-op pass-through.
+        if request.new_metadata.is_none() && !request.updates.is_empty() {
+            return Err(LakeCatError::NotSupported(format!(
+                "applying {} Iceberg table update(s) server-side requires the \
+                 `sail-local` build; this deferred build accepts only commits that \
+                 carry the full replacement table metadata",
+                request.updates.len()
+            )));
+        }
         let metadata_write_required =
             request.new_metadata_location.is_some() || request.new_metadata.is_some();
         let new_metadata_location = request
@@ -352,5 +369,69 @@ mod tests {
 
         assert!(matches!(error, LakeCatError::NotSupported(_)));
         assert!(error.to_string().contains("sail-local"));
+    }
+
+    fn commit_request(
+        updates: Vec<serde_json::Value>,
+        new_metadata: Option<serde_json::Value>,
+    ) -> CommitPreparationRequest {
+        CommitPreparationRequest {
+            table: TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            ),
+            principal: Principal::anonymous(),
+            current_metadata_location: Some(
+                "file:///tmp/events/metadata/00000.json".to_string(),
+            ),
+            new_metadata_location: None,
+            current_metadata: serde_json::json!({"format-version": 2, "snapshots": []}),
+            new_metadata,
+            requirements: Vec::new(),
+            updates,
+        }
+    }
+
+    #[tokio::test]
+    async fn deferred_engine_rejects_commit_with_unapplied_updates() {
+        // The exact silent-drop case (finding H9): updates present, no replacement
+        // metadata — the deferred build must reject, not return the table unchanged.
+        let error = DeferredSailCatalogEngine::new()
+            .prepare_commit(commit_request(
+                vec![serde_json::json!({"action": "add-snapshot"})],
+                None,
+            ))
+            .await
+            .expect_err("deferred engine must not silently drop table updates");
+        assert!(matches!(error, LakeCatError::NotSupported(_)));
+        assert!(error.to_string().contains("sail-local"));
+    }
+
+    #[tokio::test]
+    async fn deferred_engine_serves_register_style_commit() {
+        // A commit carrying the full replacement metadata is still served.
+        let new = serde_json::json!({"format-version": 2, "snapshots": [{"snapshot-id": 1}]});
+        let plan = DeferredSailCatalogEngine::new()
+            .prepare_commit(commit_request(
+                vec![serde_json::json!({"action": "add-snapshot"})],
+                Some(new.clone()),
+            ))
+            .await
+            .expect("register-style commit with replacement metadata is served");
+        assert_eq!(plan.new_metadata, new);
+    }
+
+    #[tokio::test]
+    async fn deferred_engine_passes_through_no_update_commit() {
+        // An empty-update commit is a no-op pass-through of the current metadata.
+        let plan = DeferredSailCatalogEngine::new()
+            .prepare_commit(commit_request(Vec::new(), None))
+            .await
+            .expect("empty-update commit is a no-op pass-through");
+        assert_eq!(
+            plan.new_metadata,
+            serde_json::json!({"format-version": 2, "snapshots": []})
+        );
     }
 }
