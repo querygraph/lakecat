@@ -17,7 +17,9 @@ pub const LAKECAT_FORMAT_V4_TYPED_SAIL_VALUE: &str = "unavailable";
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct CatalogConfigResponse {
+    #[serde(default, with = "config_map")]
     pub defaults: Vec<ConfigEntry>,
+    #[serde(default, with = "config_map")]
     pub overrides: Vec<ConfigEntry>,
     pub endpoints: Vec<String>,
 }
@@ -37,6 +39,27 @@ impl Default for CatalogConfigResponse {
             ],
             overrides: Vec::new(),
             endpoints: vec![
+                // Spec-canonical Iceberg REST endpoints. Stock clients
+                // (pyiceberg/Spark/Trino) match advertised capabilities against
+                // the `<METHOD> /v1/{prefix}/<path>` form (no `/catalog` base,
+                // `{prefix}` = warehouse). Each maps to LakeCat's served
+                // `/catalog/v1/{warehouse}/<path>` route (client base ends in
+                // `/catalog`, prefix=warehouse). `updateTable` is the bare POST
+                // on the table path (no `/commit` suffix).
+                "GET /v1/config".to_string(),
+                "GET /v1/{prefix}/namespaces".to_string(),
+                "POST /v1/{prefix}/namespaces".to_string(),
+                "GET /v1/{prefix}/namespaces/{namespace}".to_string(),
+                "DELETE /v1/{prefix}/namespaces/{namespace}".to_string(),
+                "POST /v1/{prefix}/namespaces/{namespace}/tables".to_string(),
+                "GET /v1/{prefix}/namespaces/{namespace}/tables/{table}".to_string(),
+                "POST /v1/{prefix}/namespaces/{namespace}/tables/{table}".to_string(),
+                "DELETE /v1/{prefix}/namespaces/{namespace}/tables/{table}".to_string(),
+                "POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/plan".to_string(),
+                "POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/tasks".to_string(),
+                "GET /v1/{prefix}/namespaces/{namespace}/tables/{table}/credentials".to_string(),
+                // LakeCat-specific / legacy advertised routes retained for the
+                // QueryGraph handoff contract and the bundled CLI client.
                 "GET /catalog/v1/config".to_string(),
                 "GET /catalog/v1/namespaces".to_string(),
                 "POST /catalog/v1/namespaces".to_string(),
@@ -121,6 +144,61 @@ impl ConfigEntry {
     }
 }
 
+/// Serde adapter that puts Iceberg REST map-typed fields on the wire as JSON
+/// **objects** (`{"k":"v",...}`) while keeping the internal representation a
+/// `Vec<ConfigEntry>`. Stock Iceberg REST clients (pyiceberg/Spark/Trino) parse
+/// these fields as string→string maps; serializing them as arrays of
+/// `{key,value}` made them unparseable. Insertion order is preserved on
+/// serialize (serde_json emits map entries in the order supplied) and on
+/// deserialize (entries are collected in document order), so existing
+/// order/hash assumptions are unaffected.
+pub(crate) mod config_map {
+    use super::ConfigEntry;
+    use serde::de::{MapAccess, Visitor};
+    use serde::ser::SerializeMap;
+    use serde::{Deserializer, Serializer};
+    use std::fmt;
+
+    pub fn serialize<S>(entries: &[ConfigEntry], serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(entries.len()))?;
+        for entry in entries {
+            map.serialize_entry(&entry.key, &entry.value)?;
+        }
+        map.end()
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<ConfigEntry>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct ConfigMapVisitor;
+
+        impl<'de> Visitor<'de> for ConfigMapVisitor {
+            type Value = Vec<ConfigEntry>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a JSON object mapping string keys to string values")
+            }
+
+            fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+            where
+                M: MapAccess<'de>,
+            {
+                let mut entries = Vec::with_capacity(access.size_hint().unwrap_or(0));
+                while let Some((key, value)) = access.next_entry::<String, String>()? {
+                    entries.push(ConfigEntry::new(key, value));
+                }
+                Ok(entries)
+            }
+        }
+
+        deserializer.deserialize_map(ConfigMapVisitor)
+    }
+}
+
 #[cfg(test)]
 mod tests;
 
@@ -132,6 +210,7 @@ pub struct CreateNamespaceRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct NamespaceResponse {
     pub namespace: Vec<String>,
+    #[serde(default, with = "config_map")]
     pub properties: Vec<ConfigEntry>,
 }
 
@@ -183,6 +262,7 @@ pub struct LoadTableResponse {
     pub identifier: TableIdentifier,
     pub metadata_location: Option<String>,
     pub metadata: Value,
+    #[serde(default, with = "config_map")]
     pub config: Vec<ConfigEntry>,
 }
 
@@ -268,6 +348,7 @@ pub struct ListWarehousesResponse {
 #[serde(rename_all = "kebab-case")]
 pub struct StorageCredential {
     pub prefix: String,
+    #[serde(default, with = "config_map")]
     pub config: Vec<ConfigEntry>,
 }
 
