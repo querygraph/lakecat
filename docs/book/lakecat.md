@@ -822,15 +822,21 @@ The defaults intentionally separate compatibility from future capability:
 
 ```json
 {
-  "defaults": [
-    {"key": "lakecat.compatibility", "value": "iceberg-rest"},
-    {"key": "lakecat.format.baseline", "value": "iceberg-v1-v3"},
-    {"key": "lakecat.format.v4", "value": "extension-ready"},
-    {"key": "lakecat.format.v4.bridge", "value": "json-passthrough"},
-    {"key": "lakecat.format.v4.typed-sail", "value": "unavailable"}
-  ]
+  "defaults": {
+    "lakecat.compatibility": "iceberg-rest",
+    "lakecat.format.baseline": "iceberg-v1-v3",
+    "lakecat.format.v4": "extension-ready",
+    "lakecat.format.v4.bridge": "json-passthrough",
+    "lakecat.format.v4.typed-sail": "unavailable"
+  }
 }
 ```
+
+The Iceberg REST map-typed fields (`defaults`, `overrides`, table/credential
+`config`, and namespace `properties`) are JSON objects on the wire so that stock
+clients (pyiceberg/Spark/Trino) parse them directly; the advertised `endpoints`
+include the spec-canonical `<METHOD> /v1/{prefix}/...` forms alongside LakeCat's
+legacy strings.
 
 That means LakeCat can preserve and replay emerging v4 metadata through the Sail
 JSON bridge, but it is not claiming typed Sail v4 semantics yet. The same

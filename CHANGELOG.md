@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Iceberg REST stock-client compatibility: the catalog's map-typed REST fields
+  are now JSON **objects** on the wire (`{"k":"v",...}`) instead of arrays of
+  `{key,value}` (the long-standing `H8` finding), so stock `RestCatalog`
+  implementations (pyiceberg/Spark/Trino) can parse them. A new `config_map`
+  serde adapter in `lakecat-api` serializes/deserializes `Vec<ConfigEntry>` to/from
+  an object, applied to `CatalogConfigResponse.{defaults,overrides}`,
+  `NamespaceResponse.properties`, `LoadTableResponse.config`, and
+  `StorageCredential.config`; the internal `Vec<ConfigEntry>` representation (and
+  insertion/document order) is preserved, and LakeCat→LakeCat round-trips still
+  work (both ends now use objects). Internal replay/handoff evidence documents keep
+  their array shape. `GET /v1/config`'s advertised `endpoints` now additionally
+  include the spec-canonical `<METHOD> /v1/{prefix}/...` forms (no `/catalog` base,
+  `{prefix}`=warehouse) that stock clients match capabilities against — including
+  the bare `POST /v1/{prefix}/namespaces/{namespace}/tables/{table}` `updateTable`
+  (which LakeCat already routes, in addition to its `/commit` alias) — alongside the
+  retained legacy strings for the QueryGraph handoff contract. New `lakecat-api`
+  round-trip/object-shape/canonical-endpoint tests and a `lakecat-service` wire
+  assertion; existing tests updated to the object shape.
 - Handoff verifier: made the QueryGraph importer's verification/evidence artifacts
   **tolerant by policy**. The importer keeps enriching its output (catalog labels,
   table-node counts, per-view `verified-view-*` evidence maps, future fields); LakeCat
