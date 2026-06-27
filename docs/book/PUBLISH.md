@@ -239,6 +239,28 @@ Do not treat iCloud delivery as a broad directory-access task. Derive the
 current filename from `docs/book/dist/VERSION.md`, then use exact-path `stat`,
 `cmp`, or `cp` against `~/icloud/books/<kindle_link>`.
 
+## Blog Posts and TextPacks
+
+Every blog post under `docs/blog/` ships with a Ulysses **`.textpack`** as its
+hand-off deliverable to the writing/publishing app. **Always create a textpack
+for each blog post**, following the procedure in `TEXTPACK.md` (repository root).
+
+The short version (see `TEXTPACK.md` for the full steps and scripts):
+
+1. **Reflow** the post's prose to one line per paragraph — hard wrapping renders
+   ragged with vertical gaps in Ulysses/Ghost; leave code, lists, headings,
+   blockquotes, tables, and image lines untouched.
+2. **Render any `mermaid` diagrams to PNG** — Ulysses and Ghost do not render
+   `mermaid`. LakeCat already renders mermaid for the book via
+   `docs/book/render-diagrams.mjs` (white background, 2× scale, through
+   `docs/book/puppeteer-config.json`); render blog diagrams the same way and
+   reference the PNGs.
+3. **Bundle** the Markdown plus image assets into a `<post>.textbundle` and zip it
+   to `<post>.textpack` (with the `.textbundle` directory as the top-level entry).
+4. **Do not commit** the `.textpack` (or any base64 fallback) — it duplicates the
+   PNGs and bloats git. Generate it as a deliverable (e.g. under `/tmp`) and keep
+   the repo source clean: the post `.md` plus any `diagrams/*.mmd` and `*.png`.
+
 ## Git Delivery
 
 When a publishing change affects source, metadata, build scripts, or generated

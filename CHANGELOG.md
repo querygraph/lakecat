@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Docs: added `TEXTPACK.md` (repo root) — how to turn a `docs/blog/` post into a
+  Ulysses `.textpack` (reflow prose, render `mermaid` to PNG via the book's
+  `render-diagrams.mjs` tooling, bundle, don't commit the pack). Recorded the rule
+  in the book publishing runbook (`docs/book/PUBLISH.md`, new "Blog Posts and
+  TextPacks" section): every blog post always ships a textpack built per
+  `TEXTPACK.md`.
+
 ## 0.2.1 - 2026-06-26
 
 Lynx-line maintenance release: Turso/object-store commit-path performance,
