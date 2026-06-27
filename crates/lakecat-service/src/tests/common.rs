@@ -1488,9 +1488,21 @@ pub(crate) fn merge_json_object(target: &mut serde_json::Value, patch: serde_jso
 }
 
 pub(crate) fn assert_config_defaults_include(defaults: &serde_json::Value, key: &str, value: &str) {
+    // The Iceberg REST wire surface now serializes config maps as JSON objects
+    // (`{"k":"v"}`); the internal evidence/handoff documents still carry the
+    // legacy array-of-{key,value} shape. Accept either so this helper works for
+    // both wire responses and evidence payloads.
+    if let Some(map) = defaults.as_object() {
+        assert_eq!(
+            map.get(key).and_then(serde_json::Value::as_str),
+            Some(value),
+            "config defaults should include {key}={value}: {defaults:?}"
+        );
+        return;
+    }
     let defaults = defaults
         .as_array()
-        .expect("config defaults should be an array");
+        .expect("config defaults should be a JSON object or array");
     assert!(
         defaults.iter().any(|entry| {
             entry.get("key").and_then(serde_json::Value::as_str) == Some(key)

@@ -96,6 +96,15 @@ async fn config_endpoint_reports_lakecat_capabilities() {
         .await
         .unwrap();
     let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    // Stock Iceberg REST clients require object-shaped config maps.
+    assert!(
+        payload["defaults"].is_object(),
+        "config defaults should be a JSON object on the wire: {payload:?}"
+    );
+    assert!(
+        payload["overrides"].is_object(),
+        "config overrides should be a JSON object on the wire: {payload:?}"
+    );
     assert_config_defaults_include(&payload["defaults"], "lakecat.format.v4", "extension-ready");
     assert_config_defaults_include(
         &payload["defaults"],
@@ -137,6 +146,20 @@ async fn config_endpoint_reports_lakecat_capabilities() {
     );
     assert_config_endpoints_include(&payload["endpoints"], "POST /management/v1/lineage/drain");
     assert_config_endpoints_include(&payload["endpoints"], "GET /querygraph/v1/bootstrap");
+    // Spec-canonical `<METHOD> /v1/{prefix}/...` forms that stock clients match.
+    assert_config_endpoints_include(&payload["endpoints"], "GET /v1/config");
+    assert_config_endpoints_include(
+        &payload["endpoints"],
+        "POST /v1/{prefix}/namespaces/{namespace}/tables",
+    );
+    assert_config_endpoints_include(
+        &payload["endpoints"],
+        "GET /v1/{prefix}/namespaces/{namespace}/tables/{table}",
+    );
+    assert_config_endpoints_include(
+        &payload["endpoints"],
+        "POST /v1/{prefix}/namespaces/{namespace}/tables/{table}",
+    );
 }
 
 #[tokio::test]

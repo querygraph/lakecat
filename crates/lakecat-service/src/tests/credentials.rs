@@ -231,15 +231,18 @@ async fn load_credentials_returns_scoped_local_file_profile_without_raw_secrets(
         credentials[0]["prefix"],
         serde_json::json!("file:///tmp/events")
     );
-    let config = credentials[0]["config"].as_array().unwrap();
-    assert!(config.iter().any(|entry| {
-        entry["key"] == "lakecat.credential-mode" && entry["value"] == "local-file-no-secret"
-    }));
-    assert!(!config.iter().any(|entry| {
-        entry["key"]
-            .as_str()
-            .is_some_and(|key| key.contains("secret") || key.contains("token"))
-    }));
+    let config = credentials[0]["config"].as_object().unwrap();
+    assert_eq!(
+        config
+            .get("lakecat.credential-mode")
+            .and_then(serde_json::Value::as_str),
+        Some("local-file-no-secret")
+    );
+    assert!(
+        !config
+            .keys()
+            .any(|key| key.contains("secret") || key.contains("token"))
+    );
 }
 
 #[tokio::test]
@@ -342,14 +345,18 @@ async fn management_storage_profile_overrides_inferred_credentials_by_prefix() {
         credentials[0]["prefix"],
         serde_json::json!("file:///tmp/events")
     );
-    let config = credentials[0]["config"].as_array().unwrap();
-    assert!(config.iter().any(|entry| {
-        entry["key"] == "lakecat.storage-profile-id" && entry["value"] == "local-events"
-    }));
-    assert!(
+    let config = credentials[0]["config"].as_object().unwrap();
+    assert_eq!(
         config
-            .iter()
-            .any(|entry| { entry["key"] == "lakecat.endpoint" && entry["value"] == "local" })
+            .get("lakecat.storage-profile-id")
+            .and_then(serde_json::Value::as_str),
+        Some("local-events")
+    );
+    assert_eq!(
+        config
+            .get("lakecat.endpoint")
+            .and_then(serde_json::Value::as_str),
+        Some("local")
     );
 }
 
@@ -532,14 +539,17 @@ async fn credential_issuer_vends_short_lived_credentials_for_secret_ref_profile(
         credentials[0]["prefix"],
         serde_json::json!("s3://lakecat-demo/events")
     );
-    let config = credentials[0]["config"].as_array().unwrap();
-    assert!(config.iter().any(|entry| {
-        entry["key"] == "lakecat.credential-kind" && entry["value"] == "mock-short-lived"
-    }));
+    let config = credentials[0]["config"].as_object().unwrap();
+    assert_eq!(
+        config
+            .get("lakecat.credential-kind")
+            .and_then(serde_json::Value::as_str),
+        Some("mock-short-lived")
+    );
     assert!(
         !config
-            .iter()
-            .any(|entry| { entry["value"] == "typesec://lakecat/local/s3-events" })
+            .values()
+            .any(|value| value.as_str() == Some("typesec://lakecat/local/s3-events"))
     );
 
     let requests = issuer.requests.lock().await;
@@ -626,10 +636,13 @@ async fn typesec_credential_issuer_gates_secret_ref_resolution() {
     let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
     let credentials = body["storage-credentials"].as_array().unwrap();
     assert_eq!(credentials.len(), 1);
-    let config = credentials[0]["config"].as_array().unwrap();
-    assert!(config.iter().any(|entry| {
-        entry["key"] == "lakecat.credential-kind" && entry["value"] == "typesec-env-short-lived"
-    }));
+    let config = credentials[0]["config"].as_object().unwrap();
+    assert_eq!(
+        config
+            .get("lakecat.credential-kind")
+            .and_then(serde_json::Value::as_str),
+        Some("typesec-env-short-lived")
+    );
 
     let denied = Request::builder()
         .method(Method::GET)
