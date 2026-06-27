@@ -145,37 +145,36 @@ fn qglake_handoff_captured_output_semantics_rejects_extra_lakecat_replay_root_fi
 }
 
 #[test]
-fn qglake_handoff_captured_output_semantics_rejects_extra_querygraph_root_fields() {
-    for (capture, file, claim, label) in [
+fn qglake_handoff_captured_output_semantics_tolerates_extra_querygraph_root_fields() {
+    // Tolerant by policy: the QueryGraph importer may enrich its verify/import output
+    // with additional evidence fields. LakeCat does not gate on the importer artifact
+    // shape — round-trip integrity rides on the strictly matched hashes/ids — so an
+    // additive field must be ACCEPTED, not rejected.
+    for (capture, file, field) in [
         (
             "querygraphVerify",
             "querygraph-verify.json",
-            "unverifiedQueryGraphVerifyClaim",
-            "captured QueryGraph verify output",
+            "additionalQueryGraphVerifyEvidence",
         ),
         (
             "querygraphImport",
             "querygraph-import.json",
-            "unverifiedQueryGraphImportClaim",
-            "captured QueryGraph import output",
+            "additionalQueryGraphImportEvidence",
         ),
     ] {
         let temp = qglake_temp_dir(&format!("handoff-captured-extra-{capture}-root"));
         let summary_path = temp.join("handoff-summary.json");
         let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
         let mut output = read_json_file(&temp.join(file)).expect("read captured QueryGraph output");
-        output[claim] = json!(qglake_fixture_hash("unverified-querygraph-root-claim"));
-        let bytes = serde_json::to_vec_pretty(&output).expect("drifted QueryGraph JSON");
-        fs::write(temp.join(file), &bytes).expect("write drifted QueryGraph output");
+        output[field] = json!(qglake_fixture_hash("additive-querygraph-evidence"));
+        let bytes = serde_json::to_vec_pretty(&output).expect("enriched QueryGraph JSON");
+        fs::write(temp.join(file), &bytes).expect("write enriched QueryGraph output");
         summary["artifacts"]["capturedOutputs"][capture]["sha256"] =
             json!(content_hash_bytes(&bytes));
 
-        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
-            .expect_err("captured QueryGraph output should reject extra root fields");
-        let err = err.to_string();
-
-        assert!(err.contains(label), "{err}");
-        assert!(err.contains(&format!("unexpected field {claim}")), "{err}");
+        verify_qglake_handoff_captured_output_semantics(&summary_path, &summary).expect(
+            "captured QueryGraph output should tolerate additive importer evidence fields",
+        );
     }
 }
 

@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Handoff verifier: made the QueryGraph importer's verification/evidence artifacts
+  **tolerant by policy**. The importer keeps enriching its output (catalog labels,
+  table-node counts, per-view `verified-view-*` evidence maps, future fields); LakeCat
+  no longer gates on the exact shape of the importer-produced artifacts — round-trip
+  integrity rides on the strictly matched hashes, counts, and ids. New
+  `require_present_fields` helper (require the known core fields, tolerate extras)
+  replaces the closed-set check on the captured verify/import output and the
+  import-plan top-level + verification; the field constants are pruned to the required
+  core. Policy boundary preserved: LakeCat's OWN replay proof claims stay strict
+  (`require_only_fields` — forged/unverified claims rejected), and the structured
+  import **table/view records** LakeCat consumes stay strict. Three handoff tests
+  flipped from rejecting to tolerating an additive field; 492 `lakecat-cli` tests pass
+  and the handoff verifies end-to-end. This ends the recurring cross-repo drift where
+  every importer output enrichment tripped a closed-field set.
 - DRY migration (qg-rust side): the QueryGraph importer now depends on the published
   `qglake-bundle` crate and deleted its copied bundle wire types + `verify.rs`
   validation, keeping only its own import-plan output types. LakeCat side, finalized

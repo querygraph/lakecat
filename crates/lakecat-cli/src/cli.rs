@@ -502,6 +502,31 @@ pub(crate) fn require_only_fields(
     Ok(())
 }
 
+/// Tolerant-by-policy field check for artifacts produced by the *QueryGraph
+/// importer* (its captured verify/import output and import-plan). The importer may
+/// enrich these with additional descriptive or per-view evidence fields over time
+/// (catalog labels, table-node counts, `verified-view-*` maps, and future ones),
+/// so LakeCat does NOT gate on their exact shape — round-trip integrity is enforced
+/// separately by strict matching of the security-critical hashes, counts, and ids.
+/// This requires the known core fields are present but tolerates any extras.
+///
+/// Use this only for importer-produced artifacts. LakeCat's OWN replay proof claims
+/// stay strict via [`require_only_fields`] so forged/unverified claims are rejected.
+pub(crate) fn require_present_fields(
+    value: &serde_json::Map<String, Value>,
+    required_fields: &[&str],
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    for field in required_fields {
+        if !value.contains_key(*field) {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label} is missing required field {field}"
+            )));
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn required_array<'a>(
     value: &'a serde_json::Map<String, Value>,
     field: &str,

@@ -80,58 +80,45 @@ fn qglake_handoff_querygraph_import_plan_semantics_rejects_table_drift() {
 }
 
 #[test]
-fn qglake_handoff_querygraph_import_plan_semantics_rejects_extra_root_fields() {
+fn qglake_handoff_querygraph_import_plan_semantics_tolerates_extra_root_fields() {
+    // Tolerant by policy: the importer may add descriptive/evidence fields to its
+    // import-plan artifact (catalog labels, counts, future ones). LakeCat does not
+    // gate on the artifact shape — integrity rides on the strictly matched hashes/ids
+    // — so an additive root field is ACCEPTED.
     let temp = qglake_temp_dir("handoff-import-plan-semantics-extra-root");
     let summary_path = temp.join("handoff-summary.json");
     let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
     let mut plan = qglake_write_handoff_import_plan_artifact(&temp, &mut summary);
-    plan["unverified-import-root-claim"] = json!({
-        "sha256": qglake_fixture_hash("unverified-import-root-claim")
+    plan["additional-import-evidence"] = json!({
+        "sha256": qglake_fixture_hash("additional-import-evidence")
     });
-    let bytes = serde_json::to_vec_pretty(&plan).expect("drifted import plan JSON");
-    fs::write(temp.join("querygraph-import-plan.json"), &bytes).expect("write drifted import plan");
+    let bytes = serde_json::to_vec_pretty(&plan).expect("enriched import plan JSON");
+    fs::write(temp.join("querygraph-import-plan.json"), &bytes).expect("write enriched import plan");
     summary["artifacts"]["querygraphImportPlan"]["sha256"] = json!(content_hash_bytes(&bytes));
 
-    let err = verify_qglake_handoff_querygraph_import_plan_semantics(&summary_path, &summary)
-        .expect_err("QueryGraph import plan artifact semantics should reject extra root fields");
-    let err = err.to_string();
-
-    assert!(
-        err.contains("handoff QueryGraph import plan artifact"),
-        "{err}"
-    );
-    assert!(
-        err.contains("unexpected field unverified-import-root-claim"),
-        "{err}"
-    );
+    verify_qglake_handoff_querygraph_import_plan_semantics(&summary_path, &summary)
+        .expect("QueryGraph import plan artifact semantics should tolerate additive root fields");
 }
 
 #[test]
-fn qglake_handoff_querygraph_import_plan_semantics_rejects_extra_verification_fields() {
+fn qglake_handoff_querygraph_import_plan_semantics_tolerates_extra_verification_fields() {
+    // Tolerant by policy: the importer emits additive per-view evidence maps in its
+    // verification (verified-view-* maps via the shared qglake-bundle verification).
+    // LakeCat tolerates additive verification fields; integrity rides on the strictly
+    // matched hashes/ids — so an extra verification field is ACCEPTED.
     let temp = qglake_temp_dir("handoff-import-plan-semantics-extra-verification");
     let summary_path = temp.join("handoff-summary.json");
     let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
     let mut plan = qglake_write_handoff_import_plan_artifact(&temp, &mut summary);
-    plan["verification"]["unverified-import-verification-claim"] = json!({
-        "sha256": qglake_fixture_hash("unverified-import-verification-claim")
+    plan["verification"]["additional-verification-evidence"] = json!({
+        "sha256": qglake_fixture_hash("additional-verification-evidence")
     });
-    let bytes = serde_json::to_vec_pretty(&plan).expect("drifted import plan JSON");
-    fs::write(temp.join("querygraph-import-plan.json"), &bytes).expect("write drifted import plan");
+    let bytes = serde_json::to_vec_pretty(&plan).expect("enriched import plan JSON");
+    fs::write(temp.join("querygraph-import-plan.json"), &bytes).expect("write enriched import plan");
     summary["artifacts"]["querygraphImportPlan"]["sha256"] = json!(content_hash_bytes(&bytes));
 
-    let err = verify_qglake_handoff_querygraph_import_plan_semantics(&summary_path, &summary)
-        .expect_err(
-            "QueryGraph import plan artifact semantics should reject extra verification fields",
-        );
-    let err = err.to_string();
-
-    assert!(
-        err.contains("handoff QueryGraph import plan artifact.verification"),
-        "{err}"
-    );
-    assert!(
-        err.contains("unexpected field unverified-import-verification-claim"),
-        "{err}"
+    verify_qglake_handoff_querygraph_import_plan_semantics(&summary_path, &summary).expect(
+        "QueryGraph import plan artifact semantics should tolerate additive verification fields",
     );
 }
 

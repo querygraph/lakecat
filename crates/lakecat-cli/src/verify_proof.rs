@@ -7,7 +7,9 @@ pub(crate) fn verify_querygraph_capture_matches_summary(
     view_scope: &HandoffViewScope,
     label: &str,
 ) -> lakecat_core::LakeCatResult<()> {
-    require_only_fields(capture, QUERYGRAPH_CAPTURE_FIELDS, label)?;
+    // Tolerant by policy: the importer may add evidence fields (per-view maps, etc.);
+    // we require the core fields are present and strictly match the hashes/ids below.
+    require_present_fields(capture, QUERYGRAPH_CAPTURE_FIELDS, label)?;
     require_string_match(capture, "warehouse", table_scope.warehouse.as_str(), label)?;
     require_verified_table_scope(capture, table_scope, label)?;
     require_verified_view_scope(capture, view_scope, label)?;
@@ -120,6 +122,11 @@ pub(crate) const LAKECAT_REPLAY_CAPTURE_FIELDS: &[&str] = &[
     "replay-evidence",
 ];
 
+// The core fields LakeCat cross-checks in the importer's captured verify/import
+// output; checked with `require_present_fields` (present + extras tolerated). The
+// importer also emits additive per-view evidence maps (`verified-view-versions`,
+// `verified-view-receipt-hashes`, `verified-view-receipt-chain-hashes`) that are
+// deliberately NOT gated here — integrity rides on the matched hashes below.
 pub(crate) const QUERYGRAPH_CAPTURE_FIELDS: &[&str] = &[
     "warehouse",
     "verified-tables",
@@ -131,14 +138,6 @@ pub(crate) const QUERYGRAPH_CAPTURE_FIELDS: &[&str] = &[
     "open-lineage-hash",
     "querygraph-import-hash",
     "standards",
-    // Per-view verification evidence the QueryGraph importer emits (stable-id ->
-    // value maps): the verified view versions, receipt hashes, and receipt-chain
-    // hashes it confirmed via the shared `qglake-bundle` validation. Additive and
-    // allowed but not separately cross-checked here — round-trip integrity is
-    // covered by the matched bundle-hash/graph-hash above.
-    "verified-view-versions",
-    "verified-view-receipt-hashes",
-    "verified-view-receipt-chain-hashes",
 ];
 
 pub(crate) struct HandoffTableScope {

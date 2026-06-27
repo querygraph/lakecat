@@ -1184,32 +1184,28 @@ pub(crate) fn require_qglake_import_plan_graph_counts_match_bundle(
     Ok(())
 }
 
+// The core structural fields LakeCat cross-checks in the importer's import-plan
+// artifact; checked with `require_present_fields` (present + extras tolerated). The
+// importer also emits additive descriptive fields (`catalog-labels`, a graph-derived
+// `table-count`, and future ones) that are deliberately NOT gated here — their
+// integrity rides on the verified graph hash.
 pub(crate) const QUERYGRAPH_IMPORT_PLAN_ARTIFACT_FIELDS: &[&str] = &[
     "verification",
     "graph-nodes",
     "graph-edges",
     "tables",
     "views",
-    // Informational, derived by the QueryGraph importer from the (graph-hash-
-    // covered) catalog-graph projection: the distinct node labels and the
-    // `MATCH (t:Table)` node count. Allowed but not separately verified — their
-    // integrity rides on the verified graph hash.
-    "catalog-labels",
-    "table-count",
 ];
+// Core verification fields LakeCat cross-checks; checked with `require_present_fields`.
+// The importer also emits additive per-view evidence maps (`verified-view-versions`,
+// `verified-view-receipt-hashes`, `verified-view-receipt-chain-hashes`) that are
+// tolerated — integrity rides on the matched bundle-hash/graph-hash.
 pub(crate) const QUERYGRAPH_IMPORT_PLAN_VERIFICATION_FIELDS: &[&str] = &[
     "warehouse",
     "table-count",
     "view-count",
     "verified-tables",
     "verified-views",
-    // Per-view verification evidence from the shared `qglake-bundle` verification
-    // (stable-id -> value maps): verified view versions, receipt hashes, and
-    // receipt-chain hashes. Additive; round-trip integrity rides on the matched
-    // bundle-hash/graph-hash.
-    "verified-view-versions",
-    "verified-view-receipt-hashes",
-    "verified-view-receipt-chain-hashes",
     "bundle-hash",
     "graph-hash",
     "open-lineage-hash",
@@ -1247,7 +1243,11 @@ pub(crate) fn verify_qglake_handoff_querygraph_import_plan_semantics(
             "handoff QueryGraph import plan artifact must be a JSON object".to_string(),
         )
     })?;
-    require_only_fields(
+    // Tolerant by policy (importer-produced artifact): require the core fields,
+    // tolerate additive descriptive/evidence fields (catalog labels, table-node
+    // count, per-view maps, future ones). Integrity rides on the strict hash/id
+    // matching below.
+    require_present_fields(
         plan,
         QUERYGRAPH_IMPORT_PLAN_ARTIFACT_FIELDS,
         "handoff QueryGraph import plan artifact",
@@ -1257,7 +1257,7 @@ pub(crate) fn verify_qglake_handoff_querygraph_import_plan_semantics(
         "verification",
         "handoff QueryGraph import plan artifact",
     )?;
-    require_only_fields(
+    require_present_fields(
         verification,
         QUERYGRAPH_IMPORT_PLAN_VERIFICATION_FIELDS,
         "handoff QueryGraph import plan artifact.verification",
