@@ -131,6 +131,14 @@ pub(crate) const QUERYGRAPH_CAPTURE_FIELDS: &[&str] = &[
     "open-lineage-hash",
     "querygraph-import-hash",
     "standards",
+    // Per-view verification evidence the QueryGraph importer emits (stable-id ->
+    // value maps): the verified view versions, receipt hashes, and receipt-chain
+    // hashes it confirmed via the shared `qglake-bundle` validation. Additive and
+    // allowed but not separately cross-checked here — round-trip integrity is
+    // covered by the matched bundle-hash/graph-hash above.
+    "verified-view-versions",
+    "verified-view-receipt-hashes",
+    "verified-view-receipt-chain-hashes",
 ];
 
 pub(crate) struct HandoffTableScope {

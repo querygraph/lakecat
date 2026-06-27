@@ -1203,6 +1203,13 @@ pub(crate) const QUERYGRAPH_IMPORT_PLAN_VERIFICATION_FIELDS: &[&str] = &[
     "view-count",
     "verified-tables",
     "verified-views",
+    // Per-view verification evidence from the shared `qglake-bundle` verification
+    // (stable-id -> value maps): verified view versions, receipt hashes, and
+    // receipt-chain hashes. Additive; round-trip integrity rides on the matched
+    // bundle-hash/graph-hash.
+    "verified-view-versions",
+    "verified-view-receipt-hashes",
+    "verified-view-receipt-chain-hashes",
     "bundle-hash",
     "graph-hash",
     "open-lineage-hash",

@@ -392,17 +392,20 @@ require_dir ../querygraph/qg-rust
 require_pattern 'cargo test -p lakecat-cli --features qglake-fixture qglake_fixture' .github/workflows/ci.yml \
   "manual CI matrix must keep explicit QGLake fixture feature coverage without automatic triggers"
 
-# NOTE: the QueryGraph importer's receipt-chain validation is proven BEHAVIORALLY
-# by the live handoff (scripts/qglake-handoff-local.sh runs qg-rust `lakecat-verify`
-# against a real bundle), not by grepping qg-rust's source. The previous content-
-# coupled greps (importer source file path, `receipt_chain_hash` field text, a pinned
-# Grust version in qg-rust's manifest/lockfile) reached across repo boundaries and
-# broke whenever qg-rust reorganized files or bumped a dependency — failures that
-# said nothing about LakeCat. The DRY successor is the shared `qglake-bundle` crate:
-# once qg-rust depends on it instead of copying the wire/validation types, the
-# contract is enforced by the type system, and the handoff remains the behavioral
-# proof. Until then, `require_dir ../querygraph/qg-rust` (above) plus the handoff
-# cover the relationship.
+# The QueryGraph importer consumes LakeCat's bootstrap-bundle wire format + view
+# receipt-chain validation through the shared `qglake-bundle` crate (extracted in
+# LakeCat 0.2.1 "Lynx"), NOT a copy. This single dependency assertion is the DRY
+# successor to the old content-coupled greps (importer source-file path,
+# `receipt_chain_hash` field text, a pinned Grust version in qg-rust's
+# manifest/lockfile) that reached across the repo boundary and broke whenever
+# qg-rust reorganized files or bumped a dependency — failures that said nothing
+# about LakeCat. Now the contract is enforced by the type system: if qg-rust
+# depends on `qglake-bundle`, it cannot silently drop the receipt-chain validation
+# without dropping the crate. The live handoff (scripts/qglake-handoff-local.sh
+# runs qg-rust `lakecat-verify` against a real bundle) remains the behavioral proof.
+require_file ../querygraph/qg-rust/Cargo.toml
+require_pattern '^qglake-bundle\b' ../querygraph/qg-rust/Cargo.toml \
+  "the QueryGraph importer must depend on the shared qglake-bundle crate rather than copy LakeCat's bundle wire/validation types"
 
 metadata_json="$tmpdir/metadata.json"
 full_metadata_json="$tmpdir/full-metadata.json"

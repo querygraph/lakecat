@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- DRY migration (qg-rust side): the QueryGraph importer now depends on the published
+  `qglake-bundle` crate and deleted its copied bundle wire types + `verify.rs`
+  validation, keeping only its own import-plan output types. LakeCat side, finalized
+  here: (1) the dependency contract replaces the removed cross-repo source greps with
+  a single robust assertion that qg-rust *depends on* `qglake-bundle`
+  (`require_pattern '^qglake-bundle' qg-rust/Cargo.toml`) — the type system, not text
+  greps, now guarantees the importer can't silently drop the receipt-chain validation;
+  the live handoff remains the behavioral proof. (2) The QGLake handoff verifier was
+  reconciled with the importer's now-richer output: depending on `qglake-bundle` made
+  qg-rust emit the *full* shared verification shape, so the captured verify/import
+  closed-set (`QUERYGRAPH_CAPTURE_FIELDS`) and the import-plan `.verification`
+  closed-set (`QUERYGRAPH_IMPORT_PLAN_VERIFICATION_FIELDS`) now allow the three
+  per-view evidence maps (`verified-view-versions`, `verified-view-receipt-hashes`,
+  `verified-view-receipt-chain-hashes`); strict matching on the security-critical
+  hashes is unchanged. Handoff verified end-to-end against the migrated importer.
+- Handoff: `qglake-handoff-local.sh` now removes the Turso MVCC `*.db-log` logical-log
+  files in its pre-run cleanup (alongside `*-wal`/`*-shm`), so reusing a run directory
+  no longer trips the "MVCC log exists but header indicates WAL mode" corruption guard.
 - Docs: added `TEXTPACK.md` (repo root) — how to turn a `docs/blog/` post into a
   Ulysses `.textpack` (reflow prose, render `mermaid` to PNG via the book's
   `render-diagrams.mjs` tooling, bundle, don't commit the pack). Recorded the rule

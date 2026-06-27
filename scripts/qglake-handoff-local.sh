@@ -1796,8 +1796,9 @@ ensure_bind_addr_free
 mkdir -p "$RUN_DIR"
 rm -f "$BUNDLE" "$DRAIN" "$IMPORT_PLAN" "$SUMMARY" \
   "$LAKECAT_REPLAY_OUTPUT" "$LAKECAT_HANDOFF_VERIFY_OUTPUT" "$LAKECAT_HANDOFF_SELF_VERIFY_OUTPUT" "$QUERYGRAPH_VERIFY_OUTPUT" "$QUERYGRAPH_IMPORT_OUTPUT" \
-  "$TURSO_PATH" "$TURSO_PATH-wal" "$TURSO_PATH-shm" \
-  "$GRUST_TURSO_PATH" "$GRUST_TURSO_PATH-wal" "$GRUST_TURSO_PATH-shm" "$SERVICE_LOG"
+  "$TURSO_PATH" "$TURSO_PATH-wal" "$TURSO_PATH-shm" "${TURSO_PATH%.turso}.db-log" \
+  "$GRUST_TURSO_PATH" "$GRUST_TURSO_PATH-wal" "$GRUST_TURSO_PATH-shm" "${GRUST_TURSO_PATH%.turso}.db-log" \
+  "$SERVICE_LOG"
 rm -rf "$RUN_DIR/events"
 
 echo "Starting LakeCat at $CATALOG_URL with Grust Turso graph projection"
