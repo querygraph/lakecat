@@ -19,13 +19,14 @@ use lakecat_api::{
     LAKECAT_FORMAT_V4_TYPED_SAIL_VALUE, LAKECAT_FORMAT_V4_VALUE, LineageDrainEventSummary,
     LineageDrainResponse, ListNamespacesResponse, ListPolicyBindingsResponse, ListProjectsResponse,
     ListServersResponse, ListStorageProfilesResponse, ListTableCommitRecordsResponse,
-    ListViewVersionReceiptChainsResponse, ListViewVersionReceiptsResponse, ListViewsResponse,
-    ListWarehousesResponse, LoadCredentialsResponse, LoadTableResponse, NamespaceResponse,
-    PlanTableScanRequest, PlanTableScanResponse, PolicyBindingResponse, ProjectResponse,
-    ServerResponse, StorageCredential, StorageProfileResponse, TableCommitRecordResponse,
-    TableIdentifier, UpsertPolicyBindingRequest, UpsertProjectRequest, UpsertServerRequest,
-    UpsertStorageProfileRequest, UpsertViewRequest, UpsertWarehouseRequest, ViewColumnResponse,
-    ViewResponse, ViewVersionReceiptChainResponse, ViewVersionReceiptResponse, WarehouseResponse,
+    ListTablesResponse, ListViewVersionReceiptChainsResponse, ListViewVersionReceiptsResponse,
+    ListViewsResponse, ListWarehousesResponse, LoadCredentialsResponse, LoadTableResponse,
+    NamespaceResponse, PlanTableScanRequest, PlanTableScanResponse, PolicyBindingResponse,
+    ProjectResponse, ServerResponse, StorageCredential, StorageProfileResponse,
+    TableCommitRecordResponse, TableIdentifier, UpsertPolicyBindingRequest, UpsertProjectRequest,
+    UpsertServerRequest, UpsertStorageProfileRequest, UpsertViewRequest, UpsertWarehouseRequest,
+    ViewColumnResponse, ViewResponse, ViewVersionReceiptChainResponse, ViewVersionReceiptResponse,
+    WarehouseResponse,
 };
 #[cfg(not(feature = "sail-local"))]
 use lakecat_core::sail::DeferredSailCatalogEngine;
@@ -468,4 +469,90 @@ async fn restore_table_reopens_soft_deleted_catalog_reads() {
         .unwrap();
     let response = app.oneshot(load).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+}
+
+async fn create_named_table(app: &Router, namespace: &str, name: &str) {
+    let create = Request::builder()
+        .method(Method::POST)
+        .uri(format!("/catalog/v1/namespaces/{namespace}/tables"))
+        .header("content-type", "application/json")
+        .body(Body::from(format!(
+            r#"{{"name":"{name}","location":"file:///tmp/{name}","metadata-location":"file:///tmp/{name}/metadata/00000.json","metadata":{{"format-version":3,"current-schema-id":1,"schemas":[{{"schema-id":1,"fields":[{{"id":1,"name":"event_id","type":"string","required":true}}]}}]}}}}"#
+        )))
+        .unwrap();
+    let response = app.clone().oneshot(create).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn list_tables_returns_identifiers_for_namespace() {
+    // Iceberg REST `listTables`: GET on the `/tables` collection returns the
+    // table identifiers in the requested namespace.
+    let app = test_app();
+    create_named_table(&app, "default", "events").await;
+    create_named_table(&app, "default", "metrics").await;
+
+    let list = Request::builder()
+        .method(Method::GET)
+        .uri("/catalog/v1/namespaces/default/tables")
+        .body(Body::empty())
+        .unwrap();
+    let response = app.clone().oneshot(list).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+
+    // Assert the wire shape: `identifiers` is an array of
+    // `{namespace:[...], name:"..."}` objects.
+    let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let identifiers = value["identifiers"].as_array().unwrap();
+    assert_eq!(identifiers.len(), 2);
+    for identifier in identifiers {
+        assert_eq!(identifier["namespace"], serde_json::json!(["default"]));
+        assert!(identifier["name"].is_string());
+    }
+
+    // And it deserializes into the typed response.
+    let parsed: ListTablesResponse = serde_json::from_slice(&body).unwrap();
+    let mut names: Vec<String> = parsed
+        .identifiers
+        .iter()
+        .map(|identifier| identifier.name.clone())
+        .collect();
+    names.sort();
+    assert_eq!(names, vec!["events".to_string(), "metrics".to_string()]);
+    assert!(
+        parsed
+            .identifiers
+            .iter()
+            .all(|identifier| identifier.namespace == vec!["default".to_string()])
+    );
+}
+
+#[tokio::test]
+async fn list_tables_excludes_other_namespaces() {
+    // A table in a different namespace must not appear in the listing.
+    let app = test_app();
+    create_named_table(&app, "default", "events").await;
+    create_named_table(&app, "other", "secrets").await;
+
+    let list = Request::builder()
+        .method(Method::GET)
+        .uri("/catalog/v1/namespaces/default/tables")
+        .body(Body::empty())
+        .unwrap();
+    let response = app.clone().oneshot(list).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let parsed: ListTablesResponse = serde_json::from_slice(&body).unwrap();
+    let names: Vec<String> = parsed
+        .identifiers
+        .iter()
+        .map(|identifier| identifier.name.clone())
+        .collect();
+    assert_eq!(names, vec!["events".to_string()]);
+    assert!(!names.contains(&"secrets".to_string()));
 }

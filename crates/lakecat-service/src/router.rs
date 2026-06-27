@@ -24,7 +24,7 @@ pub fn app(state: LakeCatState) -> Router {
         )
         .route(
             "/catalog/v1/{warehouse}/namespaces/{namespace}/tables",
-            post(create_table_for_warehouse),
+            get(list_tables_for_warehouse).post(create_table_for_warehouse),
         )
         .route(
             "/catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}",
@@ -75,7 +75,7 @@ pub fn app(state: LakeCatState) -> Router {
         )
         .route(
             "/catalog/v1/namespaces/{namespace}/tables",
-            post(create_table),
+            get(list_tables).post(create_table),
         )
         .route(
             "/catalog/v1/namespaces/{namespace}/tables/{table}",

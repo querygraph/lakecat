@@ -93,7 +93,8 @@ fn qglake_handoff_querygraph_import_plan_semantics_tolerates_extra_root_fields()
         "sha256": qglake_fixture_hash("additional-import-evidence")
     });
     let bytes = serde_json::to_vec_pretty(&plan).expect("enriched import plan JSON");
-    fs::write(temp.join("querygraph-import-plan.json"), &bytes).expect("write enriched import plan");
+    fs::write(temp.join("querygraph-import-plan.json"), &bytes)
+        .expect("write enriched import plan");
     summary["artifacts"]["querygraphImportPlan"]["sha256"] = json!(content_hash_bytes(&bytes));
 
     verify_qglake_handoff_querygraph_import_plan_semantics(&summary_path, &summary)
@@ -114,7 +115,8 @@ fn qglake_handoff_querygraph_import_plan_semantics_tolerates_extra_verification_
         "sha256": qglake_fixture_hash("additional-verification-evidence")
     });
     let bytes = serde_json::to_vec_pretty(&plan).expect("enriched import plan JSON");
-    fs::write(temp.join("querygraph-import-plan.json"), &bytes).expect("write enriched import plan");
+    fs::write(temp.join("querygraph-import-plan.json"), &bytes)
+        .expect("write enriched import plan");
     summary["artifacts"]["querygraphImportPlan"]["sha256"] = json!(content_hash_bytes(&bytes));
 
     verify_qglake_handoff_querygraph_import_plan_semantics(&summary_path, &summary).expect(

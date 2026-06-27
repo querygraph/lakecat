@@ -5,10 +5,10 @@ use lakecat_api::{
     CatalogConfigResponse, CommitTableRequest, CommitTableResponse, ConfigEntry,
     CreateNamespaceRequest, CreateTableRequest, ListNamespacesResponse, ListPolicyBindingsResponse,
     ListProjectsResponse, ListServersResponse, ListStorageProfilesResponse,
-    ListTableCommitRecordsResponse, ListViewVersionReceiptChainsResponse,
+    ListTableCommitRecordsResponse, ListTablesResponse, ListViewVersionReceiptChainsResponse,
     ListViewVersionReceiptsResponse, ListViewsResponse, ListWarehousesResponse,
     LoadCredentialsResponse, LoadTableResponse, NamespaceResponse, PolicyBindingResponse,
-    ProjectResponse, ServerResponse, StorageCredential, StorageProfileResponse,
+    ProjectResponse, ServerResponse, StorageCredential, StorageProfileResponse, TableIdentifier,
     UpsertPolicyBindingRequest, UpsertProjectRequest, UpsertServerRequest,
     UpsertStorageProfileRequest, UpsertViewRequest, UpsertWarehouseRequest, ViewResponse,
     WarehouseResponse,
@@ -165,6 +165,62 @@ pub(crate) async fn list_namespaces_in_warehouse(
             .map(|namespace| namespace.parts().to_vec())
             .collect(),
     }))
+}
+
+pub(crate) async fn list_tables(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path(namespace): Path<String>,
+) -> Result<Json<ListTablesResponse>, LakeCatHttpError> {
+    list_tables_in_warehouse(state.warehouse.clone(), state, headers, namespace).await
+}
+
+pub(crate) async fn list_tables_for_warehouse(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, namespace)): Path<(String, String)>,
+) -> Result<Json<ListTablesResponse>, LakeCatHttpError> {
+    let warehouse = prefixed_catalog_warehouse(&state, warehouse).await?;
+    list_tables_in_warehouse(warehouse, state, headers, namespace).await
+}
+
+pub(crate) async fn list_tables_in_warehouse(
+    warehouse: WarehouseName,
+    state: LakeCatState,
+    headers: HeaderMap,
+    namespace: String,
+) -> Result<Json<ListTablesResponse>, LakeCatHttpError> {
+    // listTables is scoped to a namespace; reuse the namespace-list authz
+    // (no distinct `TableList` policy action exists).
+    let capability = authorize_namespace_list(&state, request_identity(&headers)?).await?;
+    let namespace = namespace.parse::<Namespace>()?;
+    let tables = state.store.list_tables(&warehouse).await?;
+    let identifiers: Vec<TableIdentifier> = tables
+        .iter()
+        .filter(|table| table.ident.namespace == namespace)
+        .map(|table| TableIdentifier::from_ident(&table.ident))
+        .collect();
+    let table_names: Vec<String> = identifiers
+        .iter()
+        .map(|identifier| identifier.name.clone())
+        .collect();
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "table.listed",
+            None,
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "table.listed",
+                "authorization-receipt": capability.receipt(),
+                "warehouse": warehouse.as_str(),
+                "namespace": namespace.parts(),
+                "table-count": identifiers.len(),
+                "table-names": table_names,
+            }),
+        )?)
+        .await?;
+    Ok(Json(ListTablesResponse { identifiers }))
 }
 
 pub(crate) async fn load_namespace(

@@ -172,9 +172,8 @@ fn qglake_handoff_captured_output_semantics_tolerates_extra_querygraph_root_fiel
         summary["artifacts"]["capturedOutputs"][capture]["sha256"] =
             json!(content_hash_bytes(&bytes));
 
-        verify_qglake_handoff_captured_output_semantics(&summary_path, &summary).expect(
-            "captured QueryGraph output should tolerate additive importer evidence fields",
-        );
+        verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect("captured QueryGraph output should tolerate additive importer evidence fields");
     }
 }
 
