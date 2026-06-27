@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Commit (correctness, finding H9): the default (no-`sail-local`) build no longer
+  **silently drops** Iceberg `updates`. `DeferredSailCatalogEngine::prepare_commit`
+  now returns `NotSupported` when a commit carries `updates` but no replacement
+  metadata document — applying updates server-side (add-snapshot, schema/spec
+  changes) is Sail table-format work available with the `sail-local` feature. Before,
+  such a commit returned 200 with the table unchanged, which looked like success
+  while losing the write. Register-style commits that carry full `new_metadata`, and
+  no-op (empty-`updates`) commits, are still served unchanged. (For a real stock
+  append that *persists*, use a `sail-local` build, which applies updates via Sail's
+  `apply_table_updates`.)
+
 - Handoff verifier: made the QueryGraph importer's verification/evidence artifacts
   **tolerant by policy**. The importer keeps enriching its output (catalog labels,
   table-node counts, per-view `verified-view-*` evidence maps, future fields); LakeCat
