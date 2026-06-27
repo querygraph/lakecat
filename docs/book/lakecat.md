@@ -523,7 +523,18 @@ Two disciplines keep the spine trustworthy:
   QGLake handoff.
 
 
-# The Commit Benchmark
+# The Benchmark Suite
+
+A catalog lives on more than one path, so LakeCat is measured on more than one. The
+suite covers four axes a catalog and its engine actually exercise — committing under
+contention, scanning cold and warm through an object-store cache, competing against a
+JVM engine on identical files, and carrying a *stock* Iceberg client through a full
+write-and-read. The commit benchmark lives in `querygraph/catalog-commit-bench`; the
+cache-scan, rust-versus-jvm, and read-write benchmarks live in the broader
+`querygraph/catalog-bench` suite. All of them run behind the same impartial
+Docker/MinIO harness, so every number compares systems doing identical work against
+identical storage. This chapter walks them in turn, beginning with the commit path
+the rest of the catalog is built to serve.
 
 The commit path is where a catalog earns its keep, and it is exactly the part the
 usual benchmarks ignore. TPC-DS and TPC-H measure query engines; they touch the
@@ -605,6 +616,98 @@ many-tenant-per-host deployments rather than for a single warm server in a loop.
 
 The driver, the impartial Docker/MinIO harness, and the full results live in
 `querygraph/catalog-commit-bench`.
+
+## The object-store cache and the scan benchmark
+
+Where the commit benchmark holds the object store constant to isolate the catalog,
+the cache-scan benchmark does the opposite: it puts the read path under test and asks
+what a warm cache is worth. The answer is large, because the work a warm cache removes
+is a network round-trip. The benchmark plans a scan, reads it once cold straight from
+MinIO, then reads it again with Sail's object-store cache warm, over the same 87 MB
+dataset.
+
+The cache is a per-worker, read-through *page* cache in Sail's `sail-object-store`
+crate — `CachingObjectStore` over a `CacheConfig` — added to answer Sail issue #1015.
+It is ported from lancedb/ocra, attributed in the crate, with the original Moka
+backing store swapped for Foyer. It is opt-in: `SAIL_OBJECT_STORE_CACHE` turns it on,
+and `SAIL_OBJECT_STORE_CACHE_PAGE_SIZE`, `_MEMORY`, and `_METADATA` tune it — by
+default 1 MiB pages, 1 GiB of value memory, and 64 MiB of metadata. Because
+`object_store` exposes its read methods as a non-overridable blanket trait, the cache
+cannot wrap them directly; it intercepts the two range entry points the engine
+actually reads through — `get_opts` and `get_ranges` — and serves whole pages from
+memory. The current tier is in-memory only; Foyer's hybrid disk tiering is a follow-up
+the same seam already anticipates.
+
+On the same files the difference is roughly twenty-six fold: the per-file scan median
+falls from about 47.5 ms cold and uncached to 1.81 ms warm. None of this lives in
+LakeCat. A read-through object-store cache is a reusable engine concern, so it belongs
+in Sail; LakeCat consumes it through the same dependency seam it uses for planning and
+benefits without owning a line of cache code. How that seam is wired — and which Sail
+commits carry the cache — is the subject of `LAKECAT-SAIL.md`.
+
+## Rust versus the JVM
+
+The commit chapter was careful about what Rust did and did not buy: on an I/O-bound,
+fsynced commit loop against a warm JVM, runtime CPU speed barely registers. The
+rust-versus-jvm benchmark asks the same question honestly on the read path, where a
+vectorized engine has more room to move. It runs Sail/DataFusion and Spark 3.5.3 over
+the identical query and the identical files.
+
+The honest engine edge is modest: about 1.63× — a 446 ms Rust median against 729 ms
+for warm Spark. That is the real, like-for-like number, and it is the one to quote,
+because the JVM here is in its best case: warm, JIT-compiled, hot pools, doing exactly
+the same scan. The figure that looks spectacular — about 57.5× — is the *cached*
+comparison, and it earns an asterisk: the warm Foyer cache is doing most of that work,
+not the language. The lesson is the commit benchmark's, mirrored: the large win comes
+from a system-design choice — a cache living in the engine — not from Rust itself.
+What Rust keeps independently is what a warm steady-state benchmark hides — steadier
+tail latency with no GC pauses, a smaller resident footprint, and instant cold start.
+
+## The read-write benchmark and the stock-client round-trip
+
+The most demanding test in the suite is also the simplest to state: can an
+*unmodified* Iceberg client create a table, write real data, and read it back through
+LakeCat? The read-write benchmark drives stock PyIceberg with no LakeCat-aware shim —
+a plain `RestCatalog` pointed at the service. When the suite first ran this probe the
+answer was no; an early phase had recorded the full stock round-trip as impossible.
+The value of the benchmark was that it named *why*, gap by gap, and each gap turned
+out to be small and closable.
+
+Five fixes, four in LakeCat and one in Sail, turned impossible into routine:
+
+- **Map fields became objects.** LakeCat had been serializing Iceberg's map-typed
+  fields — `defaults`, `overrides`, `config`, `properties` — as arrays of
+  `{key, value}` pairs, which a stock client cannot parse. A `config_map` serde
+  adapter now emits them as JSON objects, so a plain `RestCatalog` reads `/config`
+  and proceeds.
+- **`/config` advertises canonical routes.** The endpoint now lists spec-canonical
+  `<METHOD> /v1/{prefix}/...` forms — keeping the legacy strings alongside — so a
+  stock client routes its calls where the spec says they live.
+- **`listTables` exists.** A `GET …/namespaces/{namespace}/tables` endpoint was
+  added, which stock clients call as a matter of course.
+- **The default build refuses what it cannot keep.** Without `sail-local`, a commit
+  can validate but not truly apply table-metadata updates; it used to accept them and
+  silently drop the change. It now *rejects* updates it cannot apply, the same
+  fail-closed posture the deferred scan seam already takes. Real persistence is the
+  `sail-local` build, which applies updates through Sail's `apply_table_updates`.
+- **Sail learned the append.** `apply_table_updates` now handles `add-snapshot` and
+  `set-snapshot-ref`, the two updates a data append produces — so a real snapshot
+  commit lands as new table metadata rather than being refused.
+
+The split is the boundary doing its job: compatibility shape — object-typed maps,
+canonical routes, the missing endpoint, the honest default-build refusal — is
+LakeCat's to fix, while table-format evolution, applying a snapshot append, is Sail's.
+With all five in place the round-trip is real and reproducible: stock PyIceberg 0.11.1,
+no shim, initializes a `RestCatalog`, creates a table, calls `table.append` and gets a
+genuine snapshot (`snapshots_after = 1`), then scans 1000 rows back, all against a
+`sail-local` LakeCat. With the Foyer cache warm the read side of that loop runs about
+150× faster than cold. What had been declared impossible is now a benchmark that
+passes on every run.
+
+The cache-scan, rust-versus-jvm, and read-write drivers, the MinIO harness, and the
+stock-client round-trip live in `querygraph/catalog-bench`; the integration seam they
+exercise — how LakeCat consumes Sail, and which Sail commits the round-trip depends on
+— is documented in `LAKECAT-SAIL.md`.
 
 
 # The Siblings and the Engine Path

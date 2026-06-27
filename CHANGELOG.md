@@ -2,16 +2,17 @@
 
 ## Unreleased
 
+- Docs: added `LAKECAT-SAIL.md` (the canonical LakeCat↔Sail integration doc — the `querygraph/sail#lakecat` git dep, what the branch carries today incl. the Foyer cache + snapshot-append, the `SailCatalogEngine` seam, default-build-vs-`sail-local`, and how to bump the pin) and broadened the book’s benchmark chapter into “The Benchmark Suite” — the Foyer object-store cache + cache-scan (~26×), Rust-vs-JVM (1.63× engine / 57.5× cached), and the read-write stock-client Iceberg round-trip the suite surfaced + proved. Rebuilt the book artifacts.
 - Iceberg REST `listTables`: LakeCat now serves `GET
-  /…/namespaces/{namespace}/tables`, so stock clients (pyiceberg/Spark) can list a
+  /â¦/namespaces/{namespace}/tables`, so stock clients (pyiceberg/Spark) can list a
   namespace's tables instead of failing with `NotImplementedError: Server does not
   support endpoint`. New `ListTablesResponse { identifiers: Vec<TableIdentifier> }`
-  in `lakecat-api` (Iceberg `{namespace:[…], name}` shape, reusing the existing
+  in `lakecat-api` (Iceberg `{namespace:[â¦], name}` shape, reusing the existing
   `TableIdentifier`); `list_tables` / `list_tables_for_warehouse` /
   `list_tables_in_warehouse` handlers in `lakecat-service` mirroring the
-  `list_namespaces` trio — authorized via the existing namespace-list policy action
+  `list_namespaces` trio â authorized via the existing namespace-list policy action
   (no new `TableList` action), filtered to the requested namespace, emitting a
-  `table.listed` audit event. The `.get(…)` is wired onto the `/tables` collection
+  `table.listed` audit event. The `.get(â¦)` is wired onto the `/tables` collection
   route in both the default and `{warehouse}` forms, and the endpoint is advertised
   in `GET /config` across all three route families. New `lakecat-api` round-trip +
   endpoint-advertisement tests and `lakecat-service` list/namespace-isolation tests.
@@ -23,20 +24,20 @@
   an object, applied to `CatalogConfigResponse.{defaults,overrides}`,
   `NamespaceResponse.properties`, `LoadTableResponse.config`, and
   `StorageCredential.config`; the internal `Vec<ConfigEntry>` representation (and
-  insertion/document order) is preserved, and LakeCat→LakeCat round-trips still
+  insertion/document order) is preserved, and LakeCatâLakeCat round-trips still
   work (both ends now use objects). Internal replay/handoff evidence documents keep
   their array shape. `GET /v1/config`'s advertised `endpoints` now additionally
   include the spec-canonical `<METHOD> /v1/{prefix}/...` forms (no `/catalog` base,
-  `{prefix}`=warehouse) that stock clients match capabilities against — including
+  `{prefix}`=warehouse) that stock clients match capabilities against â including
   the bare `POST /v1/{prefix}/namespaces/{namespace}/tables/{table}` `updateTable`
-  (which LakeCat already routes, in addition to its `/commit` alias) — alongside the
+  (which LakeCat already routes, in addition to its `/commit` alias) â alongside the
   retained legacy strings for the QueryGraph handoff contract. New `lakecat-api`
   round-trip/object-shape/canonical-endpoint tests and a `lakecat-service` wire
   assertion; existing tests updated to the object shape.
 - Commit (correctness, finding H9): the default (no-`sail-local`) build no longer
   **silently drops** Iceberg `updates`. `DeferredSailCatalogEngine::prepare_commit`
   now returns `NotSupported` when a commit carries `updates` but no replacement
-  metadata document — applying updates server-side (add-snapshot, schema/spec
+  metadata document â applying updates server-side (add-snapshot, schema/spec
   changes) is Sail table-format work available with the `sail-local` feature. Before,
   such a commit returned 200 with the table unchanged, which looked like success
   while losing the write. Register-style commits that carry full `new_metadata`, and
@@ -47,13 +48,13 @@
 - Handoff verifier: made the QueryGraph importer's verification/evidence artifacts
   **tolerant by policy**. The importer keeps enriching its output (catalog labels,
   table-node counts, per-view `verified-view-*` evidence maps, future fields); LakeCat
-  no longer gates on the exact shape of the importer-produced artifacts — round-trip
+  no longer gates on the exact shape of the importer-produced artifacts â round-trip
   integrity rides on the strictly matched hashes, counts, and ids. New
   `require_present_fields` helper (require the known core fields, tolerate extras)
   replaces the closed-set check on the captured verify/import output and the
   import-plan top-level + verification; the field constants are pruned to the required
   core. Policy boundary preserved: LakeCat's OWN replay proof claims stay strict
-  (`require_only_fields` — forged/unverified claims rejected), and the structured
+  (`require_only_fields` â forged/unverified claims rejected), and the structured
   import **table/view records** LakeCat consumes stay strict. Three handoff tests
   flipped from rejecting to tolerating an additive field; 492 `lakecat-cli` tests pass
   and the handoff verifies end-to-end. This ends the recurring cross-repo drift where
@@ -63,7 +64,7 @@
   validation, keeping only its own import-plan output types. LakeCat side, finalized
   here: (1) the dependency contract replaces the removed cross-repo source greps with
   a single robust assertion that qg-rust *depends on* `qglake-bundle`
-  (`require_pattern '^qglake-bundle' qg-rust/Cargo.toml`) — the type system, not text
+  (`require_pattern '^qglake-bundle' qg-rust/Cargo.toml`) â the type system, not text
   greps, now guarantees the importer can't silently drop the receipt-chain validation;
   the live handoff remains the behavioral proof. (2) The QGLake handoff verifier was
   reconciled with the importer's now-richer output: depending on `qglake-bundle` made
@@ -76,7 +77,7 @@
 - Handoff: `qglake-handoff-local.sh` now removes the Turso MVCC `*.db-log` logical-log
   files in its pre-run cleanup (alongside `*-wal`/`*-shm`), so reusing a run directory
   no longer trips the "MVCC log exists but header indicates WAL mode" corruption guard.
-- Docs: added `TEXTPACK.md` (repo root) — how to turn a `docs/blog/` post into a
+- Docs: added `TEXTPACK.md` (repo root) â how to turn a `docs/blog/` post into a
   Ulysses `.textpack` (reflow prose, render `mermaid` to PNG via the book's
   `render-diagrams.mjs` tooling, bundle, don't commit the pack). Recorded the rule
   in the book publishing runbook (`docs/book/PUBLISH.md`, new "Blog Posts and
@@ -97,10 +98,10 @@ governance, or on-disk behavior change versus v0.2.0.
 - Refactor (DRY): extracted a new lean **`qglake-bundle`** crate holding the
   QueryGraph bootstrap-bundle **wire format + validation** (the `QueryGraph*` serde
   types, `validate_view_receipt_evidence`, `view_receipt_evidence_hash`,
-  `verify_hash`). It depends only on `serde`/`serde_json`/`chrono`/`lakecat-core` —
-  **not** `lakecat-store` — so a bundle *consumer* (the QueryGraph importer in
+  `verify_hash`). It depends only on `serde`/`serde_json`/`chrono`/`lakecat-core` â
+  **not** `lakecat-store` â so a bundle *consumer* (the QueryGraph importer in
   `qg-rust`) can depend on it instead of **copying** these types into a separate
-  repo. `lakecat-querygraph` (1576 → 859 lines) keeps the store-coupled builders,
+  repo. `lakecat-querygraph` (1576 â 859 lines) keeps the store-coupled builders,
   now free functions (`bootstrap_from_*`, `*_projection_from_*`, `catalog_graph_*`)
   since Rust's orphan rule forbids inherent impls on another crate's types, and
   re-exports the wire types (`pub use qglake_bundle::*`) so caller type-paths are
@@ -108,10 +109,10 @@ governance, or on-disk behavior change versus v0.2.0.
   `lakecat-querygraph` tests preserved, default + `qglake-fixture` builds green, fmt
   clean. (Follow-up: point `qg-rust` at the published crate and delete its copy.)
 - Handoff: the QGLake handoff verifier now recognizes the two informational
-  top-level fields the QueryGraph importer emits in its import-plan artifact —
+  top-level fields the QueryGraph importer emits in its import-plan artifact â
   `catalog-labels` (the catalog graph's distinct node labels) and `table-count`
   (the `MATCH (t:Table)` node count), both derived from the graph-hash-covered
-  projection. They are allowed but not separately verified — their integrity rides
+  projection. They are allowed but not separately verified â their integrity rides
   on the verified graph hash. The strict closed-field set is otherwise intact
   (unknown fields still rejected; verification/tables/views shapes unchanged); fixes
   the handoff `qglake-verify-handoff` step against the current importer.
@@ -119,27 +120,27 @@ governance, or on-disk behavior change versus v0.2.0.
   `check-local-dependency-contract.sh` (importer source-file path, `receipt_chain_hash`
   field text, a pinned Grust version in qg-rust's manifest/lockfile). They reached
   across the repo boundary and broke whenever qg-rust reorganized files or bumped a
-  dependency — failures unrelated to LakeCat. The importer's receipt-chain validation
+  dependency â failures unrelated to LakeCat. The importer's receipt-chain validation
   is proven **behaviorally** by the live handoff (`qglake-handoff-local.sh` runs
   qg-rust `lakecat-verify`); the DRY successor is the shared `qglake-bundle` crate.
-  Bumped the contract's `cargo tree` version pins 0.2.0 → 0.2.1.
+  Bumped the contract's `cargo tree` version pins 0.2.0 â 0.2.1.
 - Deps: update TypeSec to the published **0.11.0 (Burano)** crates (from 0.8.0).
-  TypeSec 0.11.0 depends on Grust 0.11.0 — the same line LakeCat uses — so this
+  TypeSec 0.11.0 depends on Grust 0.11.0 â the same line LakeCat uses â so this
   **unifies Grust on a single 0.11.0 version**, dropping the leftover `grust 0.9.1`
   copy that `typesec-rbac 0.8.0` previously dragged in. Verified: 25
   `lakecat-security` + 465 `lakecat-service` typesec-local governance tests pass.
-  Bumped the contract's typesec assertions 0.8.0 → 0.11.0.
+  Bumped the contract's typesec assertions 0.8.0 â 0.11.0.
 - Build: depend on the **published Grust 0.11.0 crates** from crates.io
   (`grust-graph`, `grust-turso`) instead of a git/path dependency. Grust merged its
   `turso-mvcc` work (the `BEGIN CONCURRENT` MVCC backend) to main and cut the 0.11.0
-  release, so LakeCat now consumes it as a registry dependency like TypeSec — no
+  release, so LakeCat now consumes it as a registry dependency like TypeSec â no
   git source needed for Grust. Sail remains a git dependency
   (`querygraph/sail#lakecat`) until its needed changes are published. LakeCat still
   builds **out of the box** from a fresh clone. Updated the dependency-contract
   grust assertions from the git source to the published crates.io 0.11 line;
   verified default + `grust-turso-local` builds (35 graph tests incl. the MVCC
   Cypher-projection tests) and the dependency contract.
-- Book: added "The Commit Benchmark" chapter — what `catalog-commit-bench` measures,
+- Book: added "The Commit Benchmark" chapter â what `catalog-commit-bench` measures,
   the impartial same-MinIO setup, the 4-catalog results (LakeCat is #2 of four on
   both per-commit latency and concurrent throughput), the connection-reuse fixes
   that closed the gap, and the "Audit and idempotency" section explaining the
@@ -151,15 +152,15 @@ governance, or on-disk behavior change versus v0.2.0.
   warming one only on an empty pool) and returns it after a clean COMMIT/ROLLBACK;
   a connection that fails to even begin is dropped. Each concurrent writer still
   checks out a *distinct* connection and runs its own `BEGIN CONCURRENT`, so MVCC
-  concurrency is unchanged — verified by the FW-16 same-table/distinct-table
+  concurrency is unchanged â verified by the FW-16 same-table/distinct-table
   concurrency tests. On the S3-backed commit benchmark this took sequential p50
-  6.8 → 4.14 ms (133 → 207 commits/s) on top of the object-store client cache.
+  6.8 â 4.14 ms (133 â 207 commits/s) on top of the object-store client cache.
 - Performance: cache `object_store` clients per scheme+authority (one client per
-  bucket) instead of reconstructing one — credential chain, HTTP client, and a
-  fresh connection — on every commit. The per-object `Path` is still derived per
+  bucket) instead of reconstructing one â credential chain, HTTP client, and a
+  fresh connection â on every commit. The per-object `Path` is still derived per
   call via `ObjectStoreScheme::parse` (identical to `parse_url_opts`). On the
   S3-backed commit benchmark this nearly halved sequential commit latency
-  (p50 12.6 → 6.8 ms) by reusing keep-alive connections.
+  (p50 12.6 â 6.8 ms) by reusing keep-alive connections.
 
 ## 0.2.0 - 2026-06-26
 
@@ -167,7 +168,7 @@ governance, or on-disk behavior change versus v0.2.0.
   `scripts/check-release-readiness.sh --release-candidate` passed from a clean tree
   with the default and all-feature workspace matrix, the querygraph/sail `lakecat`
   git-dependency source assertions, temporary out-of-tree book validation, the
-  Grust Turso QGLake handoff, and QueryGraph locked verify/import — bundle hash
+  Grust Turso QGLake handoff, and QueryGraph locked verify/import â bundle hash
   `sha256:88e38f620068d13cb14cb3ad3f102558b694482a87b45f09c08419ed93cf17cb`,
   graph hash
   `sha256:7c6aa85c544d67953edf7bd168a85d8cfaa87a2f48f2732b77cf443031db01a7`,
@@ -194,11 +195,11 @@ governance, or on-disk behavior change versus v0.2.0.
   the 0.1.1 workspace version. (a) Re-added the genuinely-dropped LakeCat/Sail
   responsibility ledger ("The handoff between LakeCat and Sail should therefore be
   compact and typed" + the per-work-item table with the durable-proof column) into
-  `## Sail and the v3→v4 path`; it was lost in the stage-2 book consolidation and
+  `## Sail and the v3âv4 path`; it was lost in the stage-2 book consolidation and
   survived nowhere else. (b) Pointed the two gate patterns for sections that were
-  faithfully *renamed* (not dropped) at their surviving anchors — the
+  faithfully *renamed* (not dropped) at their surviving anchors â the
   standard/extension/proposal taxonomy now lives under `## The Proper-Noun Test`,
-  and `First Release Readiness` was re-leveled `##`→`#` by the TOC-hierarchy fix.
+  and `First Release Readiness` was re-leveled `##`â`#` by the TOC-hierarchy fix.
   (c) Bumped the two stale `cargo tree` version assertions
   (`lakecat-graph`/`lakecat-service`) from `v0.1.0` to the current `v0.1.1`.
   Rebuilt the book artifacts (`VERSION.md` now `0.1.1-687c9eea`); EPUB + PDF
@@ -214,13 +215,13 @@ governance, or on-disk behavior change versus v0.2.0.
   uses only the dedicated `grust_turso` crate, no raw `turso::`.
 - Split `lakecat-cli`'s `fixture.rs` (4,245 lines) into a `fixture/` directory of
   nine topic modules (behavior-preserving): `setup`, `bootstrap`, `listings`,
-  `scan`, `credentials`, `lineage`, `replay`, `management`, `writers` (each ≤ 721
+  `scan`, `credentials`, `lineage`, `replay`, `management`, `writers` (each â¤ 721
   lines). Items were extracted verbatim with their per-item cfg attributes; each
   module re-uses `use crate::*` (the file's only import). `fixture/mod.rs` gates
   each `mod`/re-export with the union of its items' cfg conditions so the default
   build sees no empty modules. Verified: 492 default + 499 `qglake-fixture` tests
   pass (== baseline); both builds warning-free; fmt clean.
-- Split `lakecat-store`'s root `lib.rs` (3,802 → 285 lines) into focused modules
+- Split `lakecat-store`'s root `lib.rs` (3,802 â 285 lines) into focused modules
   (behavior-preserving): `records.rs` (record types + validation), `memory.rs`
   (`MemoryCatalogStore`), and `helpers.rs` (free helpers); `lib.rs` now holds the
   `CatalogStore` trait plus glob re-exports so the public API and all `crate::`
@@ -231,7 +232,7 @@ governance, or on-disk behavior change versus v0.2.0.
 - Refactored the remaining crates for human-reviewability (behavior-preserving):
   moved every inline `#[cfg(test)] mod tests` into a separate `tests.rs`, and split
   the feature-gated integration modules into directory modules with their own test
-  files — `lakecat-sail` (`lib.rs` 6,388 → 15 lines; `catalog_provider/` and
+  files â `lakecat-sail` (`lib.rs` 6,388 â 15 lines; `catalog_provider/` and
   `sail_integration/` each `mod.rs` + `tests.rs`), `lakecat-graph`
   (`grust_integration/`), `lakecat-security` (`typesec_integration/`), plus
   `lakecat-api`/`lakecat-lineage`/`lakecat-querygraph` test extraction. All
@@ -256,7 +257,7 @@ governance, or on-disk behavior change versus v0.2.0.
   `lakecat-service/src/lib.rs` monoliths at the files those guarantees now live in
   (`verify_proof.rs`, the cli/service `tests/` trees). No guard was weakened; each
   still asserts the same string, only in its new location.
-- `lakecat-store`: split the ~16.9k-line `lib.rs` (16,852 → 3,802 lines) by
+- `lakecat-store`: split the ~16.9k-line `lib.rs` (16,852 â 3,802 lines) by
   extracting the `turso-local` backend into `turso_store/mod.rs` and its inline
   test module into `turso_store/tests.rs`, and the memory-backend test module
   into `memory_tests.rs`. Verbatim, path-preserving moves (the turso backend
@@ -5708,7 +5709,7 @@ governance, or on-disk behavior change versus v0.2.0.
   the verbose form is read correctly; fields with an absent or unrecognised
   direction are skipped rather than silently defaulted to ascending.
 - Fixed `create_table` in the in-process Sail provider always writing
-  `"default-sort-order-id": 1` even for unsorted tables: Iceberg spec §4.1.2
+  `"default-sort-order-id": 1` even for unsorted tables: Iceberg spec Â§4.1.2
   reserves id 0 for the unsorted order; a non-zero id implies intentional
   sorting and caused clients that issue `assert-default-sort-order-id: 0` on
   subsequent commits to receive a 409 Conflict. Unsorted tables now write id 0;
