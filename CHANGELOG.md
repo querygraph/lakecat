@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Iceberg REST `listTables`: LakeCat now serves `GET
+  /…/namespaces/{namespace}/tables`, so stock clients (pyiceberg/Spark) can list a
+  namespace's tables instead of failing with `NotImplementedError: Server does not
+  support endpoint`. New `ListTablesResponse { identifiers: Vec<TableIdentifier> }`
+  in `lakecat-api` (Iceberg `{namespace:[…], name}` shape, reusing the existing
+  `TableIdentifier`); `list_tables` / `list_tables_for_warehouse` /
+  `list_tables_in_warehouse` handlers in `lakecat-service` mirroring the
+  `list_namespaces` trio — authorized via the existing namespace-list policy action
+  (no new `TableList` action), filtered to the requested namespace, emitting a
+  `table.listed` audit event. The `.get(…)` is wired onto the `/tables` collection
+  route in both the default and `{warehouse}` forms, and the endpoint is advertised
+  in `GET /config` across all three route families. New `lakecat-api` round-trip +
+  endpoint-advertisement tests and `lakecat-service` list/namespace-isolation tests.
 - Iceberg REST stock-client compatibility: the catalog's map-typed REST fields
   are now JSON **objects** on the wire (`{"k":"v",...}`) instead of arrays of
   `{key,value}` (the long-standing `H8` finding), so stock `RestCatalog`
