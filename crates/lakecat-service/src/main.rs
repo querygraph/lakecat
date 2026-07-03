@@ -97,6 +97,11 @@ fn configured_governance_engine_from_policy_path(
     policy_path: Option<&str>,
 ) -> lakecat_core::LakeCatResult<Arc<dyn GovernanceEngine>> {
     let Some(policy_path) = policy_path else {
+        eprintln!(
+            "warning: typesec-local is enabled but LAKECAT_TYPESEC_RBAC_POLICY is not set; \
+             wiring ALLOW-ALL governance alongside the secret-ref credential resolver. Every \
+             request will be authorized. Set LAKECAT_TYPESEC_RBAC_POLICY to enforce a policy."
+        );
         return Ok(lakecat_security::typesec_integration::TypeSecGovernanceEngine::allow_all());
     };
     let yaml = std::fs::read_to_string(policy_path).map_err(|err| {

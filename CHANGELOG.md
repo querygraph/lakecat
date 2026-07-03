@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- Commit-requirement guardrails (FABLE-REVIEW-1 §1.4, closes finding M7; first
+  slice of M1/L11): the v4-extension requirement validator now **fails closed**
+  — an `assert-ref-snapshot-id` on a non-`main` ref returns `NotSupported`
+  instead of being counted as validated without any check (the typed ≤v3 path
+  already validated refs properly via `metadata.refs`), and unknown requirement
+  types are rejected with `InvalidArgument` instead of being silently skipped.
+  Two startup warnings make the demo-grade configurations visible: enabling
+  `typesec-local` without `LAKECAT_TYPESEC_RBAC_POLICY` now announces that
+  ALLOW-ALL governance is being wired next to the live secret-ref resolver
+  (finding M1; fail-closed behavior is a maintainer decision, see
+  FABLE-REVIEW-1 Phase 2), and falling back to the built-in plan-task signing
+  key warns once (finding L11).
+- Feature-matrix test repair: `cargo test -p lakecat-sail --all-features` was
+  red at HEAD — the H9 fix (default build rejects unappliable updates) broke
+  `provider_resolves_governed_tables_in_process`, which drove a
+  `DeferredSailCatalogEngine` commit carrying a fake update (now a no-op
+  commit), and the namespace-semantics change surfaced in three provider scan
+  tests that created tables without namespaces. The feature-gated suites were
+  not part of the per-change gate that verified those commits — rerun the
+  matrix (or at minimum `-p lakecat-sail --all-features`) for changes touching
+  shared engine seams.
+
 - Iceberg REST conformance — error model + namespace semantics (FABLE-REVIEW-1
   §1.2/§1.3, closes findings M4, M5, M6): the REST error envelope now carries
   real Iceberg `ErrorModel` exception types instead of the constant
