@@ -19,17 +19,34 @@ impl From<LakeCatError> for LakeCatHttpError {
 
 impl IntoResponse for LakeCatHttpError {
     fn into_response(self) -> Response {
-        let status = match self.0 {
+        let status = match &self.0 {
             LakeCatError::InvalidArgument(_) => StatusCode::BAD_REQUEST,
             LakeCatError::NotFound { .. } => StatusCode::NOT_FOUND,
-            LakeCatError::Conflict(_) => StatusCode::CONFLICT,
+            LakeCatError::AlreadyExists { .. } | LakeCatError::Conflict(_) => StatusCode::CONFLICT,
+            LakeCatError::Forbidden(_) => StatusCode::FORBIDDEN,
             LakeCatError::NotSupported(_) => StatusCode::NOT_IMPLEMENTED,
             LakeCatError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+        // Iceberg REST ErrorModel `type` names, so stock clients (pyiceberg,
+        // Spark, Trino) can map errors to their catalog exception types.
+        let error_type = match &self.0 {
+            LakeCatError::InvalidArgument(_) => "BadRequestException",
+            LakeCatError::NotFound { object, .. } => match *object {
+                "table" | "soft-deleted table" => "NoSuchTableException",
+                "namespace" => "NoSuchNamespaceException",
+                "view" => "NoSuchViewException",
+                _ => "NotFoundException",
+            },
+            LakeCatError::AlreadyExists { .. } => "AlreadyExistsException",
+            LakeCatError::Conflict(_) => "CommitFailedException",
+            LakeCatError::Forbidden(_) => "ForbiddenException",
+            LakeCatError::NotSupported(_) => "UnsupportedOperationException",
+            LakeCatError::Internal(_) => "InternalServerError",
         };
         let body = Json(json!({
             "error": {
                 "message": self.0.to_string(),
-                "type": "LakeCatError",
+                "type": error_type,
                 "code": status.as_u16()
             }
         }));

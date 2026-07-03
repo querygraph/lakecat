@@ -202,6 +202,7 @@ fn metadata_write_plan_rejects_credential_markers_in_location_paths() {
 #[tokio::test]
 async fn load_credentials_returns_scoped_local_file_profile_without_raw_secrets() {
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let create = Request::builder()
         .method(Method::POST)
         .uri("/catalog/v1/namespaces/default/tables")
@@ -248,6 +249,7 @@ async fn load_credentials_returns_scoped_local_file_profile_without_raw_secrets(
 #[tokio::test]
 async fn load_credentials_returns_empty_for_remote_profile_until_issuance_exists() {
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let create = Request::builder()
         .method(Method::POST)
         .uri("/catalog/v1/namespaces/default/tables")
@@ -277,6 +279,7 @@ async fn load_credentials_returns_empty_for_remote_profile_until_issuance_exists
 #[tokio::test]
 async fn management_storage_profile_overrides_inferred_credentials_by_prefix() {
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let upsert = Request::builder()
         .method(Method::PUT)
         .uri("/management/v1/warehouses/local/storage-profiles/local-events")
@@ -396,6 +399,7 @@ async fn management_storage_profile_rejects_local_secret_ref_mode() {
 #[tokio::test]
 async fn remote_storage_profile_accepts_secret_ref_without_vending_raw_secrets() {
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let upsert = Request::builder()
         .method(Method::PUT)
         .uri("/management/v1/warehouses/local/storage-profiles/s3-events")
@@ -492,6 +496,7 @@ async fn credential_issuer_vends_short_lived_credentials_for_secret_ref_profile(
         MemoryCatalogStore::new(),
     )
     .with_credential_issuer(issuer.clone()));
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let upsert = Request::builder()
         .method(Method::PUT)
         .uri("/management/v1/warehouses/local/storage-profiles/s3-events")
@@ -593,6 +598,7 @@ async fn typesec_credential_issuer_gates_secret_ref_resolution() {
         MemoryCatalogStore::new(),
     )
     .with_credential_issuer(issuer));
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let upsert = Request::builder()
         .method(Method::PUT)
         .uri("/management/v1/warehouses/local/storage-profiles/s3-events")
@@ -1572,6 +1578,13 @@ async fn credential_vend_blocks_raw_credentials_for_fine_grained_restriction() {
         Principal::anonymous(),
     );
     let ident = create.ident.clone();
+    store
+        .create_namespace(
+            &WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+        )
+        .await
+        .unwrap();
     store.create_table(create).await.unwrap();
     store
         .upsert_policy_binding(
@@ -1706,6 +1719,13 @@ async fn credential_vend_rejects_malformed_odrl_before_issuer() {
         Principal::anonymous(),
     );
     let ident = table.ident.clone();
+    store
+        .create_namespace(
+            &WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+        )
+        .await
+        .unwrap();
     store.create_table(table).await.unwrap();
     store
         .upsert_policy_binding(
@@ -1791,6 +1811,13 @@ async fn credential_vend_rejects_malformed_jsonld_odrl_before_issuer() {
         Principal::anonymous(),
     );
     let ident = table.ident.clone();
+    store
+        .create_namespace(
+            &WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+        )
+        .await
+        .unwrap();
     store.create_table(table).await.unwrap();
     store
         .upsert_policy_binding(
@@ -1869,6 +1896,13 @@ async fn credential_vend_rejects_issuer_credentials_outside_profile_scope() {
         serde_json::json!({"format-version": 3}),
         Principal::anonymous(),
     );
+    store
+        .create_namespace(
+            &WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+        )
+        .await
+        .unwrap();
     store.create_table(create).await.unwrap();
 
     let mut headers = HeaderMap::new();
@@ -1939,6 +1973,13 @@ async fn credential_vend_allows_trusted_human_raw_exception_for_restricted_table
         Principal::anonymous(),
     );
     let ident = create.ident.clone();
+    store
+        .create_namespace(
+            &WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+        )
+        .await
+        .unwrap();
     store.create_table(create).await.unwrap();
     store
         .upsert_policy_binding(
@@ -2104,6 +2145,13 @@ async fn credential_vend_response_normalizes_duplicate_ttl_entries() {
         Principal::anonymous(),
     );
     let ident = table.ident.clone();
+    store
+        .create_namespace(
+            &WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+        )
+        .await
+        .unwrap();
     store.create_table(table).await.unwrap();
     store
         .upsert_policy_binding(
@@ -2184,6 +2232,13 @@ async fn credential_vend_response_replaces_shadowed_lakecat_evidence() {
         Principal::anonymous(),
     );
     let ident = table.ident.clone();
+    store
+        .create_namespace(
+            &WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+        )
+        .await
+        .unwrap();
     store.create_table(table).await.unwrap();
     store
         .upsert_policy_binding(

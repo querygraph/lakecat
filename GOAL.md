@@ -12,15 +12,17 @@ graph behavior to Grust, and governance semantics to TypeSec.
 
 ## Current Stage
 
-- The first-release local candidate proof is recorded from clean head
-  `72df4eed`; see `RELEASE.md`, `STATUS.md`, and `CHANGELOG.md`.
+- The latest release is v0.2.1 (Lynx maintenance), with the release-candidate
+  proof recorded from clean head `b6ade047`; see `RELEASE.md`, `STATUS.md`,
+  `docs/RELEASES.md`, and `CHANGELOG.md`.
 - Do not rebuild tracked book artifacts unless deliberately finishing a release.
   Keep `docs/book/lakecat.md` current as behavior and workflows change.
 - Keep CI manual-only. Local release evidence is authoritative.
-- Current LakeCat dependencies are Grust `0.10.0` and published TypeSec `0.8.0`.
-  QueryGraph's live `qg-rust` importer matches those versions and LakeCat's
-  receipt-chain contract; refresh its stale dependency-guide examples before
-  QueryGraph's next public release.
+- Current LakeCat dependencies are the published Grust `0.11.0` and TypeSec
+  `0.11.0` crates, plus Sail as a Cargo git dependency on
+  `querygraph/sail#lakecat` (see `LAKECAT-SAIL.md`). QueryGraph's live `qg-rust`
+  importer matches LakeCat's receipt-chain contract; refresh its stale
+  dependency-guide examples before QueryGraph's next public release.
 
 ## Next Stage
 

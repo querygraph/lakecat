@@ -16,8 +16,12 @@ pub enum LakeCatError {
     InvalidArgument(String),
     #[error("{object} not found: {name}")]
     NotFound { object: &'static str, name: String },
+    #[error("{object} already exists: {name}")]
+    AlreadyExists { object: &'static str, name: String },
     #[error("conflict: {0}")]
     Conflict(String),
+    #[error("forbidden: {0}")]
+    Forbidden(String),
     #[error("operation is not supported yet: {0}")]
     NotSupported(String),
     #[error("internal error: {0}")]

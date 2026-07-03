@@ -4,7 +4,7 @@ use lakecat_core::{AuditStamp, Principal, TableName};
 
 use crate::{
     CredentialIssuanceMode, MemoryCatalogStore, PolicyBinding, ServerRecord, StorageProvider,
-    ViewColumnRecord, ViewRecord, ViewVersionOperation,
+    ViewColumnRecord, ViewRecord, ViewVersionOperation, table_ident,
 };
 
 use super::*;
@@ -1587,6 +1587,10 @@ async fn turso_store_loads_and_drops_namespaces() {
     assert_eq!(store.list_namespaces(&warehouse).await.unwrap(), vec![]);
 
     let occupied_namespace = "occupied".parse::<Namespace>().unwrap();
+    store
+        .create_namespace(&warehouse, occupied_namespace.clone())
+        .await
+        .unwrap();
     let ident = TableIdent::new(
         warehouse.clone(),
         occupied_namespace.clone(),
@@ -3915,6 +3919,10 @@ async fn turso_store_rejects_stale_metadata_pointer_commits() {
     let store = TursoCatalogStore::in_memory().await.unwrap();
     let warehouse = WarehouseName::new("local").unwrap();
     let namespace = "default".parse::<Namespace>().unwrap();
+    store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
     let ident = TableIdent::new(warehouse, namespace, TableName::new("events").unwrap());
     let table = TableRecord::new(
         ident.clone(),
@@ -4655,6 +4663,10 @@ async fn turso_store_allows_only_one_concurrent_metadata_pointer_commit() {
     let store = TursoCatalogStore::in_memory().await.unwrap();
     let warehouse = WarehouseName::new("local").unwrap();
     let namespace = "default".parse::<Namespace>().unwrap();
+    store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
     let ident = TableIdent::new(warehouse, namespace, TableName::new("events").unwrap());
     let table = TableRecord::new(
         ident.clone(),
@@ -6416,6 +6428,10 @@ async fn turso_store_soft_deletes_tables_from_normal_catalog_reads() {
     let store = TursoCatalogStore::in_memory().await.unwrap();
     let warehouse = WarehouseName::new("local").unwrap();
     let namespace = "default".parse::<Namespace>().unwrap();
+    store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
     let ident = TableIdent::new(
         warehouse.clone(),
         namespace,
@@ -6464,6 +6480,10 @@ async fn turso_store_restores_soft_deleted_tables() {
     let store = TursoCatalogStore::in_memory().await.unwrap();
     let warehouse = WarehouseName::new("local").unwrap();
     let namespace = "default".parse::<Namespace>().unwrap();
+    store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
     let ident = TableIdent::new(
         warehouse.clone(),
         namespace,
@@ -6528,6 +6548,10 @@ async fn turso_store_rejects_corrupt_soft_delete_records_on_restore() {
     let store = TursoCatalogStore::in_memory().await.unwrap();
     let warehouse = WarehouseName::new("local").unwrap();
     let namespace = "default".parse::<Namespace>().unwrap();
+    store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
     let ident = TableIdent::new(
         warehouse.clone(),
         namespace,
@@ -6608,6 +6632,10 @@ async fn turso_store_rejects_soft_delete_row_scope_drift_on_restore() {
     let store = TursoCatalogStore::in_memory().await.unwrap();
     let warehouse = WarehouseName::new("local").unwrap();
     let namespace = "default".parse::<Namespace>().unwrap();
+    store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
     let ident = TableIdent::new(
         warehouse.clone(),
         namespace.clone(),
@@ -6666,6 +6694,10 @@ async fn turso_store_rejects_soft_delete_row_scope_drift_on_restore() {
     ));
 
     let row_key_store = TursoCatalogStore::in_memory().await.unwrap();
+    row_key_store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
     let other_ident = TableIdent::new(
         warehouse.clone(),
         namespace,
@@ -6887,4 +6919,43 @@ async fn turso_concurrent_commits_to_same_table_yield_one_winner() {
     );
     assert_eq!(store.load_table(&ident).await.unwrap().version, 1);
     let _ = std::fs::remove_file(&path);
+}
+
+#[tokio::test]
+async fn turso_store_rejects_duplicate_namespace_create() {
+    let store = TursoCatalogStore::in_memory().await.unwrap();
+    let warehouse = WarehouseName::new("local").unwrap();
+    let namespace = "default".parse::<Namespace>().unwrap();
+    store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
+    let err = store
+        .create_namespace(&warehouse, namespace)
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        LakeCatError::AlreadyExists { object, name }
+            if object == "namespace" && name == "default"
+    ));
+}
+
+#[tokio::test]
+async fn turso_store_rejects_create_table_in_missing_namespace() {
+    let store = TursoCatalogStore::in_memory().await.unwrap();
+    let ident = table_ident("local", "absent", "events").unwrap();
+    let table = TableRecord::new(
+        ident,
+        "file:///tmp/absent/events".to_string(),
+        Some("file:///tmp/absent/events/metadata/00000.json".to_string()),
+        serde_json::json!({"format-version": 3}),
+        Principal::anonymous(),
+    );
+    let err = store.create_table(table).await.unwrap_err();
+    assert!(matches!(
+        err,
+        LakeCatError::NotFound { object, name }
+            if object == "namespace" && name == "absent"
+    ));
 }

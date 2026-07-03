@@ -584,13 +584,19 @@ fn validate_v4_extension_commit_requirements(
                     .get("ref")
                     .and_then(Value::as_str)
                     .unwrap_or(MAIN_BRANCH);
-                if reference == MAIN_BRANCH {
-                    validate_json_i64_requirement(
-                        "main snapshot id",
-                        metadata_summary.current_snapshot_id,
-                        requirement.get("snapshot-id").and_then(Value::as_i64),
-                    )?;
+                if reference != MAIN_BRANCH {
+                    // LakeCat tracks only the main branch today; counting an
+                    // unverifiable ref assertion as validated would weaken the
+                    // client's optimistic-concurrency guard, so fail closed.
+                    return Err(LakeCatError::NotSupported(format!(
+                        "Iceberg ref assertion on {reference:?} is not supported; only {MAIN_BRANCH:?} snapshot assertions are validated"
+                    )));
                 }
+                validate_json_i64_requirement(
+                    "main snapshot id",
+                    metadata_summary.current_snapshot_id,
+                    requirement.get("snapshot-id").and_then(Value::as_i64),
+                )?;
                 validated += 1;
             }
             "assert-last-assigned-field-id" => {
@@ -631,7 +637,14 @@ fn validate_v4_extension_commit_requirements(
                 )?;
                 validated += 1;
             }
-            _ => {}
+            unknown => {
+                // An unrecognized requirement can't be checked; accepting it
+                // silently would report a validated commit precondition that
+                // was never enforced.
+                return Err(LakeCatError::InvalidArgument(format!(
+                    "unsupported Iceberg table requirement type: {unknown}"
+                )));
+            }
         }
     }
     Ok(validated)
@@ -1894,7 +1907,17 @@ fn verify_plan_task_signature(bytes: &[u8], signature: &str) -> LakeCatResult<()
 fn plan_task_signing_key() -> Vec<u8> {
     std::env::var(PLAN_TASK_SIGNING_KEY_ENV)
         .map(|value| value.into_bytes())
-        .unwrap_or_else(|_| DEFAULT_PLAN_TASK_SIGNING_KEY.to_vec())
+        .unwrap_or_else(|_| {
+            static DEFAULT_KEY_WARNING: std::sync::Once = std::sync::Once::new();
+            DEFAULT_KEY_WARNING.call_once(|| {
+                eprintln!(
+                    "warning: {PLAN_TASK_SIGNING_KEY_ENV} is not set; plan-task tokens are signed \
+                     with the built-in development key, which offers no integrity protection \
+                     against parties that can read this source"
+                );
+            });
+            DEFAULT_PLAN_TASK_SIGNING_KEY.to_vec()
+        })
 }
 
 fn invalid_plan_task<T>(plan_task: &str) -> LakeCatResult<T> {

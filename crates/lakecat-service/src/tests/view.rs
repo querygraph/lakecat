@@ -144,6 +144,7 @@ fn view_receipt_chain_verifier_requires_version_transitions() {
 #[tokio::test]
 async fn querygraph_bootstrap_projects_catalog_tables() {
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let server = Request::builder()
         .method(Method::PUT)
         .uri("/management/v1/servers/prod-server")

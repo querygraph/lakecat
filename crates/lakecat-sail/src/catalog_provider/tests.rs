@@ -233,6 +233,9 @@ async fn provider_resolves_governed_tables_in_process() {
         ]
     );
     assert_eq!(provider.list_tables(&namespace).await.unwrap().len(), 1);
+    // A no-op commit: the deferred engine (like the default build) refuses
+    // commits that carry updates it cannot apply, so the bookkeeping is
+    // exercised with an empty update list.
     provider
         .commit_table(
             &namespace,
@@ -240,7 +243,7 @@ async fn provider_resolves_governed_tables_in_process() {
             CommitTableOptions {
                 format: "iceberg".to_string(),
                 requirements: Vec::new(),
-                updates: vec![json!({"action": "metadata-only"})],
+                updates: Vec::new(),
             },
         )
         .await
@@ -557,6 +560,10 @@ async fn provider_scan_planning_applies_policy_restriction_before_sail() {
     let table_name = TableName::new("events").unwrap();
     let ident = TableIdent::new(warehouse.clone(), namespace.clone(), table_name.clone());
     store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
+    store
         .create_table(TableRecord::new(
             ident,
             "file:///tmp/events".to_string(),
@@ -675,6 +682,10 @@ async fn provider_fetch_scan_tasks_applies_policy_requirements_before_sail() {
     let table_name = TableName::new("events").unwrap();
     let ident = TableIdent::new(warehouse.clone(), namespace.clone(), table_name.clone());
     store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
+    store
         .create_table(TableRecord::new(
             ident,
             "file:///tmp/events".to_string(),
@@ -769,7 +780,8 @@ async fn provider_uses_pre_authorized_scan_capability_without_reauthorizing() {
     let warehouse = WarehouseName::new("local").unwrap();
     let namespace = "default".parse::<Namespace>().unwrap();
     let table_name = TableName::new("events").unwrap();
-    let ident = TableIdent::new(warehouse.clone(), namespace, table_name);
+    let ident = TableIdent::new(warehouse.clone(), namespace.clone(), table_name);
+    store.create_namespace(&warehouse, namespace).await.unwrap();
     store
         .create_table(TableRecord::new(
             ident.clone(),

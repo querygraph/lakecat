@@ -514,6 +514,66 @@ async fn rejects_stale_commit_requirements() {
 }
 
 #[tokio::test]
+async fn rejects_non_main_ref_snapshot_assertions() {
+    let engine = SailRestModelCatalogEngine;
+    let table = TableIdent::new(
+        WarehouseName::new("local").unwrap(),
+        "default".parse::<Namespace>().unwrap(),
+        TableName::new("events").unwrap(),
+    );
+    let err = engine
+        .prepare_commit(CommitPreparationRequest {
+            table,
+            principal: Principal::anonymous(),
+            current_metadata_location: Some("file:///tmp/events/metadata/v4.json".to_string()),
+            new_metadata_location: None,
+            current_metadata: sample_metadata(4),
+            new_metadata: None,
+            requirements: vec![json!({
+                "type": "assert-ref-snapshot-id",
+                "ref": "audit-branch",
+                "snapshot-id": 42
+            })],
+            updates: Vec::new(),
+        })
+        .await
+        .expect_err("non-main ref assertion must fail closed, not count as validated");
+    assert!(matches!(err, LakeCatError::NotSupported(_)));
+    assert!(err.to_string().contains("audit-branch"));
+}
+
+#[tokio::test]
+async fn rejects_unknown_commit_requirement_types() {
+    let engine = SailRestModelCatalogEngine;
+    let table = TableIdent::new(
+        WarehouseName::new("local").unwrap(),
+        "default".parse::<Namespace>().unwrap(),
+        TableName::new("events").unwrap(),
+    );
+    let err = engine
+        .prepare_commit(CommitPreparationRequest {
+            table,
+            principal: Principal::anonymous(),
+            current_metadata_location: Some("file:///tmp/events/metadata/v4.json".to_string()),
+            new_metadata_location: None,
+            current_metadata: sample_metadata(4),
+            new_metadata: None,
+            requirements: vec![json!({
+                "type": "assert-future-requirement",
+                "value": 1
+            })],
+            updates: Vec::new(),
+        })
+        .await
+        .expect_err("unknown requirement type must be rejected, not silently skipped");
+    assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+    assert!(
+        err.to_string()
+            .contains("unsupported Iceberg table requirement type: assert-future-requirement")
+    );
+}
+
+#[tokio::test]
 async fn validates_v4_extension_commit_requirements_against_json_summary() {
     let engine = SailRestModelCatalogEngine;
     let table = TableIdent::new(

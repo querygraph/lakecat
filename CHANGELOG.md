@@ -2,6 +2,59 @@
 
 ## Unreleased
 
+- Commit-requirement guardrails (FABLE-REVIEW-1 §1.4, closes finding M7; first
+  slice of M1/L11): the v4-extension requirement validator now **fails closed**
+  — an `assert-ref-snapshot-id` on a non-`main` ref returns `NotSupported`
+  instead of being counted as validated without any check (the typed ≤v3 path
+  already validated refs properly via `metadata.refs`), and unknown requirement
+  types are rejected with `InvalidArgument` instead of being silently skipped.
+  Two startup warnings make the demo-grade configurations visible: enabling
+  `typesec-local` without `LAKECAT_TYPESEC_RBAC_POLICY` now announces that
+  ALLOW-ALL governance is being wired next to the live secret-ref resolver
+  (finding M1; fail-closed behavior is a maintainer decision, see
+  FABLE-REVIEW-1 Phase 2), and falling back to the built-in plan-task signing
+  key warns once (finding L11).
+- Feature-matrix test repair: `cargo test -p lakecat-sail --all-features` was
+  red at HEAD — the H9 fix (default build rejects unappliable updates) broke
+  `provider_resolves_governed_tables_in_process`, which drove a
+  `DeferredSailCatalogEngine` commit carrying a fake update (now a no-op
+  commit), and the namespace-semantics change surfaced in three provider scan
+  tests plus seven feature-gated `lakecat-service` tests (`sail-local`/
+  `typesec-local` commit, credentials, and scan flows) that created tables
+  without namespaces. The feature-gated suites were not part of the per-change
+  gate that verified those commits — rerun the matrix (or at minimum the
+  `--all-features` suites of the touched crates) for changes touching shared
+  engine seams.
+
+- Iceberg REST conformance — error model + namespace semantics (FABLE-REVIEW-1
+  §1.2/§1.3, closes findings M4, M5, M6): the REST error envelope now carries
+  real Iceberg `ErrorModel` exception types instead of the constant
+  `"LakeCatError"` — `BadRequestException`, entity-aware
+  `NoSuchTableException`/`NoSuchNamespaceException`/`NoSuchViewException`/
+  `NotFoundException`, `AlreadyExistsException`, `CommitFailedException`,
+  `ForbiddenException`, `UnsupportedOperationException`, `InternalServerError` —
+  so stock clients (pyiceberg/Spark/Trino) can map failures to their catalog
+  exception hierarchy. `LakeCatError` gains `AlreadyExists { object, name }`
+  (409) and `Forbidden` (403) variants; **authorization denial now returns 403
+  `ForbiddenException` instead of 409**. Namespace semantics are spec-correct
+  at the store layer, both backends, atomically: duplicate `createNamespace`
+  returns 409 `AlreadyExistsException` (memory: occupancy check; Turso: plain
+  `insert` mapping the unique violation) instead of silently succeeding — so
+  pyiceberg's `create_namespace_if_not_exists` works — and `createTable` in a
+  missing namespace returns 404 `NoSuchNamespaceException` instead of
+  auto-creating the namespace. ~58 tests updated to create namespaces
+  explicitly; new wire-shape tests for the three error models and new
+  store-level duplicate/missing-namespace tests on both backends.
+
+- Docs truth (FABLE-REVIEW-1 §1.1, closes finding H5): the book's onboarding,
+  curl, and Spark examples now use the address the service actually binds
+  (`127.0.0.1:8181`, was `:3000` in 15 places) and document `LAKECAT_BIND_ADDR`
+  at first use. `GOAL.md`'s "Current Stage" now states the real dependency
+  posture (published Grust/TypeSec `0.11.0`, Sail git dep per `LAKECAT-SAIL.md`)
+  and the v0.2.1 proof head `b6ade047` instead of the long-superseded
+  Grust `0.10.0`/TypeSec `0.8.0`/`72df4eed`. Book source only; tracked book
+  artifacts are rebuilt at release time per `GOAL.md`.
+
 - Docs: added `LAKECAT-SAIL.md` (the canonical LakeCat↔Sail integration doc — the `querygraph/sail#lakecat` git dep, what the branch carries today incl. the Foyer cache + snapshot-append, the `SailCatalogEngine` seam, default-build-vs-`sail-local`, and how to bump the pin) and broadened the book’s benchmark chapter into “The Benchmark Suite” — the Foyer object-store cache + cache-scan (~26×), Rust-vs-JVM (1.63× engine / 57.5× cached), and the read-write stock-client Iceberg round-trip the suite surfaced + proved. Rebuilt the book artifacts.
 - Iceberg REST `listTables`: LakeCat now serves `GET
   /â¦/namespaces/{namespace}/tables`, so stock clients (pyiceberg/Spark) can list a

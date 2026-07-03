@@ -68,11 +68,17 @@ impl CatalogStore for MemoryCatalogStore {
         namespace: Namespace,
     ) -> LakeCatResult<()> {
         let mut state = self.state.write().await;
-        state
+        let created = state
             .namespaces
             .entry(warehouse.as_str().to_string())
             .or_default()
-            .insert(namespace);
+            .insert(namespace.clone());
+        if !created {
+            return Err(LakeCatError::AlreadyExists {
+                object: "namespace",
+                name: namespace.path(),
+            });
+        }
         Ok(())
     }
 
@@ -181,13 +187,13 @@ impl CatalogStore for MemoryCatalogStore {
     async fn create_table(&self, table: TableRecord) -> LakeCatResult<TableRecord> {
         table.validate()?;
         let mut state = self.state.write().await;
-        let warehouse = table.ident.warehouse.as_str().to_string();
-        let namespace = table.ident.namespace.clone();
-        state
+        let namespace_exists = state
             .namespaces
-            .entry(warehouse)
-            .or_default()
-            .insert(namespace);
+            .get(table.ident.warehouse.as_str())
+            .is_some_and(|set| set.contains(&table.ident.namespace));
+        if !namespace_exists {
+            return Err(namespace_not_found(&table.ident.namespace));
+        }
 
         let key = table_key(&table.ident);
         if state.tables.contains_key(&key) {

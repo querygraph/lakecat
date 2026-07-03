@@ -186,6 +186,13 @@ async fn prefixed_catalog_routes_target_requested_warehouse() {
         let response = app.clone().oneshot(upsert_warehouse).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
+        create_namespace_via_route(
+            &app,
+            &format!("/catalog/v1/{warehouse}/namespaces"),
+            "default",
+        )
+        .await;
+
         let create = Request::builder()
             .method(Method::POST)
             .uri(format!("/catalog/v1/{warehouse}/namespaces/default/tables"))
@@ -1503,6 +1510,13 @@ async fn policy_bindings_are_governed_and_attached_to_table_authorization_contex
             HashOnlyLineageSink::new(),
         ),
     );
+    store
+        .create_namespace(
+            &WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+        )
+        .await
+        .unwrap();
 
     let upsert = Request::builder()
         .method(Method::PUT)

@@ -85,6 +85,10 @@ async fn sail_local_scan_uses_one_http_authorization_receipt_per_request() {
     let warehouse = WarehouseName::new("local").unwrap();
     let ident = table_ident("local", "default".to_string(), "events".to_string()).unwrap();
     store
+        .create_namespace(&warehouse, "default".parse::<Namespace>().unwrap())
+        .await
+        .unwrap();
+    store
         .create_table(TableRecord::new(
             ident,
             "file:///tmp/events".to_string(),
@@ -154,6 +158,7 @@ async fn sail_local_scan_uses_one_http_authorization_receipt_per_request() {
 async fn fetch_scan_tasks_exposes_iceberg_rest_plan_task_tokens() {
     let fixture = local_manifest_fixture();
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let upsert_policy = Request::builder()
         .method(Method::PUT)
         .uri("/management/v1/warehouses/local/policies/agent-id-read")
@@ -299,6 +304,7 @@ async fn fetch_scan_tasks_exposes_iceberg_rest_plan_task_tokens() {
 #[tokio::test]
 async fn plan_rejects_invalid_incremental_scan_modes() {
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let create = Request::builder()
         .method(Method::POST)
         .uri("/catalog/v1/namespaces/default/tables")
@@ -797,6 +803,13 @@ async fn scan_planning_route_sends_effective_policy_scope_to_sail() {
             HashOnlyLineageSink::new(),
         ),
     );
+    store
+        .create_namespace(
+            &WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+        )
+        .await
+        .unwrap();
 
     let upsert = Request::builder()
         .method(Method::PUT)
@@ -946,6 +959,13 @@ async fn scan_planning_rejects_malformed_odrl_before_sail() {
             HashOnlyLineageSink::new(),
         ),
     );
+    store
+        .create_namespace(
+            &WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+        )
+        .await
+        .unwrap();
 
     let upsert = Request::builder()
         .method(Method::PUT)
@@ -1034,6 +1054,13 @@ async fn scan_planning_rejects_malformed_jsonld_odrl_before_sail() {
             HashOnlyLineageSink::new(),
         ),
     );
+    store
+        .create_namespace(
+            &WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+        )
+        .await
+        .unwrap();
 
     let upsert = Request::builder()
         .method(Method::PUT)
@@ -1128,6 +1155,13 @@ async fn fetch_scan_tasks_route_sends_required_policy_scope_to_sail() {
             HashOnlyLineageSink::new(),
         ),
     );
+    store
+        .create_namespace(
+            &WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+        )
+        .await
+        .unwrap();
 
     let upsert = Request::builder()
         .method(Method::PUT)
@@ -1272,6 +1306,13 @@ async fn fetch_scan_tasks_rejects_malformed_odrl_before_sail() {
             HashOnlyLineageSink::new(),
         ),
     );
+    store
+        .create_namespace(
+            &WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+        )
+        .await
+        .unwrap();
 
     let upsert = Request::builder()
         .method(Method::PUT)
@@ -1356,6 +1397,13 @@ async fn fetch_scan_tasks_rejects_malformed_jsonld_odrl_before_sail() {
             HashOnlyLineageSink::new(),
         ),
     );
+    store
+        .create_namespace(
+            &WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+        )
+        .await
+        .unwrap();
 
     let upsert = Request::builder()
         .method(Method::PUT)
@@ -1437,6 +1485,7 @@ async fn fetch_scan_tasks_rejects_malformed_jsonld_odrl_before_sail() {
 #[tokio::test]
 async fn scan_planning_applies_policy_column_restriction_before_sail() {
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let upsert = Request::builder()
         .method(Method::PUT)
         .uri("/management/v1/warehouses/local/policies/agent-columns")

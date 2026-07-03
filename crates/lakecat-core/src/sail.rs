@@ -382,9 +382,7 @@ mod tests {
                 TableName::new("events").unwrap(),
             ),
             principal: Principal::anonymous(),
-            current_metadata_location: Some(
-                "file:///tmp/events/metadata/00000.json".to_string(),
-            ),
+            current_metadata_location: Some("file:///tmp/events/metadata/00000.json".to_string()),
             new_metadata_location: None,
             current_metadata: serde_json::json!({"format-version": 2, "snapshots": []}),
             new_metadata,

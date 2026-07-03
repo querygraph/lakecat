@@ -84,6 +84,7 @@ async fn create_table_generates_metadata_from_standard_schema() {
     // Spec `createTable`: client sends name + schema (no metadata, no
     // location); the catalog generates the initial metadata and a location.
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let create = Request::builder()
         .method(Method::POST)
         .uri("/catalog/v1/namespaces/default/tables")
@@ -387,6 +388,7 @@ async fn metadata_cleanup_skips_previous_metadata_pointer() {
 #[tokio::test]
 async fn delete_table_soft_deletes_from_catalog_reads() {
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let create = Request::builder()
         .method(Method::POST)
         .uri("/catalog/v1/namespaces/default/tables")
@@ -428,6 +430,7 @@ async fn delete_table_soft_deletes_from_catalog_reads() {
 #[tokio::test]
 async fn restore_table_reopens_soft_deleted_catalog_reads() {
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let create = Request::builder()
         .method(Method::POST)
         .uri("/catalog/v1/namespaces/default/tables")
@@ -489,6 +492,7 @@ async fn list_tables_returns_identifiers_for_namespace() {
     // Iceberg REST `listTables`: GET on the `/tables` collection returns the
     // table identifiers in the requested namespace.
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     create_named_table(&app, "default", "events").await;
     create_named_table(&app, "default", "metrics").await;
 
@@ -534,6 +538,8 @@ async fn list_tables_returns_identifiers_for_namespace() {
 async fn list_tables_excludes_other_namespaces() {
     // A table in a different namespace must not appear in the listing.
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "other").await;
     create_named_table(&app, "default", "events").await;
     create_named_table(&app, "other", "secrets").await;
 

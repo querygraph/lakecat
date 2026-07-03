@@ -138,6 +138,7 @@ async fn commit_table_accepts_bare_iceberg_rest_update_path() {
     // `/commit` segment. A stock PyIceberg/Spark/Trino client commits there,
     // so LakeCat must accept it (the `/commit` route is a LakeCat alias).
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let create = Request::builder()
         .method(Method::POST)
         .uri("/catalog/v1/namespaces/default/tables")
@@ -167,6 +168,7 @@ async fn commit_table_accepts_bare_iceberg_rest_update_path() {
 #[tokio::test]
 async fn create_load_commit_and_plan_table_round_trips_through_integrations() {
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let create = Request::builder()
         .method(Method::POST)
         .uri("/catalog/v1/namespaces/default/tables")
@@ -264,6 +266,7 @@ async fn create_load_commit_and_plan_table_round_trips_through_integrations() {
 #[tokio::test]
 async fn commit_can_advance_metadata_location_extension() {
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let unique = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -419,6 +422,13 @@ async fn commit_replays_rest_idempotency_key() {
         WarehouseName::new("local").unwrap(),
         store.clone(),
     ));
+    store
+        .create_namespace(
+            &WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+        )
+        .await
+        .unwrap();
     let create = Request::builder()
         .method(Method::POST)
         .uri("/catalog/v1/namespaces/default/tables")
@@ -501,6 +511,13 @@ async fn commit_replays_standard_rest_idempotency_key() {
         WarehouseName::new("local").unwrap(),
         store.clone(),
     ));
+    store
+        .create_namespace(
+            &WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+        )
+        .await
+        .unwrap();
     let create = Request::builder()
         .method(Method::POST)
         .uri("/catalog/v1/namespaces/default/tables")
@@ -560,6 +577,13 @@ async fn commit_accepts_matching_standard_and_lakecat_idempotency_headers() {
         WarehouseName::new("local").unwrap(),
         store.clone(),
     ));
+    store
+        .create_namespace(
+            &WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+        )
+        .await
+        .unwrap();
     let create = Request::builder()
         .method(Method::POST)
         .uri("/catalog/v1/namespaces/default/tables")
@@ -603,6 +627,13 @@ async fn commit_without_rest_idempotency_key_still_drains_replay_evidence() {
             lineage.clone(),
         ),
     );
+    store
+        .create_namespace(
+            &WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+        )
+        .await
+        .unwrap();
     let create = Request::builder()
         .method(Method::POST)
         .uri("/catalog/v1/namespaces/default/tables")
@@ -811,6 +842,13 @@ async fn management_table_commits_lists_pointer_log_evidence() {
             lineage,
         ),
     );
+    store
+        .create_namespace(
+            &WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+        )
+        .await
+        .unwrap();
     let unique = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -1095,6 +1133,13 @@ async fn management_table_commits_empty_history_still_drains_zero_count_proof() 
             lineage,
         ),
     );
+    store
+        .create_namespace(
+            &WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+        )
+        .await
+        .unwrap();
     let create = Request::builder()
         .method(Method::POST)
         .uri("/catalog/v1/namespaces/default/tables")
@@ -1192,6 +1237,13 @@ async fn idempotent_commit_replay_does_not_rewrite_metadata_object() {
         WarehouseName::new("local").unwrap(),
         store.clone(),
     ));
+    store
+        .create_namespace(
+            &WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+        )
+        .await
+        .unwrap();
     let unique = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -1335,6 +1387,7 @@ async fn idempotent_commit_replay_does_not_rewrite_metadata_object() {
 #[tokio::test]
 async fn commit_rejects_metadata_object_overwrite_of_current_pointer() {
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let unique = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -1463,6 +1516,7 @@ async fn commit_rejects_metadata_object_overwrite_of_current_pointer() {
 #[tokio::test]
 async fn commit_rejects_metadata_object_overwrite_of_existing_target() {
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let unique = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -1599,6 +1653,7 @@ async fn commit_rejects_metadata_object_overwrite_of_existing_target() {
 #[tokio::test]
 async fn commit_rejects_metadata_object_outside_storage_profile_prefix() {
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let unique = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -1726,6 +1781,7 @@ async fn commit_rejects_metadata_object_outside_storage_profile_prefix() {
 #[tokio::test]
 async fn commit_rejects_decorated_metadata_locations_without_leaking_details() {
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let unique = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -1927,6 +1983,7 @@ async fn idempotent_commit_replay_skips_stale_sail_revalidation() {
         WarehouseName::new("local").unwrap(),
         store.clone(),
     ));
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let unique = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -2091,6 +2148,7 @@ async fn idempotent_commit_replay_skips_stale_sail_revalidation() {
 #[tokio::test]
 async fn stale_commit_requirement_returns_conflict_with_sail_local_engine() {
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let create = Request::builder()
         .method(Method::POST)
         .uri("/catalog/v1/namespaces/default/tables")
@@ -2118,6 +2176,7 @@ async fn stale_commit_requirement_returns_conflict_with_sail_local_engine() {
 #[tokio::test]
 async fn stale_commit_cleans_up_uncommitted_metadata_file() {
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let unique = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -2247,6 +2306,7 @@ async fn cas_race_cleans_up_uncommitted_metadata_file_with_redacted_conflict() {
         WarehouseName::new("local").unwrap(),
         store.clone(),
     ));
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let base_metadata = serde_json::json!({
         "format-version": 3,
         "table-uuid": "11111111-1111-1111-1111-111111111111",
