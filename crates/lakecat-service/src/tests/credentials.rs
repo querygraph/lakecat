@@ -598,6 +598,7 @@ async fn typesec_credential_issuer_gates_secret_ref_resolution() {
         MemoryCatalogStore::new(),
     )
     .with_credential_issuer(issuer));
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let upsert = Request::builder()
         .method(Method::PUT)
         .uri("/management/v1/warehouses/local/storage-profiles/s3-events")

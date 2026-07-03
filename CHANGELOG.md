@@ -19,10 +19,12 @@
   `provider_resolves_governed_tables_in_process`, which drove a
   `DeferredSailCatalogEngine` commit carrying a fake update (now a no-op
   commit), and the namespace-semantics change surfaced in three provider scan
-  tests that created tables without namespaces. The feature-gated suites were
-  not part of the per-change gate that verified those commits — rerun the
-  matrix (or at minimum `-p lakecat-sail --all-features`) for changes touching
-  shared engine seams.
+  tests plus seven feature-gated `lakecat-service` tests (`sail-local`/
+  `typesec-local` commit, credentials, and scan flows) that created tables
+  without namespaces. The feature-gated suites were not part of the per-change
+  gate that verified those commits — rerun the matrix (or at minimum the
+  `--all-features` suites of the touched crates) for changes touching shared
+  engine seams.
 
 - Iceberg REST conformance — error model + namespace semantics (FABLE-REVIEW-1
   §1.2/§1.3, closes findings M4, M5, M6): the REST error envelope now carries

@@ -158,6 +158,7 @@ async fn sail_local_scan_uses_one_http_authorization_receipt_per_request() {
 async fn fetch_scan_tasks_exposes_iceberg_rest_plan_task_tokens() {
     let fixture = local_manifest_fixture();
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let upsert_policy = Request::builder()
         .method(Method::PUT)
         .uri("/management/v1/warehouses/local/policies/agent-id-read")
@@ -1484,6 +1485,7 @@ async fn fetch_scan_tasks_rejects_malformed_jsonld_odrl_before_sail() {
 #[tokio::test]
 async fn scan_planning_applies_policy_column_restriction_before_sail() {
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let upsert = Request::builder()
         .method(Method::PUT)
         .uri("/management/v1/warehouses/local/policies/agent-columns")

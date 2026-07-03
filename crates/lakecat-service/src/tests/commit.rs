@@ -1983,6 +1983,7 @@ async fn idempotent_commit_replay_skips_stale_sail_revalidation() {
         WarehouseName::new("local").unwrap(),
         store.clone(),
     ));
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let unique = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -2147,6 +2148,7 @@ async fn idempotent_commit_replay_skips_stale_sail_revalidation() {
 #[tokio::test]
 async fn stale_commit_requirement_returns_conflict_with_sail_local_engine() {
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let create = Request::builder()
         .method(Method::POST)
         .uri("/catalog/v1/namespaces/default/tables")
@@ -2174,6 +2176,7 @@ async fn stale_commit_requirement_returns_conflict_with_sail_local_engine() {
 #[tokio::test]
 async fn stale_commit_cleans_up_uncommitted_metadata_file() {
     let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let unique = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -2303,6 +2306,7 @@ async fn cas_race_cleans_up_uncommitted_metadata_file_with_redacted_conflict() {
         WarehouseName::new("local").unwrap(),
         store.clone(),
     ));
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
     let base_metadata = serde_json::json!({
         "format-version": 3,
         "table-uuid": "11111111-1111-1111-1111-111111111111",
