@@ -197,18 +197,25 @@ impl CatalogStore for TursoCatalogStore {
             let warehouse = warehouse.clone();
             let namespace = namespace.clone();
             Box::pin(async move {
-                conn.execute(
-                    "insert or ignore into namespaces (warehouse, namespace_path, namespace_json)
+                let result = conn
+                    .execute(
+                        "insert into namespaces (warehouse, namespace_path, namespace_json)
                  values (?1, ?2, ?3)",
-                    (
-                        warehouse.as_str(),
-                        namespace.path(),
-                        encode_json(namespace.parts())?,
-                    ),
-                )
-                .await
-                .map_err(turso_error)?;
-                Ok(())
+                        (
+                            warehouse.as_str(),
+                            namespace.path(),
+                            encode_json(namespace.parts())?,
+                        ),
+                    )
+                    .await;
+                match result {
+                    Ok(_) => Ok(()),
+                    Err(err) if is_unique_violation(&err) => Err(LakeCatError::AlreadyExists {
+                        object: "namespace",
+                        name: namespace.path(),
+                    }),
+                    Err(err) => Err(turso_error(err)),
+                }
             })
         })
         .await
@@ -358,17 +365,16 @@ impl CatalogStore for TursoCatalogStore {
         self.write_txn(move |conn| {
             let table = table.clone();
             Box::pin(async move {
-                conn.execute(
-                    "insert or ignore into namespaces (warehouse, namespace_path, namespace_json)
-                 values (?1, ?2, ?3)",
-                    (
-                        table.ident.warehouse.as_str(),
-                        table.ident.namespace.path(),
-                        encode_json(table.ident.namespace.parts())?,
-                    ),
-                )
-                .await
-                .map_err(turso_error)?;
+                let mut namespace_rows = conn
+                    .query(
+                        "select 1 from namespaces where warehouse = ?1 and namespace_path = ?2",
+                        (table.ident.warehouse.as_str(), table.ident.namespace.path()),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                if namespace_rows.next().await.map_err(turso_error)?.is_none() {
+                    return Err(namespace_not_found(&table.ident.namespace));
+                }
 
                 let result = conn
                     .execute(

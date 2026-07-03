@@ -333,6 +333,20 @@ async fn namespaces_load_and_drop_through_catalog_routes() {
         .oneshot(
             Request::builder()
                 .method(Method::POST)
+                .uri("/catalog/v1/namespaces")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"namespace":["default"]}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
                 .uri("/catalog/v1/namespaces/default/tables")
                 .header("content-type", "application/json")
                 .body(Body::from(
@@ -535,5 +549,111 @@ fn environment_secret_resolver_parses_supported_secret_shapes() {
             }
         }))
         .is_err()
+    );
+}
+
+#[tokio::test]
+async fn duplicate_namespace_create_returns_already_exists_error_model() {
+    let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/catalog/v1/namespaces")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"namespace":["default"]}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let payload: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(payload["error"]["type"], "AlreadyExistsException");
+    assert_eq!(payload["error"]["code"], 409);
+    assert!(
+        payload["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("namespace already exists")
+    );
+}
+
+#[tokio::test]
+async fn create_table_in_missing_namespace_returns_no_such_namespace_error_model() {
+    let app = test_app();
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/catalog/v1/namespaces/absent/tables")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&serde_json::json!({
+                        "name": "events",
+                        "schema": {
+                            "type": "struct",
+                            "schema-id": 0,
+                            "fields": [
+                                {"id": 1, "name": "event_id", "required": true, "type": "long"}
+                            ]
+                        }
+                    }))
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let payload: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(payload["error"]["type"], "NoSuchNamespaceException");
+    assert_eq!(payload["error"]["code"], 404);
+}
+
+#[tokio::test]
+async fn authorization_denial_returns_forbidden_error_model() {
+    let app = app(LakeCatState::new(
+        WarehouseName::new("local").unwrap(),
+        MemoryCatalogStore::new(),
+    )
+    .with_integrations(
+        default_sail_engine(),
+        Arc::new(DenyAllGovernance),
+        NoopCatalogGraphSink::new(),
+        HashOnlyLineageSink::new(),
+    ));
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri("/catalog/v1/config")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let payload: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(payload["error"]["type"], "ForbiddenException");
+    assert_eq!(payload["error"]["code"], 403);
+    assert!(
+        payload["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("authorization denied")
     );
 }

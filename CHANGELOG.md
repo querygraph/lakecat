@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- Iceberg REST conformance — error model + namespace semantics (FABLE-REVIEW-1
+  §1.2/§1.3, closes findings M4, M5, M6): the REST error envelope now carries
+  real Iceberg `ErrorModel` exception types instead of the constant
+  `"LakeCatError"` — `BadRequestException`, entity-aware
+  `NoSuchTableException`/`NoSuchNamespaceException`/`NoSuchViewException`/
+  `NotFoundException`, `AlreadyExistsException`, `CommitFailedException`,
+  `ForbiddenException`, `UnsupportedOperationException`, `InternalServerError` —
+  so stock clients (pyiceberg/Spark/Trino) can map failures to their catalog
+  exception hierarchy. `LakeCatError` gains `AlreadyExists { object, name }`
+  (409) and `Forbidden` (403) variants; **authorization denial now returns 403
+  `ForbiddenException` instead of 409**. Namespace semantics are spec-correct
+  at the store layer, both backends, atomically: duplicate `createNamespace`
+  returns 409 `AlreadyExistsException` (memory: occupancy check; Turso: plain
+  `insert` mapping the unique violation) instead of silently succeeding — so
+  pyiceberg's `create_namespace_if_not_exists` works — and `createTable` in a
+  missing namespace returns 404 `NoSuchNamespaceException` instead of
+  auto-creating the namespace. ~58 tests updated to create namespaces
+  explicitly; new wire-shape tests for the three error models and new
+  store-level duplicate/missing-namespace tests on both backends.
+
 - Docs truth (FABLE-REVIEW-1 §1.1, closes finding H5): the book's onboarding,
   curl, and Spark examples now use the address the service actually binds
   (`127.0.0.1:8181`, was `:3000` in 15 places) and document `LAKECAT_BIND_ADDR`

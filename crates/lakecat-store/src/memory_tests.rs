@@ -784,6 +784,10 @@ async fn memory_store_loads_and_drops_namespaces() {
     assert_eq!(store.list_namespaces(&warehouse).await.unwrap(), vec![]);
 
     let table_namespace = "has_table".parse::<Namespace>().unwrap();
+    store
+        .create_namespace(&warehouse, table_namespace.clone())
+        .await
+        .unwrap();
     let table = TableRecord::new(
         TableIdent::new(
             warehouse.clone(),
@@ -858,6 +862,10 @@ async fn memory_store_rejects_corrupt_namespace_drop_dependencies() {
 
     let store = MemoryCatalogStore::new();
     let table_namespace = "table_scope".parse::<Namespace>().unwrap();
+    store
+        .create_namespace(&warehouse, table_namespace.clone())
+        .await
+        .unwrap();
     let table_ident = TableIdent::new(
         warehouse.clone(),
         table_namespace.clone(),
@@ -1818,6 +1826,10 @@ async fn memory_store_rejects_corrupt_soft_delete_records_on_restore() {
     let store = MemoryCatalogStore::new();
     let warehouse = WarehouseName::new("local").unwrap();
     let namespace = "default".parse::<Namespace>().unwrap();
+    store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
     let ident = TableIdent::new(
         warehouse.clone(),
         namespace,
@@ -1883,6 +1895,10 @@ async fn memory_store_rejects_soft_delete_map_scope_drift_on_restore() {
     let store = MemoryCatalogStore::new();
     let warehouse = WarehouseName::new("local").unwrap();
     let namespace = "default".parse::<Namespace>().unwrap();
+    store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
     let ident = TableIdent::new(
         warehouse.clone(),
         namespace.clone(),
@@ -1947,6 +1963,10 @@ async fn memory_store_records_table_lifecycle_audit_outbox_events() {
     let store = MemoryCatalogStore::new();
     let warehouse = WarehouseName::new("local").unwrap();
     let namespace = "default".parse::<Namespace>().unwrap();
+    store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
     let ident = TableIdent::new(
         warehouse.clone(),
         namespace,
@@ -3720,6 +3740,10 @@ async fn memory_store_stale_pointer_conflict_uses_location_hashes() {
     let store = MemoryCatalogStore::new();
     let ident = table_ident("local", "default", "events").unwrap();
     store
+        .create_namespace(&ident.warehouse, ident.namespace.clone())
+        .await
+        .unwrap();
+    store
         .create_table(TableRecord::new(
             ident.clone(),
             "file:///tmp/events".to_string(),
@@ -3998,5 +4022,44 @@ async fn memory_store_rejects_commit_history_scope_drift() {
         err,
         LakeCatError::Internal(message)
             if message.contains("table commit record table does not match requested table")
+    ));
+}
+
+#[tokio::test]
+async fn memory_store_rejects_duplicate_namespace_create() {
+    let store = MemoryCatalogStore::new();
+    let warehouse = WarehouseName::new("local").unwrap();
+    let namespace = "default".parse::<Namespace>().unwrap();
+    store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
+    let err = store
+        .create_namespace(&warehouse, namespace)
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        LakeCatError::AlreadyExists { object, name }
+            if object == "namespace" && name == "default"
+    ));
+}
+
+#[tokio::test]
+async fn memory_store_rejects_create_table_in_missing_namespace() {
+    let store = MemoryCatalogStore::new();
+    let ident = table_ident("local", "absent", "events").unwrap();
+    let table = TableRecord::new(
+        ident,
+        "file:///tmp/absent/events".to_string(),
+        Some("file:///tmp/absent/events/metadata/00000.json".to_string()),
+        serde_json::json!({"format-version": 3}),
+        Principal::anonymous(),
+    );
+    let err = store.create_table(table).await.unwrap_err();
+    assert!(matches!(
+        err,
+        LakeCatError::NotFound { object, name }
+            if object == "namespace" && name == "absent"
     ));
 }

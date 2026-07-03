@@ -279,9 +279,14 @@ pub(crate) fn redact_typedid_verifier_error(
     match err {
         LakeCatError::InvalidArgument(_) => LakeCatError::InvalidArgument(message),
         LakeCatError::Conflict(_) => LakeCatError::Conflict(message),
+        LakeCatError::Forbidden(_) => LakeCatError::Forbidden(message),
         LakeCatError::NotSupported(_) => LakeCatError::NotSupported(message),
         LakeCatError::Internal(_) => LakeCatError::Internal(message),
         LakeCatError::NotFound { .. } => LakeCatError::NotFound {
+            object: "TypeDID verifier failure",
+            name: message,
+        },
+        LakeCatError::AlreadyExists { .. } => LakeCatError::AlreadyExists {
             object: "TypeDID verifier failure",
             name: message,
         },
@@ -339,7 +344,7 @@ pub(crate) async fn authorize(
     if receipt.allowed {
         Ok(receipt.with_read_restriction_policy_hash()?)
     } else {
-        Err(LakeCatError::Conflict("authorization denied".to_string()).into())
+        Err(LakeCatError::Forbidden("authorization denied".to_string()).into())
     }
 }
 

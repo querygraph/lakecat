@@ -360,8 +360,15 @@ pub(crate) fn commit_error_with_cleanup_failure(
             object,
             name: format!("{name}; {cleanup_context}"),
         },
+        LakeCatError::AlreadyExists { object, name } => LakeCatError::AlreadyExists {
+            object,
+            name: format!("{name}; {cleanup_context}"),
+        },
         LakeCatError::Conflict(message) => {
             LakeCatError::Conflict(format!("{message}; {cleanup_context}"))
+        }
+        LakeCatError::Forbidden(message) => {
+            LakeCatError::Forbidden(format!("{message}; {cleanup_context}"))
         }
         LakeCatError::NotSupported(message) => {
             LakeCatError::NotSupported(format!("{message}; {cleanup_context}"))

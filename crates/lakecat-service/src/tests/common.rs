@@ -119,9 +119,14 @@ impl TypeDidVerifier for LeakingTypeDidVerifier {
                 LakeCatError::InvalidArgument(message.clone())
             }
             LakeCatError::Conflict(message) => LakeCatError::Conflict(message.clone()),
+            LakeCatError::Forbidden(message) => LakeCatError::Forbidden(message.clone()),
             LakeCatError::NotSupported(message) => LakeCatError::NotSupported(message.clone()),
             LakeCatError::Internal(message) => LakeCatError::Internal(message.clone()),
             LakeCatError::NotFound { object, name } => LakeCatError::NotFound {
+                object,
+                name: name.clone(),
+            },
+            LakeCatError::AlreadyExists { object, name } => LakeCatError::AlreadyExists {
                 object,
                 name: name.clone(),
             },
@@ -899,6 +904,28 @@ impl GovernanceEngine for RecordingGovernance {
     }
 }
 
+#[derive(Debug, Default)]
+pub(crate) struct DenyAllGovernance;
+
+#[async_trait]
+impl GovernanceEngine for DenyAllGovernance {
+    async fn authorize(
+        &self,
+        request: AuthorizationRequest,
+    ) -> lakecat_core::LakeCatResult<lakecat_security::AuthorizationReceipt> {
+        Ok(lakecat_security::AuthorizationReceipt {
+            principal: request.principal,
+            action: request.action,
+            table: request.table,
+            allowed: false,
+            engine: "deny-all".to_string(),
+            policy_hash: None,
+            context: request.context,
+            checked_at: chrono::Utc::now(),
+        })
+    }
+}
+
 pub(crate) fn assert_single_config_value(config: &[ConfigEntry], key: &str, expected: &str) {
     let values = config
         .iter()
@@ -1380,6 +1407,22 @@ pub(crate) fn test_app() -> Router {
         WarehouseName::new("local").unwrap(),
         MemoryCatalogStore::new(),
     ))
+}
+
+pub(crate) async fn create_namespace_via_route(app: &Router, uri: &str, namespace: &str) {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri(uri)
+                .header("content-type", "application/json")
+                .body(Body::from(format!(r#"{{"namespace":["{namespace}"]}}"#)))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
 }
 
 pub(crate) fn catalog_config_defaults_json() -> serde_json::Value {
