@@ -136,7 +136,7 @@ report_release_proof_freshness() {
   while IFS= read -r changed_file; do
     [[ -n "$changed_file" ]] || continue
     case "$changed_file" in
-      CHANGELOG.md|DESIGN.md|GOAL.md|README.md|RELEASE.md|STATUS.md|docs/book/lakecat.md|docs/book/dist/*|scripts/check-release-proof-contract.sh)
+      CHANGELOG.md|DESIGN.md|GOAL.md|README.md|RELEASE.md|STATUS.md|FABLE-REVIEW-*.md|docs/book/lakecat.md|docs/book/dist/*|scripts/check-release-proof-contract.sh)
         ;;
       *)
         stale=1

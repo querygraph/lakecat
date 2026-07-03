@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Proof-contract allowlists: `FABLE-REVIEW-*.md` is documentation — the
+  release-proof contract and the readiness freshness rule now treat the FABLE
+  review docs like the other root docs, so a review addendum doesn't read as
+  an executable change after a recorded proof.
 - FABLE-REVIEW-1 sibling checkpoint review: recorded the post-merge state of
   the parallel work streams — grust `full39075` GQL F8–F11 (additive,
   unpublished), typesec 24 commits past `v0.11.0` incl. signed decision
