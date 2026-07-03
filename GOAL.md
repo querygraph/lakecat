@@ -13,7 +13,7 @@ graph behavior to Grust, and governance semantics to TypeSec.
 ## Current Stage
 
 - The latest release is v0.2.1 (Lynx maintenance); the release-candidate
-  proof was last refreshed from clean head `504c660d` (post-FABLE-REVIEW-1
+  proof was last refreshed from clean head `a28aa018` (post-FABLE-REVIEW-1
   merge); see `RELEASE.md`, `STATUS.md`, `docs/RELEASES.md`, and
   `CHANGELOG.md`.
 - Do not rebuild tracked book artifacts unless deliberately finishing a release.

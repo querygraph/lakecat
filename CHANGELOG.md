@@ -14,7 +14,7 @@
   qg-rust 0.3.0 "Goshawk" with TypeDID envelope auth, 38/38 green against
   LakeCat's path-dep crates. Dependency verdict unchanged: stay on published
   0.11.0 pins until the siblings release.
-- Refreshed the full local release-candidate proof from clean head `504c660d`
+- Refreshed the full local release-candidate proof from clean head `a28aa018`
   (July 3, 2026): shell + dependency contracts, default and all-feature Rust
   matrices, temporary book validation, Grust-Turso QGLake handoff with
   QueryGraph locked verify/import (run against a frozen snapshot of the live

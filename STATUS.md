@@ -17,17 +17,17 @@ Updated: 2026-06-24
   advertise only its extension-ready JSON bridge; typed model, planner, and
   compatibility work remains a Sail-owned pre-adoption task.
 - Latest release-candidate proof refresh: the broad local gate passed on July
-  3, 2026 from clean head `504c660d`. The gate covered shell and dependency
+  3, 2026 from clean head `a28aa018`. The gate covered shell and dependency
   contracts, default and all-feature Rust matrices, temporary book validation,
   Grust Turso QGLake handoff, QueryGraph locked verify/import, and the final
   clean-tree check. Its bundle hash was
-  `sha256:258ac3c78c45dba7e59bddc2086c67e09b1e52d748329d43f9e4a266c598e377`,
+  `sha256:502ef7d7953cfaac21db71a60daff174abc8f0a13ce349750a169b2a5306a108`,
   graph hash
-  `sha256:3e6f9c08667864bd2dcae9e49d37e0d7f0a0fbf044b4c968ed9993663b4bd0e7`,
+  `sha256:06522047d0ed38a9635360c8e2cf838abe3d1f40bd11c1705df3bb5a2adca3e1`,
   OpenLineage hash
-  `sha256:4b872402e9cc27bbaa34e65539f0a19fee01c77b6888ce5237f7c0940bb322ea`,
+  `sha256:d247f1b8367d0c900ac6aa48fa3cb6ffa518b826b38b3a62403132e3f58df364`,
   and QueryGraph import hash
-  `sha256:609ccbee92c418874612fcd59885997d13754ac3b68f6151bcabeb76d08f00dc`.
+  `sha256:ab43875c286cf51b99c3afda0460b74577e8aef429a2c0cdc55b1101dc0c86c5`.
 - Latest release-gate observability hardening: the local gate can now write
   its own final status to `LAKECAT_RELEASE_RESULT_FILE` from its cleanup trap,
   after removing temporary candidate artifacts. This preserves local evidence
