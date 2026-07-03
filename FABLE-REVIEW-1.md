@@ -244,7 +244,46 @@ defaults in parentheses.
 5. **Hashing contract (drives 4.2):** does qg-rust expect byte-matched
    serde_json or JCS? Golden fixture?
 
-## 5. Execution log (this session)
+## 5. Sibling checkpoint review (2026-07-03, post-merge)
+
+The parallel Fable work streams in the sibling repos checkpointed after this
+review's Phase 1 merged. State and LakeCat implications:
+
+- **grust** — branch `full39075`, clean, workspace `0.11.0` (unpublished
+  branch work): GQL read-reference features F8–F11 (CALL subqueries,
+  table-valued functions, shortestPath/allShortestPaths, backend-native
+  passthrough), atomic batch transactions, an executable portable read corpus,
+  and a plan for GQL_PUSHDOWN2 (lowering F8–F10 into SQL pushdown). All
+  additive; nothing LakeCat consumes (published `grust-graph`/`grust-turso`
+  0.11.0) changes. Future value: richer graph queries over the catalog
+  projection (P4) once a version ships with the GQL surface.
+- **typesec** — `main`, clean, **24 commits past the `v0.11.0` tag**
+  (unreleased): signed decision receipts + decision logging/replay
+  (in `typesec-integrations`), JSON-Schema tool-argument validation, OTel
+  audit sink, policy-aware tool listing, `#[typesec_tool]`, typesec-wasm, an
+  enforcement proxy, capability lease attenuation, conversation typestate, and
+  a PyPI package. Two LakeCat hooks: (1) **Phase 2.3's honest receipts should
+  adopt `typesec-integrations` signed decision receipts** when published,
+  rather than growing a local labeling scheme (the FW-9/FW-10
+  boundary-correct home); (2) M8 is *not* unblocked — the published
+  `typesec-rbac` engine LakeCat calls still exposes context-free
+  `check(subject, action, resource)` (`typesec-rbac/src/engine.rs:107`); the
+  RequestContext work targeted the Python agent stack. Phase 4.3 still needs
+  an upstream engine seam.
+- **querygraph/qg-rust** — released **0.3.0 "Goshawk"** (the previously
+  uncommitted WIP is now committed), plus a `/v1/answer` server slice and
+  **TypeDID envelope auth on governed `/v1` routes**. Its suite passes
+  **38/38 against the merged LakeCat path deps** (`lakecat-core`,
+  `qglake-bundle` 0.2.1). The TypeDID-auth direction is an ecosystem signal
+  that strengthens Phase 2.1/2.2: when LakeCat stops trusting bare principal
+  headers, qg agents already carry verifiable envelopes.
+
+**Dependency verdict (unchanged):** LakeCat stays on published Grust/TypeSec
+`0.11.0` and the Sail `lakecat`-branch pin. Both siblings' checkpoints are
+unreleased; bump when they publish, and revisit Phase 2.3 at the next TypeSec
+release.
+
+## 6. Execution log (this session)
 
 Implemented on branch `fable/review-1`, one commit per unit, CHANGELOG.md
 updated per AGENTS.md convention. Filled in as units land:

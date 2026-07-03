@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- FABLE-REVIEW-1 sibling checkpoint review: recorded the post-merge state of
+  the parallel work streams — grust `full39075` GQL F8–F11 (additive,
+  unpublished), typesec 24 commits past `v0.11.0` incl. signed decision
+  receipts (the boundary-correct home for Phase 2.3's honest receipts; M8
+  remains blocked on a context-aware `typesec-rbac` engine seam), and
+  qg-rust 0.3.0 "Goshawk" with TypeDID envelope auth, 38/38 green against
+  LakeCat's path-dep crates. Dependency verdict unchanged: stay on published
+  0.11.0 pins until the siblings release.
 - Refreshed the full local release-candidate proof from clean head `504c660d`
   (July 3, 2026): shell + dependency contracts, default and all-feature Rust
   matrices, temporary book validation, Grust-Turso QGLake handoff with
