@@ -485,7 +485,7 @@ metadata. Operators read it through a governed endpoint:
 
 ```sh
 curl -s -H 'x-lakecat-principal: operator@example.com' \
-  http://127.0.0.1:3000/management/v1/warehouses/local/namespaces/default/tables/events/commits
+  http://127.0.0.1:8181/management/v1/warehouses/local/namespaces/default/tables/events/commits
 ```
 
 That read itself enters the outbox as `table.commits-listed` and drains as
@@ -915,10 +915,11 @@ surfaces sit beside it:
 
 A simple configuration read shows the split. Standard engines care about the
 Iceberg endpoints. Operators and QueryGraph care about management and bootstrap
-surfaces.
+surfaces. The service binds `127.0.0.1:8181` by default; set `LAKECAT_BIND_ADDR`
+to change the address (every example below assumes the default).
 
 ```sh
-curl -s http://127.0.0.1:3000/catalog/v1/config
+curl -s http://127.0.0.1:8181/catalog/v1/config
 ```
 
 The defaults intentionally separate compatibility from future capability:
@@ -956,7 +957,7 @@ profiles, policy bindings, and the metadata pointer state that standard engines
 see through Iceberg REST.
 
 ```sh
-curl -s -X PUT http://127.0.0.1:3000/management/v1/servers/prod \
+curl -s -X PUT http://127.0.0.1:8181/management/v1/servers/prod \
   -H 'content-type: application/json' \
   -d '{
     "display-name": "Production LakeCat",
@@ -964,7 +965,7 @@ curl -s -X PUT http://127.0.0.1:3000/management/v1/servers/prod \
     "properties": {"owner": "platform"}
   }'
 
-curl -s -X PUT http://127.0.0.1:3000/management/v1/projects/resilience \
+curl -s -X PUT http://127.0.0.1:8181/management/v1/projects/resilience \
   -H 'content-type: application/json' \
   -d '{
     "display-name": "Resilience Desk",
@@ -972,7 +973,7 @@ curl -s -X PUT http://127.0.0.1:3000/management/v1/projects/resilience \
     "properties": {"environment": "demo"}
   }'
 
-curl -s -X PUT http://127.0.0.1:3000/management/v1/projects/resilience/warehouses/local \
+curl -s -X PUT http://127.0.0.1:8181/management/v1/projects/resilience/warehouses/local \
   -H 'content-type: application/json' \
   -d '{
     "display-name": "Local QGLake Warehouse",
@@ -1004,7 +1005,7 @@ authorize issuance before any resolver sees the secret reference.
 
 ```sh
 curl -s -X PUT \
-  http://127.0.0.1:3000/management/v1/warehouses/local/storage-profiles/local-events \
+  http://127.0.0.1:8181/management/v1/warehouses/local/storage-profiles/local-events \
   -H 'content-type: application/json' \
   -d '{
     "location-prefix": "file:///tmp/lakecat/qglake/events",
@@ -1014,7 +1015,7 @@ curl -s -X PUT \
   }'
 
 curl -s -X PUT \
-  http://127.0.0.1:3000/management/v1/warehouses/local/storage-profiles/s3-events \
+  http://127.0.0.1:8181/management/v1/warehouses/local/storage-profiles/s3-events \
   -H 'content-type: application/json' \
   -d '{
     "location-prefix": "s3://lakecat/events",
@@ -1066,7 +1067,7 @@ spark = (
     .appName("lakecat-events")
     .config("spark.sql.catalog.lakecat", "org.apache.iceberg.spark.SparkCatalog")
     .config("spark.sql.catalog.lakecat.type", "rest")
-    .config("spark.sql.catalog.lakecat.uri", "http://127.0.0.1:3000/catalog/v1")
+    .config("spark.sql.catalog.lakecat.uri", "http://127.0.0.1:8181/catalog/v1")
     .config("spark.sql.defaultCatalog", "lakecat")
     .getOrCreate()
 )
@@ -1109,7 +1110,7 @@ task list, so LakeCat treats it as an exception path.
 ```sh
 curl -s \
   -H 'x-lakecat-principal: agent:triage' \
-  http://127.0.0.1:3000/catalog/v1/local/namespaces/default/tables/events/credentials
+  http://127.0.0.1:8181/catalog/v1/local/namespaces/default/tables/events/credentials
 ```
 
 For an agent bound by a fine-grained restriction, LakeCat should fail closed:
@@ -1137,7 +1138,7 @@ warehouse-prefixed catalog routes.
 
 ```sh
 curl -s -X PUT \
-  http://127.0.0.1:3000/management/v1/warehouses/local/namespaces/default/views/events_view \
+  http://127.0.0.1:8181/management/v1/warehouses/local/namespaces/default/views/events_view \
   -H 'content-type: application/json' \
   -d '{
     "sql": "select event_id, severity from default.events where severity = '\''critical'\''",
@@ -1165,7 +1166,7 @@ current:
 
 ```sh
 curl -s -X PUT \
-  http://127.0.0.1:3000/management/v1/warehouses/local/namespaces/default/views/events_view \
+  http://127.0.0.1:8181/management/v1/warehouses/local/namespaces/default/views/events_view \
   -H 'content-type: application/json' \
   -d '{
     "sql": "select event_id from default.events where severity = '\''critical'\''",
@@ -1181,7 +1182,7 @@ guard:
 
 ```sh
 curl -s -X DELETE \
-  'http://127.0.0.1:3000/management/v1/warehouses/local/namespaces/default/views/events_view?expected-view-version=2'
+  'http://127.0.0.1:8181/management/v1/warehouses/local/namespaces/default/views/events_view?expected-view-version=2'
 ```
 
 LakeCat also writes a compact view-version receipt in the durable store. The
@@ -1196,7 +1197,7 @@ governed management surface:
 
 ```sh
 curl -s \
-  http://127.0.0.1:3000/management/v1/warehouses/local/namespaces/default/views/events_view/version-receipts \
+  http://127.0.0.1:8181/management/v1/warehouses/local/namespaces/default/views/events_view/version-receipts \
   -H 'x-lakecat-agent-did: did:example:resilience-agent'
 ```
 
@@ -1216,7 +1217,7 @@ emitted:
 ```sh
 curl -s \
   -H 'x-lakecat-principal: agent:querygraph-importer' \
-  http://127.0.0.1:3000/querygraph/v1/bootstrap \
+  http://127.0.0.1:8181/querygraph/v1/bootstrap \
   -o target/qglake/lakecat-bootstrap.json
 ```
 
@@ -1282,7 +1283,7 @@ what turns committed catalog facts into graph and lineage receipts:
 ```sh
 curl -s -X POST \
   -H 'x-lakecat-principal: agent:lineage-drainer' \
-  http://127.0.0.1:3000/management/v1/lineage/drain \
+  http://127.0.0.1:8181/management/v1/lineage/drain \
   -o target/qglake/lineage-drain.json
 ```
 

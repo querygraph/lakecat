@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Docs truth (FABLE-REVIEW-1 §1.1, closes finding H5): the book's onboarding,
+  curl, and Spark examples now use the address the service actually binds
+  (`127.0.0.1:8181`, was `:3000` in 15 places) and document `LAKECAT_BIND_ADDR`
+  at first use. `GOAL.md`'s "Current Stage" now states the real dependency
+  posture (published Grust/TypeSec `0.11.0`, Sail git dep per `LAKECAT-SAIL.md`)
+  and the v0.2.1 proof head `b6ade047` instead of the long-superseded
+  Grust `0.10.0`/TypeSec `0.8.0`/`72df4eed`. Book source only; tracked book
+  artifacts are rebuilt at release time per `GOAL.md`.
+
 - Docs: added `LAKECAT-SAIL.md` (the canonical LakeCat↔Sail integration doc — the `querygraph/sail#lakecat` git dep, what the branch carries today incl. the Foyer cache + snapshot-append, the `SailCatalogEngine` seam, default-build-vs-`sail-local`, and how to bump the pin) and broadened the book’s benchmark chapter into “The Benchmark Suite” — the Foyer object-store cache + cache-scan (~26×), Rust-vs-JVM (1.63× engine / 57.5× cached), and the read-write stock-client Iceberg round-trip the suite surfaced + proved. Rebuilt the book artifacts.
 - Iceberg REST `listTables`: LakeCat now serves `GET
   /â¦/namespaces/{namespace}/tables`, so stock clients (pyiceberg/Spark) can list a
