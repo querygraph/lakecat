@@ -42,9 +42,10 @@ The current implementation exposes an Iceberg REST-compatible catalog surface
 under `/catalog/v1` and a QueryGraph bootstrap bundle at
 `/querygraph/v1/bootstrap`. The bootstrap bundle projects live catalog tables
 into Croissant, CDIF, OSI, ODRL, OpenLineage, and a Grust-ready graph envelope.
-The full local release-readiness gate is green as of June 23, 2026; keep that
-local proof green before making release or cloud-automation claims. Use
-[RELEASE.md](RELEASE.md) for the first-release checklist.
+The full local release-readiness gate is green as of July 3, 2026 (see the
+recorded proof ref below); keep that local proof green before making release
+or cloud-automation claims. Use [RELEASE.md](RELEASE.md) for the release
+checklist.
 
 Scan planning already routes through the Sail-facing engine. Point-in-time scans
 produce opaque Iceberg REST plan-task tokens from stable Sail metadata, and
@@ -74,7 +75,7 @@ Turso-backed `TursoCatalogStore` for namespaces, table records, metadata pointer
 history, audit/outbox rows, and idempotent commit replay; without it the binary
 keeps the in-memory store.
 
-The Grust feature gate follows the local Grust 0.10 path checkout so LakeCat
+The Grust feature gates consume the published Grust `0.11.0` crates so LakeCat
 can use the dedicated `grust-turso` crate for durable catalog graph projection.
 Plain `grust-local` keeps the fast memory-backed Grust sink;
 `grust-turso-local` constructs a bootstrapped `grust_turso::TursoGraphStore`,
@@ -82,12 +83,13 @@ using `LAKECAT_GRUST_TURSO_PATH` when set and an in-memory Turso graph database
 otherwise. Startup connect/bootstrap failures for that graph sink are reported
 with `graph-store-path-hash` and `backend-error-hash` evidence, not raw graph
 database paths or backend text. TypeSec remains on the published `typesec`
-0.8.0 crate, and Sail integration builds from a Cargo git dependency on the
-`lakecat` branch of `github.com/querygraph/sail` until the required Sail APIs are
-published.
+`0.11.0` crate, and Sail integration builds from a Cargo git dependency on the
+`lakecat` branch of `github.com/querygraph/sail` (see `LAKECAT-SAIL.md`) until
+the required Sail APIs are published.
 
 The local QueryGraph handoff path has a separate compatibility contract:
-`/Users/alexy/src/querygraph/qg-rust` follows the local Grust 0.10.0 path
+`/Users/alexy/src/querygraph/qg-rust` (released 0.3.0) consumes `lakecat-core`
+and `qglake-bundle` as local path dependencies and the sibling Grust `0.11.0`
 checkout for `lakecat-verify` and `lakecat-import`. The handoff harness starts
 LakeCat with `grust-turso-local` plus `LAKECAT_GRUST_TURSO_PATH`, so the
 end-to-end QueryGraph acceptance path exercises Grust's Turso-backed catalog
@@ -168,7 +170,7 @@ version-1 upsert heads, previous receipt links, supported operations, version
 transitions, identity binding, tombstone posture, and tombstone receipt coverage
 before compact handoff proof is accepted.
 
-For first-release readiness, run the local release gate instead of relying on
+For release readiness, run the local release gate instead of relying on
 cloud CI. The full release checklist lives in [RELEASE.md](RELEASE.md):
 
 ```bash

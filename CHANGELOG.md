@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- README narrative refresh: the prose no longer claims the long-superseded
+  Grust `0.10` path checkout, TypeSec `0.8.0`, the June 23 gate date, or
+  first-release framing — it now states the published Grust/TypeSec `0.11.0`
+  posture, the `LAKECAT-SAIL.md` pointer, and qg-rust 0.3.0's path-dep
+  contract.
 - Proof-contract allowlists: `FABLE-REVIEW-*.md` is documentation — the
   release-proof contract and the readiness freshness rule now treat the FABLE
   review docs like the other root docs, so a review addendum doesn't read as
