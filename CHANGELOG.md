@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Dependency-contract repair (FABLE-REVIEW-1 N8): `check-local-dependency-contract.sh`
+  was red at HEAD — the tolerant-handoff change (`5c3cbc9e`) renamed the
+  import-plan verification test but left the contract guard grepping for the
+  old strict-test name. The guard now encodes the actual policy: tolerate
+  additive root verification fields, keep import-plan table/view records
+  strict.
+
 - Commit-requirement guardrails (FABLE-REVIEW-1 §1.4, closes finding M7; first
   slice of M1/L11): the v4-extension requirement validator now **fails closed**
   — an `assert-ref-snapshot-id` on a non-`main` ref returns `NotSupported`
