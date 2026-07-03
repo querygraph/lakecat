@@ -12,9 +12,10 @@ graph behavior to Grust, and governance semantics to TypeSec.
 
 ## Current Stage
 
-- The latest release is v0.2.1 (Lynx maintenance), with the release-candidate
-  proof recorded from clean head `b6ade047`; see `RELEASE.md`, `STATUS.md`,
-  `docs/RELEASES.md`, and `CHANGELOG.md`.
+- The latest release is v0.2.1 (Lynx maintenance); the release-candidate
+  proof was last refreshed from clean head `504c660d` (post-FABLE-REVIEW-1
+  merge); see `RELEASE.md`, `STATUS.md`, `docs/RELEASES.md`, and
+  `CHANGELOG.md`.
 - Do not rebuild tracked book artifacts unless deliberately finishing a release.
   Keep `docs/book/lakecat.md` current as behavior and workflows change.
 - Keep CI manual-only. Local release evidence is authoritative.

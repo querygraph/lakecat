@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Refreshed the full local release-candidate proof from clean head `504c660d`
+  (July 3, 2026): shell + dependency contracts, default and all-feature Rust
+  matrices, temporary book validation, Grust-Turso QGLake handoff with
+  QueryGraph locked verify/import (run against a frozen snapshot of the live
+  qg-rust working tree, 34/34 tests green against LakeCat's path-dep crates),
+  and the final clean-tree check. This proof covers the FABLE-REVIEW-1 Phase 1
+  merge (Iceberg error model, namespace semantics, requirement-validation
+  guardrails, book bind-address fix) and the N8 dependency-contract repair.
+
 - Dependency-contract repair (FABLE-REVIEW-1 N8): `check-local-dependency-contract.sh`
   was red at HEAD — the tolerant-handoff change (`5c3cbc9e`) renamed the
   import-plan verification test but left the contract guard grepping for the

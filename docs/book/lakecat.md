@@ -1834,20 +1834,20 @@ scripts/check-book-artifact-contract.sh docs/book/dist
 scripts/check-local-dependency-contract.sh
 ```
 
-The current full local release-candidate proof was refreshed on June 26, 2026
-from clean head `b6ade047`. It passed with tracked book artifact validation,
+The current full local release-candidate proof was refreshed on July 3, 2026
+from clean head `504c660d`. It passed with tracked book artifact validation,
 the checked-in release-proof contract in clean candidate mode, the strengthened
 post-tag release-posture contract for the published `v0.1.0` baseline,
 the querygraph/sail `lakecat` git-dependency source assertions, temporary
 book build, executable book artifact contract, QueryGraph locked verify/import,
 Grust Turso graph projection proof, bundle hash
-`sha256:88e38f620068d13cb14cb3ad3f102558b694482a87b45f09c08419ed93cf17cb`,
+`sha256:258ac3c78c45dba7e59bddc2086c67e09b1e52d748329d43f9e4a266c598e377`,
 graph hash
-`sha256:7c6aa85c544d67953edf7bd168a85d8cfaa87a2f48f2732b77cf443031db01a7`,
+`sha256:3e6f9c08667864bd2dcae9e49d37e0d7f0a0fbf044b4c968ed9993663b4bd0e7`,
 OpenLineage hash
-`sha256:c86ce5e6a82ad241a67a99301e802b42c9f07b020869b3893103e9b780561aab`,
+`sha256:4b872402e9cc27bbaa34e65539f0a19fee01c77b6888ce5237f7c0940bb322ea`,
 QueryGraph import hash
-`sha256:8c662182623d7c51bc1397ffffd8228c1c73c82130c4bb42f5ca9d1e08b4e220`,
+`sha256:609ccbee92c418874612fcd59885997d13754ac3b68f6151bcabeb76d08f00dc`,
 and the final clean-tree check.
 
 LakeCat also carries a smaller proof-freshness contract for the release docs
