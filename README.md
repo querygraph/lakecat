@@ -42,7 +42,7 @@ The current implementation exposes an Iceberg REST-compatible catalog surface
 under `/catalog/v1` and a QueryGraph bootstrap bundle at
 `/querygraph/v1/bootstrap`. The bootstrap bundle projects live catalog tables
 into Croissant, CDIF, OSI, ODRL, OpenLineage, and a Grust-ready graph envelope.
-The full local release-readiness gate is green as of July 3, 2026 (see the
+The full local release-readiness gate is green as of July 4, 2026 (see the
 recorded proof ref below); keep that local proof green before making release
 or cloud-automation claims. Use [RELEASE.md](RELEASE.md) for the release
 checklist.
@@ -188,7 +188,7 @@ EPUB metadata and PDF layout validation, QGLake handoff proof, and
 The current full proof also verifies the Grust Turso graph projection evidence,
 including `graphProjectionProof.backend = grust-turso` and
 `graphProjectionProof.tablePrefix = lakecat_graph`; the latest clean
-release-candidate proof was refreshed from head `a28aa018`.
+release-candidate proof was refreshed from head `6bfce1ef`.
 `scripts/check-release-proof-contract.sh` verifies that active release docs
 agree on that proof commit and that any later commits are limited to
 documentation and checked-in book artifacts; executable changes after the

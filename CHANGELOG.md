@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Recorded the v0.3.0 release-candidate proof from clean head `6bfce1ef`
+  (July 4, 2026): shell + dependency contracts, default and all-feature Rust
+  matrices, temporary book validation, Grust-Turso QGLake handoff with
+  QueryGraph locked verify/import (qg-rust aligned to LakeCat 0.3.0 +
+  Grust/TypeSec 0.12, 40/40 tests green), and the final clean-tree check.
+
 ## 0.3.0 - 2026-07-04
 
 - Dependencies: Grust `0.11.0 → 0.12.0` (Lobster — the merged Full39075 GQL
