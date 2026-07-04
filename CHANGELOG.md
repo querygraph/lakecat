@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Dependencies: Grust `0.11.0 → 0.12.0` (Lobster — the merged Full39075 GQL
+  goal: CALL subqueries, table-valued functions, shortestPath, passthrough
+  escape hatches, atomic batch transactions) and TypeSec `0.11.0 → 0.12.0`
+  (Torcello — signed decision receipts, decision logging/replay, schema-
+  validated tool bindings, wasm/proxy/PyPI surfaces). No LakeCat API changes
+  were required — the full feature matrix (security `typesec-local` 25,
+  graph `grust-turso-local` 35, service `typesec-local` 470 +
+  `grust-turso-local` 453) passes unchanged. The dependency contract's pins
+  move to the 0.12 line, and its README full-gate evidence-date guard now
+  matches the evidence sentence instead of a hardcoded date that staled on
+  every proof refresh. Sibling alignment: `qg-rust` got a minimal grust-pin
+  bump (committed there) so its `--locked` verify/import — which LakeCat's
+  handoff gate drives — builds against the released Grust checkout; 40/40
+  qg-rust tests green.
+
 - README narrative refresh: the prose no longer claims the long-superseded
   Grust `0.10` path checkout, TypeSec `0.8.0`, the June 23 gate date, or
   first-release framing — it now states the published Grust/TypeSec `0.11.0`

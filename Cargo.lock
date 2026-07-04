@@ -2668,9 +2668,9 @@ checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
 [[package]]
 name = "grust-core"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bdd879a85ddd80a3a665e02e8344beec20f2d8c4e9261d08aa49f679aa3f23b3"
+checksum = "cc1c028083618bd026cec4b46c87c0c98a02d065fa35f7c956227319a254b8bc"
 dependencies = [
  "async-trait",
  "garde",
@@ -2684,9 +2684,9 @@ dependencies = [
 
 [[package]]
 name = "grust-cypher"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e6b07373aaea0480e7fa1bb02c19a7e512994f26ab5b2a9799936f43f0a9d79"
+checksum = "df43b945ea9d73b84c9450174ea11e80340d06eded3400c73702f1fd44b20d72"
 dependencies = [
  "async-trait",
  "grust-core",
@@ -2697,9 +2697,9 @@ dependencies = [
 
 [[package]]
 name = "grust-graph"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07fc69c129fa3faf06d546f89c1bd7a4bd4e2ec81ed9400e43ccde2086ee3f1b"
+checksum = "d6a20f05378d04fb85355053ad1dd85469f22a201f9cc81e2f08d74d10f0b5f2"
 dependencies = [
  "grust-core",
  "grust-cypher",
@@ -2709,9 +2709,9 @@ dependencies = [
 
 [[package]]
 name = "grust-memory"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b865d62db59911892afdece7b55a1ee2589dce55b338c840420c0e6cddf525d9"
+checksum = "3bb4ff1089fab585e1271d3e087037b9eb8b7c0f5c25b557fadf07fa62bea43b"
 dependencies = [
  "async-trait",
  "grust-core",
@@ -2719,9 +2719,9 @@ dependencies = [
 
 [[package]]
 name = "grust-sql-core"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e1b2b74225cdb507c3f735dfaa9a4a17f39388a7fac34dae3aff3dce1182c72"
+checksum = "daf4d8b127e4c2c80768828cf0ee3957284e7a3d37554e0bc559c553fc682671"
 dependencies = [
  "grust-core",
  "serde_json",
@@ -2729,9 +2729,9 @@ dependencies = [
 
 [[package]]
 name = "grust-turso"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8c940523a1cbc64e2c3c5099b0517731911429f4c92e5122830a03be5fad31b"
+checksum = "a3553ea1ea1601331df87273ead8ea7cde9c0838150e049e41ac2a5d3842722a"
 dependencies = [
  "async-trait",
  "grust-core",
@@ -5058,7 +5058,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03da047801ff44bb6a4d407d4860c05fd70bb81714e6b2f3812603d5b145b042"
 dependencies = [
  "heck",
- "itertools 0.12.1",
+ "itertools 0.14.0",
  "log",
  "multimap",
  "petgraph",
@@ -5079,7 +5079,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b570b25f7617e43d59005d0990ccb79e950a423952cea19671b7a876da390adf"
 dependencies = [
  "anyhow",
- "itertools 0.12.1",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -7435,9 +7435,9 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "typesec"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "964cfa679b8797edfbada93144e5eee543e0f47f3ae43a1161b011cd36691ee7"
+checksum = "a04d51d17cef1ac887a4117a90aa8b8a81bcfd0e6f2f801ad63a320a73f1cce6"
 dependencies = [
  "typesec-core",
  "typesec-integrations",
@@ -7446,9 +7446,9 @@ dependencies = [
 
 [[package]]
 name = "typesec-core"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "015ddfd57ca348d4d92d6c52b42b259b0115384b33be1533596616f8a96946a0"
+checksum = "ac6673bbbeaafe5d14f36d51ac50fdb4faacdca357e20b72a5193b9da098b962"
 dependencies = [
  "chrono",
  "glob",
@@ -7459,10 +7459,11 @@ dependencies = [
 
 [[package]]
 name = "typesec-integrations"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2681790ceabb38cabf0383425e7dc9e2cb908bb99947ace85caca88e50789e6"
+checksum = "79c8b6106554c25cb7bd984e0c43e41c4a7da9341defd7507d6ed27516b8f54d"
 dependencies = [
+ "base64",
  "chacha20poly1305",
  "chrono",
  "ed25519-dalek",
@@ -7480,9 +7481,9 @@ dependencies = [
 
 [[package]]
 name = "typesec-rbac"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e96beeedcd127dc4de33386663315a747759a7dcb80f0effcfc891df1e5ea32"
+checksum = "945398a4d1f93c6236d18566ee6677c3b6ac988b8860857224f120d0e330f573"
 dependencies = [
  "garde",
  "glob",
