@@ -1897,6 +1897,7 @@ book artifact refresh records that new proof commit.
 
 The already-published `v0.1.0` tag is a baseline, not something to move.
 The already-published `v0.2.1` tag is a baseline, not something to move either.
+The already-published `v0.3.0` tag is a baseline, not something to move either.
 While
 the workspace version remains `0.1.0` and `HEAD` is past `v0.1.0`, post-tag
 hardening stays under `Unreleased`. The release version contract checks that
