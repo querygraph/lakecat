@@ -12,10 +12,10 @@ graph behavior to Grust, and governance semantics to TypeSec.
 
 ## Current Stage
 
-- The latest release is v0.2.1 (Lynx maintenance); the release-candidate
-  proof was last refreshed from clean head `a28aa018` (post-FABLE-REVIEW-1
-  merge); see `RELEASE.md`, `STATUS.md`, `docs/RELEASES.md`, and
-  `CHANGELOG.md`.
+- The latest release is v0.3.0 (Ocelot — stock-client Iceberg REST
+  conformance, FABLE-REVIEW-1, Grust/TypeSec 0.12); see `RELEASE.md`,
+  `STATUS.md`, `docs/RELEASES.md`, and `CHANGELOG.md` for the recorded
+  release-candidate proof.
 - Do not rebuild tracked book artifacts unless deliberately finishing a release.
   Keep `docs/book/lakecat.md` current as behavior and workflows change.
 - Keep CI manual-only. Local release evidence is authoritative.

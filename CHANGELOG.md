@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.0 - 2026-07-04
+
 - Dependencies: Grust `0.11.0 → 0.12.0` (Lobster — the merged Full39075 GQL
   goal: CALL subqueries, table-valued functions, shortestPath, passthrough
   escape hatches, atomic batch transactions) and TypeSec `0.11.0 → 0.12.0`

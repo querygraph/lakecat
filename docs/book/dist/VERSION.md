@@ -1,4 +1,4 @@
-kindle_name: lakecat (0.2.1-ebee0fc7)
-built_at: 2026-07-03
+kindle_name: lakecat (0.3.0-45af9740)
+built_at: 2026-07-04
 epub_file: lakecat.epub
-kindle_link: lakecat (0.2.1-ebee0fc7).epub
+kindle_link: lakecat (0.3.0-45af9740).epub
