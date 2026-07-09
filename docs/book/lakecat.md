@@ -14,6 +14,13 @@ is **LakeCat** and the engine-side lakehouse implementation is **Sail**. Graph
 behavior belongs to **Grust**; governance and capability proof belong to
 **TypeSec**; the end-to-end integration target is **QueryGraph**.
 
+This edition is aligned with **LakeCat 0.3.0, Ocelot**, published on July 4,
+2026. Ocelot is the point where the architecture in this book became a shipped,
+announcement-ready claim: a stock PyIceberg client completed a real REST
+round-trip, the release-candidate gate passed from a clean tree, and the QGLake
+handoff proved that LakeCat replay, OpenLineage evidence, Grust projection, and
+QueryGraph verification/import agreed on the same catalog transition.
+
 This book builds from first principles. Chapter 2 explains what a catalog is,
 what Iceberg makes the catalog responsible for, and what LakeCat adds without
 changing the table format. Chapter 3 fixes the vocabulary — the single hardest
@@ -23,7 +30,8 @@ someday become neutral, standardizable profiles. The middle chapters walk the
 live architecture: the service spine, the read path, the commit path, and the
 durable store. The final chapters cover the engine boundary and the v3→v4 path,
 the graph/security/lineage handoffs, the QueryGraph/QGLake acceptance flow,
-worked examples, and the first-release scope.
+worked examples, and the Ocelot release proof and its deliberately bounded
+scope.
 
 Each concept is defined once and then used. Where a later chapter needs a term,
 it links back rather than restating it.
@@ -255,6 +263,22 @@ through its category (Chapter 3) rather than flattening them into "Iceberg
 extensions": some are ordinary catalog implementation, some are optional LakeCat
 APIs, some are TypeSec governance proof, and only a few are plausible future
 standardization candidates.
+
+## The Ocelot baseline
+
+The published baseline is `v0.3.0`, **Ocelot**. It turns the phrase "compatible,
+durable, governed catalog" into four separately checkable claims:
+
+| Claim | Ocelot evidence |
+| --- | --- |
+| Stock-client compatibility | An unmodified PyIceberg `RestCatalog` can create a namespace and table, append real data, list the table, load it, and read it back. REST map fields are objects, error types follow Iceberg's `ErrorModel`, and namespace behavior matches stock-client expectations. |
+| Durable catalog state | Turso transactions bind pointer compare-and-swap, pointer history, audit, outbox, and idempotency. An exact retry replays; a conflicting retry is rejected. |
+| Governed work | TypeSec restrictions are applied before Sail plans. Raw credential vending remains an explicit, redacted, audited exception. |
+| Verifiable handoff | The QGLake gate creates a bootstrap bundle, drains lineage, projects through Grust, and runs QueryGraph's locked verifier and importer over hash-bound artifacts. |
+
+The release does not put those extra proofs in front of ordinary clients. The
+standard REST surface remains the floor; governance, replay, lineage, graph,
+and QueryGraph bootstrap are additive paths beside it.
 
 The most important word is **beside**. New capability sits beside the Iceberg
 REST path, never in front of it. A standard client never has to present a
@@ -742,6 +766,9 @@ and credential-vend events replay with redacted evidence only —
 credential. The `grust-turso-local` feature proves the boundary end to end:
 LakeCat writes catalog events into a Grust-owned Turso graph store and Grust
 Cypher reads them back, with LakeCat never parsing Cypher or executing traversal.
+Ocelot consumes the published **Grust 0.12.0, Lobster** crates for both the graph
+API and Turso backend; the feature name describes LakeCat's in-process
+integration row, not a path checkout.
 
 ## TypeSec: the authorization boundary
 
@@ -773,6 +800,10 @@ top-level and receipt restrictions, full digests, closed field sets) apply
 identically here, so a credential or raw-exception event cannot drift before it
 reaches graph, lineage, or QGLake proof.
 
+Ocelot consumes published **TypeSec 0.12.0, Torcello**. LakeCat owns the
+enforcement point and durable receipt binding; TypeSec owns authorization,
+capability, and receipt semantics.
+
 ## Sail and the v3→v4 path
 
 Sail is a Rust-native engine — Arrow, DataFusion, generated Iceberg REST models,
@@ -786,6 +817,13 @@ questions LakeCat sends to Sail are the ones that require table-format knowledge
 - which delete files must accompany the selected data files?
 - which scan tasks are children of a governed parent plan?
 - which v4 fields are known, preserved as passthrough, or not yet safe to read?
+
+For Ocelot, the Sail crates report version `0.6.4` and resolve from the
+`lakecat` branch of `github.com/querygraph/sail`. `Cargo.lock` pins that
+branch to revision `bddb1706ba2308e5029d47f04f03121236edbfa6`. The branch is
+explicit release provenance: it carries the Iceberg planning, snapshot-append,
+and Foyer cache work LakeCat needs until those APIs can move to an upstream or
+published Sail line.
 
 LakeCat evolves under three rules: conform to Iceberg v3 for ordinary clients;
 preserve unknown/emerging v4 metadata without claiming settled semantics; prefer
@@ -844,6 +882,24 @@ flowchart TB
   lc -->|semantic + lineage bootstrap| qg
 ```
 
+## Ocelot's dependency baseline
+
+The release uses one coordinated substrate wave. The manifest expresses desired
+versions and sources; the lockfile records the exact build:
+
+| Component | Ocelot baseline | Relationship to LakeCat |
+| --- | --- | --- |
+| LakeCat workspace | `0.3.0`, Ocelot | All LakeCat crates and `qglake-bundle` share the workspace version. |
+| Grust | `0.12.0`, Lobster, crates.io | `grust-graph` and `grust-turso` provide graph projection, Cypher, and the durable Turso graph backend. |
+| TypeSec | `0.12.0`, Torcello, crates.io | The `typesec` facade provides the authorization and receipt boundary used by `lakecat-security`. |
+| Sail | `0.6.4`, git branch `querygraph/sail#lakecat`, locked at `bddb1706` | Sail supplies Iceberg planning, model, commit-update, and object-store-cache behavior not yet consumed from a published release. |
+| QueryGraph | `0.4.0`, Sentinel | Acceptance peer rather than a compiled LakeCat dependency; its importer consumes LakeCat `qglake-bundle` and `lakecat-core` `0.3.0` while the handoff gate drives verify/import under `--locked`. |
+
+This distinction matters operationally. Updating a version in prose is not a
+dependency upgrade. Ocelot's reproducible statement is the combination of
+`Cargo.toml`, `Cargo.lock`, the local dependency contract, and the locked
+QueryGraph handoff.
+
 ## Implementation shape
 
 The workspace expresses the architecture directly:
@@ -858,6 +914,7 @@ crates/
   lakecat-security    TypeSec integration and authorization receipts
   lakecat-lineage     OpenLineage projection and event receipts
   lakecat-querygraph  Croissant/CDIF/OSI/ODRL/OpenLineage bootstrap projection
+  qglake-bundle       portable bootstrap wire types, hashes, and validators
   lakecat-service     axum service, middleware, auth, routing
   lakecat-cli         admin, local demo, conformance, bootstrap export
 ```
@@ -866,9 +923,9 @@ Feature gates keep integrations honest, and embedded defaults stay safe for
 tests so a memory-store test never accidentally depends on a sibling repo:
 
 ```text
-sail-local         local Sail APIs for planning and provider integration
-typesec-local      local TypeSec APIs for governance and TypeDID verification
-grust-local        local Grust APIs for catalog graph projection
+sail-local         in-process Sail APIs for planning and provider integration
+typesec-local      in-process TypeSec APIs for governance and TypeDID verification
+grust-local        in-process Grust APIs for catalog graph projection
 grust-turso-local  Grust's Turso backend for durable catalog graph projection
 turso-local        the Turso-backed durable store
 ```
@@ -878,8 +935,8 @@ The runtime honors the same line: without `sail-local`, the deferred Sail seam
 reflects the engine that interprets Iceberg metadata, never a catalog-shaped
 placeholder. Standard compatibility lives at `/catalog/v1`; management APIs,
 `/querygraph/v1/bootstrap`, and feature-gated Sail planning sit beside it, never
-in front of it. (The first-release gate and dependency contract that hold this
-together are covered in the release chapter.)
+in front of it. (The Ocelot-era release gate and dependency contract that hold
+this together are covered in the release chapter.)
 
 
 # Workflow Examples
@@ -1678,28 +1735,51 @@ Iceberg behavior. Operators get durable Rust and Turso proof. Governed callers
 get TypeSec decisions bound to Sail engine work. QueryGraph gets a semantic
 handoff that is broad enough to build on and narrow enough not to fork Iceberg.
 
-# First Release Readiness
+# Ocelot: The 0.3 Release
 
-The first LakeCat release should not try to finish every idea in this book. It
-should release the catalog substrate that can already be proven locally. The
-right question is not "does LakeCat contain the whole future QueryGraph stack?"
-It is "does LakeCat provide a compatible, durable, governed catalog foundation
-that QueryGraph can trust?"
+Ocelot is the release where LakeCat's design becomes a public, reproducible
+claim. It does not contain the whole QueryGraph stack. It ships the compatible,
+durable, governed catalog foundation that the stack can trust, and it records
+the evidence needed to check that statement.
 
-For the first release, the release-blocking behavior is the catalog spine:
-standard Iceberg REST config, namespace, table-load, table-create, and
-table-commit paths; warehouse-prefixed routing; Rust service identity handling;
-the `CatalogStore` seam; the Turso-backed local store; memory-store parity for
-embedded tests; metadata-pointer CAS; idempotent commit replay; pointer logs;
-audit rows; outbox rows; and replay admission that rejects malformed durable
-evidence before graph or OpenLineage projection.
+## What shipped
 
-The governed path is also release-blocking because it is the reason LakeCat
-exists for agents. A restricted agent should be able to ask for a governed
-read, receive a TypeSec-style receipt, get Sail-planned work instead of broad
-storage authority, and leave behind replayable scan, fetch, credential,
-management, view, and commit-history evidence. Trusted raw credential vending
-can exist only as an audited exception with redacted storage-scope proof.
+The `0.3.0` catalog spine includes:
+
+- standard Iceberg REST config, namespace, table-load, table-create,
+  `listTables`, and table-commit paths, including warehouse-prefixed routing;
+- the Rust service and `CatalogStore` seam with Turso-backed durable state and
+  memory-store parity for embedded tests;
+- metadata-pointer compare-and-swap, pointer history, idempotent replay, audit,
+  and transactional outbox rows bound to the accepted catalog transition;
+- TypeSec-gated scan and credential paths, Sail-planned work, Grust projection,
+  OpenLineage drain, and QueryGraph/QGLake bootstrap evidence; and
+- replay admission that rejects malformed, broadened, or secret-bearing durable
+  evidence before downstream projection.
+
+## Stock-client conformance
+
+Ocelot's compatibility claim is behavioral. An unmodified PyIceberg
+`RestCatalog` creates a namespace and table, appends real data, lists the
+table, loads it, and reads the rows back. Four release fixes made that ordinary
+round-trip possible: map-typed fields serialize as JSON objects; `listTables`
+is implemented; errors use real Iceberg `ErrorModel` exception types and
+statuses; and namespace creation/table creation follow stock-client semantics.
+
+The commit path is honest in both feature postures. With `sail-local`, Sail
+applies supported Iceberg updates, including snapshot append. Without that
+engine integration, LakeCat rejects an update it cannot apply instead of
+returning success while leaving the table unchanged. Unknown or unsupported
+commit requirements also fail closed.
+
+## Governed reads and bounded credentials
+
+The governed path is part of Ocelot because it is the reason LakeCat exists for
+agents. A restricted agent can ask for a governed read, receive a TypeSec
+receipt, get Sail-planned work instead of broad storage authority, and leave
+behind replayable scan, fetch, credential, management, view, and commit-history
+evidence. Trusted raw credential vending
+exists only as an audited exception with redacted storage-scope proof.
 Fetched scan replay treats the returned `plan-task` as evidence rather than
 arbitrary text: if it is present, it must be a non-empty LakeCat-issued token
 and it must not contain decorated location, query/fragment, or credential
@@ -1717,14 +1797,33 @@ same nonblank, duplicate-free array rule to projection, stats-field, and
 read-restriction allowed-column evidence before it writes that compact proof
 into the summary.
 
-The QueryGraph handoff is release-blocking as an acceptance proof, not as a
-requirement for ordinary Iceberg clients. The local QGLake workflow must keep
-creating a bootstrap bundle, draining LakeCat lineage/outbox evidence, verifying
-replay, running QueryGraph verification/import, and saving a handoff summary
+## The handoff as release proof
+
+The QueryGraph handoff is Ocelot's acceptance proof, not a requirement for
+ordinary Iceberg clients. The QGLake workflow creates a bootstrap bundle,
+drains LakeCat lineage/outbox evidence, verifies replay, runs QueryGraph
+verification/import, and saves a handoff summary
 whose artifact hashes, table/view counts, standards, OpenLineage receipts,
 graph hashes, policy anchors, credential proof, view receipt chains, and commit
-history agree. If that handoff cannot be reproduced locally, LakeCat may still
-serve an Iceberg endpoint, but it has not proven the QueryGraph foundation.
+history agree. If that handoff cannot be reproduced, LakeCat may still serve an
+Iceberg endpoint, but it has not reproduced the QueryGraph foundation claim.
+
+The successful Ocelot gate ends with two plain statements:
+
+```text
+QGLake handoff verified
+LakeCat release-candidate checks passed from a clean tree.
+```
+
+The archived handoff is organized around four core files:
+
+- `lakecat-bootstrap.json`, the governed catalog and semantic export;
+- `lineage-drain.json`, the committed OpenLineage/outbox evidence;
+- `querygraph-import-plan.json`, QueryGraph's verified interpretation; and
+- `handoff-summary.json`, the compact proof tying the other artifacts,
+  captured command outputs, replay, graph projection, counts, and hashes
+  together.
+
 The saved handoff verifier output must also repeat the lineage-drain
 `catalogConfigProof`; omission is treated as proof failure, not as an
 unspecified optional field. Extra fields inside that repeated proof are also
@@ -1749,82 +1848,64 @@ not placeholders: view replay receipts, tombstone view receipts, namespace
 receipt-chain hashes, and receipt-chain replay/OpenLineage hashes must be full
 SHA-256-shaped values before QGLake can archive them as accepted view proof.
 
-The first release should explicitly defer work that belongs elsewhere or is not
-yet ready to claim. Typed Iceberg v4 semantics belong in Sail; LakeCat should
-advertise only the current JSON passthrough bridge with
-`typed-sail=unavailable` until Sail exposes stable typed support. Reusable graph
-taxonomy, traversal, Cypher, graph stores, and algorithms belong in Grust.
-Capability composition, TypeDID envelopes, secure-agent proof, and richer
-policy semantics belong in TypeSec. Croissant, CDIF, OSI, ODRL application
-composition, and agent-facing reasoning belong in QueryGraph. Cloud SDK secret
-managers beyond the current Vault and file-backed provider roots are future
-credential backends, not blockers for the catalog substrate.
+## Dependency provenance
 
-As a working estimate, the first-release LakeCat catalog substrate is roughly
-90 percent complete. That number is not a promise about the whole future
-QueryGraph architecture. It means the release-blocking LakeCat pieces are
-mostly present and locally proven: standard Iceberg REST namespace and table
-paths, the Rust service spine, the Turso-backed local store direction,
-metadata-pointer CAS, idempotency, pointer logs, audit and outbox rows, replay
-admission, governed scan and fetch proof, credential-vending receipt proof,
-management proof, view receipt chains, QueryGraph bootstrap, OpenLineage
-replay, and QGLake handoff/import evidence.
+Ocelot moves LakeCat onto the published **Grust 0.12.0, Lobster** and
+**TypeSec 0.12.0, Torcello** substrate. Grust's `grust-graph` and
+`grust-turso` crates come from crates.io; TypeSec's `typesec` facade comes
+from crates.io. Sail remains an explicit Cargo git dependency on the `lakecat`
+branch of `github.com/querygraph/sail`, locked to the revision recorded in
+`Cargo.lock`. QueryGraph 0.4 Sentinel is an acceptance peer rather than a
+LakeCat build dependency; its importer consumes the LakeCat 0.3 bundle contract
+and is exercised under `--locked`.
 
-The remaining 5-10 percent is concentrated in release engineering and
-dependency-boundary cleanup rather than a new conceptual layer. The broad local
-gate has already been recorded from the current handoff path, including
-QueryGraph verification and import under `--locked`; the release task is to
-keep that gate green after each dependency-boundary change and rerun it from
-the final release commit. The Sail dependency is release-explicit: LakeCat builds
-Sail from a Cargo git dependency on the `lakecat` branch of
-`github.com/querygraph/sail` until the required Sail APIs are published. The Grust
-contract is likewise explicit:
-LakeCat and QueryGraph follow the active local Grust 0.10 path checkout, and
-LakeCat binds Turso-backed graph projection to the dedicated `grust-turso`
-crate. `grust-local` keeps fast memory-backed projection tests, while
-`grust-turso-local` proves durable graph projection through a bootstrapped
-`grust_turso::TursoGraphStore`. QueryGraph's `qg-rust` checkout uses the same
-local Grust path for `lakecat-verify` and `lakecat-import`, keeping the
-end-to-end graph import path aligned with the catalog graph sink. LakeCat's
-own graph responsibility stops at the catalog-facing envelope: graph sinks
-reject blank projection identity, non-object properties, and table-scoped
+The dependency contract checks source as well as version. It rejects a quiet
+return to a local Grust path, a stale TypeSec line, a Sail source that no longer
+names the `lakecat` branch, or a QueryGraph importer that drops the shared
+`qglake-bundle` contract. The exact Ocelot table appears in *The Siblings and
+the Engine Path*.
+
+LakeCat's graph responsibility still stops at the catalog envelope. The sink
+rejects blank projection identity, non-object properties, and table-scoped
 labels without table identity before handing anything to Grust. Persistence,
-traversal, Cypher, and graph mutation semantics stay in Grust. The service
-also redacts Grust Turso graph-sink connect/bootstrap failures to
-`graph-store-path-hash` and `backend-error-hash` evidence so release logs do not
-capture raw graph database paths.
+traversal, Cypher, and graph mutation semantics remain Grust work. Graph-store
+connect/bootstrap failures are reduced to
+`graph-store-path-hash` and `backend-error-hash` evidence so release logs do
+not capture raw database paths.
 
-README, status, changelog, book artifacts, and version notes must be refreshed
-from the same clean proof commit. The already-published `v0.1.0` tag should not
-move; current post-tag hardening stays under `Unreleased` while the workspace
-version remains `0.1.0`. For a future version-bump release, tag only after the
-broad local gate, QGLake handoff, QueryGraph locked verify/import,
-dependency-contract check, and book validation all pass together. Tracked book
-artifacts are refreshed deliberately with `docs/book/build.sh`; the
-release-candidate gate validates a fresh EPUB/PDF/MOBI build in a temporary
-`LAKECAT_BOOK_DIST_DIR` and gives Calibre a temporary
-`CALIBRE_CONFIG_DIRECTORY`, so neither binary artifact metadata nor converter
-preference state can dirty the candidate commit or operator profile.
+## What Ocelot does not claim
 
-Manual GitHub Actions is deliberately narrower than the local release proof.
-When an operator triggers it, the workflow runs the local dependency contract,
-the workflow-trigger self-test, and the release-version contract before the
-Rust matrix. It does not own release-proof freshness. That check belongs to the
-clean local release-candidate gate, because ordinary post-proof code hardening
-should report "the old proof is stale" locally rather than create a surprising
-failing cloud run. In practice: use manual CI as a second environment after the
-local gates are green, not as the source of release truth.
+Typed Iceberg v4 semantics remain Sail work. Ocelot advertises the JSON
+passthrough bridge with `typed-sail=unavailable` rather than implying that a
+moving draft is fully modeled. Reusable graph taxonomy, traversal, algorithms,
+and stores remain in Grust. Capability composition, TypeDID envelopes,
+secure-agent proof, and richer policy semantics remain in TypeSec. Croissant,
+CDIF, OSI, ODRL application composition, and agent-facing reasoning remain in
+QueryGraph. Cloud SDK secret managers beyond the current provider seams are
+future credential backends.
 
-That leaves important work after the first release, but it should stay out of
-the first-release blocker list unless the scope changes. Typed Iceberg v4
-semantics belong in Sail. Cloud SDK-backed secret resolvers belong behind the
-existing TypeSec-gated provider seam. Reusable graph taxonomy, traversal,
-stores, and Cypher behavior belong in Grust. Full Croissant, CDIF, OSI, ODRL
-application composition and agentic workflow semantics belong in QueryGraph
-and TypeSec above LakeCat. The first release should prove the catalog
-foundation, not absorb every future system.
+Those are release boundaries, not omissions hidden behind an optimistic
+completion percentage. Ocelot proves the catalog foundation it ships and names
+the systems that own the rest.
 
-The release evidence is concrete:
+## Release and announcement posture
+
+The announcement's proof-forward language comes from the same sources as the
+book: the release tag and changelog, the clean release-candidate record, the
+dependency lock and contract, and the QGLake handoff artifacts. Reader-facing
+docs and generated book formats are refreshed after the clean proof without
+pretending that a documentation rebuild is a new executable proof.
+
+Tracked book artifacts are rebuilt with `docs/book/build.sh`. Release-candidate
+mode builds EPUB, PDF, MOBI, and HTML into a temporary
+`LAKECAT_BOOK_DIST_DIR`, with temporary Calibre state, so format validation
+does not dirty the candidate commit or the operator's converter profile.
+Manual GitHub Actions remains a second environment; release-proof freshness is
+owned by the clean local gate.
+
+## Reproducing the proof
+
+The release evidence is executable:
 
 ```sh
 scripts/check-release-readiness.sh --release-candidate
@@ -1834,21 +1915,12 @@ scripts/check-book-artifact-contract.sh docs/book/dist
 scripts/check-local-dependency-contract.sh
 ```
 
-The current full local release-candidate proof was refreshed on July 4, 2026
-from clean head `6bfce1ef`. It passed with tracked book artifact validation,
-the checked-in release-proof contract in clean candidate mode, the strengthened
-post-tag release-posture contract for the published `v0.1.0` baseline,
-the querygraph/sail `lakecat` git-dependency source assertions, temporary
-book build, executable book artifact contract, QueryGraph locked verify/import,
-Grust Turso graph projection proof, bundle hash
-`sha256:8d64b0b7e26788ae67ce513996d923911666d2b74b1759f38b400c943002af5b`,
-graph hash
-`sha256:41953a9530b465310f668c44107d335fb5d8295e95a0b63b0edeb489ee5d35a6`,
-OpenLineage hash
-`sha256:4a1fdf0fbe043c0a96340838eef88d02f22d9f8b1455856d2fe687c1536fcf48`,
-QueryGraph import hash
-`sha256:778e9e0e8dfe35d9243b690440229969b6018c9be9a344b142b5f861084eaff1`,
-and the final clean-tree check.
+The published Ocelot release-candidate proof ran on July 4, 2026 from clean
+head `6bfce1ef`. It covered shell and dependency contracts, the default and
+all-feature Rust matrices, an out-of-tree book build, Grust-Turso projection,
+the QGLake handoff, QueryGraph locked verify/import, and the final clean-tree
+check. The immutable `v0.3.0` tag records that release baseline; later
+documentation and artifact refreshes do not move it.
 
 LakeCat also carries a smaller proof-freshness contract for the release docs
 themselves:
@@ -1896,18 +1968,14 @@ next proof commit. After the heavy gate passes, the follow-up documentation and
 book artifact refresh records that new proof commit.
 
 The already-published `v0.1.0` tag is a baseline, not something to move.
-The already-published `v0.2.1` tag is a baseline, not something to move either.
-The already-published `v0.3.0` tag is a baseline, not something to move either.
-While
-the workspace version remains `0.1.0` and `HEAD` is past `v0.1.0`, post-tag
-hardening stays under `Unreleased`. The release version contract checks that
-shape directly so a follow-up proof commit cannot accidentally look like a
-second same-version release. It also requires the release checklist to scope
-tagging chores to a future version-bump release, not the already-published
-baseline. Finally, it derives the expected versioned changelog heading date
-from the existing tag, not the current day, so the published `0.1.0 -
-2026-06-23` release heading remains stable while hardening continues under
-`Unreleased`.
+The already-published `v0.2.0` tag is a baseline, not something to move.
+The already-published `v0.2.1` tag is a baseline, not something to move.
+The already-published `v0.3.0` tag is a baseline, not something to move.
+The workspace version is `0.3.0`; post-Ocelot documentation and hardening stay
+under `Unreleased` until a deliberate future version bump. The release version
+contract checks that the workspace crates, release instructions, tracked book
+manifest, and versioned artifact links agree without turning a post-tag docs
+rebuild into a second Ocelot release.
 
 The quick check is acceptable while landing a narrow slice:
 
@@ -1916,9 +1984,9 @@ scripts/check-release-readiness.sh --quick
 ```
 
 The quick check is not a release claim, but it does validate the tracked
-`docs/book/dist` artifact contract so stale EPUB/PDF/MOBI deliverables are
+`docs/book/dist` artifact contract so stale EPUB/PDF/MOBI/HTML deliverables are
 caught before a full release-candidate build regenerates temporary artifacts.
-The full gate is the first-release claim. It runs local dependency-contract
+The full gate is the release claim. It runs local dependency-contract
 checks, workflow-trigger checks, formatting, default workspace tests, feature
 matrix tests, Turso rows, Sail/TypeSec/Grust integration rows, all-features
 workspace tests, an out-of-tree book build with artifact validators, and the
@@ -1947,7 +2015,7 @@ storage-profile upsert proof in the distinct sections the verifier compares.
 That is the local substitute for cloud hope: the artifact graph is checked
 before the summary is accepted.
 
-For this release, replay admission is part of the local proof rather than a
+For Ocelot, replay admission is part of the local proof rather than a
 best-effort projection filter. The service closes event payloads before graph,
 OpenLineage, QGLake, or QueryGraph import can inherit them; the compact handoff
 verifier then repeats the same checks against saved artifacts. Appendix A lists
@@ -2005,7 +2073,7 @@ secret URI, backend error, token, or returned credential material.
 
 # Appendix C: View Receipt-Chain Rules
 
-LakeCat's first release does not claim full Iceberg view-history semantics. It
+Ocelot does not claim full Iceberg view-history semantics. It
 keeps a compact, catalog-owned receipt chain so QueryGraph can prove which view
 version was exported, updated, dropped, or tombstoned. Richer view semantics
 remain a Sail-aligned future target.
@@ -2080,10 +2148,9 @@ back into the catalog.
 5. Expand TypeSec-backed capability checks until every privileged path is
    unbypassable, with raw credentials remaining an explicit audited exception.
 6. Keep OSI, Croissant, CDIF, ODRL composition, and agent workflows in
-   QueryGraph. Before the next public release, refresh QueryGraph's older
-   dependency-guide examples to match its live Grust `0.10.0` and TypeSec
-   `0.8.0` runtime manifest; its LakeCat importer already validates the current
-   receipt-chain and Grust graph handoff contract.
+   QueryGraph. Keep QueryGraph 0.4 Sentinel's importer aligned with LakeCat
+   `qglake-bundle`/`lakecat-core` `0.3.0` and the Grust/TypeSec `0.12.0`
+   substrate while preserving the locked receipt-chain and graph-handoff proof.
 7. Prove the bootstrap bundle through QueryGraph import on every meaningful
    public-surface change, and keep local release evidence ahead of cloud CI.
 

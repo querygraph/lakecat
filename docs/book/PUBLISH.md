@@ -23,33 +23,39 @@ The stable deliverables are:
 - `docs/book/dist/lakecat.pdf`
 - `docs/book/dist/lakecat.epub`
 - `docs/book/dist/lakecat.mobi`
+- `docs/book/dist/lakecat.html`
 - `docs/book/dist/VERSION.md`
 
-The Kindle-facing EPUB path is generated from `title_stem` in
-`docs/book/metadata.yaml` and `[workspace.package].version` in `Cargo.toml`:
+The versioned artifact stem is generated from `title_stem` in
+`docs/book/metadata.yaml`, `[workspace.package].version` in `Cargo.toml`,
+and the short Git commit:
 
 ```text
-lakecat (0.1.0).epub
+lakecat (0.3.0-abcdef12)
 ```
 
-That versioned path must be a symlink to the stable EPUB:
+The EPUB, PDF, and HTML versioned paths must be symlinks to the stable files:
 
 ```text
-docs/book/dist/lakecat (0.1.0).epub -> lakecat.epub
+docs/book/dist/lakecat (0.3.0-abcdef12).epub -> lakecat.epub
+docs/book/dist/lakecat (0.3.0-abcdef12).pdf  -> lakecat.pdf
+docs/book/dist/lakecat (0.3.0-abcdef12).html -> lakecat.html
 ```
 
-Track the stable EPUB, PDF, MOBI, and `VERSION.md` when generated deliverables
-are part of the requested change. The versioned EPUB is a generated symlink and
-`.gitignore` ignores future versioned EPUB names matching
-`docs/book/dist/* (*).epub`.
+Track the stable EPUB, PDF, MOBI, HTML, and `VERSION.md` when generated
+deliverables are part of the requested change. Versioned EPUB/PDF/HTML names are
+generated symlinks and are ignored.
 
 `VERSION.md` must contain:
 
 ```yaml
-kindle_name: lakecat (0.1.0)
+kindle_name: lakecat (0.3.0-abcdef12)
 built_at: YYYY-MM-DD
 epub_file: lakecat.epub
-kindle_link: lakecat (0.1.0).epub
+kindle_link: lakecat (0.3.0-abcdef12).epub
+html_file: lakecat.html
+html_link: lakecat (0.3.0-abcdef12).html
+html_title: LakeCat
 ```
 
 ## Metadata Rules
@@ -63,14 +69,22 @@ LakeCat
 The Kindle/catalog title is versioned:
 
 ```text
-lakecat (0.1.0)
+lakecat (0.3.0-abcdef12)
+```
+
+The Ocelot edition subtitle is:
+
+```text
+Ocelot: Governed Iceberg REST with Proof Built In
 ```
 
 Keep those surfaces separate:
 
 - Cover, NCX, navigation title, and visible table of contents: `LakeCat`
-- OPF `dc:title` and title-sort metadata: `lakecat (0.1.0)`
-- Upload/delivery filename: `lakecat (0.1.0).epub`
+- Cover and metadata subtitle: `Ocelot: Governed Iceberg REST with Proof Built In`
+- OPF `dc:title` and title-sort metadata: `lakecat (0.3.0-abcdef12)`
+- Upload/delivery filename: `lakecat (0.3.0-abcdef12).epub`
+- Browser document title: `LakeCat`
 - Dist marker: `VERSION.md`
 
 Do not hard-code the version in the manuscript or cover. The cover uses
@@ -82,7 +96,7 @@ current generated Kindle name.
 The cover is a separate Markdown file with two raw blocks:
 
 - Typst raw block for PDF.
-- HTML raw block for EPUB and MOBI.
+- HTML raw block for EPUB, MOBI, and browser HTML.
 
 The Typst cover block must include:
 
@@ -99,7 +113,8 @@ PDF should have:
 For the EPUB cover, keep the HTML simple. Do not use flexbox. Kindle renderers
 are more reliable with centered text and margins.
 
-Keep code blocks compact in EPUB and MOBI through `docs/book/epub.css`.
+Keep code blocks compact in EPUB, MOBI, and HTML through
+`docs/book/epub.css`.
 
 ## Build
 
@@ -113,7 +128,7 @@ The build script:
 
 1. Reads the workspace version from `Cargo.toml`.
 2. Reads `title_stem` from `docs/book/metadata.yaml`.
-3. Computes `kindle_name`, for example `lakecat (0.1.0)`.
+3. Computes `kindle_name`, for example `lakecat (0.3.0-abcdef12)`.
 4. Writes `docs/book/dist/VERSION.md`.
 5. Renders a temporary cover with `{{KINDLE_NAME}}` replaced.
 6. Builds a standalone cover PDF.
@@ -124,8 +139,10 @@ The build script:
 10. Runs `fix_epub_layout.sh` to repair Pandoc EPUB defaults.
 11. Creates the versioned EPUB symlink.
 12. Runs `check_epub_metadata.sh`.
-13. Runs `check_pdf_layout.sh`.
-14. Converts the EPUB to `docs/book/dist/lakecat.mobi`.
+13. Builds `docs/book/dist/lakecat.html` and creates its versioned symlink.
+14. Creates the versioned PDF symlink.
+15. Converts the EPUB to `docs/book/dist/lakecat.mobi`.
+16. Runs the complete book artifact contract, including HTML and PDF layout.
 
 Calibre is expected at:
 
@@ -165,8 +182,9 @@ in `Cargo.toml`, all `crates/lakecat-*` package versions resolved by Cargo
 metadata, the `RELEASE.md` tag command, `docs/book/dist/VERSION.md`, and the
 versioned Kindle EPUB symlink.
 The book artifact contract accepts an optional dist directory and validates the
-same stable EPUB/PDF/MOBI files, marker fields, versioned Kindle symlink, EPUB
-metadata, and PDF layout that release-candidate mode generates out of tree.
+same stable EPUB/PDF/MOBI/HTML files, marker fields, versioned EPUB/PDF/HTML
+symlinks, EPUB metadata, HTML title/TOC, and PDF layout that release-candidate
+mode generates out of tree.
 
 The validator rejects:
 
@@ -183,6 +201,8 @@ The validator rejects:
 - A stable EPUB that differs from the canonical EPUB.
 - A missing or non-symlink versioned Kindle EPUB.
 - A versioned symlink that does not point to `lakecat.epub`.
+- Missing stable HTML, its `LakeCat` document title, or its generated TOC.
+- Missing or incorrect versioned PDF/HTML symlinks.
 - A missing or incomplete `VERSION.md`.
 
 The PDF validator rejects:
@@ -214,7 +234,7 @@ Optional Calibre metadata check:
 Expected title and title sort:
 
 ```text
-lakecat (0.1.0)
+lakecat (0.3.0-abcdef12)
 ```
 
 ## Delivery
@@ -229,7 +249,7 @@ cp "docs/book/dist/$kindle_link" "$HOME/icloud/books/"
 This produces a regular EPUB file at:
 
 ```text
-~/icloud/books/lakecat (0.1.0).epub
+~/icloud/books/lakecat (0.3.0-abcdef12).epub
 ```
 
 That is intentional: the destination should preserve the versioned filename,

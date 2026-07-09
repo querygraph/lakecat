@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Book: recast the reader-facing edition around LakeCat 0.3.0 Ocelot and its
+  announcement claim, including stock-client conformance, clean release proof,
+  QGLake artifact verification, the current Grust 0.12 Lobster / TypeSec 0.12
+  Torcello / Sail `lakecat` dependency baseline, and explicit post-release
+  limits. Updated the cover subtitle and publishing runbook, then rebuilt all
+  tracked book formats plus the HTML edition.
 - Recorded the v0.3.0 release-candidate proof from clean head `6bfce1ef`
   (July 4, 2026): shell + dependency contracts, default and all-feature Rust
   matrices, temporary book validation, Grust-Turso QGLake handoff with

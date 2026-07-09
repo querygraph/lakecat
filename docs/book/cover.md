@@ -6,7 +6,7 @@
   #v(-22pt)
   #text(size: 12pt)[covers {{KINDLE_NAME}}]
   #v(1em)
-  #text(size: 20pt)[An Engine-Close Catalog Foundation for QueryGraph]
+  #text(size: 20pt)[Ocelot: Governed Iceberg REST with Proof Built In]
   #v(5em)
   #text(size: 18pt)[Alexy Khrabrov]
   #v(0.4em)
@@ -22,7 +22,7 @@
 <section epub:type="titlepage" style="text-align: center; page-break-after: always; padding-top: 8em;">
   <h1 style="font-size: 3.2em; margin: 0 0 0.05em; text-align: center; page-break-before: auto;">LakeCat</h1>
   <p style="font-size: 0.85em; margin: 0 0 1.1em;">covers {{KINDLE_NAME}}</p>
-  <p style="font-size: 1.35em; margin: 0 0 4em;">An Engine-Close Catalog Foundation for QueryGraph</p>
+  <p style="font-size: 1.35em; margin: 0 0 4em;">Ocelot: Governed Iceberg REST with Proof Built In</p>
   <p style="font-size: 1.25em; margin: 0.2em 0;">Alexy Khrabrov</p>
   <p style="font-size: 0.95em; margin: 0 0 1.5em;">chiefscientist.org</p>
   <p style="font-size: 0.85em; font-style: italic; margin: 0 0 0.35em;">&amp;</p>

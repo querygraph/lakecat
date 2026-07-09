@@ -35,21 +35,27 @@ version_file="$dist_dir/VERSION.md"
 stable_epub="$dist_dir/lakecat.epub"
 stable_pdf="$dist_dir/lakecat.pdf"
 stable_mobi="$dist_dir/lakecat.mobi"
+stable_html="$dist_dir/lakecat.html"
 
 require_file "$version_file"
 require_file "$stable_epub"
 require_file "$stable_pdf"
 require_file "$stable_mobi"
+require_file "$stable_html"
 
 kindle_name="$(awk -F': ' '/^kindle_name:/ { print $2; exit }' "$version_file")"
 built_at="$(awk -F': ' '/^built_at:/ { print $2; exit }' "$version_file")"
 epub_file="$(awk -F': ' '/^epub_file:/ { print $2; exit }' "$version_file")"
 kindle_link="$(awk -F': ' '/^kindle_link:/ { print $2; exit }' "$version_file")"
+html_file="$(awk -F': ' '/^html_file:/ { print $2; exit }' "$version_file")"
+html_link="$(awk -F': ' '/^html_link:/ { print $2; exit }' "$version_file")"
+html_title="$(awk -F': ' '/^html_title:/ { print $2; exit }' "$version_file")"
 
 # The linked, versioned artifact name carries a short git-hash suffix:
 #   lakecat (<workspace_version>-<short_hash>)
 kindle_name_re="^lakecat \($workspace_version-[0-9a-f]{7,}\)$"
 kindle_link_re="^lakecat \($workspace_version-[0-9a-f]{7,}\)\.epub$"
+html_link_re="^lakecat \($workspace_version-[0-9a-f]{7,}\)\.html$"
 
 [[ "$kindle_name" =~ $kindle_name_re ]] || \
   fail "kindle_name '$kindle_name' does not match expected 'lakecat ($workspace_version-<hash>)'"
@@ -57,6 +63,12 @@ kindle_link_re="^lakecat \($workspace_version-[0-9a-f]{7,}\)\.epub$"
   fail "epub_file '$epub_file' does not match lakecat.epub"
 [[ "$kindle_link" =~ $kindle_link_re ]] || \
   fail "kindle_link '$kindle_link' does not match expected 'lakecat ($workspace_version-<hash>).epub'"
+[[ "$html_file" == "lakecat.html" ]] || \
+  fail "html_file '$html_file' does not match lakecat.html"
+[[ "$html_link" =~ $html_link_re ]] || \
+  fail "html_link '$html_link' does not match expected 'lakecat ($workspace_version-<hash>).html'"
+[[ "$html_title" == "LakeCat" ]] || \
+  fail "html_title '$html_title' does not match LakeCat"
 [[ "$built_at" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || \
   fail "built_at '$built_at' must be an ISO date"
 
@@ -64,6 +76,21 @@ kindle_path="$dist_dir/$kindle_link"
 [[ -L "$kindle_path" ]] || fail "versioned Kindle EPUB is not a symlink: $kindle_path"
 [[ "$(readlink "$kindle_path")" == "$epub_file" ]] || \
   fail "versioned Kindle EPUB must link to $epub_file"
+
+pdf_path="$dist_dir/$kindle_name.pdf"
+[[ -L "$pdf_path" ]] || fail "versioned PDF is not a symlink: $pdf_path"
+[[ "$(readlink "$pdf_path")" == "lakecat.pdf" ]] || \
+  fail "versioned PDF must link to lakecat.pdf"
+
+html_path="$dist_dir/$html_link"
+[[ -L "$html_path" ]] || fail "versioned HTML is not a symlink: $html_path"
+[[ "$(readlink "$html_path")" == "$html_file" ]] || \
+  fail "versioned HTML must link to $html_file"
+
+grep -Fq '<title>LakeCat</title>' "$stable_html" || \
+  fail "stable HTML does not carry the visible LakeCat title"
+grep -Fq 'id="TOC"' "$stable_html" || \
+  fail "stable HTML does not carry a generated table of contents"
 
 docs/book/check_epub_metadata.sh "$stable_epub" "$kindle_name"
 docs/book/check_pdf_layout.sh "$stable_pdf"

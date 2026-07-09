@@ -3,4 +3,5 @@
 **/*.rs.bk
 docs/book/dist/* (*).epub
 docs/book/dist/* (*).pdf
+docs/book/dist/* (*).html
 .linux-target/

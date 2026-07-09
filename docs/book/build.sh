@@ -7,6 +7,7 @@ cd "$repo_root"
 dist_dir="${LAKECAT_BOOK_DIST_DIR:-docs/book/dist}"
 mkdir -p "$dist_dir"
 dist_dir="$(cd "$dist_dir" && pwd)"
+html_emitter="${HTML_BOOK_EMITTER:-$HOME/src/firstpair/publishing/scripts/emit-html-book.sh}"
 
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
@@ -128,6 +129,25 @@ find "$dist_dir" -maxdepth 1 -name "$kindle_short_title (*).epub" -exec rm -f {}
 ln -s "$(basename "$stable_epub")" "$kindle_epub"
 docs/book/check_epub_metadata.sh "$dist_dir/lakecat.epub" "$kindle_name"
 
+if [[ ! -x "$html_emitter" ]]; then
+  echo "missing HTML book emitter: $html_emitter" >&2
+  exit 1
+fi
+REPO_ROOT="$repo_root" \
+  BOOK_ROOT="docs/book" \
+  BOOK_DIST_DIR="$dist_dir" \
+  BOOK_BUILD_DIR="$tmpdir" \
+  BOOK_METADATA="$repo_root/docs/book/metadata.yaml" \
+  BOOK_HTML_COVER="$tmpdir/cover.md" \
+  BOOK_HTML_MANUSCRIPT="$tmpdir/lakecat.md" \
+  BOOK_HTML_CSS="$repo_root/docs/book/epub.css" \
+  BOOK_STEM="$kindle_short_title" \
+  BOOK_VISIBLE_TITLE="LakeCat" \
+  BOOK_VERSION="$version" \
+  BOOK_VERSION_STAMP="$kindle_version" \
+  BOOK_HTML_RESOURCE_PATH="$tmpdir:$repo_root/docs/book:$repo_root" \
+  "$html_emitter"
+
 # Mirror the versioned link for the PDF so both formats carry the version+hash.
 find "$dist_dir" -maxdepth 1 -name "$kindle_short_title (*).pdf" -exec rm -f {} +
 ln -s "$(basename "$stable_pdf")" "$kindle_pdf"
@@ -142,12 +162,15 @@ scripts/check-book-artifact-contract.sh "$dist_dir"
 # the reading library. Override the destination with LAKECAT_BOOK_PUBLISH_DIR;
 # skip (without failing the build) when the destination is absent, e.g. CI.
 publish_dir="${LAKECAT_BOOK_PUBLISH_DIR:-$HOME/icloud/books}"
-if [[ -d "$publish_dir" ]]; then
-  cp -L "$stable_epub" "$publish_dir/$kindle_name.epub"
-  cp -L "$stable_pdf" "$publish_dir/$kindle_name.pdf"
-  echo "Published to $publish_dir:"
-  echo "  $kindle_name.epub"
-  echo "  $kindle_name.pdf"
+if [[ -d "$publish_dir" && -w "$publish_dir" ]]; then
+  if cp -L "$stable_epub" "$publish_dir/$kindle_name.epub" &&
+    cp -L "$stable_pdf" "$publish_dir/$kindle_name.pdf"; then
+    echo "Published to $publish_dir:"
+    echo "  $kindle_name.epub"
+    echo "  $kindle_name.pdf"
+  else
+    echo "Skipped library publish: copy to $publish_dir failed"
+  fi
 else
-  echo "Skipped library publish: $publish_dir not present (set LAKECAT_BOOK_PUBLISH_DIR)"
+  echo "Skipped library publish: $publish_dir not present or not writable (set LAKECAT_BOOK_PUBLISH_DIR)"
 fi

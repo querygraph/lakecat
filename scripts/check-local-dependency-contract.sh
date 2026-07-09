@@ -305,8 +305,8 @@ require_pattern 'The handoff between LakeCat and Sail should therefore be compac
   "LakeCat book must keep the LakeCat/Sail responsibility ledger"
 require_pattern 'The already-published `v0\.1\.0` tag is a baseline, not something to move' docs/book/lakecat.md \
   "LakeCat book must preserve the post-v0.1.0 no-retag explanation"
-require_pattern '# First Release Readiness' docs/book/lakecat.md \
-  "LakeCat book must keep the first-release readiness section"
+require_pattern '# Ocelot: The 0\.3 Release' docs/book/lakecat.md \
+  "LakeCat book must keep the Ocelot release and proof section"
 require_pattern 'typed-sail=unavailable' docs/book/lakecat.md \
   "LakeCat book must preserve the honest typed Sail v4 posture"
 require_pattern 'docs/book/check_pdf_layout\.sh docs/book/dist/lakecat\.pdf' docs/book/PUBLISH.md \
