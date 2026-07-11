@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov" />
+  <meta name="dcterms.date" content="2026-07-11" />
+  <title>The Architecture</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    html { -webkit-text-size-adjust: 100%; }
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { color: #008000; } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { color: #008000; font-weight: bold; } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">LakeCat</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">LakeCat</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-009.html" accesskey="n" rel="next">The Benchmark Suite</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-007.html" accesskey="p" rel="previous">Why the Catalog Stays Thin</a>
+</span>
+</div>
+</nav>
+<h1 data-number="7" id="the-architecture"><span
+class="header-section-number">7</span> The Architecture</h1>
+<p>Thin does not mean trivial. LakeCat owns the durable catalog state
+that must be correct even when external sinks are down, and nothing
+more. Its responsibilities are exactly:</p>
+<ul>
+<li>serve the Iceberg REST Catalog API for standard clients;</li>
+<li>model projects, warehouses, namespaces, tables, views, and storage
+profiles;</li>
+<li>persist metadata pointers and compare-and-swap commit history;</li>
+<li>validate idempotency keys and replay only matching commit
+bodies;</li>
+<li>resolve request identity from headers, bearer tokens, agents, and
+TypeDID envelopes;</li>
+<li>ask TypeSec for authorization decisions and persist the
+receipts;</li>
+<li>route scan planning and commit preparation through Sail;</li>
+<li>record audit and outbox events inside the catalog transaction;</li>
+<li>drain committed events to Grust and OpenLineage sinks;</li>
+<li>publish a QueryGraph bootstrap bundle.</li>
+</ul>
+<p>Everything else is deliberately excluded — LakeCat does not invent a
+table format, fork manifest pruning, own graph traversal, decide
+security semantics, or author QueryGraph’s business model. Those belong
+to Sail, Grust, TypeSec, and QueryGraph respectively (Chapter 4).</p>
+<h2 data-number="7.1" id="the-catalogstore-seam"><span
+class="header-section-number">7.1</span> The CatalogStore seam</h2>
+<p>All durable state sits behind one trait, so the memory store (for
+tests and embedded use) and the Turso store (for durable local
+deployments) are interchangeable. The interesting methods are the table
+lifecycle and the idempotent replay hook:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="at">#[</span>async_trait<span class="at">]</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">trait</span> CatalogStore<span class="op">:</span> <span class="bu">Send</span> <span class="op">+</span> <span class="bu">Sync</span> <span class="op">+</span> <span class="ot">&#39;static</span> <span class="op">{</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">async</span> <span class="kw">fn</span> create_namespace(<span class="op">&amp;</span><span class="kw">self</span><span class="op">,</span> warehouse<span class="op">:</span> <span class="op">&amp;</span>WarehouseName<span class="op">,</span> namespace<span class="op">:</span> Namespace)</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>        <span class="op">-&gt;</span> LakeCatResult<span class="op">&lt;</span>()<span class="op">&gt;;</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">async</span> <span class="kw">fn</span> list_tables(<span class="op">&amp;</span><span class="kw">self</span><span class="op">,</span> warehouse<span class="op">:</span> <span class="op">&amp;</span>WarehouseName) <span class="op">-&gt;</span> LakeCatResult<span class="op">&lt;</span><span class="dt">Vec</span><span class="op">&lt;</span>TableRecord<span class="op">&gt;&gt;;</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">async</span> <span class="kw">fn</span> create_table(<span class="op">&amp;</span><span class="kw">self</span><span class="op">,</span> table<span class="op">:</span> TableRecord) <span class="op">-&gt;</span> LakeCatResult<span class="op">&lt;</span>TableRecord<span class="op">&gt;;</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">async</span> <span class="kw">fn</span> load_table(<span class="op">&amp;</span><span class="kw">self</span><span class="op">,</span> ident<span class="op">:</span> <span class="op">&amp;</span>TableIdent) <span class="op">-&gt;</span> LakeCatResult<span class="op">&lt;</span>TableRecord<span class="op">&gt;;</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Optimistic pointer advancement: the catalog transaction.</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="kw">async</span> <span class="kw">fn</span> commit_table(<span class="op">&amp;</span><span class="kw">self</span><span class="op">,</span> ident<span class="op">:</span> <span class="op">&amp;</span>TableIdent<span class="op">,</span> commit<span class="op">:</span> TableCommit)</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>        <span class="op">-&gt;</span> LakeCatResult<span class="op">&lt;</span>TableRecord<span class="op">&gt;;</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Exact idempotent replay: same key + same request hash -&gt; stored response.</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="kw">async</span> <span class="kw">fn</span> replay_table_commit(</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>        <span class="op">&amp;</span><span class="kw">self</span><span class="op">,</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>        ident<span class="op">:</span> <span class="op">&amp;</span>TableIdent<span class="op">,</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>        idempotency_key<span class="op">:</span> <span class="op">&amp;</span><span class="dt">str</span><span class="op">,</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>        idempotency_request_hash<span class="op">:</span> <span class="op">&amp;</span><span class="dt">str</span><span class="op">,</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>    ) <span class="op">-&gt;</span> LakeCatResult<span class="op">&lt;</span><span class="dt">Option</span><span class="op">&lt;</span>TableRecord<span class="op">&gt;&gt;;</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Compact pointer-log history for operators and QueryGraph.</span></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>    <span class="kw">async</span> <span class="kw">fn</span> table_commit_records(<span class="op">&amp;</span><span class="kw">self</span><span class="op">,</span> ident<span class="op">:</span> <span class="op">&amp;</span>TableIdent<span class="op">,</span> start<span class="op">:</span> <span class="dt">u64</span><span class="op">,</span> end<span class="op">:</span> <span class="dt">Option</span><span class="op">&lt;</span><span class="dt">u64</span><span class="op">&gt;</span>)</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>        <span class="op">-&gt;</span> LakeCatResult<span class="op">&lt;</span><span class="dt">Vec</span><span class="op">&lt;</span>TableCommitRecord<span class="op">&gt;&gt;;</span></span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h2 data-number="7.2" id="the-read-path"><span
+class="header-section-number">7.2</span> The read path</h2>
+<p>A read begins like a standard catalog request and ends with a
+<em>governed</em> Sail plan. The policy restriction becomes part of
+planning, not a note beside it.</p>
+<figure>
+<img src="diagrams/diagram-06.png" alt="Diagram 6" />
+<figcaption aria-hidden="true">Diagram 6</figcaption>
+</figure>
+<p>The governing rule is <strong>narrow, never widen</strong>. An empty
+client projection under a column restriction means <em>the allowed
+columns</em>; a client projection may narrow further but cannot widen.
+LakeCat records both the requested and the effective projection (and
+stats fields) as replay evidence, and recomputes the restriction on
+every stateless <code>fetchScanTasks</code> so a stale token cannot
+expand back to all columns. Outbox admission enforces that the governed
+scan replay carries the same <code>read-restriction</code> at the top
+level and inside <code>authorization-receipt.context</code>, a nonblank
+<code>purpose</code>, and a positive
+<code>max-credential-ttl-seconds</code>, and rejects unknown fields — so
+graph, lineage, and QGLake evidence can never inherit a claim the
+receipt did not capture.</p>
+<h2 data-number="7.3" id="the-commit-path"><span
+class="header-section-number">7.3</span> The commit path</h2>
+<p>The write path follows the same principle: LakeCat owns the
+transaction, Sail owns Iceberg validation and metadata assembly.</p>
+<figure>
+<img src="diagrams/diagram-07.png" alt="Diagram 7" />
+<figcaption aria-hidden="true">Diagram 7</figcaption>
+</figure>
+<p>Three invariant groups make this safe, each enforced once:</p>
+<ul>
+<li><strong>Metadata-write safety.</strong> The new object must be a
+concrete child of the table’s matched storage-profile prefix — never the
+current pointer, never the profile root, never a path with literal or
+percent-encoded dot segments, query strings, fragments, userinfo, or
+credential markers. Writes are create-only; if the store CAS loses after
+a write, LakeCat makes a bounded retry to delete the orphaned object and
+otherwise preserves the original conflict.</li>
+<li><strong>Idempotency.</strong> Keys are 1–128 ASCII chars
+(<code>Idempotency-Key</code> / <code>x-lakecat-idempotency-key</code>,
+matching if both present). The same key + same body replays the stored
+response before any Sail call or write; the same key + a different body
+conflicts. Only audit-safe hashes are stored — never raw keys or
+secrets. Ordinary clients may commit without a key; they simply get no
+replay proof.</li>
+<li><strong>Redaction.</strong> Every commit error — pointer conflict,
+overwrite, prefix mismatch, cleanup failure, backend error — reports
+<code>sha256:</code> hashes of the metadata location and failure detail,
+never raw object paths, storage roots, profile ids, or backend text. A
+conflict still looks like an ordinary Iceberg conflict to the
+client.</li>
+</ul>
+<p>Commit records carry compact evidence — Iceberg format version,
+current snapshot id, request/response/idempotency/policy hashes,
+principal — so operators and QueryGraph can answer audit questions from
+the pointer log without parsing full metadata. Operators read it through
+a governed endpoint:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> <span class="at">-H</span> <span class="st">&#39;x-lakecat-principal: operator@example.com&#39;</span> <span class="dt">\</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  http://127.0.0.1:8181/management/v1/warehouses/local/namespaces/default/tables/events/commits</span></code></pre></div>
+<p>That read itself enters the outbox as
+<code>table.commits-listed</code> and drains as lineage plus
+<code>Commit</code> graph anchors keyed by table and sequence — an
+auditable trail without giving anyone direct database access or turning
+LakeCat into a graph query engine.</p>
+<h2 data-number="7.4" id="the-durable-spine"><span
+class="header-section-number">7.4</span> The durable spine</h2>
+<p>The durable local store uses the Rust <code>turso</code> crate behind
+the <code>turso-local</code> feature. Object storage remains the source
+of Iceberg metadata files; Turso holds the atomic pointer and the
+control-plane memory: projects and warehouses, storage profiles,
+namespaces and tables, the metadata pointer log, idempotency records,
+soft deletes, policy bindings, audit events, and outbox events. This
+mirrors the Iceberg contract — metadata files describe the table;
+catalog state decides which file is current.</p>
+<p>Two disciplines keep the spine trustworthy:</p>
+<ul>
+<li><strong>Decoded-row binding.</strong> Every read reconciles the
+decoded JSON against the row’s own key columns before returning it — a
+warehouse against its project and storage root, a namespace against its
+path, a policy binding against its table and enforced flag, a storage
+profile against its prefix/provider/mode, a table body against its
+identity. A corrupted row index can therefore never point a
+valid-looking record at the wrong tenant, path, or policy.</li>
+<li><strong>Strict outbox draining.</strong> LakeCat projects a batch to
+graph and lineage <em>first</em>, then acknowledges the whole batch; if
+projection fails, nothing is acknowledged, and an under-count
+acknowledgement is a hard error rather than a quiet partial success. The
+drain refuses unknown event types (they stay pending rather than
+vanish), rejects event-id/payload-hash drift, and validates
+governed-read and commit evidence — policy-hash arrays must be non-empty
+full digests, top-level and receipt <code>read-restriction</code> must
+match, purpose and TTL must be present — before any sink sees the event.
+Malformed source evidence stays available for retry instead of being
+promoted into a QGLake handoff.</li>
+</ul>
+</body>
+</html>

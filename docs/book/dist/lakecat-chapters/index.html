@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov" />
+  <meta name="dcterms.date" content="2026-07-11" />
+  <title>LakeCat</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+</span>
+<span class="navlink">
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-001.html" accesskey="n" rel="next">LakeCat</a>
+</span>
+<span class="navlink">
+</span>
+</div>
+</nav>
+<header id="title-block-header">
+<h1 class="title">LakeCat</h1>
+<p class="subtitle">Ocelot: Governed Iceberg REST with Proof Built
+In</p>
+<p class="author">Alexy Khrabrov</p>
+<p class="date">2026-07-11</p>
+</header>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="chapter-002.html#preface" id="toc-preface"><span
+class="toc-section-number">1</span> Preface</a></li>
+<li><a href="chapter-003.html#catalogs-iceberg-and-what-lakecat-adds"
+id="toc-catalogs-iceberg-and-what-lakecat-adds"><span
+class="toc-section-number">2</span> Catalogs, Iceberg, and What LakeCat
+Adds</a>
+<ul>
+<li><a href="chapter-003.html#what-a-catalog-is"
+id="toc-what-a-catalog-is"><span class="toc-section-number">2.1</span>
+What a catalog is</a></li>
+<li><a
+href="chapter-003.html#what-iceberg-makes-the-catalog-responsible-for"
+id="toc-what-iceberg-makes-the-catalog-responsible-for"><span
+class="toc-section-number">2.2</span> What Iceberg makes the catalog
+responsible for</a></li>
+<li><a
+href="chapter-003.html#what-lakecat-adds-without-changing-iceberg"
+id="toc-what-lakecat-adds-without-changing-iceberg"><span
+class="toc-section-number">2.3</span> What LakeCat adds without changing
+Iceberg</a></li>
+</ul></li>
+<li><a href="chapter-004.html#the-vocabulary"
+id="toc-the-vocabulary"><span class="toc-section-number">3</span> The
+Vocabulary</a></li>
+<li><a href="chapter-005.html#the-boundary-model"
+id="toc-the-boundary-model"><span class="toc-section-number">4</span>
+The Boundary Model</a></li>
+<li><a href="chapter-006.html#where-lakecat-stands-today"
+id="toc-where-lakecat-stands-today"><span
+class="toc-section-number">5</span> Where LakeCat Stands Today</a>
+<ul>
+<li><a href="chapter-006.html#the-ocelot-baseline"
+id="toc-the-ocelot-baseline"><span class="toc-section-number">5.1</span>
+The Ocelot baseline</a></li>
+</ul></li>
+<li><a href="chapter-007.html#why-the-catalog-stays-thin"
+id="toc-why-the-catalog-stays-thin"><span
+class="toc-section-number">6</span> Why the Catalog Stays Thin</a></li>
+<li><a href="chapter-008.html#the-architecture"
+id="toc-the-architecture"><span class="toc-section-number">7</span> The
+Architecture</a>
+<ul>
+<li><a href="chapter-008.html#the-catalogstore-seam"
+id="toc-the-catalogstore-seam"><span
+class="toc-section-number">7.1</span> The CatalogStore seam</a></li>
+<li><a href="chapter-008.html#the-read-path"
+id="toc-the-read-path"><span class="toc-section-number">7.2</span> The
+read path</a></li>
+<li><a href="chapter-008.html#the-commit-path"
+id="toc-the-commit-path"><span class="toc-section-number">7.3</span> The
+commit path</a></li>
+<li><a href="chapter-008.html#the-durable-spine"
+id="toc-the-durable-spine"><span class="toc-section-number">7.4</span>
+The durable spine</a></li>
+</ul></li>
+<li><a href="chapter-009.html#the-benchmark-suite"
+id="toc-the-benchmark-suite"><span class="toc-section-number">8</span>
+The Benchmark Suite</a>
+<ul>
+<li><a href="chapter-009.html#measuring-catalogs-not-object-stores"
+id="toc-measuring-catalogs-not-object-stores"><span
+class="toc-section-number">8.1</span> Measuring catalogs, not object
+stores</a></li>
+<li><a href="chapter-009.html#where-lakecat-lands"
+id="toc-where-lakecat-lands"><span class="toc-section-number">8.2</span>
+Where LakeCat lands</a></li>
+<li><a href="chapter-009.html#what-it-took-to-get-there"
+id="toc-what-it-took-to-get-there"><span
+class="toc-section-number">8.3</span> What it took to get there</a></li>
+<li><a
+href="chapter-009.html#audit-and-idempotency-the-durable-cost-of-features"
+id="toc-audit-and-idempotency-the-durable-cost-of-features"><span
+class="toc-section-number">8.4</span> Audit and idempotency: the durable
+cost of features</a></li>
+<li><a
+href="chapter-009.html#the-object-store-cache-and-the-scan-benchmark"
+id="toc-the-object-store-cache-and-the-scan-benchmark"><span
+class="toc-section-number">8.5</span> The object-store cache and the
+scan benchmark</a></li>
+<li><a href="chapter-009.html#rust-versus-the-jvm"
+id="toc-rust-versus-the-jvm"><span class="toc-section-number">8.6</span>
+Rust versus the JVM</a></li>
+<li><a
+href="chapter-009.html#the-read-write-benchmark-and-the-stock-client-round-trip"
+id="toc-the-read-write-benchmark-and-the-stock-client-round-trip"><span
+class="toc-section-number">8.7</span> The read-write benchmark and the
+stock-client round-trip</a></li>
+</ul></li>
+<li><a href="chapter-010.html#the-siblings-and-the-engine-path"
+id="toc-the-siblings-and-the-engine-path"><span
+class="toc-section-number">9</span> The Siblings and the Engine Path</a>
+<ul>
+<li><a href="chapter-010.html#grust-the-graph-boundary"
+id="toc-grust-the-graph-boundary"><span
+class="toc-section-number">9.1</span> Grust: the graph boundary</a></li>
+<li><a href="chapter-010.html#typesec-the-authorization-boundary"
+id="toc-typesec-the-authorization-boundary"><span
+class="toc-section-number">9.2</span> TypeSec: the authorization
+boundary</a></li>
+<li><a href="chapter-010.html#sail-and-the-v3v4-path"
+id="toc-sail-and-the-v3v4-path"><span
+class="toc-section-number">9.3</span> Sail and the v3→v4 path</a></li>
+<li><a
+href="chapter-010.html#the-semantic-handoff-croissant-cdif-osi-openlineage"
+id="toc-the-semantic-handoff-croissant-cdif-osi-openlineage"><span
+class="toc-section-number">9.4</span> The semantic handoff: Croissant,
+CDIF, OSI, OpenLineage</a></li>
+<li><a href="chapter-010.html#the-full-stack"
+id="toc-the-full-stack"><span class="toc-section-number">9.5</span> The
+full stack</a></li>
+<li><a href="chapter-010.html#ocelots-dependency-baseline"
+id="toc-ocelots-dependency-baseline"><span
+class="toc-section-number">9.6</span> Ocelot’s dependency
+baseline</a></li>
+<li><a href="chapter-010.html#implementation-shape"
+id="toc-implementation-shape"><span
+class="toc-section-number">9.7</span> Implementation shape</a></li>
+</ul></li>
+<li><a href="chapter-011.html#workflow-examples"
+id="toc-workflow-examples"><span class="toc-section-number">10</span>
+Workflow Examples</a>
+<ul>
+<li><a href="chapter-011.html#starting-the-catalog"
+id="toc-starting-the-catalog"><span
+class="toc-section-number">10.1</span> Starting The Catalog</a></li>
+<li><a href="chapter-011.html#registering-the-warehouse-shape"
+id="toc-registering-the-warehouse-shape"><span
+class="toc-section-number">10.2</span> Registering The Warehouse
+Shape</a></li>
+<li><a href="chapter-011.html#storage-profiles-and-credential-roots"
+id="toc-storage-profiles-and-credential-roots"><span
+class="toc-section-number">10.3</span> Storage Profiles And Credential
+Roots</a></li>
+<li><a href="chapter-011.html#a-pyspark-user-reads-iceberg"
+id="toc-a-pyspark-user-reads-iceberg"><span
+class="toc-section-number">10.4</span> A PySpark User Reads
+Iceberg</a></li>
+<li><a href="chapter-011.html#a-notebook-requests-credentials"
+id="toc-a-notebook-requests-credentials"><span
+class="toc-section-number">10.5</span> A Notebook Requests
+Credentials</a></li>
+<li><a href="chapter-011.html#a-view-becomes-part-of-the-catalog-story"
+id="toc-a-view-becomes-part-of-the-catalog-story"><span
+class="toc-section-number">10.6</span> A View Becomes Part Of The
+Catalog Story</a></li>
+<li><a href="chapter-011.html#querygraph-bootstrap"
+id="toc-querygraph-bootstrap"><span
+class="toc-section-number">10.7</span> QueryGraph Bootstrap</a></li>
+<li><a href="chapter-011.html#draining-the-outbox"
+id="toc-draining-the-outbox"><span
+class="toc-section-number">10.8</span> Draining The Outbox</a></li>
+<li><a href="chapter-011.html#an-agentic-qglake-flow"
+id="toc-an-agentic-qglake-flow"><span
+class="toc-section-number">10.9</span> An Agentic QGLake Flow</a></li>
+</ul></li>
+<li><a href="chapter-012.html#operating-the-books-example-system"
+id="toc-operating-the-books-example-system"><span
+class="toc-section-number">11</span> Operating The Book’s Example
+System</a></li>
+<li><a
+href="chapter-013.html#standards-and-engine-boundary-decision-record"
+id="toc-standards-and-engine-boundary-decision-record"><span
+class="toc-section-number">12</span> Standards And Engine Boundary
+Decision Record</a>
+<ul>
+<li><a href="chapter-013.html#catalog-concepts-in-plain-terms"
+id="toc-catalog-concepts-in-plain-terms"><span
+class="toc-section-number">12.1</span> Catalog Concepts In Plain
+Terms</a></li>
+<li><a href="chapter-013.html#decision-matrix"
+id="toc-decision-matrix"><span class="toc-section-number">12.2</span>
+Decision Matrix</a></li>
+<li><a href="chapter-013.html#the-proper-noun-test"
+id="toc-the-proper-noun-test"><span
+class="toc-section-number">12.3</span> The Proper-Noun Test</a></li>
+<li><a href="chapter-013.html#why-the-engine-owns-the-truth"
+id="toc-why-the-engine-owns-the-truth"><span
+class="toc-section-number">12.4</span> Why The Engine Owns The
+Truth</a></li>
+<li><a href="chapter-013.html#workflow-consequences"
+id="toc-workflow-consequences"><span
+class="toc-section-number">12.5</span> Workflow Consequences</a></li>
+</ul></li>
+<li><a href="chapter-014.html#ocelot-the-0.3-release"
+id="toc-ocelot-the-0.3-release"><span
+class="toc-section-number">13</span> Ocelot: The 0.3 Release</a>
+<ul>
+<li><a href="chapter-014.html#what-shipped" id="toc-what-shipped"><span
+class="toc-section-number">13.1</span> What shipped</a></li>
+<li><a href="chapter-014.html#stock-client-conformance"
+id="toc-stock-client-conformance"><span
+class="toc-section-number">13.2</span> Stock-client conformance</a></li>
+<li><a href="chapter-014.html#governed-reads-and-bounded-credentials"
+id="toc-governed-reads-and-bounded-credentials"><span
+class="toc-section-number">13.3</span> Governed reads and bounded
+credentials</a></li>
+<li><a href="chapter-014.html#the-handoff-as-release-proof"
+id="toc-the-handoff-as-release-proof"><span
+class="toc-section-number">13.4</span> The handoff as release
+proof</a></li>
+<li><a href="chapter-014.html#dependency-provenance"
+id="toc-dependency-provenance"><span
+class="toc-section-number">13.5</span> Dependency provenance</a></li>
+<li><a href="chapter-014.html#what-ocelot-does-not-claim"
+id="toc-what-ocelot-does-not-claim"><span
+class="toc-section-number">13.6</span> What Ocelot does not
+claim</a></li>
+<li><a href="chapter-014.html#release-and-announcement-posture"
+id="toc-release-and-announcement-posture"><span
+class="toc-section-number">13.7</span> Release and announcement
+posture</a></li>
+<li><a href="chapter-014.html#reproducing-the-proof"
+id="toc-reproducing-the-proof"><span
+class="toc-section-number">13.8</span> Reproducing the proof</a></li>
+</ul></li>
+<li><a href="chapter-015.html#appendix-a-replay-admission-matrix"
+id="toc-appendix-a-replay-admission-matrix"><span
+class="toc-section-number">14</span> Appendix A: Replay Admission
+Matrix</a></li>
+<li><a
+href="chapter-016.html#appendix-b-credential-and-redaction-contract"
+id="toc-appendix-b-credential-and-redaction-contract"><span
+class="toc-section-number">15</span> Appendix B: Credential And
+Redaction Contract</a></li>
+<li><a href="chapter-017.html#appendix-c-view-receipt-chain-rules"
+id="toc-appendix-c-view-receipt-chain-rules"><span
+class="toc-section-number">16</span> Appendix C: View Receipt-Chain
+Rules</a></li>
+<li><a href="chapter-018.html#appendix-d-qglake-handoff-proof-map"
+id="toc-appendix-d-qglake-handoff-proof-map"><span
+class="toc-section-number">17</span> Appendix D: QGLake Handoff Proof
+Map</a></li>
+<li><a href="chapter-019.html#future-work" id="toc-future-work"><span
+class="toc-section-number">18</span> Future Work</a></li>
+</ul>
+</nav>
+
+</body>
+</html>

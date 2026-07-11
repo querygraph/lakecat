@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov" />
+  <meta name="dcterms.date" content="2026-07-11" />
+  <title>Where LakeCat Stands Today</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">LakeCat</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">LakeCat</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-007.html" accesskey="n" rel="next">Why the Catalog Stays Thin</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-005.html" accesskey="p" rel="previous">The Boundary Model</a>
+</span>
+</div>
+</nav>
+<h1 data-number="5" id="where-lakecat-stands-today"><span
+class="header-section-number">5</span> Where LakeCat Stands Today</h1>
+<p>LakeCat is not only a design. The implementation already has a Rust
+service/catalog spine, a Turso-backed durable store, Iceberg
+REST-compatible namespace and table paths, hardened commit and replay
+evidence, governed scan and credential proof, and QueryGraph/QGLake
+handoff surfaces. Read each of those through its category (Chapter 3)
+rather than flattening them into “Iceberg extensions”: some are ordinary
+catalog implementation, some are optional LakeCat APIs, some are TypeSec
+governance proof, and only a few are plausible future standardization
+candidates.</p>
+<h2 data-number="5.1" id="the-ocelot-baseline"><span
+class="header-section-number">5.1</span> The Ocelot baseline</h2>
+<p>The published baseline is <code>v0.3.0</code>,
+<strong>Ocelot</strong>. It turns the phrase “compatible, durable,
+governed catalog” into four separately checkable claims:</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Claim</th>
+<th>Ocelot evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Stock-client compatibility</td>
+<td>An unmodified PyIceberg <code>RestCatalog</code> can create a
+namespace and table, append real data, list the table, load it, and read
+it back. REST map fields are objects, error types follow Iceberg’s
+<code>ErrorModel</code>, and namespace behavior matches stock-client
+expectations.</td>
+</tr>
+<tr>
+<td>Durable catalog state</td>
+<td>Turso transactions bind pointer compare-and-swap, pointer history,
+audit, outbox, and idempotency. An exact retry replays; a conflicting
+retry is rejected.</td>
+</tr>
+<tr>
+<td>Governed work</td>
+<td>TypeSec restrictions are applied before Sail plans. Raw credential
+vending remains an explicit, redacted, audited exception.</td>
+</tr>
+<tr>
+<td>Verifiable handoff</td>
+<td>The QGLake gate creates a bootstrap bundle, drains lineage, projects
+through Grust, and runs QueryGraph’s locked verifier and importer over
+hash-bound artifacts.</td>
+</tr>
+</tbody>
+</table>
+<p>The release does not put those extra proofs in front of ordinary
+clients. The standard REST surface remains the floor; governance,
+replay, lineage, graph, and QueryGraph bootstrap are additive paths
+beside it.</p>
+<p>The most important word is <strong>beside</strong>. New capability
+sits beside the Iceberg REST path, never in front of it. A standard
+client never has to present a TypeDID, parse a QueryGraph bundle, read a
+Grust edge, or inspect an OpenLineage receipt to load a normal table. So
+the same catalog shows a different face to each caller:</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Caller</th>
+<th>What they see</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PySpark / PyIceberg user</td>
+<td>Ordinary Iceberg REST. Configure a catalog, create a namespace,
+write and load tables. Pointer-log, audit, and outbox rows exist but are
+invisible to table semantics.</td>
+</tr>
+<tr>
+<td>Platform operator</td>
+<td>A hardened catalog transaction log: idempotency outcomes, pointer
+movement, redacted conflict proof, storage-profile and credential
+posture, pending outbox, replay-validation failures.</td>
+</tr>
+<tr>
+<td>Governed agent</td>
+<td>A narrowed access path: TypeSec decides the capability, LakeCat
+binds the receipt to the catalog action, Sail plans the effective scan,
+the agent gets bounded work instead of broad credentials.</td>
+</tr>
+<tr>
+<td>QueryGraph importer</td>
+<td>A proof-bearing bootstrap: table, view, management, credential,
+scan, commit-history, OpenLineage, and graph-import anchors that must
+line up before the semantic layer is accepted.</td>
+</tr>
+</tbody>
+</table>
+<p>That separation also keeps standardization honest. The interesting
+portable shapes are never “LakeCat uses Turso” or “QueryGraph imports a
+bundle”; they are smaller behaviors — idempotent commit replay, catalog
+pointer history, governed credential vending, proof-carrying scan
+planning, redacted conflict evidence, lineage receipt binding. The
+posture, in five rules:</p>
+<ol type="1">
+<li>Keep base Iceberg REST behavior strict and boring.</li>
+<li>Keep LakeCat proof surfaces optional for the clients that need
+them.</li>
+<li>Keep TypeSec and QueryGraph semantics out of Iceberg metadata.</li>
+<li>Use Sail for reusable table-format and planning semantics.</li>
+<li>Promote only small, interoperable proof profiles once real workflows
+prove multiple engines and catalogs need them.</li>
+</ol>
+</body>
+</html>

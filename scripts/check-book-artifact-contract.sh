@@ -69,8 +69,8 @@ html_link_re="^lakecat \($workspace_version-[0-9a-f]{7,}\)\.html$"
   fail "html_link '$html_link' does not match expected 'lakecat ($workspace_version-<hash>).html'"
 [[ "$html_title" == "LakeCat" ]] || \
   fail "html_title '$html_title' does not match LakeCat"
-[[ "$built_at" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || \
-  fail "built_at '$built_at' must be an ISO date"
+[[ "$built_at" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}(T[0-9]{2}:[0-9]{2}:[0-9]{2}Z)?$ ]] || \
+  fail "built_at '$built_at' must be an ISO date or UTC timestamp"
 
 kindle_path="$dist_dir/$kindle_link"
 [[ -L "$kindle_path" ]] || fail "versioned Kindle EPUB is not a symlink: $kindle_path"

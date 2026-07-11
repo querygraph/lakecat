@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov" />
+  <meta name="dcterms.date" content="2026-07-11" />
+  <title>Appendix A: Replay Admission Matrix</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">LakeCat</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">LakeCat</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-016.html" accesskey="n" rel="next">Appendix B: Credential And Redaction Contract</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-014.html" accesskey="p" rel="previous">Ocelot: The 0.3 Release</a>
+</span>
+</div>
+</nav>
+<h1 data-number="14" id="appendix-a-replay-admission-matrix"><span
+class="header-section-number">14</span> Appendix A: Replay Admission
+Matrix</h1>
+<p>Replay admission is the line between durable catalog fact and
+downstream proof. An outbox row may be stored, but it is not allowed to
+become graph, OpenLineage, QGLake, or QueryGraph evidence until LakeCat
+has checked its shape, scope, authority, and redaction posture. The
+matrix below keeps the best review version of those checks in one
+place.</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>Event family</th>
+<th>Must prove</th>
+<th>Rejects</th>
+<th>Why it matters</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>catalog.config-read</code></td>
+<td>Warehouse scope, v4 bridge defaults, overrides, advertised standard
+REST endpoints, governed plan/fetch/credential endpoints, bootstrap and
+lineage-drain endpoints, authorization receipt</td>
+<td>Duplicate config keys, unsupported <code>lakecat.format.v4*</code>
+claims, missing standard or governed endpoints, extra unverified config
+fields</td>
+<td>QueryGraph imports the same compatibility contract LakeCat
+advertised, without turning config into a free-form claims bag</td>
+</tr>
+<tr>
+<td>Namespace lifecycle</td>
+<td>Warehouse, namespace path or components, matching lifecycle action,
+valid principal</td>
+<td>Malformed namespace paths, count drift, action drift, unclosed
+wrapper fields</td>
+<td>Standard catalog discovery stays attributable and replayable</td>
+</tr>
+<tr>
+<td>Table lifecycle</td>
+<td>Root table identity, warehouse/namespace/table hints matching that
+identity, action receipt, soft-delete format evidence when present</td>
+<td>Scope drift, action drift, conflicting
+<code>format-version</code>/<code>format_version</code> aliases,
+undecorated-location violations</td>
+<td>Table proof follows the Iceberg object it claims to describe</td>
+</tr>
+<tr>
+<td>Table commit</td>
+<td>Table scope, authorization receipt, pointer transition, principal,
+idempotency/request/response/policy hashes, format, snapshot,
+timestamp</td>
+<td>Credential-bearing or decorated metadata-location evidence, unclosed
+nested commit fields, forged event type</td>
+<td>Commit proof stays tied to the accepted pointer movement without
+leaking object paths</td>
+</tr>
+<tr>
+<td>Governed scan and fetch</td>
+<td>Principal, <code>table-plan-scan</code> action, requested/effective
+projections, requested/effective stats fields, required filters,
+matching top-level and receipt read restrictions, non-empty full policy
+hashes, positive TTL cap</td>
+<td>Actorless scan proof, action drift, missing or widening
+projection/filter evidence, placeholder policy hashes, non-LakeCat or
+credential-bearing plan-task values</td>
+<td>A saved scan proof shows the same TypeSec restriction Sail planned
+and LakeCat replayed</td>
+</tr>
+<tr>
+<td>Management upserts</td>
+<td>Valid server/project/warehouse/profile/policy IDs, parent scope,
+ODRL hash for policies, valid principal/action/engine/time</td>
+<td>Unknown wrapper fields, actorless mutations, endpoint/storage-root
+hash drift, malformed IDs, ODRL hash drift</td>
+<td>QueryGraph sees tenant and policy state as accepted catalog
+control-plane facts</td>
+</tr>
+<tr>
+<td>Management lists</td>
+<td>Count-aligned duplicate-free ID arrays, valid warehouse/project
+scope, event-matching read action, principal evidence</td>
+<td>Count inflation, duplicate IDs, project/warehouse detachment,
+missing receipt hashes</td>
+<td>Inventory proof cannot turn a list response into anonymous or
+inflated management state</td>
+</tr>
+<tr>
+<td>View lifecycle</td>
+<td>Warehouse, namespace, view name, store-assigned positive version,
+expected-version guard when present, action-specific receipt</td>
+<td>Versionless lifecycle facts, non-positive guards, action drift,
+nested view scope drift</td>
+<td>View bootstrap evidence is tied to the catalog view object that
+produced it</td>
+</tr>
+<tr>
+<td>QueryGraph bootstrap</td>
+<td>Warehouse, table/view counts, verified stable IDs, artifact hashes,
+standards, bundle/graph/OpenLineage/import hashes, request identity,
+authorization receipt</td>
+<td>Missing standards, malformed artifact arrays, duplicate stable IDs,
+short hashes, extra unverified bootstrap fields</td>
+<td>The semantic bundle can be imported only if it matches accepted
+catalog state</td>
+</tr>
+<tr>
+<td>Credential vend attempt</td>
+<td>Table scope, selected storage profile, credential count, prefix
+hashes, issuer-config hashes, principal, <code>credentials-vend</code>
+action, read restriction and TTL posture</td>
+<td>Raw credential material, count drift, broadened prefix, malformed
+issuer proof, missing principal on zero-credential attempts</td>
+<td>Credential evidence stays useful without becoming a credential
+leak</td>
+</tr>
+<tr>
+<td>Outbox envelope</td>
+<td>Outer event type, inner <code>event-type</code>, event id, payload
+hash, created order</td>
+<td>Event-type mismatch, duplicate event IDs in one batch, malformed
+pending payloads, unsupported event types</td>
+<td>Graph and lineage drains cannot reinterpret one event family as
+another</td>
+</tr>
+</tbody>
+</table>
+<p>The pattern is deliberately repetitive in code but not in the
+narrative: every event must be scoped, actor-bound, action-bound, closed
+over the fields LakeCat actually verifies, and redacted before it
+becomes downstream evidence.</p>
+</body>
+</html>

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov" />
+  <meta name="dcterms.date" content="2026-07-11" />
+  <title>The Boundary Model</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">LakeCat</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">LakeCat</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-006.html" accesskey="n" rel="next">Where LakeCat Stands Today</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-004.html" accesskey="p" rel="previous">The Vocabulary</a>
+</span>
+</div>
+</nav>
+<h1 data-number="4" id="the-boundary-model"><span
+class="header-section-number">4</span> The Boundary Model</h1>
+<p>The vocabulary tells you which category a word lives in. The boundary
+model says which <em>repository</em> owns the work and why. LakeCat is
+deliberately thin: it keeps identity, tenancy, metadata-pointer state,
+policy gates, idempotent commits, and integration events — and delegates
+everything reusable.</p>
+<figure>
+<img src="diagrams/diagram-04.png" alt="Diagram 4" />
+<figcaption aria-hidden="true">Diagram 4</figcaption>
+</figure>
+<p>The ownership rule, stated once:</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Concern</th>
+<th>Owner</th>
+<th>LakeCat keeps only</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Iceberg format, manifests, scan planning, pruning, delete handling,
+v4</td>
+<td>Sail</td>
+<td>The call into Sail and the proof binding its result</td>
+</tr>
+<tr>
+<td>Graph schema, taxonomy, traversal, stores, Cypher</td>
+<td>Grust</td>
+<td>The catalog-facing sink/projection boundary</td>
+</tr>
+<tr>
+<td>Authorization, policy composition, capabilities, TypeDID, credential
+decisions</td>
+<td>TypeSec</td>
+<td>The request for a decision and the persisted receipt</td>
+</tr>
+<tr>
+<td>Croissant/CDIF/OSI/ODRL/OpenLineage composition, agent
+workflows</td>
+<td>QueryGraph</td>
+<td>The governed bootstrap bundle it emits</td>
+</tr>
+<tr>
+<td>Identity, tenancy, pointer CAS, idempotency, audit, outbox,
+replay</td>
+<td>LakeCat</td>
+<td>All of it — this is the thin catalog</td>
+</tr>
+</tbody>
+</table>
+<p>This is also the answer to the recurring “is it an extension or a
+standard?” question. LakeCat is opinionated in code and modest in
+standardization. “Use Rust,” “use Turso,” “use TypeSec,” “import
+QGLake,” “project into Grust” are project choices, not proposals. The
+portable ideas are narrower and stated without product names: <em>reject
+idempotency drift; record redacted pointer history; emit transactional
+catalog-event identity; admit only scoped replay evidence; prove a
+governed scan was narrowed by an engine.</em> A proposal that forced
+every Iceberg catalog to understand QueryGraph, TypeSec, Grust, or Turso
+would narrow the ecosystem; a proposal that says “a catalog may publish
+redacted, replayable commit evidence” leaves room for many
+implementations. Prove the stronger shape locally, then extract only the
+database-neutral, policy-neutral, engine-neutral part.</p>
+</body>
+</html>

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov" />
+  <meta name="dcterms.date" content="2026-07-11" />
+  <title>Why the Catalog Stays Thin</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">LakeCat</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">LakeCat</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-008.html" accesskey="n" rel="next">The Architecture</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-006.html" accesskey="p" rel="previous">Where LakeCat Stands Today</a>
+</span>
+</div>
+</nav>
+<h1 data-number="6" id="why-the-catalog-stays-thin"><span
+class="header-section-number">6</span> Why the Catalog Stays Thin</h1>
+<p>The most dangerous failure mode for a “smart” catalog is becoming a
+partial engine. It starts innocently — validate a schema here, expand a
+manifest list there, peek at a <code>format-version</code> field, check
+a delete file. Each small parser looks cheaper than an engine call. Over
+time the catalog grows a second Iceberg implementation with weaker
+tests, fewer real execution users, and quiet drift from how the planner
+actually behaves.</p>
+<figure>
+<img src="diagrams/diagram-05.png" alt="Diagram 5" />
+<figcaption aria-hidden="true">Diagram 5</figcaption>
+</figure>
+<p>LakeCat takes the opposite path: <strong>the catalog owns the
+transaction; Sail owns the table semantics.</strong> Sail is the right
+home because it is Rust-native and already holds the structures this
+needs — generated Iceberg REST models, table providers, manifest
+pruning, metadata-as-data paths, commit plumbing, and format-version
+handling. Anything that needs field-id binding, schema/partition
+evolution, manifest metrics, delete association, row lineage, v4
+metadata trees, or snapshot/branch selection moves toward Sail.</p>
+<p>This matters because intermediation, left passive, <em>loses</em>
+information. A pass-through catalog sees only the table name, the
+pointer, the caller, and maybe a credential request; the engine sees
+schema, manifests, statistics, deletes, and filters; governance sees
+policy; lineage sees an after-the-fact event. Each system gets a shard
+of the truth, and the operational cost is concrete:</p>
+<ul>
+<li>policy can be checked before access but not carried <em>into</em>
+scan planning;</li>
+<li>credentials can be vended without proving why a raw-credential
+exception was allowed;</li>
+<li>lineage can say something happened but cannot bind to the exact
+governed plan, snapshot, policy, and metadata.</li>
+</ul>
+<p>The next generation of callers — agents, notebooks, services, model
+pipelines — needs stronger guarantees that live precisely between
+catalog state and engine planning: a policy enforced before a scan is
+planned; column restrictions that narrow the projection before file
+tasks exist; policy-derived row predicates that become mandatory
+filters; a stateless <code>fetchScanTasks</code> that cannot widen a
+prior governed plan; short-lived, scoped, audited credentials;
+idempotent commit retries; and graph/lineage side effects that reflect
+committed state rather than best-effort handler work. A catalog too far
+from the engine can only check a policy and hand back a pointer, hoping
+the client preserves the restriction. LakeCat keeps the catalog boundary
+thin and binds its proof to Sail’s plan so the restriction is real.</p>
+</body>
+</html>

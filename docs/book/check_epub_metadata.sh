@@ -124,7 +124,7 @@ if [[ ! -f "$version_marker" ]]; then
 fi
 
 require_pattern "^kindle_name: $expected_title_pattern$" "$version_marker" "VERSION.md missing Kindle name"
-require_pattern '^built_at: [0-9]{4}-[0-9]{2}-[0-9]{2}$' "$version_marker" "VERSION.md missing build date"
+require_pattern '^built_at: [0-9]{4}-[0-9]{2}-[0-9]{2}(T[0-9]{2}:[0-9]{2}:[0-9]{2}Z)?$' "$version_marker" "VERSION.md missing build date"
 require_pattern "^epub_file: $(regex_escape "$(basename "$stable_epub")")$" "$version_marker" "VERSION.md missing stable EPUB filename"
 require_pattern "^kindle_link: $(regex_escape "$(basename "$kindle_epub")")$" "$version_marker" "VERSION.md missing versioned symlink filename"
 

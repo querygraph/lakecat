@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov" />
+  <meta name="dcterms.date" content="2026-07-11" />
+  <title>Workflow Examples</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    html { -webkit-text-size-adjust: 100%; }
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { color: #008000; } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { color: #008000; font-weight: bold; } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">LakeCat</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">LakeCat</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-012.html" accesskey="n" rel="next">Operating The Book’s Example System</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-010.html" accesskey="p" rel="previous">The Siblings and the Engine Path</a>
+</span>
+</div>
+</nav>
+<h1 data-number="10" id="workflow-examples"><span
+class="header-section-number">10</span> Workflow Examples</h1>
+<p>The catalog is easiest to understand by watching it participate in
+ordinary work. LakeCat should not ask users to think about graph,
+lineage, security, and Sail every time they read a table. Those systems
+should appear when they matter: at the boundary where a name is
+resolved, a policy is enforced, a plan is created, credentials are
+withheld or issued, and a durable event is replayed.</p>
+<p>The examples below use one table, <code>local.default.events</code>,
+but the pattern is the same for larger warehouses. The important point
+is not the exact sample data. It is the catalog role in each workflow.
+The dense replay and handoff checks are in the appendices so the
+examples can stay human-readable.</p>
+<h2 data-number="10.1" id="starting-the-catalog"><span
+class="header-section-number">10.1</span> Starting The Catalog</h2>
+<p>A local operator starts LakeCat as an Iceberg REST catalog plus
+management surface:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">cargo</span> run <span class="at">-p</span> lakecat-service <span class="at">--features</span> sail-local,turso-local,typesec-local,grust-local</span></code></pre></div>
+<p>The standard catalog path is still <code>/catalog/v1</code>. The
+management and QueryGraph surfaces sit beside it:</p>
+<pre class="text"><code>/catalog/v1
+/management/v1
+/querygraph/v1/bootstrap</code></pre>
+<p>A simple configuration read shows the split. Standard engines care
+about the Iceberg endpoints. Operators and QueryGraph care about
+management and bootstrap surfaces. The service binds
+<code>127.0.0.1:8181</code> by default; set
+<code>LAKECAT_BIND_ADDR</code> to change the address (every example
+below assumes the default).</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> http://127.0.0.1:8181/catalog/v1/config</span></code></pre></div>
+<p>The defaults intentionally separate compatibility from future
+capability:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode json"><code class="sourceCode json"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;defaults&quot;</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;lakecat.compatibility&quot;</span><span class="fu">:</span> <span class="st">&quot;iceberg-rest&quot;</span><span class="fu">,</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;lakecat.format.baseline&quot;</span><span class="fu">:</span> <span class="st">&quot;iceberg-v1-v3&quot;</span><span class="fu">,</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;lakecat.format.v4&quot;</span><span class="fu">:</span> <span class="st">&quot;extension-ready&quot;</span><span class="fu">,</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;lakecat.format.v4.bridge&quot;</span><span class="fu">:</span> <span class="st">&quot;json-passthrough&quot;</span><span class="fu">,</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    <span class="dt">&quot;lakecat.format.v4.typed-sail&quot;</span><span class="fu">:</span> <span class="st">&quot;unavailable&quot;</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<p>The Iceberg REST map-typed fields (<code>defaults</code>,
+<code>overrides</code>, table/credential <code>config</code>, and
+namespace <code>properties</code>) are JSON objects on the wire so that
+stock clients (pyiceberg/Spark/Trino) parse them directly; the
+advertised <code>endpoints</code> include the spec-canonical
+<code>&lt;METHOD&gt; /v1/{prefix}/...</code> forms alongside LakeCat’s
+legacy strings.</p>
+<p>That means LakeCat can preserve and replay emerging v4 metadata
+through the Sail JSON bridge, but it is not claiming typed Sail v4
+semantics yet. The same posture is captured in replay evidence: config
+defaults and overrides stay ordinary duplicate-free key/value entries,
+advertised endpoints prove that the standard REST and additive governed
+surfaces were present, and QueryGraph sees compact config proof only
+after service replay accepts it.</p>
+<h2 data-number="10.2" id="registering-the-warehouse-shape"><span
+class="header-section-number">10.2</span> Registering The Warehouse
+Shape</h2>
+<p>An operator usually starts with management objects. A server groups
+projects. A project groups warehouses. A warehouse owns namespaces,
+tables, views, storage profiles, policy bindings, and the metadata
+pointer state that standard engines see through Iceberg REST.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> <span class="at">-X</span> PUT http://127.0.0.1:8181/management/v1/servers/prod <span class="dt">\</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">-H</span> <span class="st">&#39;content-type: application/json&#39;</span> <span class="dt">\</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">-d</span> <span class="st">&#39;{</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;display-name&quot;: &quot;Production LakeCat&quot;,</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;endpoint-url&quot;: &quot;https://lakecat.example.com&quot;,</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;properties&quot;: {&quot;owner&quot;: &quot;platform&quot;}</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="st">  }&#39;</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> <span class="at">-X</span> PUT http://127.0.0.1:8181/management/v1/projects/resilience <span class="dt">\</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">-H</span> <span class="st">&#39;content-type: application/json&#39;</span> <span class="dt">\</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">-d</span> <span class="st">&#39;{</span></span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;display-name&quot;: &quot;Resilience Desk&quot;,</span></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;server-id&quot;: &quot;prod&quot;,</span></span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;properties&quot;: {&quot;environment&quot;: &quot;demo&quot;}</span></span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a><span class="st">  }&#39;</span></span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> <span class="at">-X</span> PUT http://127.0.0.1:8181/management/v1/projects/resilience/warehouses/local <span class="dt">\</span></span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">-H</span> <span class="st">&#39;content-type: application/json&#39;</span> <span class="dt">\</span></span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">-d</span> <span class="st">&#39;{</span></span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;display-name&quot;: &quot;Local QGLake Warehouse&quot;,</span></span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;storage-root&quot;: &quot;file:///tmp/lakecat/qglake&quot;,</span></span>
+<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;properties&quot;: {&quot;querygraph&quot;: &quot;enabled&quot;}</span></span>
+<span id="cb5-23"><a href="#cb5-23" aria-hidden="true" tabindex="-1"></a><span class="st">  }&#39;</span></span></code></pre></div>
+<p>These writes are not Iceberg table metadata. They are catalog
+control-plane state. LakeCat persists them durably, records
+authorization receipts, and writes outbox events. When the outbox
+drains, server, project, warehouse, storage-profile, and policy-binding
+changes become catalog graph events and OpenLineage receipts. QueryGraph
+can later learn the management shape without requiring every Iceberg
+client to understand it.</p>
+<p>The replay rule is simple: management evidence is closed,
+attributable, scoped, and redacted. Tenant-root records bind decoded IDs
+back to their route scope, policy-binding replay carries the ODRL
+content hash, namespace/table/view lifecycle replay carries the matching
+action receipt, and raw endpoint or storage-root material is replaced by
+full hash evidence before graph, OpenLineage, QGLake, or QueryGraph sees
+it.</p>
+<h2 data-number="10.3" id="storage-profiles-and-credential-roots"><span
+class="header-section-number">10.3</span> Storage Profiles And
+Credential Roots</h2>
+<p>Storage profiles bind a warehouse to physical storage roots and
+credential issuance policy. A local profile can return scoped local file
+configuration. A remote profile should usually reference a secret store
+and require TypeSec to authorize issuance before any resolver sees the
+secret reference.</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> <span class="at">-X</span> PUT <span class="dt">\</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  http://127.0.0.1:8181/management/v1/warehouses/local/storage-profiles/local-events <span class="dt">\</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">-H</span> <span class="st">&#39;content-type: application/json&#39;</span> <span class="dt">\</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">-d</span> <span class="st">&#39;{</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;location-prefix&quot;: &quot;file:///tmp/lakecat/qglake/events&quot;,</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;provider&quot;: &quot;file&quot;,</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;issuance-mode&quot;: &quot;local-file-no-secret&quot;,</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;public-config&quot;: {&quot;lakecat.purpose&quot;: &quot;developer-loop&quot;}</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a><span class="st">  }&#39;</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> <span class="at">-X</span> PUT <span class="dt">\</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>  http://127.0.0.1:8181/management/v1/warehouses/local/storage-profiles/s3-events <span class="dt">\</span></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">-H</span> <span class="st">&#39;content-type: application/json&#39;</span> <span class="dt">\</span></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">-d</span> <span class="st">&#39;{</span></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;location-prefix&quot;: &quot;s3://lakecat/events&quot;,</span></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;provider&quot;: &quot;s3&quot;,</span></span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;issuance-mode&quot;: &quot;short-lived-secret-ref&quot;,</span></span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;secret-ref&quot;: &quot;vault://kv/lakecat/events&quot;,</span></span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;public-config&quot;: {</span></span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a><span class="st">      &quot;lakecat.region&quot;: &quot;us-west-2&quot;,</span></span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a><span class="st">      &quot;lakecat.purpose&quot;: &quot;production-events&quot;</span></span>
+<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a><span class="st">    }</span></span>
+<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a><span class="st">  }&#39;</span></span></code></pre></div>
+<p>The store accepts only plainly addressed roots: no query strings,
+fragments, URI userinfo, literal or percent-encoded dot segments,
+provider/location mismatches, ambiguous longest-prefix ties,
+secret-looking <code>public-config</code>, or decorated
+<code>secret-ref</code> values. Operator-facing errors and replay
+evidence use hashes such as <code>storage-profile-prefix-hash</code>,
+<code>location-prefix-hash</code>, <code>secret-ref-hash</code>, and
+<code>public-config-key-hash</code> rather than echoing submitted paths
+or secret-like strings.</p>
+<p>The catalog row stores the public profile and secret reference, not
+raw cloud keys. A later credential request is checked against TypeSec
+and against the effective read restriction for the target table. Agents
+with fine-grained table restrictions are steered to governed
+Sail-planned reads instead of raw credentials. Trusted humans can
+receive audited standard credentials only when policy allows the
+exception.</p>
+<p>For production-shaped secret managers, LakeCat keeps a
+provider-dispatch seam instead of embedding credentials in catalog
+state. <code>vault://</code> can use the built-in Vault HTTP backend.
+<code>aws-sm://</code>, <code>gcp-sm://</code>, and
+<code>azure-kv://</code> can dispatch to configured provider backends
+after TypeSec authorizes the exact secret-ref resource, and local
+file-backed roots let the same dispatch shape run in a single-node loop.
+Returned credentials must stay inside the selected storage profile
+prefix, carry the policy-derived TTL cap, and preserve LakeCat-owned
+profile/provider/mode/principal evidence. Replay records redacted prefix
+and issuer hashes, not credential material.</p>
+<h2 data-number="10.4" id="a-pyspark-user-reads-iceberg"><span
+class="header-section-number">10.4</span> A PySpark User Reads
+Iceberg</h2>
+<p>A PySpark user should not need to know about QueryGraph. They
+configure Spark’s Iceberg REST catalog and point it at LakeCat:</p>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> pyspark.sql <span class="im">import</span> SparkSession</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>spark <span class="op">=</span> (</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    SparkSession.builder</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    .appName(<span class="st">&quot;lakecat-events&quot;</span>)</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    .config(<span class="st">&quot;spark.sql.catalog.lakecat&quot;</span>, <span class="st">&quot;org.apache.iceberg.spark.SparkCatalog&quot;</span>)</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>    .config(<span class="st">&quot;spark.sql.catalog.lakecat.type&quot;</span>, <span class="st">&quot;rest&quot;</span>)</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>    .config(<span class="st">&quot;spark.sql.catalog.lakecat.uri&quot;</span>, <span class="st">&quot;http://127.0.0.1:8181/catalog/v1&quot;</span>)</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>    .config(<span class="st">&quot;spark.sql.defaultCatalog&quot;</span>, <span class="st">&quot;lakecat&quot;</span>)</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>    .getOrCreate()</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>events <span class="op">=</span> spark.table(<span class="st">&quot;default.events&quot;</span>)</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>events.select(<span class="st">&quot;event_id&quot;</span>, <span class="st">&quot;severity&quot;</span>).where(<span class="st">&quot;severity = &#39;critical&#39;&quot;</span>).show()</span></code></pre></div>
+<p>For an unrestricted principal, the flow looks like a normal Iceberg
+read:</p>
+<ol type="1">
+<li>Spark asks LakeCat to resolve <code>default.events</code>.</li>
+<li>LakeCat checks the principal and table capability.</li>
+<li>LakeCat returns an Iceberg-compatible table response.</li>
+<li>Spark plans the read using Iceberg metadata.</li>
+</ol>
+<p>For a governed principal, the more interesting path is server-side
+planning. The user request still looks ordinary, but LakeCat derives the
+mandatory restriction before Sail sees the plan:</p>
+<pre class="text"><code>client asks:     event_id, severity, raw_payload
+policy allows:   event_id, severity
+Sail receives:   event_id, severity</code></pre>
+<p>The catalog does not trust the client to remember that. The
+restriction is re-applied when scan tasks are fetched, and the audit
+payload records the policy hash, narrowed columns, row predicate,
+storage location, metadata location, principal, requested stats fields,
+and effective stats fields. QGLake handoff proof compares planned and
+fetched evidence so a saved artifact cannot widen the server-derived
+purpose, TTL cap, allowed columns, row predicate, stats fields, or
+policy hashes.</p>
+<h2 data-number="10.5" id="a-notebook-requests-credentials"><span
+class="header-section-number">10.5</span> A Notebook Requests
+Credentials</h2>
+<p>Credential vending is deliberately different from scan planning.
+Returning storage credentials gives the client broader power than
+returning a governed task list, so LakeCat treats it as an exception
+path.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> <span class="dt">\</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">-H</span> <span class="st">&#39;x-lakecat-principal: agent:triage&#39;</span> <span class="dt">\</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  http://127.0.0.1:8181/catalog/v1/local/namespaces/default/tables/events/credentials</span></code></pre></div>
+<p>For an agent bound by a fine-grained restriction, LakeCat should fail
+closed:</p>
+<div class="sourceCode" id="cb10"><pre
+class="sourceCode json"><code class="sourceCode json"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;credentials&quot;</span><span class="fu">:</span> <span class="ot">[]</span><span class="fu">,</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;lakecat:credential-block-reason&quot;</span><span class="fu">:</span> <span class="st">&quot;fine-grained read restriction requires Sail-planned reads&quot;</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<p>That empty credential response is not a missing feature. It is the
+intended agentic posture. The agent should ask LakeCat to plan the read
+through Sail, not receive raw storage reach. For a trusted human
+principal, policy can allow an audited raw credential exception, but the
+audit and replay evidence still carry the principal, table, decision,
+reason, TTL cap, storage-profile anchor, and redacted returned-prefix
+hashes.</p>
+<h2 data-number="10.6"
+id="a-view-becomes-part-of-the-catalog-story"><span
+class="header-section-number">10.6</span> A View Becomes Part Of The
+Catalog Story</h2>
+<p>Views are catalog objects too. LakeCat stores durable view records
+with SQL, dialect, schema version, typed columns, properties, creator,
+and warehouse scope. They can be managed through the management API or
+through warehouse-prefixed catalog routes.</p>
+<div class="sourceCode" id="cb11"><pre
+class="sourceCode sh"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> <span class="at">-X</span> PUT <span class="dt">\</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  http://127.0.0.1:8181/management/v1/warehouses/local/namespaces/default/views/events_view <span class="dt">\</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">-H</span> <span class="st">&#39;content-type: application/json&#39;</span> <span class="dt">\</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">-d</span> <span class="st">&#39;{</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;sql&quot;: &quot;select event_id, severity from default.events where severity = &#39;</span><span class="dt">\&#39;</span><span class="st">&#39;critical&#39;</span><span class="dt">\&#39;</span><span class="st">&#39;&quot;,</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;dialect&quot;: &quot;spark-sql&quot;,</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;schema-version&quot;: 1,</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;columns&quot;: [</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a><span class="st">      {&quot;name&quot;: &quot;event_id&quot;, &quot;data-type&quot;: {&quot;type&quot;: &quot;long&quot;}, &quot;nullable&quot;: false},</span></span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a><span class="st">      {&quot;name&quot;: &quot;severity&quot;, &quot;data-type&quot;: {&quot;type&quot;: &quot;string&quot;}, &quot;nullable&quot;: false}</span></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a><span class="st">    ],</span></span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;properties&quot;: {&quot;owner&quot;: &quot;resilience-desk&quot;}</span></span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a><span class="st">  }&#39;</span></span></code></pre></div>
+<p>This is not Iceberg business metadata glued onto a table. It is
+catalog state about a view object. LakeCat records
+<code>view.listed</code>, <code>view.upserted</code>,
+<code>view.loaded</code>, and <code>view.dropped</code> audit events.
+Outbox replay projects listing reads to namespace-scoped graph and
+OpenLineage evidence, and projects single-view changes and reads to
+catalog-facing View graph events plus LakeCat OpenLineage view dataset
+receipts. QueryGraph bootstrap can then include views with OSI hashes,
+store-assigned view versions, view-aware graph edges, and OpenLineage
+view counts.</p>
+<p>A caller that wants optimistic view behavior includes the version it
+believes is current:</p>
+<div class="sourceCode" id="cb12"><pre
+class="sourceCode sh"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> <span class="at">-X</span> PUT <span class="dt">\</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  http://127.0.0.1:8181/management/v1/warehouses/local/namespaces/default/views/events_view <span class="dt">\</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">-H</span> <span class="st">&#39;content-type: application/json&#39;</span> <span class="dt">\</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">-d</span> <span class="st">&#39;{</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;sql&quot;: &quot;select event_id from default.events where severity = &#39;</span><span class="dt">\&#39;</span><span class="st">&#39;critical&#39;</span><span class="dt">\&#39;</span><span class="st">&#39;&quot;,</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;dialect&quot;: &quot;spark-sql&quot;,</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;schema-version&quot;: 2,</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;expected-view-version&quot;: 1</span></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a><span class="st">  }&#39;</span></span></code></pre></div>
+<p>If another writer has already advanced the view, LakeCat returns a
+conflict before it replaces the current view or appends a receipt. Drop
+can use the same guard:</p>
+<div class="sourceCode" id="cb13"><pre
+class="sourceCode sh"><code class="sourceCode bash"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> <span class="at">-X</span> DELETE <span class="dt">\</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  <span class="st">&#39;http://127.0.0.1:8181/management/v1/warehouses/local/namespaces/default/views/events_view?expected-view-version=2&#39;</span></span></code></pre></div>
+<p>LakeCat also writes a compact view-version receipt in the durable
+store. The receipt records the stable view id, assigned version,
+previous version, previous receipt hash, content hash, principal,
+operation, and timestamp. A create, drop, and recreate sequence
+therefore looks like version 1 upsert, version 1 drop tombstone, version
+2 upsert linked to the tombstone receipt, not two unrelated version-1
+chains for the same stable view id.</p>
+<p>QueryGraph and operators can read the compact receipt chain directly
+from the governed management surface:</p>
+<div class="sourceCode" id="cb14"><pre
+class="sourceCode sh"><code class="sourceCode bash"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> <span class="dt">\</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>  http://127.0.0.1:8181/management/v1/warehouses/local/namespaces/default/views/events_view/version-receipts <span class="dt">\</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">-H</span> <span class="st">&#39;x-lakecat-agent-did: did:example:resilience-agent&#39;</span></span></code></pre></div>
+<p>The response is catalog evidence, not Iceberg table metadata. It lets
+QueryGraph verify the version chain, including tombstones after the
+current view row is gone, while keeping the richer view history model
+available for a future Sail-owned implementation. Appendix C captures
+the exact receipt-chain rules.</p>
+<h2 data-number="10.7" id="querygraph-bootstrap"><span
+class="header-section-number">10.7</span> QueryGraph Bootstrap</h2>
+<p>QueryGraph should import LakeCat facts through a verified handoff,
+not by scraping service internals. The bootstrap endpoint publishes a
+bundle with catalog tables, views, policy bindings, graph artifacts,
+OpenLineage artifacts, Croissant/CDIF/OSI/ODRL projections, and a
+manifest that hashes what was emitted:</p>
+<div class="sourceCode" id="cb15"><pre
+class="sourceCode sh"><code class="sourceCode bash"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> <span class="dt">\</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">-H</span> <span class="st">&#39;x-lakecat-principal: agent:querygraph-importer&#39;</span> <span class="dt">\</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  http://127.0.0.1:8181/querygraph/v1/bootstrap <span class="dt">\</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">-o</span> target/qglake/lakecat-bootstrap.json</span></code></pre></div>
+<p>The exported graph includes the tenant spine:</p>
+<pre class="text"><code>Catalog HAS_SERVER Server
+Server HAS_PROJECT Project
+Project HAS_WAREHOUSE Warehouse
+Warehouse HAS_NAMESPACE Namespace
+Namespace HAS_TABLE Table</code></pre>
+<p>When LakeCat has durable management rows, those graph nodes come from
+the stored <code>ServerRecord</code>, <code>ProjectRecord</code>, and
+<code>WarehouseRecord</code>. Replay evidence redacts storage roots and
+server endpoint URLs into hashes, so QueryGraph can prove which
+management state was observed without inheriting local paths, bucket
+roots, query tokens, URI fragments, or userinfo. The tenant anchors and
+warehouse-to-namespace edges are manifest-covered, so an importer can
+reject a bundle whose namespace is detached from the warehouse or
+rebound to a different durable tenant chain.</p>
+<p>The QueryGraph side verifies the bundle before importing it:</p>
+<div class="sourceCode" id="cb17"><pre
+class="sourceCode sh"><code class="sourceCode bash"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> /Users/alexy/src/querygraph/qg-rust</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a><span class="ex">cargo</span> run <span class="at">--</span> lakecat-verify <span class="dt">\</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">--bundle</span> /Users/alexy/src/lakecat/target/qglake/lakecat-bootstrap.json</span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a><span class="ex">cargo</span> run <span class="at">--</span> lakecat-import <span class="dt">\</span></span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">--bundle</span> /Users/alexy/src/lakecat/target/qglake/lakecat-bootstrap.json <span class="dt">\</span></span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">--output</span> .querygraph/lakecat/import-plan.json</span></code></pre></div>
+<p>The importer checks the outer bundle hash, manifest hashes,
+QueryGraph-import compatibility hash, graph hash, OpenLineage hash, view
+receipt evidence, and the accepted receipt-chain hash for each exported
+view. Graph validation belongs on the QueryGraph/Grust side; LakeCat is
+responsible for producing the clean catalog-facing graph projection and
+the replayable anchors.</p>
+<p>For the full local handoff, LakeCat carries a script that runs both
+sides without writing generated artifacts into the QueryGraph
+checkout:</p>
+<div class="sourceCode" id="cb18"><pre
+class="sourceCode sh"><code class="sourceCode bash"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="ex">scripts/qglake-handoff-local.sh</span></span></code></pre></div>
+<p>The script starts LakeCat on <code>127.0.0.1:18181</code>, uses a
+Turso-backed local store, generates the paired QGLake bootstrap bundle
+and lineage-drain response, runs <code>qglake-verify-replay</code>, then
+runs QueryGraph’s <code>lakecat-verify</code> and
+<code>lakecat-import</code> against the same bundle. The compact
+<code>handoff-summary.json</code> records the catalog URL, principal,
+table scope, LakeCat replay status, QueryGraph-verified table/view
+counts, and semantic bundle/graph/OpenLineage/import hashes plus
+accepted standards. Appendix D is the detailed handoff proof map.</p>
+<h2 data-number="10.8" id="draining-the-outbox"><span
+class="header-section-number">10.8</span> Draining The Outbox</h2>
+<p>LakeCat records side effects as durable outbox events. Draining the
+outbox is what turns committed catalog facts into graph and lineage
+receipts:</p>
+<div class="sourceCode" id="cb19"><pre
+class="sourceCode sh"><code class="sourceCode bash"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> <span class="at">-X</span> POST <span class="dt">\</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">-H</span> <span class="st">&#39;x-lakecat-principal: agent:lineage-drainer&#39;</span> <span class="dt">\</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>  http://127.0.0.1:8181/management/v1/lineage/drain <span class="dt">\</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">-o</span> target/qglake/lineage-drain.json</span></code></pre></div>
+<p>A useful drain response includes delivered event types, graph
+projection counts, lineage projection counts, receipt hashes, and the
+authorization proof for the drain request itself. Reading the replay
+stream is privileged, so LakeCat records that the drainer was allowed to
+read lineage evidence.</p>
+<p>The end-to-end result is a chain:</p>
+<pre class="text"><code>catalog write
+  -&gt; audit event
+  -&gt; outbox event
+  -&gt; graph projection
+  -&gt; OpenLineage projection
+  -&gt; QueryGraph import evidence</code></pre>
+<p>If graph or lineage sinks are down, catalog state should not be lost
+or rolled back accidentally. The outbox lets LakeCat retry projection
+from committed state. A drain acknowledges delivery only after every
+projection in the batch succeeds. Replay order is part of that contract:
+LakeCat selects undelivered outbox events by
+<code>created_at,event_id</code> in both embedded memory tests and the
+durable Turso store, and duplicate or malformed pending records fail
+with hash-only evidence before graph emission, lineage emission, or
+acknowledgement.</p>
+<h2 data-number="10.9" id="an-agentic-qglake-flow"><span
+class="header-section-number">10.9</span> An Agentic QGLake Flow</h2>
+<p>The agentic path is the reason LakeCat has to be more than a passive
+catalog. Imagine a resilience supervisor agent investigating
+incidents:</p>
+<ol type="1">
+<li>The supervisor delegates table triage to a specialist agent.</li>
+<li>The specialist asks LakeCat to plan a scan over
+<code>local.default.events</code>.</li>
+<li>LakeCat resolves the agent identity and TypeDID context.</li>
+<li>TypeSec authorizes the table scan and returns a restricted
+capability.</li>
+<li>LakeCat narrows the projection and appends the required row
+predicate.</li>
+<li>Sail plans against the current Iceberg metadata and delete
+manifests.</li>
+<li>LakeCat returns governed plan and fetch-task responses.</li>
+<li>The specialist summarizes only the allowed result shape.</li>
+<li>LakeCat records scan and credential decisions into
+audit/outbox.</li>
+<li>QueryGraph imports graph, policy, lineage, and bootstrap
+evidence.</li>
+</ol>
+<p>The key point is the absence of raw storage reach. The specialist
+agent does not need broad cloud credentials to do its job. It needs a
+governed plan, a bounded task set, and a receipt trail.</p>
+<p>The local fixture compresses this story into a short
+artifact-producing sequence:</p>
+<div class="sourceCode" id="cb21"><pre
+class="sourceCode sh"><code class="sourceCode bash"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="ex">cargo</span> run <span class="at">-p</span> lakecat-cli <span class="at">--features</span> qglake-fixture <span class="at">--</span> qglake-fixture <span class="dt">\</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--output</span> target/qglake/lakecat-bootstrap.json <span class="dt">\</span></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--drain-output</span> target/qglake/lineage-drain.json <span class="dt">\</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">--principal</span> did:example:agent</span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a><span class="ex">cargo</span> run <span class="at">-p</span> lakecat-cli <span class="at">--</span> qglake-verify-replay <span class="dt">\</span></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">--bundle</span> target/qglake/lakecat-bootstrap.json <span class="dt">\</span></span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">--drain</span> target/qglake/lineage-drain.json <span class="dt">\</span></span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">--principal</span> did:example:agent</span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a><span class="ex">scripts/qglake-handoff-local.sh</span></span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a><span class="ex">cargo</span> run <span class="at">-p</span> lakecat-cli <span class="at">--</span> qglake-verify-handoff <span class="dt">\</span></span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">--summary</span> target/qglake-handoff/handoff-summary.json <span class="dt">\</span></span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">--json</span></span></code></pre></div>
+<p>The fixture creates the sample table shape, installs a restricted
+policy, verifies governed scan planning, verifies fetch-scan-task
+reapplication, exercises delete manifest handling, probes
+credential-vend behavior for agents and trusted humans, verifies compact
+table commit-history evidence, exports QueryGraph bootstrap artifacts,
+drains the outbox, and proves the resulting bundle through QueryGraph’s
+Rust verifier/importer. It is small, but it is not decorative. It is the
+acceptance story for a catalog that participates in the user workflow
+from notebook to agent.</p>
+</body>
+</html>

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Unified the book build through FirstPair's pinned Pandoc/Typst and Mermaid
+  toolchain. `book.build.json` preserves LakeCat's tracked diagram renderer,
+  EPUB repair, and artifact validators while the shared builder owns PDF,
+  EPUB, MOBI, HTML/chapter output, complete manifests, versioned links, and
+  rendered layout checks. Local iCloud copying is no longer part of a build.
+
 - Book: recast the reader-facing edition around LakeCat 0.3.0 Ocelot and its
   announcement claim, including stock-client conformance, clean release proof,
   QGLake artifact verification, the current Grust 0.12 Lobster / TypeSec 0.12

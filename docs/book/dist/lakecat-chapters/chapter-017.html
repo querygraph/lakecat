@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov" />
+  <meta name="dcterms.date" content="2026-07-11" />
+  <title>Appendix C: View Receipt-Chain Rules</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">LakeCat</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">LakeCat</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-018.html" accesskey="n" rel="next">Appendix D: QGLake Handoff Proof Map</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-016.html" accesskey="p" rel="previous">Appendix B: Credential And Redaction Contract</a>
+</span>
+</div>
+</nav>
+<h1 data-number="16" id="appendix-c-view-receipt-chain-rules"><span
+class="header-section-number">16</span> Appendix C: View Receipt-Chain
+Rules</h1>
+<p>Ocelot does not claim full Iceberg view-history semantics. It keeps a
+compact, catalog-owned receipt chain so QueryGraph can prove which view
+version was exported, updated, dropped, or tombstoned. Richer view
+semantics remain a Sail-aligned future target.</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Rule</th>
+<th>Required evidence</th>
+<th>Rejects</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Stable identity</td>
+<td><code>lakecat:view:&lt;warehouse&gt;:&lt;namespace&gt;:&lt;name&gt;</code>
+plus matching component fields</td>
+<td>Stable IDs that do not match warehouse/namespace/name</td>
+</tr>
+<tr>
+<td>First receipt</td>
+<td>Version 1 <code>upsert</code>, no previous version, no previous
+receipt hash</td>
+<td>Zero-version chains, first tombstones, forged first previous-link
+fields</td>
+</tr>
+<tr>
+<td>Later upsert</td>
+<td>Previous receipt hash points at the prior receipt; version advances
+by exactly one</td>
+<td>Skipped versions, unsupported operations, broken previous links</td>
+</tr>
+<tr>
+<td>Drop tombstone</td>
+<td>Operation <code>drop</code>, previous receipt hash set,
+<code>view-version</code> remains the deleted version</td>
+<td>Drops that advance the version or omit the previous receipt</td>
+</tr>
+<tr>
+<td>Recreate</td>
+<td>New upsert links after the tombstone and advances to the next
+version</td>
+<td>A second unrelated version-1 chain for the same stable view id</td>
+</tr>
+<tr>
+<td>Chain header</td>
+<td><code>receipt-count</code>, latest version, latest operation, and
+tombstone flag agree with the last receipt</td>
+<td>Headers that shed receipts or present a forged head</td>
+</tr>
+<tr>
+<td>Hash coverage</td>
+<td><code>receipt-hashes</code>, <code>drop-receipt-hashes</code>, and
+<code>chain-hashes</code> exactly cover the nested receipt bodies and
+chains</td>
+<td>Convenient full-looking hashes that do not match the embedded
+chain</td>
+</tr>
+<tr>
+<td>Durable row binding</td>
+<td>Turso row warehouse/namespace/view columns agree with decoded
+receipt JSON</td>
+<td>A valid-looking receipt body riding a corrupted row index into
+another view</td>
+</tr>
+<tr>
+<td>QueryGraph handoff</td>
+<td>Accepted view receipt hashes match bootstrap view artifacts and
+compact handoff proof</td>
+<td>Spliced receipt arrays from another view or another run</td>
+</tr>
+</tbody>
+</table>
+<p>The receipt chain is intentionally compact: it proves catalog state
+changes and tombstones, not full SQL engine view semantics. That is
+enough for QueryGraph to reject a bootstrap that lost or borrowed view
+proof while LakeCat keeps richer view interpretation out of the
+catalog.</p>
+</body>
+</html>

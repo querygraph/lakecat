@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov" />
+  <meta name="dcterms.date" content="2026-07-11" />
+  <title>The Vocabulary</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">LakeCat</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">LakeCat</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-005.html" accesskey="n" rel="next">The Boundary Model</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-003.html" accesskey="p" rel="previous">Catalogs, Iceberg, and What LakeCat Adds</a>
+</span>
+</div>
+</nav>
+<h1 data-number="3" id="the-vocabulary"><span
+class="header-section-number">3</span> The Vocabulary</h1>
+<p>A layered system fails the moment its words blur. The most common
+mistake is to call every useful LakeCat feature an “Iceberg extension,”
+which makes the standard boundary too large. The test is simple:
+<strong>ask what breaks if a client knows nothing about
+LakeCat.</strong> If a PySpark job cannot load, commit, or drop a table
+without the concept, it belongs to standard compatibility. If PySpark
+keeps working but operators, governed agents, or QueryGraph gain
+stronger evidence, the concept is an additive surface.</p>
+<p>Every term in this book falls into one of six categories.</p>
+<figure>
+<img src="diagrams/diagram-03.png" alt="Diagram 3" />
+<figcaption aria-hidden="true">Diagram 3</figcaption>
+</figure>
+<p><strong>Standard Iceberg parlance</strong> — the words Iceberg
+already owns: catalog, namespace, table identifier, current metadata
+location, snapshot, manifest list, manifest, data file, delete file,
+schema and partition evolution, optimistic commit, REST compatibility.
+LakeCat must implement these faithfully. Changing their meaning means
+losing compatibility.</p>
+<p><strong>LakeCat implementation</strong> — how this Rust catalog
+satisfies the contract reliably: the service spine, the
+<code>CatalogStore</code> trait, the Turso-backed durable store,
+normalized idempotency rows, pointer logs, audit rows, outbox rows,
+redaction rules, and replay validators. These make ordinary Iceberg
+behavior atomic, inspectable, and replayable. They are not extensions;
+they are good engineering behind a standard surface.</p>
+<p><strong>LakeCat optional extensions</strong> — additive APIs beside
+the standard path: management inventory, commit-history inspection, view
+proof, credential-root posture, replay verification, OpenLineage
+projection, and QueryGraph/QGLake bootstrap bundles. They help
+operators, agents, and QueryGraph without becoming hidden requirements
+for ordinary table access.</p>
+<p><strong>TypeSec governance</strong> — authority and receipt
+semantics: who may act, capability proof, TypeDID envelopes,
+ODRL-derived restrictions, and agent posture. TypeSec <em>decides</em>;
+LakeCat <em>carries and records</em> the decision.</p>
+<p><strong>QueryGraph semantics</strong> — composition above the
+catalog: Croissant, CDIF, OSI, ODRL, OpenLineage, and Grust graph
+projections built from the governed source of truth.</p>
+<p><strong>Sail engine truth</strong> — table-format interpretation,
+metadata-as-data, scan planning, commit validation, and typed v4
+behavior. The catalog binds its proof to engine truth rather than
+reimplementing the format.</p>
+<p>The single reference below replaces the per-claim restatements that
+earlier drafts repeated; read each LakeCat claim through its
+category.</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>Claim</th>
+<th>Standard reading</th>
+<th>Category</th>
+<th>Portable idea (if any)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Rust service / catalog spine</td>
+<td>Iceberg needs a catalog authority, not a language</td>
+<td>LakeCat implementation</td>
+<td>“A catalog can prove what it committed, planned, vended, and
+emitted”</td>
+</tr>
+<tr>
+<td>Turso-backed durable store</td>
+<td>Iceberg needs durable state + atomic pointer movement, not a named
+DB</td>
+<td>LakeCat implementation</td>
+<td>CAS, exact-retry, row/content binding, pointer-history proof</td>
+</tr>
+<tr>
+<td>REST namespace/table routes + commit CAS</td>
+<td>Standard compatibility</td>
+<td>Standard Iceberg</td>
+<td>— (must stay ordinary)</td>
+</tr>
+<tr>
+<td>Idempotency, pointer logs, audit/outbox, replay validation</td>
+<td>Mostly outside the table contract</td>
+<td>LakeCat implementation / extension</td>
+<td>Stable catalog-event identity; scoped replay admission</td>
+</tr>
+<tr>
+<td>Governed scan with policy receipt</td>
+<td>Iceberg gives scan inputs, not receipts</td>
+<td>TypeSec governance</td>
+<td>Engine-proved effective projection + predicate</td>
+</tr>
+<tr>
+<td>Credential vending posture</td>
+<td>Catalog-adjacent, not ordinary table semantics</td>
+<td>TypeSec governance</td>
+<td>Bounded, redacted, engine-neutral credential profile</td>
+</tr>
+<tr>
+<td>QueryGraph / QGLake / OpenLineage handoff</td>
+<td>Not required for table access</td>
+<td>QueryGraph semantics</td>
+<td>Redacted, replayable lineage/view/commit evidence</td>
+</tr>
+<tr>
+<td>Typed Iceberg v4 behavior</td>
+<td>Belongs to the format as it evolves</td>
+<td>Sail engine truth</td>
+<td>Engine-owned v4 interpretation, not catalog JSON parsing</td>
+</tr>
+</tbody>
+</table>
+</body>
+</html>

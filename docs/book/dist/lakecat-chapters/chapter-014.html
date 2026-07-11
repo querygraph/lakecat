@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov" />
+  <meta name="dcterms.date" content="2026-07-11" />
+  <title>Ocelot: The 0.3 Release</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    html { -webkit-text-size-adjust: 100%; }
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { color: #008000; } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { color: #008000; font-weight: bold; } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">LakeCat</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">LakeCat</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-015.html" accesskey="n" rel="next">Appendix A: Replay Admission Matrix</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-013.html" accesskey="p" rel="previous">Standards And Engine Boundary Decision Record</a>
+</span>
+</div>
+</nav>
+<h1 data-number="13" id="ocelot-the-0.3-release"><span
+class="header-section-number">13</span> Ocelot: The 0.3 Release</h1>
+<p>Ocelot is the release where LakeCat’s design becomes a public,
+reproducible claim. It does not contain the whole QueryGraph stack. It
+ships the compatible, durable, governed catalog foundation that the
+stack can trust, and it records the evidence needed to check that
+statement.</p>
+<h2 data-number="13.1" id="what-shipped"><span
+class="header-section-number">13.1</span> What shipped</h2>
+<p>The <code>0.3.0</code> catalog spine includes:</p>
+<ul>
+<li>standard Iceberg REST config, namespace, table-load, table-create,
+<code>listTables</code>, and table-commit paths, including
+warehouse-prefixed routing;</li>
+<li>the Rust service and <code>CatalogStore</code> seam with
+Turso-backed durable state and memory-store parity for embedded
+tests;</li>
+<li>metadata-pointer compare-and-swap, pointer history, idempotent
+replay, audit, and transactional outbox rows bound to the accepted
+catalog transition;</li>
+<li>TypeSec-gated scan and credential paths, Sail-planned work, Grust
+projection, OpenLineage drain, and QueryGraph/QGLake bootstrap evidence;
+and</li>
+<li>replay admission that rejects malformed, broadened, or
+secret-bearing durable evidence before downstream projection.</li>
+</ul>
+<h2 data-number="13.2" id="stock-client-conformance"><span
+class="header-section-number">13.2</span> Stock-client conformance</h2>
+<p>Ocelot’s compatibility claim is behavioral. An unmodified PyIceberg
+<code>RestCatalog</code> creates a namespace and table, appends real
+data, lists the table, loads it, and reads the rows back. Four release
+fixes made that ordinary round-trip possible: map-typed fields serialize
+as JSON objects; <code>listTables</code> is implemented; errors use real
+Iceberg <code>ErrorModel</code> exception types and statuses; and
+namespace creation/table creation follow stock-client semantics.</p>
+<p>The commit path is honest in both feature postures. With
+<code>sail-local</code>, Sail applies supported Iceberg updates,
+including snapshot append. Without that engine integration, LakeCat
+rejects an update it cannot apply instead of returning success while
+leaving the table unchanged. Unknown or unsupported commit requirements
+also fail closed.</p>
+<h2 data-number="13.3" id="governed-reads-and-bounded-credentials"><span
+class="header-section-number">13.3</span> Governed reads and bounded
+credentials</h2>
+<p>The governed path is part of Ocelot because it is the reason LakeCat
+exists for agents. A restricted agent can ask for a governed read,
+receive a TypeSec receipt, get Sail-planned work instead of broad
+storage authority, and leave behind replayable scan, fetch, credential,
+management, view, and commit-history evidence. Trusted raw credential
+vending exists only as an audited exception with redacted storage-scope
+proof. Fetched scan replay treats the returned <code>plan-task</code> as
+evidence rather than arbitrary text: if it is present, it must be a
+non-empty LakeCat-issued token and it must not contain decorated
+location, query/fragment, or credential material before graph,
+OpenLineage, QGLake, or QueryGraph import can inherit the fetch proof.
+That keeps governed plan/fetch receipts about Sail-planned work, not a
+carrier for raw path or token claims. The same fetched replay path
+treats <code>stats-fields</code> as checked evidence when it is present:
+the array must be non-empty, duplicate-free, and bound to the effective
+stats fields before downstream proof can use it. The compact QGLake
+handoff proof now preserves that fetched side as its own
+<code>fetchedRequestedStatsFields</code> and
+<code>fetchedEffectiveStatsFields</code> evidence, so a handoff cannot
+prove only the planned stats narrowing while silently dropping what the
+fetch path actually returned. The local handoff script applies the same
+nonblank, duplicate-free array rule to projection, stats-field, and
+read-restriction allowed-column evidence before it writes that compact
+proof into the summary.</p>
+<h2 data-number="13.4" id="the-handoff-as-release-proof"><span
+class="header-section-number">13.4</span> The handoff as release
+proof</h2>
+<p>The QueryGraph handoff is Ocelot’s acceptance proof, not a
+requirement for ordinary Iceberg clients. The QGLake workflow creates a
+bootstrap bundle, drains LakeCat lineage/outbox evidence, verifies
+replay, runs QueryGraph verification/import, and saves a handoff summary
+whose artifact hashes, table/view counts, standards, OpenLineage
+receipts, graph hashes, policy anchors, credential proof, view receipt
+chains, and commit history agree. If that handoff cannot be reproduced,
+LakeCat may still serve an Iceberg endpoint, but it has not reproduced
+the QueryGraph foundation claim.</p>
+<p>The successful Ocelot gate ends with two plain statements:</p>
+<pre class="text"><code>QGLake handoff verified
+LakeCat release-candidate checks passed from a clean tree.</code></pre>
+<p>The archived handoff is organized around four core files:</p>
+<ul>
+<li><code>lakecat-bootstrap.json</code>, the governed catalog and
+semantic export;</li>
+<li><code>lineage-drain.json</code>, the committed OpenLineage/outbox
+evidence;</li>
+<li><code>querygraph-import-plan.json</code>, QueryGraph’s verified
+interpretation; and</li>
+<li><code>handoff-summary.json</code>, the compact proof tying the other
+artifacts, captured command outputs, replay, graph projection, counts,
+and hashes together.</li>
+</ul>
+<p>The saved handoff verifier output must also repeat the lineage-drain
+<code>catalogConfigProof</code>; omission is treated as proof failure,
+not as an unspecified optional field. Extra fields inside that repeated
+proof are also rejected, so an archived verifier sidecar cannot append a
+new endpoint or compatibility claim beside the validated catalog
+configuration evidence. Archived handoff file paths are part of that
+proof. LakeCat resolves artifact paths under the handoff summary
+directory before hashing or parsing them, and the verifier rejects
+relative traversal outside that bundle for both hash verification and
+captured-output semantic reads. A matching hash from another directory
+is not accepted as QGLake evidence. The artifact manifest itself is also
+closed: the primary <code>artifacts</code> object, nested
+<code>capturedOutputs</code> object, and individual bundle,
+lineage-drain, QueryGraph import-plan, and captured output artifact
+objects may carry only the path and SHA-256 evidence LakeCat checks. A
+saved summary cannot add an alternate hash, mirror artifact, or
+unverified capture beside an otherwise valid handoff bundle. The
+captured files themselves are closed at the root as well. Saved LakeCat
+replay output and QueryGraph verify/import output may carry only the
+fields LakeCat compares to the compact summary; a matching hash does not
+make an extra replay, QueryGraph, import, or application claim part of
+the proof. The same release gate treats raw view-lineage proof hashes as
+real digests, not placeholders: view replay receipts, tombstone view
+receipts, namespace receipt-chain hashes, and receipt-chain
+replay/OpenLineage hashes must be full SHA-256-shaped values before
+QGLake can archive them as accepted view proof.</p>
+<h2 data-number="13.5" id="dependency-provenance"><span
+class="header-section-number">13.5</span> Dependency provenance</h2>
+<p>Ocelot moves LakeCat onto the published <strong>Grust 0.12.0,
+Lobster</strong> and <strong>TypeSec 0.12.0, Torcello</strong>
+substrate. Grust’s <code>grust-graph</code> and <code>grust-turso</code>
+crates come from crates.io; TypeSec’s <code>typesec</code> facade comes
+from crates.io. Sail remains an explicit Cargo git dependency on the
+<code>lakecat</code> branch of <code>github.com/querygraph/sail</code>,
+locked to the revision recorded in <code>Cargo.lock</code>. QueryGraph
+0.4 Sentinel is an acceptance peer rather than a LakeCat build
+dependency; its importer consumes the LakeCat 0.3 bundle contract and is
+exercised under <code>--locked</code>.</p>
+<p>The dependency contract checks source as well as version. It rejects
+a quiet return to a local Grust path, a stale TypeSec line, a Sail
+source that no longer names the <code>lakecat</code> branch, or a
+QueryGraph importer that drops the shared <code>qglake-bundle</code>
+contract. The exact Ocelot table appears in <em>The Siblings and the
+Engine Path</em>.</p>
+<p>LakeCat’s graph responsibility still stops at the catalog envelope.
+The sink rejects blank projection identity, non-object properties, and
+table-scoped labels without table identity before handing anything to
+Grust. Persistence, traversal, Cypher, and graph mutation semantics
+remain Grust work. Graph-store connect/bootstrap failures are reduced to
+<code>graph-store-path-hash</code> and <code>backend-error-hash</code>
+evidence so release logs do not capture raw database paths.</p>
+<h2 data-number="13.6" id="what-ocelot-does-not-claim"><span
+class="header-section-number">13.6</span> What Ocelot does not
+claim</h2>
+<p>Typed Iceberg v4 semantics remain Sail work. Ocelot advertises the
+JSON passthrough bridge with <code>typed-sail=unavailable</code> rather
+than implying that a moving draft is fully modeled. Reusable graph
+taxonomy, traversal, algorithms, and stores remain in Grust. Capability
+composition, TypeDID envelopes, secure-agent proof, and richer policy
+semantics remain in TypeSec. Croissant, CDIF, OSI, ODRL application
+composition, and agent-facing reasoning remain in QueryGraph. Cloud SDK
+secret managers beyond the current provider seams are future credential
+backends.</p>
+<p>Those are release boundaries, not omissions hidden behind an
+optimistic completion percentage. Ocelot proves the catalog foundation
+it ships and names the systems that own the rest.</p>
+<h2 data-number="13.7" id="release-and-announcement-posture"><span
+class="header-section-number">13.7</span> Release and announcement
+posture</h2>
+<p>The announcement’s proof-forward language comes from the same sources
+as the book: the release tag and changelog, the clean release-candidate
+record, the dependency lock and contract, and the QGLake handoff
+artifacts. Reader-facing docs and generated book formats are refreshed
+after the clean proof without pretending that a documentation rebuild is
+a new executable proof.</p>
+<p>Tracked book artifacts are rebuilt with
+<code>docs/book/build.sh</code>. Release-candidate mode builds EPUB,
+PDF, MOBI, and HTML into a temporary <code>LAKECAT_BOOK_DIST_DIR</code>,
+with temporary Calibre state, so format validation does not dirty the
+candidate commit or the operator’s converter profile. Manual GitHub
+Actions remains a second environment; release-proof freshness is owned
+by the clean local gate.</p>
+<h2 data-number="13.8" id="reproducing-the-proof"><span
+class="header-section-number">13.8</span> Reproducing the proof</h2>
+<p>The release evidence is executable:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">scripts/check-release-readiness.sh</span> <span class="at">--release-candidate</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ex">scripts/qglake-handoff-local.sh</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="ex">docs/book/build.sh</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="ex">scripts/check-book-artifact-contract.sh</span> docs/book/dist</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="ex">scripts/check-local-dependency-contract.sh</span></span></code></pre></div>
+<p>The published Ocelot release-candidate proof ran on July 4, 2026 from
+clean head <code>6bfce1ef</code>. It covered shell and dependency
+contracts, the default and all-feature Rust matrices, an out-of-tree
+book build, Grust-Turso projection, the QGLake handoff, QueryGraph
+locked verify/import, and the final clean-tree check. The immutable
+<code>v0.3.0</code> tag records that release baseline; later
+documentation and artifact refreshes do not move it.</p>
+<p>LakeCat also carries a smaller proof-freshness contract for the
+release docs themselves:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">scripts/check-release-proof-contract.sh</span></span></code></pre></div>
+<p>That command verifies the active docs agree on the latest full
+release-candidate proof commit, that the proof commit is an ancestor of
+the current tree, and that any commits after it are limited to
+documentation and checked-in book artifact refresh. This avoids an
+infinite proof-update loop: the heavy gate proves the candidate, then a
+narrow documentation commit records the proof. If Rust code, manifests,
+workflows, dependency bridges, release scripts, or other executable
+behavior changes after the cited proof commit, the old proof is no
+longer enough and the full release-candidate gate must run again. The
+quick and ordinary full release-readiness gates surface that distinction
+without becoming release proof themselves. They print a non-failing
+freshness note when executable changes exist after the recorded proof
+commit, so a narrow development slice can still finish while the
+operator sees that final release proof requires a new
+<code>scripts/check-release-readiness.sh --release-candidate</code>
+run.</p>
+<p>The contract requires a clean tree by default. While editing the
+proof contract or release docs, maintainers can run:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="va">LAKECAT_RELEASE_PROOF_ALLOW_DIRTY</span><span class="op">=</span>1 <span class="ex">scripts/check-release-proof-contract.sh</span></span></code></pre></div>
+<p>That is only a local self-test mode. It still checks unstaged,
+staged, and untracked paths against the same post-proof allowlist, so a
+dirty Rust source file or manifest does not masquerade as
+documentation-only release evidence.</p>
+<p>The full release-candidate gate runs the same contract in candidate
+mode:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="va">LAKECAT_RELEASE_PROOF_CANDIDATE</span><span class="op">=</span>1 <span class="ex">scripts/check-release-proof-contract.sh</span></span></code></pre></div>
+<p>That mode is intentionally narrow. It still requires a clean tree and
+coherent active proof references, but it allows the current clean
+<code>HEAD</code> to become the next proof commit. After the heavy gate
+passes, the follow-up documentation and book artifact refresh records
+that new proof commit.</p>
+<p>The already-published <code>v0.1.0</code> tag is a baseline, not
+something to move. The already-published <code>v0.2.0</code> tag is a
+baseline, not something to move. The already-published
+<code>v0.2.1</code> tag is a baseline, not something to move. The
+already-published <code>v0.3.0</code> tag is a baseline, not something
+to move. The workspace version is <code>0.3.0</code>; post-Ocelot
+documentation and hardening stay under <code>Unreleased</code> until a
+deliberate future version bump. The release version contract checks that
+the workspace crates, release instructions, tracked book manifest, and
+versioned artifact links agree without turning a post-tag docs rebuild
+into a second Ocelot release.</p>
+<p>The quick check is acceptable while landing a narrow slice:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">scripts/check-release-readiness.sh</span> <span class="at">--quick</span></span></code></pre></div>
+<p>The quick check is not a release claim, but it does validate the
+tracked <code>docs/book/dist</code> artifact contract so stale
+EPUB/PDF/MOBI/HTML deliverables are caught before a full
+release-candidate build regenerates temporary artifacts. The full gate
+is the release claim. It runs local dependency-contract checks,
+workflow-trigger checks, formatting, default workspace tests, feature
+matrix tests, Turso rows, Sail/TypeSec/Grust integration rows,
+all-features workspace tests, an out-of-tree book build with artifact
+validators, and the QGLake handoff proof. Cloud CI remains manual-only
+until that local proof is boring. A release should be cut from the state
+those commands prove, not from a hope that a remote runner will discover
+the truth later.</p>
+<p>The handoff portion must stay locked in QueryGraph as well as in
+LakeCat. The local gate intentionally runs QueryGraph verification and
+import with Cargo’s <code>--locked</code> mode so a stale QueryGraph
+dependency graph is a local failure, not a cloud surprise. When Grust or
+TypeSec publish new crates, the right sequence is to refresh the
+QueryGraph lockfile locally, prove <code>lakecat-verify</code>,
+<code>lakecat-import</code>, and QueryGraph tests under
+<code>--locked</code>, then rerun LakeCat’s full release gate. That
+makes the QueryGraph import contract part of the release artifact
+instead of a best-effort downstream hope.</p>
+<p>The current gate also proves a subtle QGLake contract that is easy to
+miss. The handoff readiness probe reads
+<code>GET /catalog/v1/config</code>, and that read is a catalog event.
+It must therefore carry the same QGLake agent identity as the rest of
+the handoff, otherwise a harmless-looking readiness curl becomes an
+anonymous <code>catalog.config-read</code> proof in the drained
+evidence. The handoff script binds that config-read proof to the agent,
+writes a canonical handoff-verifier output artifact, hashes it into the
+summary before strict verification, and keeps management list proof,
+policy-upsert proof, and storage-profile upsert proof in the distinct
+sections the verifier compares. That is the local substitute for cloud
+hope: the artifact graph is checked before the summary is accepted.</p>
+<p>For Ocelot, replay admission is part of the local proof rather than a
+best-effort projection filter. The service closes event payloads before
+graph, OpenLineage, QGLake, or QueryGraph import can inherit them; the
+compact handoff verifier then repeats the same checks against saved
+artifacts. Appendix A lists the replay-admission contract, Appendix B
+captures credential redaction, Appendix C captures view receipt chains,
+and Appendix D maps the QGLake handoff proof.</p>
+</body>
+</html>

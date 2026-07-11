@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov" />
+  <meta name="dcterms.date" content="2026-07-11" />
+  <title>Preface</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">LakeCat</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">LakeCat</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-003.html" accesskey="n" rel="next">Catalogs, Iceberg, and What LakeCat Adds</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-001.html" accesskey="p" rel="previous">LakeCat</a>
+</span>
+</div>
+</nav>
+<h1 data-number="1" id="preface"><span
+class="header-section-number">1</span> Preface</h1>
+<p>LakeCat is a Rust-native, Iceberg-compatible catalog foundation for
+QueryGraph. It begins from one conservative claim and one ambitious one.
+The conservative claim: an ordinary Iceberg REST catalog must keep
+working for ordinary engines — Spark, Flink, Trino, DuckDB, PyIceberg,
+Sail — with no new protocol to learn. The ambitious claim: the
+<em>next</em> catalog also has to be a governed control plane for
+Rust-first planning, semantic graph handoff, lineage, and agent
+access.</p>
+<p>LakeCat holds both at once by drawing a sharp line. It keeps Iceberg
+compatibility at the boundary and moves the work that needs deep
+table-format knowledge to the engine that can reason about it. In this
+repository the catalog is <strong>LakeCat</strong> and the engine-side
+lakehouse implementation is <strong>Sail</strong>. Graph behavior
+belongs to <strong>Grust</strong>; governance and capability proof
+belong to <strong>TypeSec</strong>; the end-to-end integration target is
+<strong>QueryGraph</strong>.</p>
+<p>This edition is aligned with <strong>LakeCat 0.3.0, Ocelot</strong>,
+published on July 4, 2026. Ocelot is the point where the architecture in
+this book became a shipped, announcement-ready claim: a stock PyIceberg
+client completed a real REST round-trip, the release-candidate gate
+passed from a clean tree, and the QGLake handoff proved that LakeCat
+replay, OpenLineage evidence, Grust projection, and QueryGraph
+verification/import agreed on the same catalog transition.</p>
+<p>This book builds from first principles. Chapter 2 explains what a
+catalog is, what Iceberg makes the catalog responsible for, and what
+LakeCat adds without changing the table format. Chapter 3 fixes the
+vocabulary — the single hardest thing in a layered system — so every
+later term has an owner. Chapter 4 draws the boundary model: which
+repository owns which concept, and which ideas might someday become
+neutral, standardizable profiles. The middle chapters walk the live
+architecture: the service spine, the read path, the commit path, and the
+durable store. The final chapters cover the engine boundary and the
+v3→v4 path, the graph/security/lineage handoffs, the QueryGraph/QGLake
+acceptance flow, worked examples, and the Ocelot release proof and its
+deliberately bounded scope.</p>
+<p>Each concept is defined once and then used. Where a later chapter
+needs a term, it links back rather than restating it.</p>
+</body>
+</html>

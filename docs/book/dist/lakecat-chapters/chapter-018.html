@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov" />
+  <meta name="dcterms.date" content="2026-07-11" />
+  <title>Appendix D: QGLake Handoff Proof Map</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">LakeCat</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">LakeCat</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-019.html" accesskey="n" rel="next">Future Work</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-017.html" accesskey="p" rel="previous">Appendix C: View Receipt-Chain Rules</a>
+</span>
+</div>
+</nav>
+<h1 data-number="17" id="appendix-d-qglake-handoff-proof-map"><span
+class="header-section-number">17</span> Appendix D: QGLake Handoff Proof
+Map</h1>
+<p>The QGLake handoff is a compact acceptance artifact over several raw
+artifacts: the LakeCat bootstrap bundle, lineage-drain response,
+QueryGraph import plan, captured verifier output, captured replay
+output, and service log. The summary is useful only because every
+compact field can be traced back to a parsed raw artifact and a
+replay-admitted catalog event.</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Proof section</th>
+<th>Binds</th>
+<th>Compared against</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>requestIdentityProof</code></td>
+<td>Principal subject/kind, identity source/state, lineage-drain
+receipt, TypeDID hash slots</td>
+<td>Captured LakeCat replay request identity and saved handoff-verifier
+output</td>
+</tr>
+<tr>
+<td><code>queryGraphBootstrapProof</code></td>
+<td>Bundle hash, graph hash, OpenLineage hash, QueryGraph import hash,
+standards, artifact counts, policy count, view receipt hashes</td>
+<td>Bootstrap replay event, bundle manifest, QueryGraph verify/import
+output</td>
+</tr>
+<tr>
+<td><code>governedScanProof</code></td>
+<td>Planned/fetched task counts, projections, stats fields, filters,
+read restrictions, policy hashes, TTL cap</td>
+<td>Scan replay sections and operator replay text</td>
+</tr>
+<tr>
+<td><code>tableCommitHistoryProof</code></td>
+<td>Commit count, positive increasing sequence numbers, duplicate-free
+commit hashes, replay/OpenLineage hashes</td>
+<td>Pointer-log read replay and compact summary</td>
+</tr>
+<tr>
+<td><code>viewReceiptChainProof</code></td>
+<td>Accepted view versions, receipt hashes, receipt-chain hashes,
+tombstone receipts, verified-chain counts</td>
+<td>View replay sections, bootstrap view artifacts, receipt-chain
+reads</td>
+</tr>
+<tr>
+<td><code>managementProof</code></td>
+<td>Server/project/warehouse/policy/storage-profile counts, ID arrays,
+graph event counts, replay/OpenLineage hashes</td>
+<td>Management-list replay sections and QueryGraph bootstrap policy
+count</td>
+</tr>
+<tr>
+<td><code>policyUpsertProof</code></td>
+<td>Policy id, ODRL hash, principal/action, graph events,
+replay/OpenLineage hashes</td>
+<td>Policy upsert replay and policy-list proof</td>
+</tr>
+<tr>
+<td><code>storageProfileUpsertProof</code></td>
+<td>Profile id, provider, issuance mode, location-prefix hash,
+secret-ref posture, principal/action</td>
+<td>Storage-profile upsert replay and credential branches</td>
+</tr>
+<tr>
+<td><code>credentialVendingProof</code></td>
+<td>Restricted-agent block, trusted-human exception, credential counts,
+prefix hashes, TTL caps, storage-profile anchor</td>
+<td>Credential replay sections and operator replay text</td>
+</tr>
+<tr>
+<td>Artifact manifest</td>
+<td>Bundle, lineage drain, import plan, captured outputs, service log,
+saved handoff verifier output</td>
+<td>Recomputed file hashes under the handoff summary directory</td>
+</tr>
+</tbody>
+</table>
+<p>The verifier enforces three global rules. First, artifact paths
+resolve under the handoff summary directory before hashing or parsing,
+so a summary cannot splice matching bytes from outside the bundle.
+Second, all integrity anchors are full <code>sha256:</code>-prefixed
+64-hex digests, not readable placeholders. Third, saved sidecars are
+closed over the schema LakeCat compares; a hash match does not make
+extra unverified fields part of the proof.</p>
+<p>This is why the handoff is a release acceptance artifact instead of a
+convenient log bundle. It proves that LakeCat replay, graph projection,
+OpenLineage, QueryGraph verification, and QueryGraph import all agreed
+on the same catalog state.</p>
+</body>
+</html>

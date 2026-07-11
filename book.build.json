@@ -1,0 +1,36 @@
+{
+  "$schema": "../firstpair/publishing/book.build.schema.json",
+  "schemaVersion": 1,
+  "bookRoot": "docs/book",
+  "manuscript": "${tmpDir}/lakecat.md",
+  "metadata": "docs/book/metadata.yaml",
+  "cover": "docs/book/cover.md",
+  "css": "docs/book/epub.css",
+  "stem": "lakecat",
+  "version": {
+    "source": "cargo",
+    "file": "Cargo.toml"
+  },
+  "dist": "docs/book/dist",
+  "buildDir": "${tmpDir}/build",
+  "edition": "full",
+  "primaryFormat": "typst",
+  "mobi": true,
+  "pandoc": {
+    "reader": "markdown+smart",
+    "tocDepth": 2,
+    "resourcePaths": ["${tmpDir}", "${tmpDir}/diagrams", "docs/book", "${repoRoot}"]
+  },
+  "hooks": {
+    "prepare": [
+      "node docs/book/render-diagrams.mjs docs/book/lakecat.md \"${tmpDir}/lakecat.md\" docs/book/diagrams",
+      "cp -R docs/book/diagrams \"${tmpDir}/diagrams\""
+    ],
+    "postEpub": "docs/book/fix_epub_layout.sh \"${epub}\" \"${kindleName}\""
+  },
+  "validators": [
+    "docs/book/check_epub_metadata.sh \"${distDir}/${stem}.epub\" \"${kindleName}\"",
+    "docs/book/check_pdf_layout.sh \"${distDir}/${stem}.pdf\"",
+    "scripts/check-book-artifact-contract.sh \"${distDir}\""
+  ]
+}

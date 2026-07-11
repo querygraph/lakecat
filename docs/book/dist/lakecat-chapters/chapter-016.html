@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov" />
+  <meta name="dcterms.date" content="2026-07-11" />
+  <title>Appendix B: Credential And Redaction Contract</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">LakeCat</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">LakeCat</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-017.html" accesskey="n" rel="next">Appendix C: View Receipt-Chain Rules</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-015.html" accesskey="p" rel="previous">Appendix A: Replay Admission Matrix</a>
+</span>
+</div>
+</nav>
+<h1 data-number="15"
+id="appendix-b-credential-and-redaction-contract"><span
+class="header-section-number">15</span> Appendix B: Credential And
+Redaction Contract</h1>
+<p>Credential handling is where catalog convenience can become security
+risk. LakeCat’s posture is therefore narrow: governed Sail-planned reads
+are the default for agents, while raw credentials are explicit audited
+exceptions.</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>Surface</th>
+<th>Accepted shape</th>
+<th>Redaction rule</th>
+<th>Failure posture</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Warehouse storage root</td>
+<td>Plain URI rooted in the warehouse; no query, fragment, userinfo, or
+dot traversal</td>
+<td>Return <code>warehouse-storage-root-hash</code> rather than raw root
+on errors</td>
+<td>Reject before memory or Turso persistence</td>
+</tr>
+<tr>
+<td>Storage-profile prefix</td>
+<td>Provider-compatible URI prefix, longest-prefix match, no ambiguous
+tie</td>
+<td>Return <code>storage-profile-prefix-hash</code> or
+<code>location-prefix-hash</code></td>
+<td>Fail closed rather than guessing a credential root</td>
+</tr>
+<tr>
+<td>Public config</td>
+<td>Non-secret string hints such as region, endpoint labels, or
+purpose</td>
+<td>Return <code>public-config-key-hash</code> for rejected
+keys/values</td>
+<td>Reject secret-looking keys, values, and LakeCat-reserved proof
+keys</td>
+</tr>
+<tr>
+<td>Secret reference</td>
+<td>Clean external locator such as <code>vault://</code>,
+<code>aws-sm://</code>, <code>gcp-sm://</code>, or
+<code>azure-kv://</code></td>
+<td>Store and replay <code>secret-ref-present</code>, provider, and full
+<code>secret-ref-hash</code></td>
+<td>Reject decorated URIs, unsupported schemes, traversal, userinfo,
+query, fragment</td>
+</tr>
+<tr>
+<td>Resolver dispatch</td>
+<td>TypeSec authorizes the exact secret-ref resource before lookup</td>
+<td>Resolver failures report provider plus secret/error hashes</td>
+<td>Denied decisions do not call the resolver</td>
+</tr>
+<tr>
+<td>Returned credentials</td>
+<td>Prefix remains inside the selected profile; TTL honors policy cap;
+LakeCat-owned evidence is canonical</td>
+<td>Replay prefix hashes and issuer-config hashes, never raw secret
+material</td>
+<td>Reject widened prefixes before recording
+<code>credentials.vend-attempted</code></td>
+</tr>
+<tr>
+<td>Restricted agent branch</td>
+<td>Zero credentials, explicit block reason, raw exception false, TTL
+cap present</td>
+<td>Empty credential-response evidence is explicit proof, not
+absence</td>
+<td>Agent is steered to governed Sail-planned reads</td>
+</tr>
+<tr>
+<td>Trusted human branch</td>
+<td>Positive credential count only when policy allows raw exception</td>
+<td>Returned prefixes are full hashes; exception reason is recorded</td>
+<td>Raw credentials remain auditable exceptions, not the default
+path</td>
+</tr>
+</tbody>
+</table>
+<p>The important distinction is that storage-profile management proves a
+credential root exists, while credential vending proves whether a caller
+received raw storage reach. QueryGraph can reason over both without
+seeing the raw root, secret URI, backend error, token, or returned
+credential material.</p>
+</body>
+</html>

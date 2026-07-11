@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov" />
+  <meta name="dcterms.date" content="2026-07-11" />
+  <title>Catalogs, Iceberg, and What LakeCat Adds</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">LakeCat</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">LakeCat</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-004.html" accesskey="n" rel="next">The Vocabulary</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-002.html" accesskey="p" rel="previous">Preface</a>
+</span>
+</div>
+</nav>
+<h1 data-number="2" id="catalogs-iceberg-and-what-lakecat-adds"><span
+class="header-section-number">2</span> Catalogs, Iceberg, and What
+LakeCat Adds</h1>
+<h2 data-number="2.1" id="what-a-catalog-is"><span
+class="header-section-number">2.1</span> What a catalog is</h2>
+<p>A data catalog is often described as a place that lists datasets.
+That is true but too small. A real catalog is the control plane between
+names, storage, metadata, identity, and intent. At minimum it answers
+four questions:</p>
+<ol type="1">
+<li>What table does this name mean?</li>
+<li>Where is its current metadata?</li>
+<li>Who may read, write, plan, or administer it?</li>
+<li>What changed, when, and under whose authority?</li>
+</ol>
+<p>In a traditional database the catalog is embedded in the engine: one
+system owns table definitions, statistics, permissions, and the
+transaction log. A lakehouse pulls that apart. Data files live in object
+storage, metadata files live beside them, and several engines read and
+write the same tables. The catalog becomes the agreement point — it maps
+a logical table name to the current metadata pointer and arbitrates
+updates to that pointer.</p>
+<figure>
+<img src="diagrams/diagram-01.png" alt="Diagram 1" />
+<figcaption aria-hidden="true">Diagram 1</figcaption>
+</figure>
+<p>That pointer is deceptively important. If the catalog points at
+metadata version 17, the table <em>is</em> version 17. If a writer
+prepares version 18 and wins the compare-and-swap, the table becomes 18;
+if it loses, nothing partially changes. The catalog is not the table
+format, but it is where table history becomes visible and durable. For
+human analytics this sounds like bookkeeping. For agentic systems it is
+a trust boundary: a catalog can know the principal, warehouse,
+namespace, table, snapshot, requested columns, row restriction, storage
+profile, and policy receipt — and if it captures that before planning
+and commits it after state changes, it becomes a governed control plane
+rather than a passive address book.</p>
+<h2 data-number="2.2"
+id="what-iceberg-makes-the-catalog-responsible-for"><span
+class="header-section-number">2.2</span> What Iceberg makes the catalog
+responsible for</h2>
+<p>Apache Iceberg is a table format for large analytic tables. Its core
+idea is to put the table’s truth in explicit metadata files so engines
+can plan reads and validate writes without directory listing or fragile
+storage conventions. A current metadata file names schemas, partition
+specs, sort orders, snapshots, and properties; snapshots point to
+manifest lists; manifest lists point to manifests; manifests describe
+data and delete files.</p>
+<p>The catalog’s role in Iceberg is intentionally narrow. Standard
+clients must be able to load table metadata, create namespaces and
+tables, commit changes, and sometimes receive credentials or scan tasks
+— over a documented REST shape:</p>
+<pre class="text"><code>GET  /v1/config
+GET  /v1/{prefix}/namespaces
+POST /v1/{prefix}/namespaces/{ns}/tables
+GET  /v1/{prefix}/namespaces/{ns}/tables/{table}
+POST /v1/{prefix}/namespaces/{ns}/tables/{table}   # commit: requirements + updates</code></pre>
+<p>The rule that governs everything else in this book: <strong>a normal
+client must never have to call a non-standard endpoint to read an
+ordinary table.</strong> If it does, compatibility is already
+broken.</p>
+<h2 data-number="2.3"
+id="what-lakecat-adds-without-changing-iceberg"><span
+class="header-section-number">2.3</span> What LakeCat adds without
+changing Iceberg</h2>
+<p>LakeCat’s promise is <em>compatibility first, evidence second,
+semantics above the catalog.</em> A Spark or PyIceberg client sees an
+Iceberg REST catalog. A QueryGraph or governed-agent client may ask for
+richer proof. Both share the same table because the portable truth stays
+in Iceberg metadata and the extra evidence sits beside it — never inside
+the table format.</p>
+<figure>
+<img src="diagrams/diagram-02.png" alt="Diagram 2" />
+<figcaption aria-hidden="true">Diagram 2</figcaption>
+</figure>
+<p>Iceberg metadata stays pristine. Policy, graph, lineage, and agent
+state are <em>derived</em> control-plane or graph data. The table
+remains an Iceberg table.</p>
+</body>
+</html>
