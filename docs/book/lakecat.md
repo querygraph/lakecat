@@ -804,6 +804,23 @@ Ocelot consumes published **TypeSec 0.12.0, Torcello**. LakeCat owns the
 enforcement point and durable receipt binding; TypeSec owns authorization,
 capability, and receipt semantics.
 
+TypeSec now also owns the completed Marciana v1 security boundary for governed
+agent memory. A `MemoryVault` requires operation-specific capabilities for
+remember, recall, and forget; applies purpose and clearance policy before
+rehydrating content; and preserves labels, quarantine, temporal history, and
+audit. Grust's `querygraph-memory` adapter owns the opaque record and entity
+graph on durable Turso/libSQL storage. At the service edge, qg-rust verifies the
+signed TypeDID envelope and uses its signing `did:key`—not a caller-supplied
+body field—as the TypeSec policy subject.
+
+That memory is not LakeCat's `MemoryCatalogStore`. The latter is an operational
+implementation of `CatalogStore` for tests and embedded use, interchangeable
+with LakeCat's durable Turso catalog store. It holds namespaces, tables, views,
+policies, receipts, idempotency state, and outbox events; it is not an agent
+recall system. LakeCat contributes governed catalog and lineage evidence that a
+QueryGraph application may later choose to remember. It does not mint Marciana
+capabilities, store Marciana records, or reveal recalled content.
+
 ## Sail and the v3→v4 path
 
 Sail is a Rust-native engine — Arrow, DataFusion, generated Iceberg REST models,
@@ -869,9 +886,9 @@ flowchart TB
   tools[Spark / Trino / Flink / PyIceberg / notebooks]
   lc[LakeCat catalog<br/>identity, tenancy, pointers, commits, policy gates,<br/>idempotency, credential decisions, audit, durable outbox]
   sail[Sail<br/>Iceberg planning, metadata-as-data, pruning, delete handling, commit validation]
-  grust[Grust<br/>catalog graph, traversal, projection, stores]
-  typesec[TypeSec<br/>RBAC, ODRL, capabilities, TypeDID, secure agents]
-  qg[QueryGraph.ai<br/>Responsible Semantic Layer: Croissant, CDIF, OSI, OpenLineage, ODRL]
+  grust[Grust<br/>catalog graph, traversal, projection, stores<br/>querygraph-memory + durable Turso graph]
+  typesec[TypeSec<br/>RBAC, ODRL, capabilities, TypeDID, secure agents<br/>Marciana MemoryVault]
+  qg[QueryGraph.ai / qg-rust<br/>Responsible Semantic Layer + signed agent identity<br/>optional governed memory service]
   tools -->|Iceberg REST| lc
   lc -->|typed planning + table semantics| sail
   lc -->|graph events| grust
@@ -880,6 +897,8 @@ flowchart TB
   grust --> qg
   typesec --> qg
   lc -->|semantic + lineage bootstrap| qg
+  qg -->|signed remember / recall / forget| typesec
+  typesec -->|vault-authorized opaque records| grust
 ```
 
 ## Ocelot's dependency baseline
@@ -1384,9 +1403,27 @@ Imagine a resilience supervisor agent investigating incidents:
 9. LakeCat records scan and credential decisions into audit/outbox.
 10. QueryGraph imports graph, policy, lineage, and bootstrap evidence.
 
+Marciana permits a separate, optional continuation after that governed result:
+
+11. An authorized specialist sends only the allowed summary to qg-rust's
+    signed memory endpoint; TypeSec mints the write capability and the Grust
+    adapter persists the record.
+12. qg-rust stops and restarts while the Turso-backed memory survives.
+13. A differently credentialed supervisor recalls the record because its
+    verified DID has the required read capability.
+14. A validly signed but unassigned outsider receives a TypeSec `403` denial;
+    an unsigned caller fails envelope authentication with `401`.
+
 The key point is the absence of raw storage reach. The specialist agent does not
 need broad cloud credentials to do its job. It needs a governed plan, a bounded
 task set, and a receipt trail.
+
+The existing QGLake fixture ends at the verified handoff in step 10. It does not
+run the Marciana restart proof, and its successful output must not be cited as
+memory verification. The separate qg-rust/qg-python demonstration proves steps
+11--14. LakeCat supplies the governed result and its evidence anchors; qg-rust,
+TypeSec, and Grust own identity binding, recall authorization, and durable agent
+memory respectively.
 
 The local fixture compresses this story into a short artifact-producing
 sequence:
@@ -2134,6 +2171,14 @@ LakeCat is a direction more than a single release. The next stage should keep
 the architecture more true without pushing engine, graph, or security semantics
 back into the catalog.
 
+Marciana v1 is complete as a durable local-service proof; implementing agent
+memory is therefore not a LakeCat backlog item. LakeCat's future opportunity is
+narrower: let a downstream QueryGraph workflow bind an allowed answer to the
+catalog receipt, scan-plan, snapshot, bootstrap, and OpenLineage hashes that
+justify it, so those LakeCat-owned anchors become Marciana provenance without
+copying raw table data into the catalog or making LakeCat responsible for
+recall.
+
 1. Point the Sail git dependency at upstream (or a published crate) only after
    the required helpers land there, then retire the querygraph/sail `lakecat`
    branch and its dependency-contract assertions.
@@ -2153,6 +2198,20 @@ back into the catalog.
    substrate while preserving the locked receipt-chain and graph-handoff proof.
 7. Prove the bootstrap bundle through QueryGraph import on every meaningful
    public-surface change, and keep local release evidence ahead of cloud CI.
+8. Define an optional handoff profile that binds governed answer text to
+   LakeCat receipt and lineage hashes before qg-rust writes it to Marciana,
+   while keeping capability minting, content rehydration, and recall wholly in
+   TypeSec and QueryGraph.
+
+That optional binding must preserve the upstream v1 limits rather than turning
+them into LakeCat claims. `MemoryId::next()` is process-local, so a new write
+after qg-rust restarts can collide with an existing persisted id; Grust pushes
+down space equality but evaluates the other memory query dimensions through the
+shared matcher; the reference vector index is in-process and nonpersistent; and
+there is no hosted multi-tenant control plane yet. Those are upstream Marciana
+scale contracts to resolve before a production LakeCat-to-memory profile can
+claim restart-safe writes, full query pushdown, durable semantic ranking, or
+hosted tenancy.
 
 The payoff is a catalog foundation that feels ordinary to Iceberg clients and
 rich to QueryGraph. Tables remain portable. Policies become enforceable. Graph

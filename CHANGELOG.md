@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Book: documented the completed Marciana v1 boundary across TypeSec, Grust,
+  and qg-rust, distinguishing LakeCat's operational `MemoryCatalogStore` from
+  governed agent memory. Added the optional post-QGLake remember/restart/recall
+  path, its authentication denials, the current fixture boundary, and the
+  upstream limitations that constrain a future LakeCat provenance binding.
+
 - Added a First Pair Press image cover adapted from the LakeCat announcement
   headboard, with Alexy Khrabrov as the sole author. The same cover now drives
   PDF, EPUB, MOBI, and hosted HTML output.
