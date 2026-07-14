@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added a First Pair Press image cover adapted from the LakeCat announcement
+  headboard, with Alexy Khrabrov as the sole author. The same cover now drives
+  PDF, EPUB, MOBI, and hosted HTML output.
+
 - Unified the book build through FirstPair's pinned Pandoc/Typst and Mermaid
   toolchain. `book.build.json` preserves LakeCat's tracked diagram renderer,
   EPUB repair, and artifact validators while the shared builder owns PDF,

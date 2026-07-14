@@ -21,6 +21,16 @@
     "tocDepth": 2,
     "resourcePaths": ["${tmpDir}", "${tmpDir}/diagrams", "docs/book", "${repoRoot}"]
   },
+  "pdf": {
+    "coverImage": "cover/lakecat-cover.png",
+    "coverWidth": "8.5in",
+    "coverHeight": "11in",
+    "coverFit": "stretch"
+  },
+  "epub": {
+    "coverImage": "cover/lakecat-cover.png",
+    "includeRenderedCover": false
+  },
   "hooks": {
     "prepare": [
       "node docs/book/render-diagrams.mjs docs/book/lakecat.md \"${tmpDir}/lakecat.md\" docs/book/diagrams",

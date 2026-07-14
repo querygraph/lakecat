@@ -18,9 +18,11 @@ trap 'rm -rf "$tmpdir"' EXIT
 
 page1="$tmpdir/page1.txt"
 page2="$tmpdir/page2.txt"
+page1_images="$tmpdir/page1-images.txt"
 
 pdftotext -f 1 -l 1 "$pdf" "$page1"
 pdftotext -f 2 -l 2 "$pdf" "$page2"
+pdfimages -f 1 -l 1 -list "$pdf" > "$page1_images"
 
 require_pattern() {
   local pattern="$1"
@@ -44,10 +46,8 @@ reject_pattern() {
   fi
 }
 
-require_pattern '^LakeCat$' "$page1" "cover page is missing the visible title"
-require_pattern 'covers lakecat \([0-9]+\.[0-9]+\.[0-9]+(-[0-9a-f]+)?\)' "$page1" \
-  "cover page is missing the generated versioned title"
-require_pattern '^Alexy Khrabrov$' "$page1" "cover page is missing the author"
+require_pattern '^[[:space:]]*1[[:space:]]+[0-9]+[[:space:]]+image[[:space:]]+' "$page1_images" \
+  "cover page does not contain the raster cover image"
 reject_pattern '^Contents$' "$page1" "cover page includes body contents"
 reject_pattern '^[0-9]+$' "$page1" "cover page has a standalone page number"
 
