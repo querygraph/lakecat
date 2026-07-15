@@ -97,16 +97,16 @@ def main() -> int:
     draw = ImageDraw.Draw(canvas)
 
     title_face = font(TITLE_FONT, 174)
-    draw_tracked_center(draw, TITLE, 72, title_face, INK, 7)
-    draw.rounded_rectangle((330, 274, 694, 282), radius=4, fill=ACCENT)
+    draw_tracked_center(draw, TITLE, 22, title_face, INK, 7)
+    draw.rounded_rectangle((330, 220, 694, 228), radius=4, fill=ACCENT)
 
-    subtitle_face = font(TEXT_FONT, 43)
+    subtitle_face = font(TEXT_FONT, 40)
     lines = wrap_lines(draw, SUBTITLE, subtitle_face, 850)
-    line_height = 55
+    line_height = 48
     for index, line in enumerate(lines):
         box = draw.textbbox((0, 0), line, font=subtitle_face, stroke_width=1)
         x = (canvas.width - (box[2] - box[0])) / 2
-        draw.text((x, 312 + index * line_height), line, font=subtitle_face, fill=INK,
+        draw.text((x, 244 + index * line_height), line, font=subtitle_face, fill=INK,
                   stroke_width=2, stroke_fill=(0, 0, 0, 155))
 
     author_face = font(TEXT_FONT, 42)

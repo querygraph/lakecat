@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Book: moved the LakeCat cover title and subtitle upward and tightened the
+  subtitle typography, then regenerated the PDF, EPUB, MOBI, HTML, and
+  chapter-reader artifacts.
+
 - Book: documented the completed Marciana v1 boundary across TypeSec, Grust,
   and qg-rust, distinguishing LakeCat's operational `MemoryCatalogStore` from
   governed agent memory. Added the optional post-QGLake remember/restart/recall
