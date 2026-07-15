@@ -2,9 +2,9 @@ flowchart TB
   tools[Spark / Trino / Flink / PyIceberg / notebooks]
   lc[LakeCat catalog<br/>identity, tenancy, pointers, commits, policy gates,<br/>idempotency, credential decisions, audit, durable outbox]
   sail[Sail<br/>Iceberg planning, metadata-as-data, pruning, delete handling, commit validation]
-  grust[Grust<br/>catalog graph, traversal, projection, stores]
-  typesec[TypeSec<br/>RBAC, ODRL, capabilities, TypeDID, secure agents]
-  qg[QueryGraph.ai<br/>Responsible Semantic Layer: Croissant, CDIF, OSI, OpenLineage, ODRL]
+  grust[Grust<br/>catalog graph, traversal, projection, stores<br/>querygraph-memory + durable Turso graph]
+  typesec[TypeSec<br/>RBAC, ODRL, capabilities, TypeDID, secure agents<br/>Marciana MemoryVault]
+  qg[QueryGraph.ai / qg-rust<br/>Responsible Semantic Layer + signed agent identity<br/>optional governed memory service]
   tools -->|Iceberg REST| lc
   lc -->|typed planning + table semantics| sail
   lc -->|graph events| grust
@@ -13,3 +13,5 @@ flowchart TB
   grust --> qg
   typesec --> qg
   lc -->|semantic + lineage bootstrap| qg
+  qg -->|signed remember / recall / forget| typesec
+  typesec -->|vault-authorized opaque records| grust

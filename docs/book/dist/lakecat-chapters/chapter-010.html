@@ -5,7 +5,7 @@
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
   <meta name="author" content="Alexy Khrabrov" />
-  <meta name="dcterms.date" content="2026-07-14" />
+  <meta name="dcterms.date" content="2026-07-15" />
   <title>The Siblings and the Engine Path</title>
   <style>
     div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
@@ -120,6 +120,25 @@ graph, lineage, or QGLake proof.</p>
 <p>Ocelot consumes published <strong>TypeSec 0.12.0, Torcello</strong>.
 LakeCat owns the enforcement point and durable receipt binding; TypeSec
 owns authorization, capability, and receipt semantics.</p>
+<p>TypeSec now also owns the completed Marciana v1 security boundary for
+governed agent memory. A <code>MemoryVault</code> requires
+operation-specific capabilities for remember, recall, and forget;
+applies purpose and clearance policy before rehydrating content; and
+preserves labels, quarantine, temporal history, and audit. Grust’s
+<code>querygraph-memory</code> adapter owns the opaque record and entity
+graph on durable Turso/libSQL storage. At the service edge, qg-rust
+verifies the signed TypeDID envelope and uses its signing
+<code>did:key</code>—not a caller-supplied body field—as the TypeSec
+policy subject.</p>
+<p>That memory is not LakeCat’s <code>MemoryCatalogStore</code>. The
+latter is an operational implementation of <code>CatalogStore</code> for
+tests and embedded use, interchangeable with LakeCat’s durable Turso
+catalog store. It holds namespaces, tables, views, policies, receipts,
+idempotency state, and outbox events; it is not an agent recall system.
+LakeCat contributes governed catalog and lineage evidence that a
+QueryGraph application may later choose to remember. It does not mint
+Marciana capabilities, store Marciana records, or reveal recalled
+content.</p>
 <h2 data-number="9.3" id="sail-and-the-v3v4-path"><span
 class="header-section-number">9.3</span> Sail and the v3→v4 path</h2>
 <p>Sail is a Rust-native engine — Arrow, DataFusion, generated Iceberg

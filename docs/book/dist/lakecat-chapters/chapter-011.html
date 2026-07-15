@@ -5,7 +5,7 @@
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
   <meta name="author" content="Alexy Khrabrov" />
-  <meta name="dcterms.date" content="2026-07-14" />
+  <meta name="dcterms.date" content="2026-07-15" />
   <title>Workflow Examples</title>
   <style>
     div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
@@ -518,9 +518,30 @@ audit/outbox.</li>
 <li>QueryGraph imports graph, policy, lineage, and bootstrap
 evidence.</li>
 </ol>
+<p>Marciana permits a separate, optional continuation after that
+governed result:</p>
+<ol start="11" type="1">
+<li>An authorized specialist sends only the allowed summary to qg-rust’s
+signed memory endpoint; TypeSec mints the write capability and the Grust
+adapter persists the record.</li>
+<li>qg-rust stops and restarts while the Turso-backed memory
+survives.</li>
+<li>A differently credentialed supervisor recalls the record because its
+verified DID has the required read capability.</li>
+<li>A validly signed but unassigned outsider receives a TypeSec
+<code>403</code> denial; an unsigned caller fails envelope
+authentication with <code>401</code>.</li>
+</ol>
 <p>The key point is the absence of raw storage reach. The specialist
 agent does not need broad cloud credentials to do its job. It needs a
 governed plan, a bounded task set, and a receipt trail.</p>
+<p>The existing QGLake fixture ends at the verified handoff in step 10.
+It does not run the Marciana restart proof, and its successful output
+must not be cited as memory verification. The separate qg-rust/qg-python
+demonstration proves steps 11–14. LakeCat supplies the governed result
+and its evidence anchors; qg-rust, TypeSec, and Grust own identity
+binding, recall authorization, and durable agent memory
+respectively.</p>
 <p>The local fixture compresses this story into a short
 artifact-producing sequence:</p>
 <div class="sourceCode" id="cb21"><pre
