@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added a secret-free `GovernedScanProof` for QueryGraph cognition, binding an
+  authorized principal, purpose, Iceberg snapshot, effective projection, and
+  SHA-256 digests of the Sail plan task and authorization receipt without
+  exposing the opaque task token.
+
 - Book: moved the LakeCat cover title and subtitle upward and tightened the
   subtitle typography, then regenerated the PDF, EPUB, MOBI, HTML, and
   chapter-reader artifacts.
