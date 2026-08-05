@@ -855,6 +855,8 @@ pub struct PlanTableScanResponse {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub delete_files: Vec<Value>,
     pub residual_filter: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub governed_scan_proof: Option<lakecat_core::sail::GovernedScanProof>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

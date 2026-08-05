@@ -1,3 +1,4 @@
+pub mod governed_scan;
 pub mod sail;
 
 use std::fmt::{Display, Formatter};

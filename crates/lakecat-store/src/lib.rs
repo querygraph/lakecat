@@ -72,6 +72,22 @@ pub trait CatalogStore: Send + Sync + 'static {
         start_version: u64,
         end_version: Option<u64>,
     ) -> LakeCatResult<Vec<TableCommitRecord>>;
+    async fn save_governed_scan_grant(
+        &self,
+        grant: GovernedScanGrant,
+    ) -> LakeCatResult<GovernedScanGrant> {
+        grant.validate()?;
+        Err(LakeCatError::NotSupported(
+            "durable governed scan grants".to_string(),
+        ))
+    }
+    async fn load_governed_scan_grant(&self, grant_id: &str) -> LakeCatResult<GovernedScanGrant> {
+        validate_governed_scan_grant_id(grant_id)?;
+        Err(LakeCatError::NotFound {
+            object: "governed scan grant",
+            name: grant_id.to_string(),
+        })
+    }
     async fn upsert_server(&self, server: ServerRecord) -> LakeCatResult<ServerRecord> {
         server.validate()?;
         Ok(server)
@@ -269,14 +285,20 @@ pub trait CatalogStore: Send + Sync + 'static {
     }
 }
 
+mod governed_scan;
 mod helpers;
 mod memory;
 mod records;
 
+pub use governed_scan::*;
 pub use helpers::table_ident;
 pub(crate) use helpers::*;
 pub use memory::*;
 pub use records::*;
+
+#[cfg(test)]
+#[path = "governed_scan_tests.rs"]
+mod governed_scan_tests;
 
 #[cfg(test)]
 mod memory_tests;

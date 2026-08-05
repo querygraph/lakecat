@@ -9,9 +9,10 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 
 use crate::{LakeCatError, LakeCatResult, Principal, TableIdent};
+
+pub use crate::governed_scan::GovernedScanProof;
 
 #[async_trait]
 pub trait SailCatalogEngine: Send + Sync + 'static {
@@ -72,58 +73,6 @@ pub struct ScanPlan {
     pub snapshot_id: Option<i64>,
     pub scan_tasks: Vec<Value>,
     pub residual_filter: Option<Value>,
-}
-
-/// Portable, secret-free proof that downstream QueryGraph cognition can bind
-/// to an authorized LakeCat scan without persisting the opaque plan token.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct GovernedScanProof {
-    pub table: TableIdent,
-    pub snapshot_id: i64,
-    pub plan_task_digest: String,
-    pub principal_subject: String,
-    pub purpose: String,
-    pub effective_projection: Vec<String>,
-    pub authorization_receipt_digest: String,
-}
-
-impl GovernedScanProof {
-    /// Build proof material from LakeCat's authorized inputs and Sail result.
-    pub fn new(
-        table: TableIdent,
-        snapshot_id: i64,
-        plan_task: &str,
-        principal_subject: impl Into<String>,
-        purpose: impl Into<String>,
-        effective_projection: Vec<String>,
-        authorization_receipt: &[u8],
-    ) -> LakeCatResult<Self> {
-        let principal_subject = principal_subject.into();
-        let purpose = purpose.into();
-        if principal_subject.trim().is_empty()
-            || purpose.trim().is_empty()
-            || plan_task.is_empty()
-            || effective_projection.is_empty()
-        {
-            return Err(LakeCatError::InvalidArgument(
-                "governed scan proof requires subject, purpose, plan task, and projection"
-                    .to_string(),
-            ));
-        }
-        Ok(Self {
-            table,
-            snapshot_id,
-            plan_task_digest: format!("sha256:{:x}", Sha256::digest(plan_task.as_bytes())),
-            principal_subject,
-            purpose,
-            effective_projection,
-            authorization_receipt_digest: format!(
-                "sha256:{:x}",
-                Sha256::digest(authorization_receipt)
-            ),
-        })
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -304,10 +253,10 @@ pub fn initial_table_metadata(
     // schema-id and field ids come from the client schema; derive last-column-id
     // as the max field id so later column additions keep increasing it.
     let mut schema = schema.clone();
-    if schema.get("schema-id").is_none() {
-        if let Some(obj) = schema.as_object_mut() {
-            obj.insert("schema-id".into(), Value::from(0));
-        }
+    if schema.get("schema-id").is_none()
+        && let Some(obj) = schema.as_object_mut()
+    {
+        obj.insert("schema-id".into(), Value::from(0));
     }
     let current_schema_id = schema.get("schema-id").and_then(Value::as_i64).unwrap_or(0);
     let last_column_id = max_field_id(&schema);
@@ -354,10 +303,10 @@ fn max_field_id(schema: &Value) -> i64 {
     fn walk(v: &Value, max: &mut i64) {
         match v {
             Value::Object(map) => {
-                if let Some(id) = map.get("id").and_then(Value::as_i64) {
-                    if id > *max {
-                        *max = id;
-                    }
+                if let Some(id) = map.get("id").and_then(Value::as_i64)
+                    && id > *max
+                {
+                    *max = id;
                 }
                 for (_k, child) in map {
                     walk(child, max);
@@ -484,27 +433,5 @@ mod tests {
             plan.new_metadata,
             serde_json::json!({"format-version": 2, "snapshots": []})
         );
-    }
-
-    #[test]
-    fn governed_scan_proof_hashes_opaque_authority_material() {
-        let proof = GovernedScanProof::new(
-            TableIdent::new(
-                WarehouseName::new("local").unwrap(),
-                "default".parse::<Namespace>().unwrap(),
-                TableName::new("events").unwrap(),
-            ),
-            42,
-            "secret-plan-token",
-            "did:key:agent",
-            "research",
-            vec!["finding".to_string()],
-            b"signed-receipt",
-        )
-        .unwrap();
-        let json = serde_json::to_string(&proof).unwrap();
-        assert!(!json.contains("secret-plan-token"));
-        assert!(!json.contains("signed-receipt"));
-        assert!(proof.plan_task_digest.starts_with("sha256:"));
     }
 }

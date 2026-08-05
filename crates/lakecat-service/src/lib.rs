@@ -12,6 +12,7 @@ mod evidence;
 
 mod commit;
 mod error;
+pub mod governed_scan;
 mod handlers;
 mod identity;
 mod lineage_summary;

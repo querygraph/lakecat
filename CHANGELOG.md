@@ -2,10 +2,18 @@
 
 ## Unreleased
 
-- Added a secret-free `GovernedScanProof` for QueryGraph cognition, binding an
-  authorized principal, purpose, Iceberg snapshot, effective projection, and
-  SHA-256 digests of the Sail plan task and authorization receipt without
-  exposing the opaque task token.
+- Promoted `GovernedScanProof` into a production, domain-separated evidence
+  contract and added durable, idempotent governed scan grants to both memory
+  and Turso catalog stores. Purpose-bound scans now return and audit a
+  secret-free proof while LakeCat retains only digests of plan, authorization,
+  policy, verified identity context, restriction, and metadata evidence; agent
+  grants require verified TypeDID attestation. Fresh grant
+  revalidation fails closed on proof drift, stale table snapshots or metadata,
+  revoked authorization, and changed purpose, projection, restriction, or
+  policy decisions; Turso grants survive service reopen. The living design and
+  book now document LakeCat's authority, the original-versus-fresh evidence
+  boundary, and the in-process adapter contract that preserves standard
+  Iceberg REST behavior.
 
 - Book: moved the LakeCat cover title and subtitle upward and tightened the
   subtitle typography, then regenerated the PDF, EPUB, MOBI, HTML, and

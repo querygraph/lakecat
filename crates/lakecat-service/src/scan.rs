@@ -62,17 +62,24 @@ pub(crate) async fn plan_table_scan_in_warehouse(
     let ident = table_ident(warehouse.as_str(), namespace, table)?;
     let capability = authorize_table_scan(&state, identity, ident.clone()).await?;
     let table = state.store.load_table(capability.table()).await?;
-    let (scan, scan_request_extensions) =
+    let (scan, scan_request_extensions, governed_scan_proof) =
         plan_scan_with_capability(&state, &capability, &table, request).await?;
     let ident = capability.table().clone();
     let principal = capability.receipt().principal.clone();
-    let audit_payload = table_scan_planned_audit_payload(
+    let mut audit_payload = table_scan_planned_audit_payload(
         &ident,
         &table,
         capability.receipt(),
         &scan,
         &scan_request_extensions,
     );
+    if let Some(proof) = governed_scan_proof.as_ref() {
+        audit_payload["governed-scan-proof"] = serde_json::to_value(proof).map_err(|error| {
+            LakeCatError::Internal(format!(
+                "failed to encode governed scan proof for audit evidence: {error}"
+            ))
+        })?;
+    }
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
@@ -95,6 +102,7 @@ pub(crate) async fn plan_table_scan_in_warehouse(
             scan.residual_filter,
             scan_request_extensions,
         ),
+        governed_scan_proof,
     }))
 }
 
@@ -103,7 +111,14 @@ pub(crate) async fn plan_scan_with_capability(
     capability: &TableScanCapability,
     table: &TableRecord,
     request: PlanTableScanRequest,
-) -> Result<(lakecat_core::sail::ScanPlan, serde_json::Value), LakeCatHttpError> {
+) -> Result<
+    (
+        lakecat_core::sail::ScanPlan,
+        serde_json::Value,
+        Option<lakecat_core::sail::GovernedScanProof>,
+    ),
+    LakeCatHttpError,
+> {
     request.validate_scan_mode()?;
     #[cfg(feature = "sail-local")]
     let _ = &table;
@@ -112,6 +127,8 @@ pub(crate) async fn plan_scan_with_capability(
     let projection = restriction.effective_projection(&requested_projection)?;
     let filters = request.filter_values();
     let stats_fields = restriction.effective_stats_fields(&request.stats_fields);
+    let grant_requested_projection = requested_projection.clone();
+    let grant_effective_projection = projection.clone();
     let scan_request_extensions = json!({
         "case-sensitive": request.case_sensitive,
         "use-snapshot-schema": request.use_snapshot_schema,
@@ -171,7 +188,18 @@ pub(crate) async fn plan_scan_with_capability(
             end_snapshot_id: request.end_snapshot_id,
         })
         .await?;
-    Ok((scan, scan_request_extensions))
+    let governed_scan_grant = crate::governed_scan::issue_governed_scan_grant(
+        capability,
+        table,
+        &scan,
+        grant_requested_projection,
+        grant_effective_projection,
+    )?;
+    let governed_scan_proof = match governed_scan_grant {
+        Some(grant) => Some(state.store.save_governed_scan_grant(grant).await?.proof),
+        None => None,
+    };
+    Ok((scan, scan_request_extensions, governed_scan_proof))
 }
 
 #[cfg(feature = "sail-local")]

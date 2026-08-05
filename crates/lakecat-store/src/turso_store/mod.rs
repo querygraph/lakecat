@@ -6,7 +6,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use lakecat_core::{
     LakeCatError, LakeCatResult, Namespace, Principal, TableIdent, TableName, WarehouseName,
     content_hash_bytes, content_hash_json,
@@ -16,10 +16,10 @@ use serde_json::Value as JsonValue;
 use turso::{Connection, Database, Row, Value as TursoValue};
 
 use crate::{
-    CatalogAuditEvent, CatalogStore, OutboxEvent, PolicyBinding, ProjectRecord, ServerRecord,
-    SoftDeleteRecord, StorageProfile, TableCommit, TableCommitRecord, TableRecord, ViewRecord,
-    ViewVersionReceipt, WarehouseRecord, metadata_pointer_conflict, namespace_not_empty,
-    namespace_not_found, policy_binding_key, policy_bindings_for_table,
+    CatalogAuditEvent, CatalogStore, GovernedScanGrant, OutboxEvent, PolicyBinding, ProjectRecord,
+    ServerRecord, SoftDeleteRecord, StorageProfile, TableCommit, TableCommitRecord, TableRecord,
+    ViewRecord, ViewVersionReceipt, WarehouseRecord, metadata_pointer_conflict,
+    namespace_not_empty, namespace_not_found, policy_binding_key, policy_bindings_for_table,
     require_expected_view_version, storage_profile_key, storage_profile_match, table_key,
     validate_expected_view_version, validate_project_id, validate_view_receipt_chains, view_key,
     view_key_parts, view_receipt_hash,
@@ -993,6 +993,65 @@ impl CatalogStore for TursoCatalogStore {
             commits.push(commit);
         }
         Ok(commits)
+    }
+
+    async fn save_governed_scan_grant(
+        &self,
+        grant: GovernedScanGrant,
+    ) -> LakeCatResult<GovernedScanGrant> {
+        grant.validate()?;
+        self.write_txn(move |conn| {
+            let grant = grant.clone();
+            Box::pin(async move {
+                conn.execute(
+                    "insert into governed_scan_grants (
+                        grant_id, table_key, snapshot_id, principal_subject, grant_json, issued_at
+                     ) values (?1, ?2, ?3, ?4, ?5, ?6)
+                     on conflict(grant_id) do nothing",
+                    (
+                        grant.proof.grant_id.as_str(),
+                        table_key(&grant.proof.table),
+                        grant.proof.snapshot_id,
+                        grant.proof.principal_subject.as_str(),
+                        encode_json(&grant)?,
+                        grant.issued_at.to_rfc3339(),
+                    ),
+                )
+                .await
+                .map_err(turso_error)?;
+                let existing = load_turso_governed_scan_grant(conn, &grant.proof.grant_id)
+                    .await?
+                    .ok_or_else(|| {
+                        LakeCatError::Internal(
+                            "governed scan grant disappeared during idempotent save".to_string(),
+                        )
+                    })?;
+                if existing.has_same_stable_evidence(&grant) {
+                    return Ok(existing);
+                }
+                Err(LakeCatError::Conflict(
+                    "governed scan grant id was reused with different evidence".to_string(),
+                ))
+            })
+        })
+        .await
+    }
+
+    async fn load_governed_scan_grant(&self, grant_id: &str) -> LakeCatResult<GovernedScanGrant> {
+        crate::validate_governed_scan_grant_id(grant_id)?;
+        let conn = self.connect()?;
+        let grant = load_turso_governed_scan_grant(&conn, grant_id)
+            .await?
+            .ok_or_else(|| LakeCatError::NotFound {
+                object: "governed scan grant",
+                name: grant_id.to_string(),
+            })?;
+        if grant.proof.grant_id != grant_id {
+            return Err(LakeCatError::Internal(
+                "governed scan grant row id does not match stored evidence".to_string(),
+            ));
+        }
+        Ok(grant)
     }
 
     async fn upsert_server(&self, server: ServerRecord) -> LakeCatResult<ServerRecord> {
@@ -2047,6 +2106,16 @@ const TURSO_MIGRATION: &[&str] = &[
             response_json text not null,
             created_at text not null
         )",
+    "create table if not exists governed_scan_grants (
+            grant_id text primary key,
+            table_key text not null,
+            snapshot_id integer not null,
+            principal_subject text not null,
+            grant_json text not null,
+            issued_at text not null
+        )",
+    "create index if not exists idx_governed_scan_grants_table
+            on governed_scan_grants (table_key, snapshot_id, issued_at)",
     "create table if not exists audit_events (
             event_id text primary key,
             event_type text not null,
@@ -2147,6 +2216,62 @@ fn decode_namespace(value: String) -> LakeCatResult<Namespace> {
 
 fn idempotency_record_key(ident: &TableIdent, idempotency_key: &str) -> String {
     format!("{}:{idempotency_key}", ident.stable_id())
+}
+
+fn validate_turso_governed_scan_grant(
+    grant: &GovernedScanGrant,
+    row_table_key: &str,
+    row_snapshot_id: i64,
+    row_principal_subject: &str,
+    row_grant_id: &str,
+    row_issued_at: DateTime<Utc>,
+) -> LakeCatResult<()> {
+    grant.validate()?;
+    if table_key(&grant.proof.table) != row_table_key
+        || grant.proof.snapshot_id != row_snapshot_id
+        || grant.proof.principal_subject != row_principal_subject
+        || grant.proof.grant_id != row_grant_id
+        || grant.issued_at != row_issued_at
+    {
+        return Err(LakeCatError::Internal(
+            "governed scan grant row scope does not match stored evidence".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+async fn load_turso_governed_scan_grant(
+    conn: &Connection,
+    grant_id: &str,
+) -> LakeCatResult<Option<GovernedScanGrant>> {
+    let mut rows = conn
+        .query(
+            "select grant_json, table_key, snapshot_id, principal_subject, grant_id, issued_at
+             from governed_scan_grants where grant_id = ?1",
+            (grant_id,),
+        )
+        .await
+        .map_err(turso_error)?;
+    let Some(row) = rows.next().await.map_err(turso_error)? else {
+        return Ok(None);
+    };
+    let grant: GovernedScanGrant = decode_json(row_string(&row, 0)?)?;
+    let row_issued_at = DateTime::parse_from_rfc3339(&row_string(&row, 5)?)
+        .map_err(|error| {
+            LakeCatError::Internal(format!(
+                "governed scan grant row has invalid issuance time: {error}"
+            ))
+        })?
+        .with_timezone(&Utc);
+    validate_turso_governed_scan_grant(
+        &grant,
+        &row_string(&row, 1)?,
+        row_i64(&row, 2)?,
+        &row_string(&row, 3)?,
+        &row_string(&row, 4)?,
+        row_issued_at,
+    )?;
+    Ok(Some(grant))
 }
 
 fn checked_i64(value: u64, name: &str) -> LakeCatResult<i64> {

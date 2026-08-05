@@ -1614,6 +1614,27 @@ The future proposal candidate is not "TypeSec in Iceberg"; it is a
 policy-engine-neutral governed access profile with proof-carrying scan and
 credential posture.
 
+For a purpose-bound scan, LakeCat now makes that binding durable. The additive
+scan response can carry a versioned `GovernedScanProof` over the current table
+version and snapshot, ordered effective projection, principal, purpose, and
+canonical domain-separated digests of the Sail plan tasks, verified identity,
+original authorization receipt, and policy decision. The memory and Turso
+catalog stores retain the corresponding grant without raw plan tokens, reusable
+receipts, TypeDID envelopes, credentials, or signing material. Turso creation is
+idempotent under concurrent requests and the grant remains available after the
+service reopens.
+
+Before downstream cognition applies a proposal, LakeCat's in-process
+revalidation API reloads the exact grant, checks current table and policy state,
+and requests a fresh governance decision. Stale snapshots, revocation, or drift
+in purpose, ordered projection, restriction, subject, authority scope, or policy
+decision fail closed. The result keeps the original grant digest and reports
+fresh authorization and policy digests separately; one is source provenance and
+the other is application-time authority, so callers must not substitute them.
+Marciana or QueryGraph can consume this through an optional adapter. LakeCat
+does not add a revalidation REST route, and normal Iceberg clients do not depend
+on the proof schema.
+
 QueryGraph and QGLake handoff surfaces are product integration surfaces, not
 standard Iceberg semantics. QueryGraph needs bootstrap evidence, management
 inventory, table and view manifests, OpenLineage event hashes, graph import
@@ -1657,7 +1678,7 @@ be shared.
 | Iceberg REST namespace and table paths | Standard catalog compatibility: config, namespace operations, table load/create/drop, metadata locations, requirements, and optimistic commit. | LakeCat serves these paths while attaching server-side audit, outbox, and replay evidence. | Standard floor. Do not make normal clients depend on QueryGraph, TypeSec, Grust, QGLake, or LakeCat proof schemas. |
 | Commit CAS | Optimistic metadata-pointer movement under commit requirements. | LakeCat binds the accepted transition to idempotency, pointer logs, audit, outbox, redacted conflict proof, and replay admission. | CAS is standard. The proof envelope is a future optional reliability-profile candidate. |
 | Idempotency, pointer logs, audit/outbox, replay validation | Not generally standard table semantics, except insofar as they protect commit correctness. | LakeCat makes retries exact, pointer history inspectable, side effects recoverable, and downstream proof admission fail-closed. | LakeCat extension today. Strong candidate for neutral catalog reliability and event-admission profiles. |
-| Governed scan receipts | Iceberg provides table metadata that engines can plan; it does not define TypeSec authorization receipts. | TypeSec decides capability and restriction, LakeCat binds the receipt to catalog state, and Sail produces bounded table work. | Extension today. Plausible future proof-carrying scan profile if policy-engine-neutral and engine-neutral. |
+| Governed scan grants | Iceberg provides table metadata that engines can plan; it does not define TypeSec authorization receipts or cognition grants. | TypeSec decides capability and restriction, Sail produces bounded table work, and LakeCat issues, durably stores, and freshly revalidates a secret-free proof over both. | Additive extension today. It stays beside standard Iceberg routes and is consumed through an optional in-process adapter. |
 | Governed credential receipts | Credential vending is catalog-adjacent, but broad governance proof is outside ordinary table semantics. | Raw credential vending is a deliberate audited exception; governed Sail-planned work is the default for agents. | Extension today. Possible governed credential-posture profile if redacted and policy-neutral. |
 | QueryGraph/QGLake/OpenLineage/bootstrap/management/view/commit proof | Not required for standard table access. | QueryGraph consumes catalog anchors, OpenLineage hashes, view receipt chains, credential posture, graph/import hashes, and replay verdicts. | Product integration. Extract only narrow neutral shapes, such as event identity, lineage binding, view lifecycle proof, and commit proof. |
 | Typed Iceberg v4 behavior | Belongs to Iceberg table semantics as the format evolves. | LakeCat should preserve compatibility while Sail grows typed support for table and view metadata, deletes, planning, metadata-as-data, and commit validation. | Engine and Iceberg work. JSON passthrough is a bridge, not a final LakeCat-owned semantics layer. |
@@ -2171,13 +2192,13 @@ LakeCat is a direction more than a single release. The next stage should keep
 the architecture more true without pushing engine, graph, or security semantics
 back into the catalog.
 
-Marciana v1 is complete as a durable local-service proof; implementing agent
-memory is therefore not a LakeCat backlog item. LakeCat's future opportunity is
-narrower: let a downstream QueryGraph workflow bind an allowed answer to the
-catalog receipt, scan-plan, snapshot, bootstrap, and OpenLineage hashes that
-justify it, so those LakeCat-owned anchors become Marciana provenance without
-copying raw table data into the catalog or making LakeCat responsible for
-recall.
+Implementing agent memory is not a LakeCat backlog item. LakeCat now owns the
+narrow governed-source boundary needed by downstream Marciana work: a durable
+secret-free scan grant plus fresh in-process revalidation of current catalog and
+policy state. Marciana still owns cognition, proposals, protected memory,
+jobs, and recall; its optional LakeCat adapter joins the original grant and
+fresh authority evidence to the TypeSec application request without copying raw
+table data into the catalog.
 
 1. Point the Sail git dependency at upstream (or a published crate) only after
    the required helpers land there, then retire the querygraph/sail `lakecat`
@@ -2198,10 +2219,10 @@ recall.
    substrate while preserving the locked receipt-chain and graph-handoff proof.
 7. Prove the bootstrap bundle through QueryGraph import on every meaningful
    public-surface change, and keep local release evidence ahead of cloud CI.
-8. Define an optional handoff profile that binds governed answer text to
-   LakeCat receipt and lineage hashes before qg-rust writes it to Marciana,
-   while keeping capability minting, content rehydration, and recall wholly in
-   TypeSec and QueryGraph.
+8. Keep the governed-scan proof schema versioned and exercise the optional
+   Marciana/QueryGraph adapter against LakeCat's in-process revalidation API,
+   while keeping capability minting, content rehydration, cognition, and recall
+   outside LakeCat.
 
 That optional binding must preserve the upstream v1 limits rather than turning
 them into LakeCat claims. `MemoryId::next()` is process-local, so a new write

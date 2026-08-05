@@ -39,6 +39,7 @@ pub(crate) struct MemoryState {
     pub(crate) view_version_receipts: Vec<MemoryViewVersionReceipt>,
     pub(crate) policy_bindings: BTreeMap<String, PolicyBinding>,
     pub(crate) soft_deletes: BTreeMap<String, SoftDeleteRecord>,
+    pub(crate) governed_scan_grants: BTreeMap<String, GovernedScanGrant>,
 }
 
 #[derive(Debug, Clone)]
@@ -413,6 +414,41 @@ impl CatalogStore for MemoryCatalogStore {
                 Ok(commit.record.clone())
             })
             .collect()
+    }
+
+    async fn save_governed_scan_grant(
+        &self,
+        grant: GovernedScanGrant,
+    ) -> LakeCatResult<GovernedScanGrant> {
+        grant.validate()?;
+        let mut state = self.state.write().await;
+        if let Some(existing) = state.governed_scan_grants.get(&grant.proof.grant_id) {
+            if existing.has_same_stable_evidence(&grant) {
+                return Ok(existing.clone());
+            }
+            return Err(LakeCatError::Conflict(
+                "governed scan grant id was reused with different evidence".to_string(),
+            ));
+        }
+        state
+            .governed_scan_grants
+            .insert(grant.proof.grant_id.clone(), grant.clone());
+        Ok(grant)
+    }
+
+    async fn load_governed_scan_grant(&self, grant_id: &str) -> LakeCatResult<GovernedScanGrant> {
+        validate_governed_scan_grant_id(grant_id)?;
+        let state = self.state.read().await;
+        let grant = state
+            .governed_scan_grants
+            .get(grant_id)
+            .cloned()
+            .ok_or_else(|| LakeCatError::NotFound {
+                object: "governed scan grant",
+                name: grant_id.to_string(),
+            })?;
+        grant.validate()?;
+        Ok(grant)
     }
 
     async fn upsert_server(&self, server: ServerRecord) -> LakeCatResult<ServerRecord> {
