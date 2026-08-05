@@ -5,7 +5,7 @@
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
   <meta name="author" content="Alexy Khrabrov" />
-  <meta name="dcterms.date" content="2026-07-15" />
+  <meta name="dcterms.date" content="2026-08-05" />
   <title>Future Work</title>
   <style>
     div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
@@ -15,8 +15,12 @@
     ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
     */
     span.smallcaps{font-variant: small-caps;}
-    div.columns{display: flex; gap: min(4vw, 1.5em);}
-    div.column{flex: auto; overflow-x: auto;}
+    div.columns{display: flex; gap: 1.5em;}
+    div.column{flex: auto;}
+    @media screen {
+    div.columns{gap: min(4vw, 1.5em);}
+    div.column{overflow-x: auto;}
+    }
     div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
     /* The extra [class] is a hack that increases specificity enough to
        override a similar rule in reveal.js */
@@ -54,14 +58,14 @@ class="header-section-number">18</span> Future Work</h1>
 <p>LakeCat is a direction more than a single release. The next stage
 should keep the architecture more true without pushing engine, graph, or
 security semantics back into the catalog.</p>
-<p>Marciana v1 is complete as a durable local-service proof;
-implementing agent memory is therefore not a LakeCat backlog item.
-LakeCat’s future opportunity is narrower: let a downstream QueryGraph
-workflow bind an allowed answer to the catalog receipt, scan-plan,
-snapshot, bootstrap, and OpenLineage hashes that justify it, so those
-LakeCat-owned anchors become Marciana provenance without copying raw
-table data into the catalog or making LakeCat responsible for
-recall.</p>
+<p>Implementing agent memory is not a LakeCat backlog item. LakeCat now
+owns the narrow governed-source boundary needed by downstream Marciana
+work: a durable secret-free scan grant plus fresh in-process
+revalidation of current catalog and policy state. Marciana still owns
+cognition, proposals, protected memory, jobs, and recall; its optional
+LakeCat adapter joins the original grant and fresh authority evidence to
+the TypeSec application request without copying raw table data into the
+catalog.</p>
 <ol type="1">
 <li>Point the Sail git dependency at upstream (or a published crate)
 only after the required helpers land there, then retire the
@@ -88,10 +92,10 @@ locked receipt-chain and graph-handoff proof.</li>
 <li>Prove the bootstrap bundle through QueryGraph import on every
 meaningful public-surface change, and keep local release evidence ahead
 of cloud CI.</li>
-<li>Define an optional handoff profile that binds governed answer text
-to LakeCat receipt and lineage hashes before qg-rust writes it to
-Marciana, while keeping capability minting, content rehydration, and
-recall wholly in TypeSec and QueryGraph.</li>
+<li>Keep the governed-scan proof schema versioned and exercise the
+optional Marciana/QueryGraph adapter against LakeCat’s in-process
+revalidation API, while keeping capability minting, content rehydration,
+cognition, and recall outside LakeCat.</li>
 </ol>
 <p>That optional binding must preserve the upstream v1 limits rather
 than turning them into LakeCat claims. <code>MemoryId::next()</code> is
