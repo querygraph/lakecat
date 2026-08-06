@@ -4,7 +4,7 @@ use serde_json::{Map, Value, json};
 use super::{GOVERNED_SCAN_PROOF_VERSION, GovernedScanProof, GovernedScanProofEvidence};
 use crate::{LakeCatError, LakeCatResult, TableIdent, content_hash_bytes};
 
-const PROOF_DOMAIN: &str = "lakecat.governed-scan-proof.digest.v1";
+const PROOF_DOMAIN: &str = "lakecat.governed-scan-proof.digest.v2";
 const PLAN_DOMAIN: &str = "lakecat.governed-scan-plan.digest.v1";
 const AUTHORIZATION_DOMAIN: &str = "lakecat.authorization-decision.digest.v1";
 const POLICY_DOMAIN: &str = "lakecat.scan-policy-decision.digest.v1";
@@ -13,6 +13,7 @@ const POLICY_DOMAIN: &str = "lakecat.scan-policy-decision.digest.v1";
 #[serde(rename_all = "camelCase")]
 struct ProofDigestFields<'a> {
     version: &'static str,
+    catalog_identity: &'a super::GovernedScanCatalogIdentity,
     table: &'a TableIdent,
     table_version: u64,
     snapshot_id: i64,
@@ -29,6 +30,7 @@ impl<'a> From<&'a GovernedScanProofEvidence> for ProofDigestFields<'a> {
     fn from(evidence: &'a GovernedScanProofEvidence) -> Self {
         Self {
             version: GOVERNED_SCAN_PROOF_VERSION,
+            catalog_identity: &evidence.catalog_identity,
             table: &evidence.table,
             table_version: evidence.table_version,
             snapshot_id: evidence.snapshot_id,
@@ -47,16 +49,17 @@ impl<'a> From<&'a GovernedScanProof> for ProofDigestFields<'a> {
     fn from(proof: &'a GovernedScanProof) -> Self {
         Self {
             version: GOVERNED_SCAN_PROOF_VERSION,
-            table: &proof.table,
-            table_version: proof.table_version,
-            snapshot_id: proof.snapshot_id,
-            plan_task_digest: &proof.plan_task_digest,
-            principal_subject: &proof.principal_subject,
-            purpose: &proof.purpose,
-            effective_projection: &proof.effective_projection,
-            identity_context_digest: &proof.identity_context_digest,
-            authorization_receipt_digest: &proof.authorization_receipt_digest,
-            policy_decision_digest: &proof.policy_decision_digest,
+            catalog_identity: proof.catalog_identity(),
+            table: proof.table(),
+            table_version: proof.table_version(),
+            snapshot_id: proof.snapshot_id(),
+            plan_task_digest: proof.plan_task_digest(),
+            principal_subject: proof.principal_subject(),
+            purpose: proof.purpose(),
+            effective_projection: proof.effective_projection(),
+            identity_context_digest: proof.identity_context_digest(),
+            authorization_receipt_digest: proof.authorization_receipt_digest(),
+            policy_decision_digest: proof.policy_decision_digest(),
         }
     }
 }

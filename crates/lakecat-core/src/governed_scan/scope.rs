@@ -1,8 +1,10 @@
-use serde::Serialize;
+use std::fmt;
+
+use serde::{Deserialize, Deserializer, Serialize};
 
 use super::digest::domain_hash;
 use super::{GovernedScanProof, validate_governed_scan_text};
-use crate::{LakeCatResult, TableIdent};
+use crate::{LakeCatResult, TableIdent, WarehouseName, content_hash_bytes};
 
 const SNAPSHOT_DOMAIN: &str = "lakecat.governed-scan-snapshot.digest.v1";
 const SOURCE_SCOPE_DOMAIN: &str = "lakecat.governed-scan-source-scope.digest.v1";
@@ -12,21 +14,85 @@ pub const GOVERNED_SCAN_SNAPSHOT_VERSION: &str = "lakecat.governed-scan-snapshot
 /// Version embedded in canonical governed-scan source-scope evidence.
 pub const GOVERNED_SCAN_SOURCE_SCOPE_VERSION: &str = "lakecat.governed-scan-source-scope.v1";
 
+/// Stable catalog identity selected by trusted LakeCat service configuration.
+///
+/// This type validates canonical shape, not deployment authenticity. Remote
+/// request data must never be promoted into a catalog identity; the service
+/// owns one instance and binds it into every proof it issues.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, Hash)]
+#[serde(transparent)]
+pub struct GovernedScanCatalogIdentity(String);
+
+impl GovernedScanCatalogIdentity {
+    /// Validate a catalog identity supplied by trusted process configuration.
+    pub fn new(value: impl Into<String>) -> LakeCatResult<Self> {
+        let value = value.into();
+        validate_governed_scan_text(&value)?;
+        Ok(Self(value))
+    }
+
+    /// Derive the default identity for a single-warehouse LakeCat service.
+    pub fn for_warehouse(warehouse: &WarehouseName) -> Self {
+        let readable = format!("lakecat://{}", warehouse.as_str());
+        if validate_governed_scan_text(&readable).is_ok() {
+            Self(readable)
+        } else {
+            let bounded = format!(
+                "lakecat://warehouse/{}",
+                content_hash_bytes(warehouse.as_str().as_bytes())
+            );
+            debug_assert!(validate_governed_scan_text(&bounded).is_ok());
+            Self(bounded)
+        }
+    }
+
+    /// Borrow the canonical identity text.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl<'de> Deserialize<'de> for GovernedScanCatalogIdentity {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::new(value).map_err(serde::de::Error::custom)
+    }
+}
+
+impl fmt::Display for GovernedScanCatalogIdentity {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
 /// LakeCat-owned snapshot and grant-aware source identities from one proof
 /// validation pass.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GovernedScanDigests {
+    snapshot_digest: String,
+    source_scope_digest: String,
+}
+
+impl GovernedScanDigests {
     /// Catalog, table version, and snapshot identity without grant scope.
-    pub snapshot_digest: String,
+    pub fn snapshot_digest(&self) -> &str {
+        &self.snapshot_digest
+    }
+
     /// Snapshot identity composed with the durable governed grant.
-    pub source_scope_digest: String,
+    pub fn source_scope_digest(&self) -> &str {
+        &self.source_scope_digest
+    }
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SnapshotDigestFields<'a> {
     version: &'static str,
-    catalog_identity: &'a str,
+    catalog_identity: &'a GovernedScanCatalogIdentity,
     table: &'a TableIdent,
     table_version: u64,
     snapshot_id: i64,
@@ -40,37 +106,20 @@ struct SourceScopeFields<'a> {
     grant_id: &'a str,
 }
 
-/// Canonical identity of one catalog table version and snapshot. This does not
-/// authenticate the caller that supplied `catalog_identity`.
-pub fn governed_scan_snapshot_digest(
-    catalog_identity: &str,
-    proof: &GovernedScanProof,
-) -> LakeCatResult<String> {
-    validate_scope_inputs(catalog_identity, proof)?;
-    snapshot_digest_after_validation(catalog_identity, proof)
-}
-
-/// Compute snapshot and grant-aware source identity after one validation pass.
-pub fn governed_scan_digests(
-    catalog_identity: &str,
-    proof: &GovernedScanProof,
-) -> LakeCatResult<GovernedScanDigests> {
-    validate_scope_inputs(catalog_identity, proof)?;
-    let snapshot_digest = snapshot_digest_after_validation(catalog_identity, proof)?;
-    let source_scope_digest = source_scope_digest(&snapshot_digest, &proof.grant_id)?;
+/// Compute the canonical snapshot and grant-aware source identities from one
+/// integrity-validated, catalog-bound proof pass.
+///
+/// This pure canonicalizer does not reload the durable grant or revalidate
+/// authorization. Authority consumers use the sealed result from
+/// `lakecat-service`.
+pub fn governed_scan_digests(proof: &GovernedScanProof) -> LakeCatResult<GovernedScanDigests> {
+    validate_scope_inputs(proof)?;
+    let snapshot_digest = snapshot_digest_after_validation(proof)?;
+    let source_scope_digest = source_scope_digest(&snapshot_digest, proof.grant_id())?;
     Ok(GovernedScanDigests {
         snapshot_digest,
         source_scope_digest,
     })
-}
-
-/// Canonical identity of one validated snapshot plus its durable governed
-/// grant. This does not authenticate the supplied catalog identity.
-pub fn governed_scan_source_scope_digest(
-    catalog_identity: &str,
-    proof: &GovernedScanProof,
-) -> LakeCatResult<String> {
-    Ok(governed_scan_digests(catalog_identity, proof)?.source_scope_digest)
 }
 
 fn source_scope_digest(snapshot_digest: &str, grant_id: &str) -> LakeCatResult<String> {
@@ -84,23 +133,19 @@ fn source_scope_digest(snapshot_digest: &str, grant_id: &str) -> LakeCatResult<S
     )
 }
 
-fn validate_scope_inputs(catalog_identity: &str, proof: &GovernedScanProof) -> LakeCatResult<()> {
-    validate_governed_scan_text(catalog_identity)?;
+fn validate_scope_inputs(proof: &GovernedScanProof) -> LakeCatResult<()> {
     proof.validate_integrity()
 }
 
-fn snapshot_digest_after_validation(
-    catalog_identity: &str,
-    proof: &GovernedScanProof,
-) -> LakeCatResult<String> {
+fn snapshot_digest_after_validation(proof: &GovernedScanProof) -> LakeCatResult<String> {
     domain_hash(
         SNAPSHOT_DOMAIN,
         &SnapshotDigestFields {
             version: GOVERNED_SCAN_SNAPSHOT_VERSION,
-            catalog_identity,
-            table: &proof.table,
-            table_version: proof.table_version,
-            snapshot_id: proof.snapshot_id,
+            catalog_identity: proof.catalog_identity(),
+            table: proof.table(),
+            table_version: proof.table_version(),
+            snapshot_id: proof.snapshot_id(),
         },
     )
 }

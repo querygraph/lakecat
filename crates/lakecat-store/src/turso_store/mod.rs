@@ -1009,17 +1009,17 @@ impl CatalogStore for TursoCatalogStore {
                      ) values (?1, ?2, ?3, ?4, ?5, ?6)
                      on conflict(grant_id) do nothing",
                     (
-                        grant.proof.grant_id.as_str(),
-                        table_key(&grant.proof.table),
-                        grant.proof.snapshot_id,
-                        grant.proof.principal_subject.as_str(),
+                        grant.proof.grant_id(),
+                        table_key(grant.proof.table()),
+                        grant.proof.snapshot_id(),
+                        grant.proof.principal_subject(),
                         encode_json(&grant)?,
                         grant.issued_at.to_rfc3339(),
                     ),
                 )
                 .await
                 .map_err(turso_error)?;
-                let existing = load_turso_governed_scan_grant(conn, &grant.proof.grant_id)
+                let existing = load_turso_governed_scan_grant(conn, grant.proof.grant_id())
                     .await?
                     .ok_or_else(|| {
                         LakeCatError::Internal(
@@ -1046,7 +1046,7 @@ impl CatalogStore for TursoCatalogStore {
                 object: "governed scan grant",
                 name: grant_id.to_string(),
             })?;
-        if grant.proof.grant_id != grant_id {
+        if grant.proof.grant_id() != grant_id {
             return Err(LakeCatError::Internal(
                 "governed scan grant row id does not match stored evidence".to_string(),
             ));
@@ -2227,10 +2227,10 @@ fn validate_turso_governed_scan_grant(
     row_issued_at: DateTime<Utc>,
 ) -> LakeCatResult<()> {
     grant.validate()?;
-    if table_key(&grant.proof.table) != row_table_key
-        || grant.proof.snapshot_id != row_snapshot_id
-        || grant.proof.principal_subject != row_principal_subject
-        || grant.proof.grant_id != row_grant_id
+    if table_key(grant.proof.table()) != row_table_key
+        || grant.proof.snapshot_id() != row_snapshot_id
+        || grant.proof.principal_subject() != row_principal_subject
+        || grant.proof.grant_id() != row_grant_id
         || grant.issued_at != row_issued_at
     {
         return Err(LakeCatError::Internal(

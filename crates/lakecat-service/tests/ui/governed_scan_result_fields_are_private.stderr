@@ -1,0 +1,25 @@
+error[E0451]: fields `snapshot_digest` and `source_scope_digest` of struct `GovernedScanDigests` are private
+ --> tests/ui/governed_scan_result_fields_are_private.rs:7:9
+  |
+6 |     let _ = GovernedScanDigests {
+  |             ------------------- in this type
+7 |         snapshot_digest,
+  |         ^^^^^^^^^^^^^^^ private field
+8 |         source_scope_digest,
+  |         ^^^^^^^^^^^^^^^^^^^ private field
+
+error[E0451]: fields `proof`, `digests`, `fresh_authorization_digest`, `fresh_policy_decision_digest` and `revalidated_at` of struct `RevalidatedGovernedScanGrant` are private
+  --> tests/ui/governed_scan_result_fields_are_private.rs:20:9
+   |
+19 |     let _ = RevalidatedGovernedScanGrant {
+   |             ---------------------------- in this type
+20 |         proof,
+   |         ^^^^^ private field
+21 |         digests,
+   |         ^^^^^^^ private field
+22 |         fresh_authorization_digest,
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^ private field
+23 |         fresh_policy_decision_digest,
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ private field
+24 |         revalidated_at,
+   |         ^^^^^^^^^^^^^^ private field

@@ -422,7 +422,7 @@ impl CatalogStore for MemoryCatalogStore {
     ) -> LakeCatResult<GovernedScanGrant> {
         grant.validate()?;
         let mut state = self.state.write().await;
-        if let Some(existing) = state.governed_scan_grants.get(&grant.proof.grant_id) {
+        if let Some(existing) = state.governed_scan_grants.get(grant.proof.grant_id()) {
             if existing.has_same_stable_evidence(&grant) {
                 return Ok(existing.clone());
             }
@@ -432,7 +432,7 @@ impl CatalogStore for MemoryCatalogStore {
         }
         state
             .governed_scan_grants
-            .insert(grant.proof.grant_id.clone(), grant.clone());
+            .insert(grant.proof.grant_id().to_owned(), grant.clone());
         Ok(grant)
     }
 

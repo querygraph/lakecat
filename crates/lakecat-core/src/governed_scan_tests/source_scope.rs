@@ -3,9 +3,9 @@ use serde_json::json;
 use super::evidence;
 use crate::TableName;
 use crate::governed_scan::{
-    GOVERNED_SCAN_SNAPSHOT_VERSION, GOVERNED_SCAN_SOURCE_SCOPE_VERSION, GovernedScanProof,
-    MAX_GOVERNED_SCAN_TEXT_BYTES, governed_evidence_digest, governed_plan_digest,
-    governed_scan_digests, governed_scan_snapshot_digest, governed_scan_source_scope_digest,
+    GOVERNED_SCAN_SNAPSHOT_VERSION, GOVERNED_SCAN_SOURCE_SCOPE_VERSION,
+    GovernedScanCatalogIdentity, GovernedScanProof, MAX_GOVERNED_SCAN_TEXT_BYTES,
+    governed_evidence_digest, governed_plan_digest, governed_scan_digests,
 };
 
 const SNAPSHOT_DOMAIN: &str = "lakecat.governed-scan-snapshot.digest.v1";
@@ -17,35 +17,31 @@ fn source_scope_uses_the_canonical_lakecat_shape_and_domain() {
     let snapshot_evidence = json!({
         "version": GOVERNED_SCAN_SNAPSHOT_VERSION,
         "catalogIdentity": "lakecat-production",
-        "table": proof.table,
-        "tableVersion": proof.table_version,
-        "snapshotId": proof.snapshot_id,
+        "table": proof.table(),
+        "tableVersion": proof.table_version(),
+        "snapshotId": proof.snapshot_id(),
     });
     let expected_snapshot = governed_evidence_digest(SNAPSHOT_DOMAIN, &snapshot_evidence).unwrap();
     assert_eq!(
-        governed_scan_snapshot_digest("lakecat-production", &proof).unwrap(),
+        governed_scan_digests(&proof).unwrap().snapshot_digest(),
         expected_snapshot
     );
 
     let scope_evidence = json!({
         "version": GOVERNED_SCAN_SOURCE_SCOPE_VERSION,
         "snapshotDigest": expected_snapshot,
-        "grantId": proof.grant_id,
+        "grantId": proof.grant_id(),
     });
     let expected = governed_evidence_digest(SOURCE_SCOPE_DOMAIN, &scope_evidence).unwrap();
-    let paired = governed_scan_digests("lakecat-production", &proof).unwrap();
-    assert_eq!(paired.snapshot_digest, expected_snapshot);
-    assert_eq!(paired.source_scope_digest, expected);
-    assert_eq!(
-        governed_scan_source_scope_digest("lakecat-production", &proof).unwrap(),
-        paired.source_scope_digest
-    );
+    let paired = governed_scan_digests(&proof).unwrap();
+    assert_eq!(paired.snapshot_digest(), expected_snapshot);
+    assert_eq!(paired.source_scope_digest(), expected);
     assert_ne!(
-        paired.source_scope_digest,
+        paired.source_scope_digest(),
         governed_evidence_digest("lakecat.test.different-source-scope", &scope_evidence).unwrap()
     );
     assert_ne!(
-        governed_scan_snapshot_digest("lakecat-production", &proof).unwrap(),
+        governed_scan_digests(&proof).unwrap().snapshot_digest(),
         governed_evidence_digest("lakecat.test.different-snapshot", &snapshot_evidence).unwrap()
     );
 }
@@ -54,11 +50,14 @@ fn source_scope_uses_the_canonical_lakecat_shape_and_domain() {
 fn source_scope_changes_for_every_owned_scope_dimension() {
     let base_evidence = evidence();
     let base = GovernedScanProof::issue(base_evidence.clone()).unwrap();
-    let base_digest = governed_scan_source_scope_digest("lakecat-a", &base).unwrap();
-    assert_ne!(
-        base_digest,
-        governed_scan_source_scope_digest("lakecat-b", &base).unwrap()
-    );
+    let base_digest = governed_scan_digests(&base)
+        .unwrap()
+        .source_scope_digest()
+        .to_string();
+
+    let mut changed_catalog = base_evidence.clone();
+    changed_catalog.catalog_identity = GovernedScanCatalogIdentity::new("lakecat-other").unwrap();
+    assert_scope_changed(&base_digest, changed_catalog);
 
     let mut changed_table = base_evidence.clone();
     changed_table.table.name = TableName::new("other_events").unwrap();
@@ -76,8 +75,10 @@ fn source_scope_changes_for_every_owned_scope_dimension() {
     changed_grant.plan_task_digest = governed_plan_digest(&[json!({"task": "other"})]).unwrap();
     let changed_grant_proof = GovernedScanProof::issue(changed_grant.clone()).unwrap();
     assert_eq!(
-        governed_scan_snapshot_digest("lakecat-a", &base).unwrap(),
-        governed_scan_snapshot_digest("lakecat-a", &changed_grant_proof).unwrap()
+        governed_scan_digests(&base).unwrap().snapshot_digest(),
+        governed_scan_digests(&changed_grant_proof)
+            .unwrap()
+            .snapshot_digest()
     );
     assert_scope_changed(&base_digest, changed_grant);
 }
@@ -86,11 +87,14 @@ fn source_scope_changes_for_every_owned_scope_dimension() {
 fn snapshot_digest_changes_for_catalog_table_version_and_snapshot() {
     let base_evidence = evidence();
     let base = GovernedScanProof::issue(base_evidence.clone()).unwrap();
-    let base_digest = governed_scan_snapshot_digest("lakecat-a", &base).unwrap();
-    assert_ne!(
-        base_digest,
-        governed_scan_snapshot_digest("lakecat-b", &base).unwrap()
-    );
+    let base_digest = governed_scan_digests(&base)
+        .unwrap()
+        .snapshot_digest()
+        .to_string();
+
+    let mut changed_catalog = base_evidence.clone();
+    changed_catalog.catalog_identity = GovernedScanCatalogIdentity::new("lakecat-other").unwrap();
+    assert_snapshot_changed(&base_digest, changed_catalog);
 
     let mut changed_table = base_evidence.clone();
     changed_table.table.name = TableName::new("other_events").unwrap();
@@ -106,24 +110,19 @@ fn snapshot_digest_changes_for_catalog_table_version_and_snapshot() {
 }
 
 #[test]
-fn source_scope_rejects_uncanonical_catalog_or_drifted_proof() {
-    let proof = GovernedScanProof::issue(evidence()).unwrap();
-    assert!(
-        governed_scan_source_scope_digest(&"c".repeat(MAX_GOVERNED_SCAN_TEXT_BYTES), &proof)
-            .is_ok()
-    );
+fn source_scope_rejects_uncanonical_or_drifted_proof_identity() {
+    assert!(GovernedScanCatalogIdentity::new("c".repeat(MAX_GOVERNED_SCAN_TEXT_BYTES)).is_ok());
     for catalog in ["", " lakecat", "lakecat\n"] {
-        assert!(governed_scan_source_scope_digest(catalog, &proof).is_err());
+        assert!(GovernedScanCatalogIdentity::new(catalog).is_err());
     }
     assert!(
-        governed_scan_source_scope_digest(&"c".repeat(MAX_GOVERNED_SCAN_TEXT_BYTES + 1), &proof)
-            .is_err()
+        GovernedScanCatalogIdentity::new("c".repeat(MAX_GOVERNED_SCAN_TEXT_BYTES + 1)).is_err()
     );
 
-    let mut drifted = proof;
-    drifted.snapshot_id += 1;
-    assert!(governed_scan_snapshot_digest("lakecat", &drifted).is_err());
-    assert!(governed_scan_source_scope_digest("lakecat", &drifted).is_err());
+    let proof = GovernedScanProof::issue(evidence()).unwrap();
+    let mut drifted = serde_json::to_value(proof).unwrap();
+    drifted["catalogIdentity"] = json!("lakecat-other");
+    assert!(serde_json::from_value::<GovernedScanProof>(drifted).is_err());
 }
 
 fn assert_scope_changed(
@@ -133,7 +132,7 @@ fn assert_scope_changed(
     let proof = GovernedScanProof::issue(evidence).unwrap();
     assert_ne!(
         base_digest,
-        governed_scan_source_scope_digest("lakecat-a", &proof).unwrap()
+        governed_scan_digests(&proof).unwrap().source_scope_digest()
     );
 }
 
@@ -144,6 +143,6 @@ fn assert_snapshot_changed(
     let proof = GovernedScanProof::issue(evidence).unwrap();
     assert_ne!(
         base_digest,
-        governed_scan_snapshot_digest("lakecat-a", &proof).unwrap()
+        governed_scan_digests(&proof).unwrap().snapshot_digest()
     );
 }

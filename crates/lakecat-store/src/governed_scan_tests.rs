@@ -11,6 +11,10 @@ use super::*;
 pub(super) fn sample_grant() -> GovernedScanGrant {
     let principal = Principal::new("did:example:agent", PrincipalKind::Agent).unwrap();
     let proof = GovernedScanProof::issue(GovernedScanProofEvidence {
+        catalog_identity: lakecat_core::governed_scan::GovernedScanCatalogIdentity::new(
+            "lakecat-test",
+        )
+        .unwrap(),
         table: TableIdent::new(
             WarehouseName::new("local").unwrap(),
             "default".parse::<Namespace>().unwrap(),
@@ -71,7 +75,7 @@ async fn memory_store_persists_idempotent_secret_free_grants() {
     repeated.issued_at += chrono::Duration::seconds(1);
     store.save_governed_scan_grant(repeated).await.unwrap();
     let loaded = store
-        .load_governed_scan_grant(&grant.proof.grant_id)
+        .load_governed_scan_grant(grant.proof.grant_id())
         .await
         .unwrap();
     assert_eq!(loaded, grant);
@@ -116,7 +120,7 @@ async fn turso_store_reopens_persisted_governed_scan_grants() {
         .await
         .unwrap();
     let loaded = reopened
-        .load_governed_scan_grant(&grant.proof.grant_id)
+        .load_governed_scan_grant(grant.proof.grant_id())
         .await
         .unwrap();
     assert_eq!(loaded, grant);
@@ -147,7 +151,7 @@ async fn turso_store_concurrently_recovers_idempotent_grant_saves() {
     }
     assert!(saved.iter().all(|grant| grant == &saved[0]));
     let loaded = store
-        .load_governed_scan_grant(&base.proof.grant_id)
+        .load_governed_scan_grant(base.proof.grant_id())
         .await
         .unwrap();
     assert_eq!(loaded, saved[0]);

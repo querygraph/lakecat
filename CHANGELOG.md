@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Hardened the governed-scan owner boundary for Marciana: proof schema and
+  proof-digest domain v2 now bind the catalog identity selected by trusted
+  LakeCat process configuration. Snapshot and source-scope v1 digests are
+  derived only from that integrity-checked proof, and fresh revalidation
+  returns an opaque, non-deserializable result containing the exact paired
+  digests, current projection, fresh decision digests, and an observation-only
+  completion time. Catalog drift fails before policy authorization; legacy v1
+  or identity-less proofs fail closed.
+
 - Updated the release-candidate book gate and dependency contract to use the
   delegated FirstPair `--dist` interface for out-of-tree artifacts.
 

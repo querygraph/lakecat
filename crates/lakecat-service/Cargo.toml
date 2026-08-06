@@ -42,3 +42,4 @@ uuid = { workspace = true }
 [dev-dependencies]
 sail-catalog-iceberg = { workspace = true }
 sail-iceberg = { workspace = true }
+trybuild = { workspace = true }

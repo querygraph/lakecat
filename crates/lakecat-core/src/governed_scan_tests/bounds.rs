@@ -121,28 +121,21 @@ fn deserialized_table_components_are_revalidated_without_echoing_input() {
     ] {
         let mut encoded = serde_json::to_value(&base).unwrap();
         encoded["table"][field] = value;
-        let malformed: GovernedScanProof = serde_json::from_value(encoded).unwrap();
-        let error = malformed.validate_integrity().unwrap_err();
-        assert_invalid_argument(error);
+        let error = serde_json::from_value::<GovernedScanProof>(encoded).unwrap_err();
         if !secret.is_empty() {
-            assert!(
-                !malformed
-                    .validate_structure()
-                    .unwrap_err()
-                    .to_string()
-                    .contains(secret)
-            );
+            assert!(!error.to_string().contains(secret));
         }
     }
 }
 
 #[test]
-fn digest_shape_remains_compatible_with_the_v1_contract() {
+fn digest_shape_matches_the_catalog_bound_v2_contract() {
     let evidence = evidence();
     let expected = governed_evidence_digest(
-        "lakecat.governed-scan-proof.digest.v1",
+        "lakecat.governed-scan-proof.digest.v2",
         &json!({
-            "version": "lakecat.governed-scan-proof.v1",
+            "version": "lakecat.governed-scan-proof.v2",
+            "catalogIdentity": evidence.catalog_identity,
             "table": evidence.table,
             "tableVersion": evidence.table_version,
             "snapshotId": evidence.snapshot_id,
@@ -157,7 +150,7 @@ fn digest_shape_remains_compatible_with_the_v1_contract() {
     )
     .unwrap();
     assert_eq!(
-        GovernedScanProof::issue(evidence).unwrap().grant_id,
+        GovernedScanProof::issue(evidence).unwrap().grant_id(),
         expected
     );
 }

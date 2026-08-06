@@ -5,6 +5,7 @@ use crate::{Namespace, TableName, WarehouseName};
 
 pub(super) fn evidence() -> GovernedScanProofEvidence {
     GovernedScanProofEvidence {
+        catalog_identity: GovernedScanCatalogIdentity::new("lakecat-production").unwrap(),
         table: TableIdent::new(
             WarehouseName::new("local").unwrap(),
             "default".parse::<Namespace>().unwrap(),
@@ -39,9 +40,9 @@ fn proof_is_secret_free_and_integrity_bound() {
     assert!(!encoded.contains("signed-receipt"));
     proof.validate_integrity().unwrap();
 
-    let mut changed = proof;
-    changed.snapshot_id += 1;
-    assert!(changed.validate_integrity().is_err());
+    let mut changed = serde_json::to_value(proof).unwrap();
+    changed["snapshotId"] = json!(43);
+    assert!(serde_json::from_value::<GovernedScanProof>(changed).is_err());
 }
 
 #[test]
@@ -73,13 +74,19 @@ fn proof_rejects_noncanonical_digest_encodings() {
     let error = GovernedScanProof::issue(truncated).unwrap_err();
     assert!(error.to_string().contains("canonical lowercase"));
 
-    let mut proof = GovernedScanProof::issue(evidence()).unwrap();
-    proof.grant_id = format!("sha256:{}", proof.grant_id[7..].to_ascii_uppercase());
-    let error = proof.validate_integrity().unwrap_err();
+    let proof = GovernedScanProof::issue(evidence()).unwrap();
+    let mut encoded = serde_json::to_value(proof).unwrap();
+    let grant_id = encoded["grantId"].as_str().unwrap();
+    encoded["grantId"] = json!(format!("sha256:{}", grant_id[7..].to_ascii_uppercase()));
+    let error = serde_json::from_value::<GovernedScanProof>(encoded).unwrap_err();
     assert!(error.to_string().contains("canonical lowercase"));
 }
 
 #[path = "governed_scan_tests/bounds.rs"]
 mod bounds;
+#[path = "governed_scan_tests/catalog_identity.rs"]
+mod catalog_identity;
+#[path = "governed_scan_tests/proof_version.rs"]
+mod proof_version;
 #[path = "governed_scan_tests/source_scope.rs"]
 mod source_scope;

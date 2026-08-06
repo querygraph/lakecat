@@ -39,7 +39,7 @@ impl GovernedScanGrant {
             validate_digest(policy_hash, "policy")?;
         }
         self.proof.validate_integrity()?;
-        if self.principal.subject != self.proof.principal_subject {
+        if self.principal.subject != self.proof.principal_subject() {
             return Err(LakeCatError::Conflict(
                 "governed scan grant principal does not match its proof".to_string(),
             ));

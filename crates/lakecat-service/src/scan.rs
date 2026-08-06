@@ -189,6 +189,7 @@ pub(crate) async fn plan_scan_with_capability(
         })
         .await?;
     let governed_scan_grant = crate::governed_scan::issue_governed_scan_grant(
+        state.catalog_identity(),
         capability,
         table,
         &scan,

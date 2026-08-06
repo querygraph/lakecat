@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use async_trait::async_trait;
 use chrono::Utc;
@@ -15,13 +15,19 @@ use super::*;
 #[derive(Debug)]
 struct SwitchableGovernance {
     allowed: AtomicBool,
+    authorizations: AtomicUsize,
 }
 
 impl SwitchableGovernance {
     fn new(allowed: bool) -> Arc<Self> {
         Arc::new(Self {
             allowed: AtomicBool::new(allowed),
+            authorizations: AtomicUsize::new(0),
         })
+    }
+
+    fn authorization_count(&self) -> usize {
+        self.authorizations.load(Ordering::SeqCst)
     }
 }
 
@@ -31,6 +37,7 @@ impl GovernanceEngine for SwitchableGovernance {
         &self,
         request: AuthorizationRequest,
     ) -> LakeCatResult<AuthorizationReceipt> {
+        self.authorizations.fetch_add(1, Ordering::SeqCst);
         Ok(AuthorizationReceipt {
             principal: request.principal,
             action: request.action,
@@ -81,10 +88,10 @@ impl Fixture {
         store.upsert_policy_binding(binding).await.unwrap();
         let governance = SwitchableGovernance::new(true);
         let state = LakeCatState::new(warehouse, store.clone());
-        let state = LakeCatState {
-            governance: governance.clone(),
-            ..state
-        };
+        let sail = state.sail.clone();
+        let graph = state.graph.clone();
+        let lineage = state.lineage.clone();
+        let state = state.with_integrations(sail, governance.clone(), graph, lineage);
         Self {
             state,
             store,
@@ -128,6 +135,7 @@ impl Fixture {
 
     async fn grant(&self) -> GovernedScanProof {
         let grant = issue_governed_scan_grant(
+            self.state.catalog_identity(),
             &self.capability("verified"),
             &self.table,
             &self.scan(),
@@ -148,6 +156,7 @@ impl Fixture {
 async fn issuance_rejects_unverified_agent_identity() {
     let fixture = Fixture::new().await;
     let error = issue_governed_scan_grant(
+        fixture.state.catalog_identity(),
         &fixture.capability("unverified"),
         &fixture.table,
         &fixture.scan(),
@@ -187,19 +196,19 @@ async fn revalidation_accepts_unchanged_governed_evidence() {
     let revalidated = revalidate_governed_scan_grant(&fixture.state, &proof)
         .await
         .unwrap();
-    assert_eq!(revalidated.grant.proof, proof);
+    assert_eq!(revalidated.proof(), &proof);
     assert!(
         revalidated
-            .fresh_authorization_digest
+            .fresh_authorization_digest()
             .starts_with("sha256:")
     );
     assert_ne!(
-        revalidated.fresh_authorization_digest,
-        proof.authorization_receipt_digest
+        revalidated.fresh_authorization_digest(),
+        proof.authorization_receipt_digest()
     );
     assert_eq!(
-        revalidated.fresh_policy_decision_digest,
-        proof.policy_decision_digest
+        revalidated.fresh_policy_decision_digest(),
+        proof.policy_decision_digest()
     );
 }
 
@@ -265,28 +274,28 @@ async fn revalidation_rejects_projection_change() {
 }
 
 #[tokio::test]
-async fn revalidation_rejects_changed_presented_evidence() {
+async fn proof_decode_rejects_changed_presented_evidence() {
     let fixture = Fixture::new().await;
-    let mut proof = fixture.grant().await;
-    proof.plan_task_digest = governed_plan_digest(&[json!({"plan-task": "different"})]).unwrap();
-    let error = revalidate_governed_scan_grant(&fixture.state, &proof)
-        .await
-        .unwrap_err();
+    let proof = fixture.grant().await;
+    let mut encoded = serde_json::to_value(proof).unwrap();
+    encoded["planTaskDigest"] =
+        json!(governed_plan_digest(&[json!({"plan-task": "different"})]).unwrap());
+    let error = serde_json::from_value::<GovernedScanProof>(encoded).unwrap_err();
     assert!(error.to_string().contains("integrity"));
 }
 
 #[tokio::test]
-async fn revalidation_rejects_unbounded_shape_before_integrity_or_lookup() {
+async fn proof_decode_rejects_unbounded_shape_before_integrity_or_lookup() {
     let fixture = Fixture::new().await;
-    let mut proof = fixture.grant().await;
-    proof.effective_projection = (0..=MAX_GOVERNED_SCAN_PROJECTION_FIELDS)
-        .map(|index| format!("field_{index:03}"))
-        .collect();
+    let proof = fixture.grant().await;
+    let mut encoded = serde_json::to_value(proof).unwrap();
+    encoded["effectiveProjection"] = json!(
+        (0..=MAX_GOVERNED_SCAN_PROJECTION_FIELDS)
+            .map(|index| format!("field_{index:03}"))
+            .collect::<Vec<_>>()
+    );
 
-    let error = revalidate_governed_scan_grant(&fixture.state, &proof)
-        .await
-        .unwrap_err();
-    assert!(matches!(&error, LakeCatError::InvalidArgument(_)));
+    let error = serde_json::from_value::<GovernedScanProof>(encoded).unwrap_err();
     assert!(error.to_string().contains("more than"));
 }
 
@@ -296,12 +305,10 @@ async fn revalidation_reconstructs_deserialized_names_before_lookup() {
     let proof = fixture.grant().await;
     let mut encoded = serde_json::to_value(proof).unwrap();
     encoded["table"]["warehouse"] = json!("private/invalid-warehouse");
-    let malformed: GovernedScanProof = serde_json::from_value(encoded).unwrap();
-
-    let error = revalidate_governed_scan_grant(&fixture.state, &malformed)
-        .await
-        .unwrap_err();
-    assert!(matches!(&error, LakeCatError::InvalidArgument(_)));
+    let error = serde_json::from_value::<GovernedScanProof>(encoded).unwrap_err();
     assert!(error.to_string().contains("valid catalog name"));
     assert!(!error.to_string().contains("private/invalid-warehouse"));
 }
+
+#[path = "governed_scan_tests/owner_result.rs"]
+mod owner_result;

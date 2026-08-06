@@ -36,6 +36,7 @@ sha2 = "0.10"
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
 tower = "0.5"
+trybuild = "1"
 turso = { version = "0.7.0-pre.10", default-features = false }
 url = "2.5.8"
 uuid = { version = "1", features = ["serde", "v4"] }

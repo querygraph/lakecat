@@ -623,24 +623,37 @@ before a store lookup; downstream adapters should call LakeCat's validator
 rather than reproduce these bounds.
 
 LakeCat also owns the canonical governed-scan snapshot and source-scope
-digests. The snapshot v1 domain binds a canonical catalog identity, exact table
+digests. Proof schema v2 and its v2 proof-digest domain bind the stable catalog
+identity selected by trusted LakeCat process configuration at issuance. The
+default derives from the configured warehouse; an explicit
+`LAKECAT_CATALOG_IDENTITY` is a deployment setting, never request data. Its
+bounded type validates canonical shape but does not authenticate arbitrary
+strings, so only the service-owned instance is authoritative. Legacy v1 and
+identity-less proofs fail closed.
+
+The snapshot v1 domain binds that proof-owned catalog identity, exact table
 identity, table version, and snapshot identifier after full proof validation.
 The source-scope v1 domain composes that snapshot digest with the durable grant
-identifier. QueryGraph and Marciana consume these functions instead of
-inventing a second snapshot or grant-scope canonicalizer. They identify catalog
-source scope; validating the catalog string as bounded canonical text does not
-authenticate that string or turn it into TypeSec identity evidence. The paired
-API returns both digests from one proof-validation and snapshot-hash pass.
+identifier. Those two domains remain v1 because their canonical fields and
+meaning did not change; ownership moved into the v2 proof instead. QueryGraph
+and Marciana consume the paired LakeCat result instead of supplying a catalog
+string or inventing another canonicalizer. The core pair has private fields and
+comes from one proof-validation and snapshot-hash pass.
 
 Application-time revalidation does not replace the original decision. LakeCat
 loads the exact durable proof, checks the current table version, snapshot, and
 metadata, reloads current policy bindings and the server-derived restriction,
 and asks the `GovernanceEngine` for a fresh authorization. Revocation or drift
 in subject, authority scope, purpose, ordered projection, restriction, or policy
-decision rejects the grant. A successful result retains the original grant and
-returns separate fresh authorization and policy-decision digests so downstream
-Marciana or QueryGraph code cannot silently substitute fresh evidence for the
-original source binding.
+decision rejects the grant. A successful service operation derives both
+canonical source digests from that same durable proof and returns a sealed,
+non-deserializable result with borrowed getters for the proof, digest pair,
+projection, and separate fresh authorization and policy-decision digests. This
+prevents downstream Marciana or QueryGraph code from constructing a successful
+result, pairing unrelated digests, or silently substituting fresh evidence for
+the original source binding. Its `revalidated_at` value is LakeCat's local
+completion observation only: it is neither signed evidence nor an
+authorization lease.
 
 This remains an additive control-plane boundary. The existing scan-planning
 response may carry `governed-scan-proof`, while ordinary Iceberg REST behavior

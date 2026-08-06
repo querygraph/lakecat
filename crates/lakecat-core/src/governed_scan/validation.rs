@@ -18,6 +18,7 @@ pub const MAX_GOVERNED_SCAN_NAMESPACE_COMPONENTS: usize = 256;
 pub const MAX_GOVERNED_SCAN_NAMESPACE_BYTES: usize = 64 * 1024;
 
 struct ProofFields<'a> {
+    catalog_identity: &'a str,
     table: &'a TableIdent,
     snapshot_id: i64,
     plan_task_digest: &'a str,
@@ -31,6 +32,7 @@ struct ProofFields<'a> {
 
 pub(super) fn validate_evidence(evidence: &GovernedScanProofEvidence) -> LakeCatResult<()> {
     validate_fields(ProofFields {
+        catalog_identity: evidence.catalog_identity.as_str(),
         table: &evidence.table,
         snapshot_id: evidence.snapshot_id,
         plan_task_digest: &evidence.plan_task_digest,
@@ -44,20 +46,21 @@ pub(super) fn validate_evidence(evidence: &GovernedScanProofEvidence) -> LakeCat
 }
 
 pub(super) fn validate_proof_structure(proof: &GovernedScanProof) -> LakeCatResult<()> {
-    if proof.version != GOVERNED_SCAN_PROOF_VERSION {
+    if proof.version() != GOVERNED_SCAN_PROOF_VERSION {
         return Err(invalid("unsupported governed scan proof version"));
     }
-    validate_governed_sha256_digest(&proof.grant_id, "grant id")?;
+    validate_governed_sha256_digest(proof.grant_id(), "grant id")?;
     validate_fields(ProofFields {
-        table: &proof.table,
-        snapshot_id: proof.snapshot_id,
-        plan_task_digest: &proof.plan_task_digest,
-        principal_subject: &proof.principal_subject,
-        purpose: &proof.purpose,
-        effective_projection: &proof.effective_projection,
-        identity_context_digest: &proof.identity_context_digest,
-        authorization_receipt_digest: &proof.authorization_receipt_digest,
-        policy_decision_digest: &proof.policy_decision_digest,
+        catalog_identity: proof.catalog_identity().as_str(),
+        table: proof.table(),
+        snapshot_id: proof.snapshot_id(),
+        plan_task_digest: proof.plan_task_digest(),
+        principal_subject: proof.principal_subject(),
+        purpose: proof.purpose(),
+        effective_projection: proof.effective_projection(),
+        identity_context_digest: proof.identity_context_digest(),
+        authorization_receipt_digest: proof.authorization_receipt_digest(),
+        policy_decision_digest: proof.policy_decision_digest(),
     })
 }
 
@@ -67,6 +70,7 @@ fn validate_fields(fields: ProofFields<'_>) -> LakeCatResult<()> {
             "governed scan proof snapshot identifier must not be negative",
         ));
     }
+    validate_governed_scan_text(fields.catalog_identity)?;
     validate_governed_scan_table(fields.table)?;
     validate_governed_scan_text(fields.principal_subject)?;
     validate_governed_scan_text(fields.purpose)?;
