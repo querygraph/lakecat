@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Updated the release-candidate book gate and dependency contract to use the
+  delegated FirstPair `--dist` interface for out-of-tree artifacts.
+
 - Modernized Service evidence conditionals for current strict Clippy while
   preserving the existing validation order and error behavior.
 
