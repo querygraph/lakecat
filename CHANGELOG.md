@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Modernized Store iterator calls and test values for current strict Clippy;
+  the complete persisted-view constructor keeps its intentional arity explicit.
+
 - Modernized the ODRL allowed-column and row-predicate alias lookup for current
   strict Clippy while preserving the existing first-present-key precedence.
 

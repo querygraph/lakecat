@@ -539,6 +539,8 @@ pub struct ViewColumnRecord {
 }
 
 impl ViewRecord {
+    /// Construct a version-one view from its complete persisted scope.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         warehouse: WarehouseName,
         namespace: Namespace,

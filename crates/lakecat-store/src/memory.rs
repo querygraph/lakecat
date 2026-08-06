@@ -1007,7 +1007,7 @@ impl CatalogStore for MemoryCatalogStore {
                 Ok(profile)
             })
             .collect::<LakeCatResult<Vec<_>>>()?;
-        Ok(storage_profile_match(profiles.into_iter(), table)?
+        Ok(storage_profile_match(profiles, table)?
             .unwrap_or_else(|| StorageProfile::inferred_for_table(table)))
     }
 
@@ -1056,7 +1056,7 @@ impl CatalogStore for MemoryCatalogStore {
                 Ok(binding)
             })
             .collect::<LakeCatResult<Vec<_>>>()?;
-        Ok(policy_bindings_for_table(bindings.into_iter(), table))
+        Ok(policy_bindings_for_table(bindings, table))
     }
 
     async fn record_audit_event(&self, event: CatalogAuditEvent) -> LakeCatResult<()> {
