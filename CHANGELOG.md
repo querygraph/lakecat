@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Modernized the ODRL allowed-column and row-predicate alias lookup for current
+  strict Clippy while preserving the existing first-present-key precedence.
+
 - Promoted `GovernedScanProof` into a production, domain-separated evidence
   contract and added durable, idempotent governed scan grants to both memory
   and Turso catalog stores. Purpose-bound scans now return and audit a
