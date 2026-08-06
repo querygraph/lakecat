@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Modernized the QueryGraph warehouse project fallback for current strict
+  Clippy without changing its existing precedence.
+
 - Modernized Store iterator calls and test values for current strict Clippy;
   the complete persisted-view constructor keeps its intentional arity explicit.
 

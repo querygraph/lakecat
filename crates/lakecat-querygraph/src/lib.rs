@@ -442,7 +442,7 @@ fn insert_tenant_spine(
                 "projectId": tenant
                     .warehouse_project_id
                     .as_deref()
-                    .unwrap_or_else(|| tenant.project_id.as_str()),
+                    .unwrap_or(tenant.project_id.as_str()),
                 "storageRootHash": tenant.warehouse_storage_root_hash,
                 "source": tenant.source
             }),
