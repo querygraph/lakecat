@@ -481,7 +481,7 @@ async fn commit_replays_rest_idempotency_key() {
     assert!(!message.contains("00001.json"));
     assert!(!message.contains("file:///tmp/events/metadata/00001.json"));
 
-    let ident = table_ident("local", "default".to_string(), "events".to_string()).unwrap();
+    let ident = table_ident("local", "default", "events").unwrap();
     let records = store.table_commit_records(&ident, 0, None).await.unwrap();
     assert_eq!(records.len(), 1);
     assert_eq!(records[0].sequence_number, 1);
@@ -549,7 +549,7 @@ async fn commit_replays_standard_rest_idempotency_key() {
         );
     }
 
-    let ident = table_ident("local", "default".to_string(), "events".to_string()).unwrap();
+    let ident = table_ident("local", "default", "events").unwrap();
     let records = store.table_commit_records(&ident, 0, None).await.unwrap();
     assert_eq!(records.len(), 1);
     assert_eq!(
@@ -606,7 +606,7 @@ async fn commit_accepts_matching_standard_and_lakecat_idempotency_headers() {
     let response = app.clone().oneshot(commit).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    let ident = table_ident("local", "default".to_string(), "events".to_string()).unwrap();
+    let ident = table_ident("local", "default", "events").unwrap();
     let records = store.table_commit_records(&ident, 0, None).await.unwrap();
     assert_eq!(
         records[0].idempotency_key_sha256.as_deref(),
@@ -654,7 +654,7 @@ async fn commit_without_rest_idempotency_key_still_drains_replay_evidence() {
     let response = app.clone().oneshot(commit).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    let ident = table_ident("local", "default".to_string(), "events".to_string()).unwrap();
+    let ident = table_ident("local", "default", "events").unwrap();
     let records = store.table_commit_records(&ident, 0, None).await.unwrap();
     assert_eq!(records.len(), 1);
     assert_eq!(records[0].idempotency_key_sha256, None);
@@ -1377,7 +1377,7 @@ async fn idempotent_commit_replay_does_not_rewrite_metadata_object() {
         sentinel
     );
 
-    let ident = table_ident("local", "default".to_string(), "events".to_string()).unwrap();
+    let ident = table_ident("local", "default", "events").unwrap();
     let records = store.table_commit_records(&ident, 0, None).await.unwrap();
     assert_eq!(records.len(), 1);
     assert_eq!(store.load_table(&ident).await.unwrap().version, 1);
@@ -2137,7 +2137,7 @@ async fn idempotent_commit_replay_skips_stale_sail_revalidation() {
         );
     }
 
-    let ident = table_ident("local", "default".to_string(), "events".to_string()).unwrap();
+    let ident = table_ident("local", "default", "events").unwrap();
     let records = store.table_commit_records(&ident, 0, None).await.unwrap();
     assert_eq!(records.len(), 1);
     assert_eq!(store.load_table(&ident).await.unwrap().version, 1);
@@ -2389,7 +2389,7 @@ async fn cas_race_cleans_up_uncommitted_metadata_file_with_redacted_conflict() {
     assert!(!message.contains("00002-rejected.json"));
     assert!(!rejected_metadata_path.exists());
 
-    let ident = table_ident("local", "default".to_string(), "events".to_string()).unwrap();
+    let ident = table_ident("local", "default", "events").unwrap();
     let table = store.load_table(&ident).await.unwrap();
     assert_eq!(
         table.metadata_location.as_deref(),

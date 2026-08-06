@@ -83,7 +83,7 @@ use crate::*;
 async fn sail_local_scan_uses_one_http_authorization_receipt_per_request() {
     let store = MemoryCatalogStore::new();
     let warehouse = WarehouseName::new("local").unwrap();
-    let ident = table_ident("local", "default".to_string(), "events".to_string()).unwrap();
+    let ident = table_ident("local", "default", "events").unwrap();
     store
         .create_namespace(&warehouse, "default".parse::<Namespace>().unwrap())
         .await

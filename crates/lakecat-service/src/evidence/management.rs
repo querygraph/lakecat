@@ -72,13 +72,12 @@ pub(crate) fn validate_storage_profile_upsert_event_evidence(
         .get("warehouse")
         .and_then(Value::as_str)
         .filter(|warehouse| !warehouse.is_empty())
+        && payload_warehouse != warehouse_name
     {
-        if payload_warehouse != warehouse_name {
-            return Err(outbox_evidence_error(
-                event,
-                "storage-profile upsert warehouse must match storage-profile",
-            ));
-        }
+        return Err(outbox_evidence_error(
+            event,
+            "storage-profile upsert warehouse must match storage-profile",
+        ));
     }
     validate_storage_profile_provider_mode_evidence(
         event,
@@ -160,13 +159,13 @@ pub(crate) fn validate_policy_binding_upsert_event_evidence(
             "policy-binding upsert evidence must contain warehouse",
         ));
     };
-    if let Some(payload_warehouse) = payload.get("warehouse").and_then(Value::as_str) {
-        if policy.get("warehouse").and_then(Value::as_str) != Some(payload_warehouse) {
-            return Err(outbox_evidence_error(
-                event,
-                "policy-binding upsert policy warehouse must match payload warehouse",
-            ));
-        }
+    if let Some(payload_warehouse) = payload.get("warehouse").and_then(Value::as_str)
+        && policy.get("warehouse").and_then(Value::as_str) != Some(payload_warehouse)
+    {
+        return Err(outbox_evidence_error(
+            event,
+            "policy-binding upsert policy warehouse must match payload warehouse",
+        ));
     }
     let warehouse = WarehouseName::new(warehouse_name).map_err(|_| {
         outbox_evidence_error(
@@ -309,13 +308,13 @@ pub(crate) fn validate_project_upsert_event_evidence(
         ));
     };
     validate_management_id_evidence(event, project_id, "project upsert", "project-id")?;
-    if let Some(payload_project_id) = payload.get("project-id").and_then(Value::as_str) {
-        if payload_project_id != project_id {
-            return Err(outbox_evidence_error(
-                event,
-                "project upsert project-id must match project-record",
-            ));
-        }
+    if let Some(payload_project_id) = payload.get("project-id").and_then(Value::as_str)
+        && payload_project_id != project_id
+    {
+        return Err(outbox_evidence_error(
+            event,
+            "project upsert project-id must match project-record",
+        ));
     }
     let server_id = optional_string_field(event, project_record, "server-id", "project upsert")?;
     if let Some(server_id) = server_id.as_deref() {
@@ -383,13 +382,13 @@ pub(crate) fn validate_server_upsert_event_evidence(
         ));
     };
     validate_management_id_evidence(event, server_id, "server upsert", "server-id")?;
-    if let Some(payload_server_id) = payload.get("server-id").and_then(Value::as_str) {
-        if payload_server_id != server_id {
-            return Err(outbox_evidence_error(
-                event,
-                "server upsert server-id must match server-record",
-            ));
-        }
+    if let Some(payload_server_id) = payload.get("server-id").and_then(Value::as_str)
+        && payload_server_id != server_id
+    {
+        return Err(outbox_evidence_error(
+            event,
+            "server upsert server-id must match server-record",
+        ));
     }
     let endpoint_url =
         optional_string_field(event, server_record, "endpoint-url", "server upsert")?;
@@ -467,13 +466,13 @@ pub(crate) fn validate_warehouse_upsert_event_evidence(
             "warehouse upsert evidence must contain warehouse",
         ));
     };
-    if let Some(payload_warehouse) = payload.get("warehouse").and_then(Value::as_str) {
-        if warehouse_record.get("warehouse").and_then(Value::as_str) != Some(payload_warehouse) {
-            return Err(outbox_evidence_error(
-                event,
-                "warehouse upsert warehouse must match warehouse-record",
-            ));
-        }
+    if let Some(payload_warehouse) = payload.get("warehouse").and_then(Value::as_str)
+        && warehouse_record.get("warehouse").and_then(Value::as_str) != Some(payload_warehouse)
+    {
+        return Err(outbox_evidence_error(
+            event,
+            "warehouse upsert warehouse must match warehouse-record",
+        ));
     }
     let warehouse = WarehouseName::new(warehouse_name).map_err(|_| {
         outbox_evidence_error(event, "warehouse upsert evidence has invalid warehouse")
@@ -1225,8 +1224,7 @@ pub(crate) fn validate_management_list_event_evidence(
             )?;
             if let Some(project_id) =
                 optional_non_empty_string_field(event, payload, "project-id", "warehouse list")?
-            {
-                if ProjectRecord::new(
+                && ProjectRecord::new(
                     &project_id,
                     None,
                     None,
@@ -1234,15 +1232,14 @@ pub(crate) fn validate_management_list_event_evidence(
                     Principal::anonymous(),
                 )
                 .is_err()
-                {
-                    return Err(outbox_evidence_error(
-                        event,
-                        &format!(
-                            "warehouse list project-id contains an invalid identifier; project-id-hash={}",
-                            content_hash_bytes(project_id.as_bytes())
-                        ),
-                    ));
-                }
+            {
+                return Err(outbox_evidence_error(
+                    event,
+                    &format!(
+                        "warehouse list project-id contains an invalid identifier; project-id-hash={}",
+                        content_hash_bytes(project_id.as_bytes())
+                    ),
+                ));
             }
             validate_required_management_id_array(
                 event,

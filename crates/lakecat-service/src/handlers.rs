@@ -876,12 +876,12 @@ pub(crate) fn table_scan_tasks_fetched_audit_payload(
 }
 
 pub(crate) fn append_read_restriction_requirements(audit_payload: &mut Value, restriction: &Value) {
-    if let Ok(restriction) = serde_json::from_value::<ReadRestriction>(restriction.clone()) {
-        if let Ok(required_projection) = restriction.effective_projection(&[]) {
-            audit_payload["required-projection"] = json!(required_projection.clone());
-            audit_payload["effective-projection"] = json!(required_projection);
-            audit_payload["required-filters"] = json!(restriction.mandatory_filters());
-        }
+    if let Ok(restriction) = serde_json::from_value::<ReadRestriction>(restriction.clone())
+        && let Ok(required_projection) = restriction.effective_projection(&[])
+    {
+        audit_payload["required-projection"] = json!(required_projection.clone());
+        audit_payload["effective-projection"] = json!(required_projection);
+        audit_payload["required-filters"] = json!(restriction.mandatory_filters());
     }
 }
 

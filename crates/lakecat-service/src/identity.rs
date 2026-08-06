@@ -64,15 +64,15 @@ pub(crate) fn request_identity(headers: &HeaderMap) -> Result<RequestIdentity, L
     let typedid = explicit_typedid.or(agent_did);
     let typedid_proof = header("x-lakecat-typedid-proof")?;
     let typedid_envelope = header("x-lakecat-typedid-envelope")?;
-    if typedid_envelope.is_none() {
-        if let Some(proof) = typedid_proof {
-            return Err(LakeCatError::InvalidArgument(format!(
-                "x-lakecat-typedid-proof requires x-lakecat-typedid-envelope; \
-                 typedid-proof-hash={}",
-                content_hash_bytes(proof.as_bytes())
-            ))
-            .into());
-        }
+    if typedid_envelope.is_none()
+        && let Some(proof) = typedid_proof
+    {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "x-lakecat-typedid-proof requires x-lakecat-typedid-envelope; \
+             typedid-proof-hash={}",
+            content_hash_bytes(proof.as_bytes())
+        ))
+        .into());
     }
     let delegation = header("x-lakecat-agent-delegation")?;
     let signed_summary = header("x-lakecat-agent-summary-signature")?;

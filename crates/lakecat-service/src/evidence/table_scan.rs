@@ -473,9 +473,7 @@ pub(crate) fn validate_scan_planned_event_evidence(
         &effective_stats,
     )?;
     validate_read_restriction_purpose_and_ttl(event, payload, "scan-planned")?;
-    if payload.get("read-restriction").is_some() {
-        validate_scan_required_filters_match_row_predicate(event, payload, "scan-planned")?;
-    } else if payload.get("required-filters").is_some() {
+    if payload.get("read-restriction").is_some() || payload.get("required-filters").is_some() {
         validate_scan_required_filters_match_row_predicate(event, payload, "scan-planned")?;
     }
     Ok(())

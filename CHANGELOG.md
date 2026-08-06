@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Modernized Service evidence conditionals for current strict Clippy while
+  preserving the existing validation order and error behavior.
+
 - Modernized the QueryGraph warehouse project fallback for current strict
   Clippy without changing its existing precedence.
 
