@@ -609,6 +609,29 @@ stable idempotency key; a repeated save of the same stable evidence returns the
 winner, while reuse with different evidence fails closed. Turso grants survive
 service reopen and concurrent creation converges on one durable record.
 
+The proof is an untrusted serialized value until LakeCat validates it. The
+shared core validator caps each identity or field at 4 KiB, projections and
+namespaces at 256 entries and 64 KiB aggregate, requires nonempty trimmed text
+without control characters, rejects duplicate projection fields, and reruns
+the same catalog-name rules used by typed warehouse, namespace, and table
+constructors. `issue` and `validate_integrity` use this one contract, and
+integrity validation performs the bounded structural checks before JSON
+serialization or hashing. Durable grants reuse the same rules for principals,
+policy-engine identities, and optional requested projections. Consequently the
+public in-process revalidation API rejects malformed or oversized proof shape
+before a store lookup; downstream adapters should call LakeCat's validator
+rather than reproduce these bounds.
+
+LakeCat also owns the canonical governed-scan snapshot and source-scope
+digests. The snapshot v1 domain binds a canonical catalog identity, exact table
+identity, table version, and snapshot identifier after full proof validation.
+The source-scope v1 domain composes that snapshot digest with the durable grant
+identifier. QueryGraph and Marciana consume these functions instead of
+inventing a second snapshot or grant-scope canonicalizer. They identify catalog
+source scope; validating the catalog string as bounded canonical text does not
+authenticate that string or turn it into TypeSec identity evidence. The paired
+API returns both digests from one proof-validation and snapshot-hash pass.
+
 Application-time revalidation does not replace the original decision. LakeCat
 loads the exact durable proof, checks the current table version, snapshot, and
 metadata, reloads current policy bindings and the server-derived restriction,

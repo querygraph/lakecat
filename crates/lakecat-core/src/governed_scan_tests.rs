@@ -3,7 +3,7 @@ use serde_json::json;
 use super::*;
 use crate::{Namespace, TableName, WarehouseName};
 
-fn evidence() -> GovernedScanProofEvidence {
+pub(super) fn evidence() -> GovernedScanProofEvidence {
     GovernedScanProofEvidence {
         table: TableIdent::new(
             WarehouseName::new("local").unwrap(),
@@ -78,3 +78,8 @@ fn proof_rejects_noncanonical_digest_encodings() {
     let error = proof.validate_integrity().unwrap_err();
     assert!(error.to_string().contains("canonical lowercase"));
 }
+
+#[path = "governed_scan_tests/bounds.rs"]
+mod bounds;
+#[path = "governed_scan_tests/source_scope.rs"]
+mod source_scope;

@@ -1624,6 +1624,26 @@ receipts, TypeDID envelopes, credentials, or signing material. Turso creation is
 idempotent under concurrent requests and the grant remains available after the
 service reopens.
 
+A received proof is not trusted merely because it deserializes. LakeCat's shared
+core validator limits each identity or field to 4 KiB and limits projections and
+namespaces to 256 entries and 64 KiB in total. It also requires trimmed,
+control-free text, unique projection fields, and constructor-equivalent
+validation of warehouse, namespace, and table names. Issuance and integrity
+checking share this contract, and structural validation runs before proof JSON
+is serialized or hashed. Persisted grant principals, policy-engine identities,
+and optional requested projections reuse the same limits. This makes the public
+in-process adapter fail before durable lookup on malformed or oversized proof
+shape and gives Marciana and QueryGraph one LakeCat-owned validator to reuse.
+
+LakeCat likewise owns the canonical snapshot and source-scope digests used by
+those adapters. One v1 domain binds canonical catalog identity to the exact
+table identity, table version, and snapshot after proof validation. A second v1
+domain composes that snapshot digest with the durable grant ID. This removes
+QueryGraph-side snapshot and grant-scope canonicalizers while keeping the claim
+narrow: the digests identify source scope; bounded canonical text does not by
+itself authenticate a catalog identity or supply TypeSec evidence. A paired API
+returns both identities from one proof-validation and snapshot-hash pass.
+
 Before downstream cognition applies a proposal, LakeCat's in-process
 revalidation API reloads the exact grant, checks current table and policy state,
 and requests a fresh governance decision. Stale snapshots, revocation, or drift

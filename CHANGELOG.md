@@ -28,7 +28,15 @@
   policy decisions; Turso grants survive service reopen. The living design and
   book now document LakeCat's authority, the original-versus-fresh evidence
   boundary, and the in-process adapter contract that preserves standard
-  Iceberg REST behavior.
+  Iceberg REST behavior. The public proof boundary now validates canonical,
+  bounded identities, projections, and namespaces before hashing or durable
+  lookup, including constructor-equivalent checks for deserialized catalog
+  names; persisted grant-only fields use the same shared limits. LakeCat now
+  also owns canonical, domain-separated snapshot identity over catalog and
+  exact table/version/snapshot; its source-scope digest composes that identity
+  with the durable grant for downstream QueryGraph and Marciana adapters.
+  Callers needing both receive them from one validation and canonicalization
+  pass.
 
 - Book: moved the LakeCat cover title and subtitle upward and tightened the
   subtitle typography, then regenerated the PDF, EPUB, MOBI, HTML, and

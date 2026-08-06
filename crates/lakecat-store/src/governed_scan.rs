@@ -1,5 +1,7 @@
 use chrono::{DateTime, Utc};
-use lakecat_core::governed_scan::GovernedScanProof;
+use lakecat_core::governed_scan::{
+    GovernedScanProof, validate_governed_scan_requested_projection, validate_governed_scan_text,
+};
 use lakecat_core::{LakeCatError, LakeCatResult, Principal};
 use serde::{Deserialize, Serialize};
 
@@ -20,27 +22,9 @@ pub struct GovernedScanGrant {
 
 impl GovernedScanGrant {
     pub fn validate(&self) -> LakeCatResult<()> {
-        self.proof.validate_integrity()?;
-        if self.principal.subject != self.proof.principal_subject {
-            return Err(LakeCatError::Conflict(
-                "governed scan grant principal does not match its proof".to_string(),
-            ));
-        }
-        if self.policy_engine.trim().is_empty() {
-            return Err(LakeCatError::InvalidArgument(
-                "governed scan grant policy engine must not be blank".to_string(),
-            ));
-        }
-        if self
-            .requested_projection
-            .iter()
-            .any(|column| column.trim().is_empty())
-        {
-            return Err(LakeCatError::InvalidArgument(
-                "governed scan grant requested projection must not contain blank columns"
-                    .to_string(),
-            ));
-        }
+        validate_governed_scan_text(&self.principal.subject)?;
+        validate_governed_scan_text(&self.policy_engine)?;
+        validate_governed_scan_requested_projection(&self.requested_projection)?;
         for (label, digest) in [
             (
                 "authorization context",
@@ -53,6 +37,12 @@ impl GovernedScanGrant {
         }
         if let Some(policy_hash) = self.policy_hash_digest.as_deref() {
             validate_digest(policy_hash, "policy")?;
+        }
+        self.proof.validate_integrity()?;
+        if self.principal.subject != self.proof.principal_subject {
+            return Err(LakeCatError::Conflict(
+                "governed scan grant principal does not match its proof".to_string(),
+            ));
         }
         Ok(())
     }

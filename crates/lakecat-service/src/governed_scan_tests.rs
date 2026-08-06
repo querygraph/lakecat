@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use async_trait::async_trait;
 use chrono::Utc;
+use lakecat_core::governed_scan::MAX_GOVERNED_SCAN_PROJECTION_FIELDS;
 use lakecat_core::sail::ScanPlan;
 use lakecat_core::{Namespace, Principal, PrincipalKind, TableIdent, TableName, WarehouseName};
 use lakecat_security::{AuthorizationReceipt, GovernanceEngine, TableScanCapability};
@@ -272,4 +273,35 @@ async fn revalidation_rejects_changed_presented_evidence() {
         .await
         .unwrap_err();
     assert!(error.to_string().contains("integrity"));
+}
+
+#[tokio::test]
+async fn revalidation_rejects_unbounded_shape_before_integrity_or_lookup() {
+    let fixture = Fixture::new().await;
+    let mut proof = fixture.grant().await;
+    proof.effective_projection = (0..=MAX_GOVERNED_SCAN_PROJECTION_FIELDS)
+        .map(|index| format!("field_{index:03}"))
+        .collect();
+
+    let error = revalidate_governed_scan_grant(&fixture.state, &proof)
+        .await
+        .unwrap_err();
+    assert!(matches!(&error, LakeCatError::InvalidArgument(_)));
+    assert!(error.to_string().contains("more than"));
+}
+
+#[tokio::test]
+async fn revalidation_reconstructs_deserialized_names_before_lookup() {
+    let fixture = Fixture::new().await;
+    let proof = fixture.grant().await;
+    let mut encoded = serde_json::to_value(proof).unwrap();
+    encoded["table"]["warehouse"] = json!("private/invalid-warehouse");
+    let malformed: GovernedScanProof = serde_json::from_value(encoded).unwrap();
+
+    let error = revalidate_governed_scan_grant(&fixture.state, &malformed)
+        .await
+        .unwrap_err();
+    assert!(matches!(&error, LakeCatError::InvalidArgument(_)));
+    assert!(error.to_string().contains("valid catalog name"));
+    assert!(!error.to_string().contains("private/invalid-warehouse"));
 }

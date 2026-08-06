@@ -8,7 +8,7 @@ use serde_json::json;
 
 use super::*;
 
-fn sample_grant() -> GovernedScanGrant {
+pub(super) fn sample_grant() -> GovernedScanGrant {
     let principal = Principal::new("did:example:agent", PrincipalKind::Agent).unwrap();
     let proof = GovernedScanProof::issue(GovernedScanProofEvidence {
         table: TableIdent::new(
@@ -169,3 +169,6 @@ fn temp_database_path() -> String {
         .to_string_lossy()
         .into_owned()
 }
+
+#[path = "governed_scan_tests/bounds.rs"]
+mod bounds;
