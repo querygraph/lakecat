@@ -218,25 +218,39 @@ public in-process adapter fail before durable lookup on malformed or
 oversized proof shape and gives Marciana and QueryGraph one
 LakeCat-owned validator to reuse.</p>
 <p>LakeCat likewise owns the canonical snapshot and source-scope digests
-used by those adapters. One v1 domain binds canonical catalog identity
-to the exact table identity, table version, and snapshot after proof
-validation. A second v1 domain composes that snapshot digest with the
-durable grant ID. This removes QueryGraph-side snapshot and grant-scope
-canonicalizers while keeping the claim narrow: the digests identify
-source scope; bounded canonical text does not by itself authenticate a
-catalog identity or supply TypeSec evidence. A paired API returns both
-identities from one proof-validation and snapshot-hash pass.</p>
+used by those adapters. Proof schema v2 and its v2 proof-digest domain
+now bind the catalog identity selected by trusted LakeCat process
+configuration at issuance. <code>LAKECAT_CATALOG_IDENTITY</code> may set
+it at deployment time; otherwise LakeCat derives a bounded stable
+default from the warehouse. Request data never selects it, and its
+bounded type validates canonical shape rather than authenticating an
+arbitrary string. Legacy v1 and identity-less proofs therefore fail
+closed.</p>
+<p>The snapshot v1 domain binds the proof-owned catalog identity to the
+exact table identity, table version, and snapshot after proof
+validation. The source-scope v1 domain composes that snapshot digest
+with the durable grant ID. Their fields and semantics did not change, so
+both digest domains remain v1 while ownership moved into the v2 proof.
+QueryGraph and Marciana consume one LakeCat-produced pair instead of
+supplying a catalog string or reproducing canonicalization; the pair’s
+private fields come from one proof-validation and snapshot-hash
+pass.</p>
 <p>Before downstream cognition applies a proposal, LakeCat’s in-process
 revalidation API reloads the exact grant, checks current table and
 policy state, and requests a fresh governance decision. Stale snapshots,
 revocation, or drift in purpose, ordered projection, restriction,
-subject, authority scope, or policy decision fail closed. The result
-keeps the original grant digest and reports fresh authorization and
-policy digests separately; one is source provenance and the other is
-application-time authority, so callers must not substitute them.
-Marciana or QueryGraph can consume this through an optional adapter.
-LakeCat does not add a revalidation REST route, and normal Iceberg
-clients do not depend on the proof schema.</p>
+subject, authority scope, or policy decision fail closed. The sealed,
+non-deserializable result keeps the exact durable proof, paired
+snapshot/source-scope digests, and current projection while reporting
+fresh authorization and policy digests separately; callers cannot
+construct the result or pair unrelated values. Its local
+<code>revalidated_at</code> completion time is an observation, not
+signed evidence and not an authorization lease. One digest pair is
+source provenance and the fresh decisions are application-time
+authority, so callers must not substitute them. Marciana or QueryGraph
+can consume this through an optional adapter. LakeCat does not add a
+revalidation REST route, and normal Iceberg clients do not depend on the
+proof schema.</p>
 <p>QueryGraph and QGLake handoff surfaces are product integration
 surfaces, not standard Iceberg semantics. QueryGraph needs bootstrap
 evidence, management inventory, table and view manifests, OpenLineage
