@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -174,11 +175,7 @@ impl ReadRestriction {
         if requested_projection.is_empty() {
             return Ok(allowed_columns.clone());
         }
-        let projection = requested_projection
-            .iter()
-            .filter(|column| allowed_columns.iter().any(|allowed| allowed == *column))
-            .cloned()
-            .collect::<Vec<_>>();
+        let projection = retain_allowed_columns(requested_projection, allowed_columns);
         if projection.is_empty() {
             return Err(LakeCatError::Conflict(
                 "requested projection is outside the governed read restriction".to_string(),
@@ -191,11 +188,7 @@ impl ReadRestriction {
         let Some(allowed_columns) = self.allowed_columns.as_ref() else {
             return requested.to_vec();
         };
-        requested
-            .iter()
-            .filter(|column| allowed_columns.iter().any(|allowed| allowed == *column))
-            .cloned()
-            .collect()
+        retain_allowed_columns(requested, allowed_columns)
     }
 
     pub fn mandatory_filters(&self) -> Vec<Value> {
@@ -530,6 +523,20 @@ fn jsonld_u64_value(value: &Value) -> Option<u64> {
 }
 
 fn dedup_columns(columns: Vec<String>) -> Vec<String> {
+    if columns.len() > LINEAR_COLUMN_LOOKUP_MAX {
+        let mut seen = HashSet::with_capacity(columns.len());
+        let keep = columns
+            .iter()
+            .map(|column| seen.insert(column.as_str()))
+            .collect::<Vec<_>>();
+        drop(seen);
+        return columns
+            .into_iter()
+            .zip(keep)
+            .filter_map(|(column, keep)| keep.then_some(column))
+            .collect();
+    }
+
     let mut out = Vec::with_capacity(columns.len());
     for column in columns {
         if !out.iter().any(|existing| existing == &column) {
@@ -540,8 +547,24 @@ fn dedup_columns(columns: Vec<String>) -> Vec<String> {
 }
 
 fn intersect_columns(left: &[String], right: &[String]) -> Vec<String> {
-    left.iter()
-        .filter(|column| right.iter().any(|allowed| allowed == *column))
+    retain_allowed_columns(left, right)
+}
+
+const LINEAR_COLUMN_LOOKUP_MAX: usize = 32;
+
+fn retain_allowed_columns(requested: &[String], allowed: &[String]) -> Vec<String> {
+    if allowed.len() <= LINEAR_COLUMN_LOOKUP_MAX {
+        return requested
+            .iter()
+            .filter(|column| allowed.iter().any(|allowed| allowed == *column))
+            .cloned()
+            .collect();
+    }
+
+    let allowed = allowed.iter().map(String::as_str).collect::<HashSet<_>>();
+    requested
+        .iter()
+        .filter(|column| allowed.contains(column.as_str()))
         .cloned()
         .collect()
 }

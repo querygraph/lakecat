@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added scale benchmarks for ODRL read-restriction parsing, composition,
+  projection, and statistics filtering. Large column sets now use shared,
+  order-preserving hash indexes while small schemas retain the allocation-light
+  linear path. At 1,024 columns, projection and statistics filtering are about
+  90% faster, one-policy parsing is 89% faster, and two-policy composition is
+  87% faster, with unchanged ordering and duplicate semantics.
+
 - Added a lightweight validated table snapshot for optimistic commits. Turso
   reuses the service's existing catalog read instead of reading and decoding
   the same table again inside the write transaction, while preserving

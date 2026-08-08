@@ -567,6 +567,43 @@ fn read_restriction_narrows_projection_stats_and_filters() {
 }
 
 #[test]
+fn large_read_restrictions_preserve_policy_and_request_order() {
+    let mut left = (0..128)
+        .map(|index| format!("column_{index}"))
+        .collect::<Vec<_>>();
+    left.extend(["column_5".to_string(), "column_100".to_string()]);
+    let mut right = (64..192)
+        .map(|index| format!("column_{index}"))
+        .collect::<Vec<_>>();
+    right.push("column_64".to_string());
+    let left_policy = serde_json::json!({"allowed-columns": left});
+    let right_policy = serde_json::json!({"allowed-columns": right});
+
+    let restriction = ReadRestriction::from_odrl_policies([&left_policy, &right_policy]).unwrap();
+    assert_eq!(
+        restriction.allowed_columns,
+        Some((64..128).map(|index| format!("column_{index}")).collect())
+    );
+
+    let requested = vec![
+        "column_100".to_string(),
+        "outside".to_string(),
+        "column_64".to_string(),
+        "column_100".to_string(),
+    ];
+    let expected = vec![
+        "column_100".to_string(),
+        "column_64".to_string(),
+        "column_100".to_string(),
+    ];
+    assert_eq!(
+        restriction.effective_projection(&requested).unwrap(),
+        expected
+    );
+    assert_eq!(restriction.effective_stats_fields(&requested), expected);
+}
+
+#[test]
 fn table_capabilities_require_matching_allowed_receipts() {
     let table = TableIdent::new(
         WarehouseName::new("local").unwrap(),
