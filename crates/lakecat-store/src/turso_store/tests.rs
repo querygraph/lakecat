@@ -4684,6 +4684,128 @@ async fn turso_store_rejects_blank_pending_outbox_sinks() {
 }
 
 #[tokio::test]
+async fn turso_snapshot_commit_cas_rejects_a_stale_same_pointer_version() {
+    let store = TursoCatalogStore::in_memory().await.unwrap();
+    let warehouse = WarehouseName::new("local").unwrap();
+    let namespace = "default".parse::<Namespace>().unwrap();
+    store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
+    let ident = TableIdent::new(warehouse, namespace, TableName::new("events").unwrap());
+    let metadata_location = "file:///tmp/events/metadata/00000.json";
+    store
+        .create_table(TableRecord::new(
+            ident.clone(),
+            "file:///tmp/events".to_string(),
+            Some(metadata_location.to_string()),
+            serde_json::json!({"format-version": 3, "counter": 0}),
+            Principal::anonymous(),
+        ))
+        .await
+        .unwrap();
+
+    let current = store.load_table(&ident).await.unwrap();
+    let snapshot_a = TableCommitSnapshot::try_from_table(&current).unwrap();
+    let snapshot_b = TableCommitSnapshot::try_from_table(&current).unwrap();
+    let commit = |counter| TableCommit {
+        requirements: vec![],
+        updates: vec![serde_json::json!({"action": "set-properties"})],
+        expected_previous_metadata_location: Some(metadata_location.to_string()),
+        // Keeping the pointer unchanged proves that the version predicate, not
+        // just the metadata-location predicate, rejects the stale snapshot.
+        new_metadata_location: Some(metadata_location.to_string()),
+        new_metadata: Some(serde_json::json!({
+            "format-version": 3,
+            "counter": counter,
+        })),
+        idempotency_key: None,
+        idempotency_request_hash: None,
+        principal: Principal::anonymous(),
+        authorization_receipt: None,
+    };
+
+    let committed = store
+        .commit_table_with_snapshot(snapshot_a, commit(1))
+        .await
+        .unwrap();
+    assert_eq!(committed.version, 1);
+    assert_eq!(committed.metadata["counter"], serde_json::json!(1));
+
+    let err = store
+        .commit_table_with_snapshot(snapshot_b, commit(2))
+        .await
+        .unwrap_err();
+    let LakeCatError::Conflict(message) = err else {
+        panic!("expected stale snapshot conflict");
+    };
+    assert!(message.contains("table version changed"));
+    assert!(message.contains("expected-version=0"));
+    assert!(message.contains("actual-version=1"));
+    let current = store.load_table(&ident).await.unwrap();
+    assert_eq!(current.version, 1);
+    assert_eq!(current.metadata["counter"], serde_json::json!(1));
+    assert_eq!(store.count_rows("metadata_pointer_log").await.unwrap(), 1);
+    assert_eq!(store.count_rows("audit_events").await.unwrap(), 1);
+    assert_eq!(store.count_rows("outbox_events").await.unwrap(), 1);
+}
+
+#[tokio::test]
+async fn turso_snapshot_commit_rejects_a_table_deleted_after_the_snapshot() {
+    let store = TursoCatalogStore::in_memory().await.unwrap();
+    let warehouse = WarehouseName::new("local").unwrap();
+    let namespace = "default".parse::<Namespace>().unwrap();
+    store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
+    let ident = TableIdent::new(warehouse, namespace, TableName::new("events").unwrap());
+    let metadata_location = "file:///tmp/events/metadata/00000.json";
+    store
+        .create_table(TableRecord::new(
+            ident.clone(),
+            "file:///tmp/events".to_string(),
+            Some(metadata_location.to_string()),
+            serde_json::json!({"format-version": 3}),
+            Principal::anonymous(),
+        ))
+        .await
+        .unwrap();
+    let snapshot =
+        TableCommitSnapshot::try_from_table(&store.load_table(&ident).await.unwrap()).unwrap();
+    store
+        .soft_delete_table(&ident, Principal::anonymous(), None)
+        .await
+        .unwrap();
+
+    let err = store
+        .commit_table_with_snapshot(
+            snapshot,
+            TableCommit {
+                requirements: vec![],
+                updates: vec![],
+                expected_previous_metadata_location: Some(metadata_location.to_string()),
+                new_metadata_location: Some("file:///tmp/events/metadata/00001.json".to_string()),
+                new_metadata: Some(serde_json::json!({"format-version": 3})),
+                idempotency_key: None,
+                idempotency_request_hash: None,
+                principal: Principal::anonymous(),
+                authorization_receipt: None,
+            },
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        LakeCatError::NotFound {
+            object: "table",
+            ..
+        }
+    ));
+    assert_eq!(store.count_rows("metadata_pointer_log").await.unwrap(), 0);
+}
+
+#[tokio::test]
 async fn turso_store_allows_only_one_concurrent_metadata_pointer_commit() {
     let store = TursoCatalogStore::in_memory().await.unwrap();
     let warehouse = WarehouseName::new("local").unwrap();

@@ -67,6 +67,53 @@ impl TableRecord {
     }
 }
 
+/// Immutable table state captured by a validated catalog read for an
+/// optimistic commit.
+///
+/// The snapshot intentionally excludes table metadata: commit preparation
+/// already consumes that document and produces its replacement. Stores can use
+/// these stable fields to avoid reading and decoding the same table twice while
+/// still enforcing a version and metadata-pointer compare-and-swap.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TableCommitSnapshot {
+    ident: TableIdent,
+    location: String,
+    metadata_location: Option<String>,
+    created: AuditStamp,
+    updated_at: DateTime<Utc>,
+    version: u64,
+}
+
+impl TableCommitSnapshot {
+    pub fn try_from_table(table: &TableRecord) -> LakeCatResult<Self> {
+        table.validate()?;
+        Ok(Self {
+            ident: table.ident.clone(),
+            location: table.location.clone(),
+            metadata_location: table.metadata_location.clone(),
+            created: table.created.clone(),
+            updated_at: table.updated_at,
+            version: table.version,
+        })
+    }
+
+    pub fn ident(&self) -> &TableIdent {
+        &self.ident
+    }
+
+    pub(crate) fn to_table_record(&self, metadata: Value) -> TableRecord {
+        TableRecord {
+            ident: self.ident.clone(),
+            location: self.location.clone(),
+            metadata_location: self.metadata_location.clone(),
+            metadata,
+            created: self.created.clone(),
+            updated_at: self.updated_at,
+            version: self.version,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TableCommit {
     pub requirements: Vec<Value>,

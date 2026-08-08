@@ -7,7 +7,7 @@ use lakecat_core::{LakeCatError, WarehouseName, content_hash_json};
 use lakecat_sail::catalog_provider::{
     LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
 };
-use lakecat_store::{TableCommit, table_ident};
+use lakecat_store::{TableCommit, TableCommitSnapshot, table_ident};
 use serde_json::json;
 
 use crate::*;
@@ -53,6 +53,7 @@ pub(crate) async fn commit_table_in_warehouse(
     }
     let current = state.store.load_table(capability.table()).await?;
     let storage_profile = state.store.storage_profile_for_table(&current).await?;
+    let commit_snapshot = TableCommitSnapshot::try_from_table(&current)?;
     let current_metadata_location = current.metadata_location.clone();
     let commit_plan = state
         .sail
@@ -82,8 +83,8 @@ pub(crate) async fn commit_table_in_warehouse(
     } = commit_plan;
     let table = match state
         .store
-        .commit_table(
-            capability.table(),
+        .commit_table_with_snapshot(
+            commit_snapshot,
             TableCommit {
                 requirements,
                 updates,

@@ -18,12 +18,12 @@ use turso::{Connection, Database, Row, Value as TursoValue};
 
 use crate::{
     CatalogAuditEvent, CatalogStore, GovernedScanGrant, OutboxEvent, PolicyBinding, ProjectRecord,
-    ServerRecord, SoftDeleteRecord, StorageProfile, TableCommit, TableCommitRecord, TableRecord,
-    ViewRecord, ViewVersionReceipt, WarehouseRecord, metadata_pointer_conflict,
-    namespace_not_empty, namespace_not_found, policy_binding_key, policy_bindings_for_table,
-    require_expected_view_version, storage_profile_key, storage_profile_match, table_key,
-    validate_expected_view_version, validate_project_id, validate_view_receipt_chains, view_key,
-    view_key_parts, view_receipt_hash,
+    ServerRecord, SoftDeleteRecord, StorageProfile, TableCommit, TableCommitRecord,
+    TableCommitSnapshot, TableRecord, ViewRecord, ViewVersionReceipt, WarehouseRecord,
+    metadata_pointer_conflict, namespace_not_empty, namespace_not_found, policy_binding_key,
+    policy_bindings_for_table, require_expected_view_version, storage_profile_key,
+    storage_profile_match, table_key, validate_expected_view_version, validate_project_id,
+    validate_view_receipt_chains, view_key, view_key_parts, view_receipt_hash,
 };
 
 #[derive(Debug, Clone)]
@@ -222,6 +222,30 @@ impl TursoCatalogStore {
             conn: Some(conn),
             pool: &self.read_pool,
         })
+    }
+
+    async fn commit_table_inner(
+        &self,
+        ident: &TableIdent,
+        snapshot: Option<TableCommitSnapshot>,
+        commit: TableCommit,
+    ) -> LakeCatResult<TableRecord> {
+        commit.validate()?;
+        let ident = Arc::new(ident.clone());
+        let commit = Arc::new(commit);
+        let snapshot = snapshot.map(Arc::new);
+        self.write_txn(move |conn| {
+            let ident = Arc::clone(&ident);
+            let commit = Arc::clone(&commit);
+            let snapshot = snapshot.as_ref().map(Arc::clone);
+            Box::pin(async move {
+                let ident = ident.as_ref();
+                let commit = commit.as_ref();
+                let snapshot = snapshot.as_deref();
+                commit_table_transaction(conn, ident, snapshot, commit).await
+            })
+        })
+        .await
     }
 
     #[cfg(test)]
@@ -464,38 +488,7 @@ impl CatalogStore for TursoCatalogStore {
 
     async fn load_table(&self, ident: &TableIdent) -> LakeCatResult<TableRecord> {
         let conn = self.checkout_read_conn()?;
-        let mut rows = conn
-            .query(
-                "select record_json, table_key, warehouse, namespace_path, table_name
-                     from tables t
-                     where t.table_key = ?1
-                       and not exists (
-                         select 1 from soft_deletes d where d.table_key = t.table_key
-                       )",
-                (table_key(ident),),
-            )
-            .await
-            .map_err(turso_error)?;
-        rows.next()
-            .await
-            .map_err(turso_error)?
-            .map(|row| {
-                let table: TableRecord = decode_json(row_string(&row, 0)?)?;
-                crate::validate_table_record_scope(
-                    &table,
-                    ident,
-                    &row_string(&row, 1)?,
-                    &row_string(&row, 2)?,
-                    &row_string(&row, 3)?,
-                    &row_string(&row, 4)?,
-                )?;
-                Ok(table)
-            })
-            .transpose()?
-            .ok_or_else(|| LakeCatError::NotFound {
-                object: "table",
-                name: ident.stable_id(),
-            })
+        load_active_table(&conn, ident).await
     }
 
     async fn commit_table(
@@ -503,242 +496,17 @@ impl CatalogStore for TursoCatalogStore {
         ident: &TableIdent,
         commit: TableCommit,
     ) -> LakeCatResult<TableRecord> {
-        commit.validate()?;
-        let ident = Arc::new(ident.clone());
-        let commit = Arc::new(commit);
-        self.write_txn(move |conn| {
-            let ident = Arc::clone(&ident);
-            let commit = Arc::clone(&commit);
-            Box::pin(async move {
-                let ident = ident.as_ref();
-                let commit = commit.as_ref();
-        let table_key_value = table_key(ident);
-        let request_hash = content_hash_json(&serde_json::json!({
-            "requirements": &commit.requirements,
-            "updates": &commit.updates,
-            "expected_previous_metadata_location": &commit.expected_previous_metadata_location,
-            "new_metadata_location": &commit.new_metadata_location,
-            "new_metadata": &commit.new_metadata,
-        }))?;
-        let idempotency_request_hash = commit
-            .idempotency_request_hash
-            .as_deref()
-            .unwrap_or(request_hash.as_str());
-        if let Some(idempotency_key) = commit.idempotency_key.as_deref() {
-            let idem_key = idempotency_record_key(ident, idempotency_key);
-            let mut rows = conn
-                    .query(
-                        "select table_key, request_hash, response_json from idempotency_records where idem_key = ?1",
-                        (idem_key,),
-                    )
-                    .await
-                    .map_err(turso_error)?;
-            if let Some(row) = rows.next().await.map_err(turso_error)? {
-                crate::validate_idempotency_record_table_key(&row_string(&row, 0)?, ident)?;
-                let replay_hash = row_string(&row, 1)?;
-                crate::validate_idempotency_record_request_hash(&replay_hash)?;
-                if replay_hash != idempotency_request_hash {
-                    return Err(LakeCatError::Conflict(format!(
-                        "idempotency key reused with different commit request for {}",
-                        ident.stable_id()
-                    )));
-                }
-                let table = decode_json(row_string(&row, 2)?)?;
-                crate::validate_table_record_identity(&table, ident)?;
-                return Ok(table);
-            }
-        }
+        self.commit_table_inner(ident, None, commit).await
+    }
 
-        let mut rows = conn
-            .query(
-                "select record_json, table_key, warehouse, namespace_path, table_name
-                     from tables t
-                     where t.table_key = ?1
-                       and not exists (
-                         select 1 from soft_deletes d where d.table_key = t.table_key
-                       )",
-                (table_key_value.as_str(),),
-            )
+    async fn commit_table_with_snapshot(
+        &self,
+        snapshot: TableCommitSnapshot,
+        commit: TableCommit,
+    ) -> LakeCatResult<TableRecord> {
+        let ident = snapshot.ident().clone();
+        self.commit_table_inner(&ident, Some(snapshot), commit)
             .await
-            .map_err(turso_error)?;
-        let Some(row) = rows.next().await.map_err(turso_error)? else {
-            return Err(LakeCatError::NotFound {
-                object: "table",
-                name: ident.stable_id(),
-            });
-        };
-        let mut table: TableRecord = decode_json(row_string(&row, 0)?)?;
-        crate::validate_table_record_scope(
-            &table,
-            ident,
-            &row_string(&row, 1)?,
-            &row_string(&row, 2)?,
-            &row_string(&row, 3)?,
-            &row_string(&row, 4)?,
-        )?;
-        let previous_metadata_location = table.metadata_location.clone();
-        let idempotency_key_sha256 = commit
-            .idempotency_key
-            .as_ref()
-            .map(|key| content_hash_bytes(key.as_bytes()));
-        if previous_metadata_location != commit.expected_previous_metadata_location {
-            return Err(metadata_pointer_conflict(
-                ident,
-                commit.expected_previous_metadata_location.as_deref(),
-                previous_metadata_location.as_deref(),
-            ));
-        }
-        table.metadata_location.clone_from(&commit.new_metadata_location);
-        if let Some(new_metadata) = commit.new_metadata.as_ref() {
-            table.metadata.clone_from(new_metadata);
-        }
-        table.version += 1;
-        table.updated_at = Utc::now();
-        table.metadata["lakecat:version"] = serde_json::json!(table.version);
-        table.metadata["lakecat:last-request-hash"] = serde_json::json!(request_hash);
-
-        let table_value = serde_json::to_value(&table).map_err(|err| {
-            LakeCatError::Internal(format!("failed to encode table commit response: {err}"))
-        })?;
-        let (table_json, table_response_hash) = encode_json_with_hash(&table_value)?;
-        let committed_at = table.updated_at.to_rfc3339();
-        let updated_rows = conn
-            .execute(
-                "update tables
-                 set metadata_location = ?2, version = ?3, record_json = ?4, updated_at = ?5
-                 where table_key = ?1
-                   and (
-                     (metadata_location is null and ?6 is null)
-                     or metadata_location = ?7
-                   )",
-                (
-                    table_key_value.as_str(),
-                    table.metadata_location.as_deref(),
-                    checked_i64(table.version, "table version")?,
-                    table_json.as_str(),
-                    committed_at.as_str(),
-                    commit.expected_previous_metadata_location.as_deref(),
-                    commit.expected_previous_metadata_location.as_deref(),
-                ),
-            )
-            .await
-            .map_err(turso_error)?;
-        if updated_rows == 0 {
-            return Err(metadata_pointer_conflict(
-                ident,
-                commit.expected_previous_metadata_location.as_deref(),
-                previous_metadata_location.as_deref(),
-            ));
-        }
-
-        let record = TableCommitRecord {
-            table: ident.clone(),
-            previous_metadata_location,
-            new_metadata_location: table.metadata_location.clone(),
-            sequence_number: table.version,
-            principal: commit.principal.clone(),
-            format_version: crate::table_commit_format_version(&table),
-            snapshot_id: crate::table_commit_snapshot_id(&table),
-            policy_hash: crate::table_commit_policy_hash(commit.authorization_receipt.as_ref()),
-            request_hash,
-            response_hash: table_response_hash,
-            idempotency_key_sha256,
-            committed_at: table.updated_at,
-        };
-        let principal_json = encode_json(&record.principal)?;
-        let record_json = encode_json(&record)?;
-        conn.execute(
-            "insert into metadata_pointer_log (
-                    table_key, sequence_number, previous_metadata_location,
-                    new_metadata_location, principal_json, request_hash,
-                    committed_at, record_json
-                 )
-                 values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            (
-                table_key_value.as_str(),
-                checked_i64(record.sequence_number, "sequence number")?,
-                record.previous_metadata_location.as_deref(),
-                record.new_metadata_location.as_deref(),
-                principal_json.as_str(),
-                record.request_hash.as_str(),
-                committed_at.as_str(),
-                record_json.as_str(),
-            ),
-        )
-        .await
-        .map_err(turso_error)?;
-
-        let audit_payload = serde_json::json!({
-            "event-type": "table.commit",
-            "table": ident,
-            "commit": record,
-            "authorization-receipt": &commit.authorization_receipt,
-        });
-        let (audit_payload_json, audit_payload_hash) = encode_json_with_hash(&audit_payload)?;
-        conn.execute(
-            "insert into audit_events (
-                    event_id, event_type, table_key, principal_json,
-                    request_hash, event_json, created_at
-                 )
-                 values (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            (
-                audit_payload_hash.as_str(),
-                "table.commit",
-                table_key_value.as_str(),
-                principal_json.as_str(),
-                audit_payload_hash.as_str(),
-                audit_payload_json.as_str(),
-                committed_at.as_str(),
-            ),
-        )
-        .await
-        .map_err(turso_error)?;
-
-        let mut outbox_payload = audit_payload;
-        outbox_payload["audit-event-id"] = JsonValue::String(audit_payload_hash);
-        let (outbox_payload_json, outbox_payload_hash) =
-            encode_json_with_hash(&outbox_payload)?;
-        conn.execute(
-            "insert into outbox_events (
-                    event_id, sink, event_type, payload_json, created_at
-                 )
-                 values (?1, ?2, ?3, ?4, ?5)",
-            (
-                outbox_payload_hash,
-                "lakecat.lineage-and-graph",
-                "table.commit",
-                outbox_payload_json,
-                committed_at.as_str(),
-            ),
-        )
-        .await
-        .map_err(turso_error)?;
-
-        if let Some(idempotency_key) = commit.idempotency_key.as_deref() {
-            conn.execute(
-                "insert into idempotency_records (
-                        idem_key, table_key, request_hash, response_json, created_at
-                     )
-                     values (?1, ?2, ?3, ?4, ?5)",
-                (
-                    idempotency_record_key(ident, &idempotency_key),
-                    table_key_value.as_str(),
-                    commit
-                        .idempotency_request_hash
-                        .as_deref()
-                        .unwrap_or(record.request_hash.as_str()),
-                    table_json.as_str(),
-                    committed_at.as_str(),
-                ),
-            )
-            .await
-            .map_err(turso_error)?;
-        }
-
-        Ok(table)
-            })
-        })
-        .await
     }
 
     async fn replay_table_commit(
@@ -2259,6 +2027,265 @@ const TURSO_MIGRATION: &[&str] = &[
     "create index if not exists idx_soft_deletes_warehouse
             on soft_deletes (warehouse, namespace_path, table_name)",
 ];
+
+async fn commit_table_transaction(
+    conn: &Connection,
+    ident: &TableIdent,
+    snapshot: Option<&TableCommitSnapshot>,
+    commit: &TableCommit,
+) -> LakeCatResult<TableRecord> {
+    let table_key_value = table_key(ident);
+    let request_hash = content_hash_json(&serde_json::json!({
+        "requirements": &commit.requirements,
+        "updates": &commit.updates,
+        "expected_previous_metadata_location": &commit.expected_previous_metadata_location,
+        "new_metadata_location": &commit.new_metadata_location,
+        "new_metadata": &commit.new_metadata,
+    }))?;
+    let idempotency_request_hash = commit
+        .idempotency_request_hash
+        .as_deref()
+        .unwrap_or(request_hash.as_str());
+    if let Some(idempotency_key) = commit.idempotency_key.as_deref() {
+        let idem_key = idempotency_record_key(ident, idempotency_key);
+        let mut rows = conn
+            .query(
+                "select table_key, request_hash, response_json
+                 from idempotency_records where idem_key = ?1",
+                (idem_key,),
+            )
+            .await
+            .map_err(turso_error)?;
+        if let Some(row) = rows.next().await.map_err(turso_error)? {
+            crate::validate_idempotency_record_table_key(&row_string(&row, 0)?, ident)?;
+            let replay_hash = row_string(&row, 1)?;
+            crate::validate_idempotency_record_request_hash(&replay_hash)?;
+            if replay_hash != idempotency_request_hash {
+                return Err(LakeCatError::Conflict(format!(
+                    "idempotency key reused with different commit request for {}",
+                    ident.stable_id()
+                )));
+            }
+            let table = decode_json(row_string(&row, 2)?)?;
+            crate::validate_table_record_identity(&table, ident)?;
+            return Ok(table);
+        }
+    }
+
+    // Service commits always supply the metadata produced by Sail. Direct
+    // callers that omit replacement metadata retain the existing read path so
+    // the old document remains available.
+    let mut table = match (snapshot, commit.new_metadata.as_ref()) {
+        (Some(snapshot), Some(_)) => snapshot.to_table_record(JsonValue::Null),
+        _ => load_active_table(conn, ident).await?,
+    };
+    let expected_version = table.version;
+    let previous_metadata_location = table.metadata_location.clone();
+    let idempotency_key_sha256 = commit
+        .idempotency_key
+        .as_ref()
+        .map(|key| content_hash_bytes(key.as_bytes()));
+    if previous_metadata_location != commit.expected_previous_metadata_location {
+        return Err(metadata_pointer_conflict(
+            ident,
+            commit.expected_previous_metadata_location.as_deref(),
+            previous_metadata_location.as_deref(),
+        ));
+    }
+    table
+        .metadata_location
+        .clone_from(&commit.new_metadata_location);
+    if let Some(new_metadata) = commit.new_metadata.as_ref() {
+        table.metadata.clone_from(new_metadata);
+    }
+    table.version += 1;
+    table.updated_at = Utc::now();
+    table.metadata["lakecat:version"] = serde_json::json!(table.version);
+    table.metadata["lakecat:last-request-hash"] = serde_json::json!(request_hash);
+
+    let table_value = serde_json::to_value(&table).map_err(|err| {
+        LakeCatError::Internal(format!("failed to encode table commit response: {err}"))
+    })?;
+    let (table_json, table_response_hash) = encode_json_with_hash(&table_value)?;
+    let committed_at = table.updated_at.to_rfc3339();
+    let updated_rows = conn
+        .execute(
+            "update tables
+             set metadata_location = ?2, version = ?3, record_json = ?4, updated_at = ?5
+             where table_key = ?1
+               and version = ?8
+               and not exists (
+                 select 1 from soft_deletes d where d.table_key = ?1
+               )
+               and (
+                 (metadata_location is null and ?6 is null)
+                 or metadata_location = ?7
+               )",
+            (
+                table_key_value.as_str(),
+                table.metadata_location.as_deref(),
+                checked_i64(table.version, "table version")?,
+                table_json.as_str(),
+                committed_at.as_str(),
+                commit.expected_previous_metadata_location.as_deref(),
+                commit.expected_previous_metadata_location.as_deref(),
+                checked_i64(expected_version, "expected table version")?,
+            ),
+        )
+        .await
+        .map_err(turso_error)?;
+    if updated_rows == 0 {
+        let actual = load_active_table(conn, ident).await?;
+        if actual.metadata_location != commit.expected_previous_metadata_location {
+            return Err(metadata_pointer_conflict(
+                ident,
+                commit.expected_previous_metadata_location.as_deref(),
+                actual.metadata_location.as_deref(),
+            ));
+        }
+        return Err(LakeCatError::Conflict(format!(
+            "table version changed for {}; expected-version={expected_version}; actual-version={}",
+            ident.stable_id(),
+            actual.version
+        )));
+    }
+
+    let record = TableCommitRecord {
+        table: ident.clone(),
+        previous_metadata_location,
+        new_metadata_location: table.metadata_location.clone(),
+        sequence_number: table.version,
+        principal: commit.principal.clone(),
+        format_version: crate::table_commit_format_version(&table),
+        snapshot_id: crate::table_commit_snapshot_id(&table),
+        policy_hash: crate::table_commit_policy_hash(commit.authorization_receipt.as_ref()),
+        request_hash,
+        response_hash: table_response_hash,
+        idempotency_key_sha256,
+        committed_at: table.updated_at,
+    };
+    let principal_json = encode_json(&record.principal)?;
+    let record_json = encode_json(&record)?;
+    conn.execute(
+        "insert into metadata_pointer_log (
+                table_key, sequence_number, previous_metadata_location,
+                new_metadata_location, principal_json, request_hash,
+                committed_at, record_json
+             )
+             values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        (
+            table_key_value.as_str(),
+            checked_i64(record.sequence_number, "sequence number")?,
+            record.previous_metadata_location.as_deref(),
+            record.new_metadata_location.as_deref(),
+            principal_json.as_str(),
+            record.request_hash.as_str(),
+            committed_at.as_str(),
+            record_json.as_str(),
+        ),
+    )
+    .await
+    .map_err(turso_error)?;
+
+    let audit_payload = serde_json::json!({
+        "event-type": "table.commit",
+        "table": ident,
+        "commit": record,
+        "authorization-receipt": &commit.authorization_receipt,
+    });
+    let (audit_payload_json, audit_payload_hash) = encode_json_with_hash(&audit_payload)?;
+    conn.execute(
+        "insert into audit_events (
+                event_id, event_type, table_key, principal_json,
+                request_hash, event_json, created_at
+             )
+             values (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        (
+            audit_payload_hash.as_str(),
+            "table.commit",
+            table_key_value.as_str(),
+            principal_json.as_str(),
+            audit_payload_hash.as_str(),
+            audit_payload_json.as_str(),
+            committed_at.as_str(),
+        ),
+    )
+    .await
+    .map_err(turso_error)?;
+
+    let mut outbox_payload = audit_payload;
+    outbox_payload["audit-event-id"] = JsonValue::String(audit_payload_hash);
+    let (outbox_payload_json, outbox_payload_hash) = encode_json_with_hash(&outbox_payload)?;
+    conn.execute(
+        "insert into outbox_events (
+                event_id, sink, event_type, payload_json, created_at
+             )
+             values (?1, ?2, ?3, ?4, ?5)",
+        (
+            outbox_payload_hash,
+            "lakecat.lineage-and-graph",
+            "table.commit",
+            outbox_payload_json,
+            committed_at.as_str(),
+        ),
+    )
+    .await
+    .map_err(turso_error)?;
+
+    if let Some(idempotency_key) = commit.idempotency_key.as_deref() {
+        conn.execute(
+            "insert into idempotency_records (
+                    idem_key, table_key, request_hash, response_json, created_at
+                 )
+                 values (?1, ?2, ?3, ?4, ?5)",
+            (
+                idempotency_record_key(ident, idempotency_key),
+                table_key_value.as_str(),
+                commit
+                    .idempotency_request_hash
+                    .as_deref()
+                    .unwrap_or(record.request_hash.as_str()),
+                table_json.as_str(),
+                committed_at.as_str(),
+            ),
+        )
+        .await
+        .map_err(turso_error)?;
+    }
+
+    Ok(table)
+}
+
+async fn load_active_table(conn: &Connection, ident: &TableIdent) -> LakeCatResult<TableRecord> {
+    let mut rows = conn
+        .query(
+            "select record_json, table_key, warehouse, namespace_path, table_name
+                 from tables t
+                 where t.table_key = ?1
+                   and not exists (
+                     select 1 from soft_deletes d where d.table_key = t.table_key
+                   )",
+            (table_key(ident),),
+        )
+        .await
+        .map_err(turso_error)?;
+    let Some(row) = rows.next().await.map_err(turso_error)? else {
+        return Err(LakeCatError::NotFound {
+            object: "table",
+            name: ident.stable_id(),
+        });
+    };
+    let table: TableRecord = decode_json(row_string(&row, 0)?)?;
+    crate::validate_table_record_scope(
+        &table,
+        ident,
+        &row_string(&row, 1)?,
+        &row_string(&row, 2)?,
+        &row_string(&row, 3)?,
+        &row_string(&row, 4)?,
+    )?;
+    Ok(table)
+}
 
 fn encode_json(value: impl serde::Serialize) -> LakeCatResult<String> {
     serde_json::to_string(&value)

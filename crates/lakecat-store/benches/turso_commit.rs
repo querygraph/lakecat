@@ -1,7 +1,9 @@
+use std::sync::Arc;
+
 use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
 use lakecat_core::{Namespace, Principal, TableIdent, TableName, WarehouseName};
 use lakecat_store::turso_store::TursoCatalogStore;
-use lakecat_store::{CatalogStore, TableCommit, TableRecord};
+use lakecat_store::{CatalogStore, TableCommit, TableCommitSnapshot, TableRecord};
 use serde_json::{Value, json};
 
 fn table_ident() -> TableIdent {
@@ -63,30 +65,35 @@ fn commit(metadata: &Value) -> TableCommit {
     }
 }
 
+async fn benchmark_store(ident: &TableIdent, metadata: &Value) -> Arc<TursoCatalogStore> {
+    let store = TursoCatalogStore::in_memory()
+        .await
+        .expect("create Turso benchmark store");
+    store
+        .create_namespace(&ident.warehouse, ident.namespace.clone())
+        .await
+        .expect("create benchmark namespace");
+    store
+        .create_table(TableRecord::new(
+            ident.clone(),
+            "s3://warehouse/lakecat/events".to_string(),
+            None,
+            metadata.clone(),
+            Principal::anonymous(),
+        ))
+        .await
+        .expect("create benchmark table");
+    store
+}
+
 fn bench_turso_commit(c: &mut Criterion) {
     let runtime = tokio::runtime::Runtime::new().expect("benchmark runtime");
     let metadata = table_metadata();
     let ident = table_ident();
-    let store = runtime.block_on(async {
-        let store = TursoCatalogStore::in_memory()
-            .await
-            .expect("create Turso benchmark store");
-        store
-            .create_namespace(&ident.warehouse, ident.namespace.clone())
-            .await
-            .expect("create benchmark namespace");
-        store
-            .create_table(TableRecord::new(
-                ident.clone(),
-                "s3://warehouse/lakecat/events".to_string(),
-                None,
-                metadata.clone(),
-                Principal::anonymous(),
-            ))
-            .await
-            .expect("create benchmark table");
-        store
-    });
+    let direct_store = runtime.block_on(benchmark_store(&ident, &metadata));
+    let double_read_store = runtime.block_on(benchmark_store(&ident, &metadata));
+    let snapshot_store = runtime.block_on(benchmark_store(&ident, &metadata));
+    let read_store = runtime.block_on(benchmark_store(&ident, &metadata));
     let table_commit = commit(&metadata);
 
     let mut group = c.benchmark_group("turso_catalog_store");
@@ -94,11 +101,36 @@ fn bench_turso_commit(c: &mut Criterion) {
     group.throughput(Throughput::Elements(1));
     group.bench_function("commit_table", |b| {
         b.to_async(&runtime)
-            .iter(|| store.commit_table(black_box(&ident), black_box(table_commit.clone())));
+            .iter(|| direct_store.commit_table(black_box(&ident), black_box(table_commit.clone())));
+    });
+    group.bench_function("load_then_commit_table", |b| {
+        b.to_async(&runtime).iter(|| async {
+            let current = double_read_store
+                .load_table(black_box(&ident))
+                .await
+                .expect("load table before commit");
+            black_box(&current);
+            double_read_store
+                .commit_table(black_box(&ident), black_box(table_commit.clone()))
+                .await
+        });
+    });
+    group.bench_function("load_then_snapshot_commit", |b| {
+        b.to_async(&runtime).iter(|| async {
+            let current = snapshot_store
+                .load_table(black_box(&ident))
+                .await
+                .expect("load table before snapshot commit");
+            let snapshot = TableCommitSnapshot::try_from_table(black_box(&current))
+                .expect("capture commit snapshot");
+            snapshot_store
+                .commit_table_with_snapshot(snapshot, black_box(table_commit.clone()))
+                .await
+        });
     });
     group.bench_function("load_table", |b| {
         b.to_async(&runtime)
-            .iter(|| store.load_table(black_box(&ident)));
+            .iter(|| read_store.load_table(black_box(&ident)));
     });
     group.finish();
 }

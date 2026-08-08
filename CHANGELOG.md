@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added a lightweight validated table snapshot for optimistic commits. Turso
+  reuses the service's existing catalog read instead of reading and decoding
+  the same table again inside the write transaction, while preserving
+  idempotency and enforcing active-table, metadata-pointer, and version
+  compare-and-swap checks. A paired same-container benchmark reduces the
+  load-then-commit path from 762.9 to 697.2 microseconds (8.6%).
+
 - Extended the service commit benchmark to cover both one-field and 100-field
   Iceberg schemas. The handler now moves Sail's prepared metadata and location
   into the store commit instead of deep-cloning them after the metadata write,

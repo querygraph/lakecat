@@ -58,6 +58,19 @@ pub trait CatalogStore: Send + Sync + 'static {
         ident: &TableIdent,
         commit: TableCommit,
     ) -> LakeCatResult<TableRecord>;
+    /// Commit from table state returned by an earlier validated read.
+    ///
+    /// The default preserves compatibility for stores that cannot exploit the
+    /// snapshot. Implementations that override this method must retain the same
+    /// optimistic conflict semantics as [`CatalogStore::commit_table`].
+    async fn commit_table_with_snapshot(
+        &self,
+        snapshot: TableCommitSnapshot,
+        commit: TableCommit,
+    ) -> LakeCatResult<TableRecord> {
+        self.commit_table(snapshot.ident(), commit).await
+    }
+
     async fn replay_table_commit(
         &self,
         _ident: &TableIdent,
