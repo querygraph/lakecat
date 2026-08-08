@@ -126,6 +126,17 @@ fn bench_catalog_scale(c: &mut Criterion) {
             },
         );
         group.bench_with_input(
+            BenchmarkId::new("construction_summary", table_count),
+            &table_count,
+            |b, _| {
+                b.iter(|| {
+                    black_box(&bundle)
+                        .construction_summary()
+                        .expect("summarize constructed benchmark bundle")
+                });
+            },
+        );
+        group.bench_with_input(
             BenchmarkId::new("verify", table_count),
             &table_count,
             |b, _| {

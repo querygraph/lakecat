@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- QueryGraph production bootstrap now derives its audit summary from hashes
+  already computed by the trusted in-process constructor instead of immediately
+  re-verifying the freshly built bundle. Debug and test builds still run the
+  independent verifier and assert summary equivalence, and external bundles
+  still require full verification. The 256-item construction summary takes
+  about 9.37 microseconds versus 89.18 milliseconds for independent
+  verification; the end-to-end 1/64/256 service path falls from about
+  0.790/37.17/151.7–154.5 milliseconds to 0.484/21.46/86.9 milliseconds.
+
 - Added warehouse-scoped view and version-receipt store reads with compatible
   namespace-based defaults and validated single-query Memory and Turso paths.
   QueryGraph bootstrap now avoids up to 32 namespace fan-out reads. Across

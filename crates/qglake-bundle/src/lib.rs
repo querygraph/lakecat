@@ -30,6 +30,23 @@ impl QueryGraphBootstrap {
         Ok(self)
     }
 
+    /// Return the verification-shaped claims captured while this bundle was
+    /// constructed, without recomputing content hashes.
+    ///
+    /// This is only appropriate for an in-process bundle immediately produced
+    /// by a trusted constructor that computed every manifest field. Consumers
+    /// of deserialized or otherwise external bundles must call
+    /// [`Self::verify_manifest`] instead.
+    pub fn construction_summary(&self) -> LakeCatResult<QueryGraphBootstrapVerification> {
+        let import_contract = self.manifest.querygraph_import.as_ref().ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(
+                "QueryGraph bootstrap manifest is missing querygraph-import compatibility contract"
+                    .to_string(),
+            )
+        })?;
+        Ok(self.verification_summary(import_contract))
+    }
+
     pub fn verify_manifest(&self) -> LakeCatResult<QueryGraphBootstrapVerification> {
         if self.manifest.schema_version != "lakecat.querygraph.bootstrap.v1" {
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
@@ -169,7 +186,14 @@ impl QueryGraphBootstrap {
             )));
         }
 
-        Ok(QueryGraphBootstrapVerification {
+        Ok(self.verification_summary(import_contract))
+    }
+
+    fn verification_summary(
+        &self,
+        import_contract: &QueryGraphImportCompatibility,
+    ) -> QueryGraphBootstrapVerification {
+        QueryGraphBootstrapVerification {
             warehouse: self.warehouse.as_str().to_string(),
             table_count: self.tables.len(),
             view_count: self.views.len(),
@@ -203,12 +227,12 @@ impl QueryGraphBootstrap {
                     )
                 })
                 .collect(),
-            bundle_hash,
-            graph_hash,
-            open_lineage_hash,
+            bundle_hash: self.bundle_hash.clone(),
+            graph_hash: self.manifest.graph_hash.clone(),
+            open_lineage_hash: self.manifest.open_lineage_hash.clone(),
             querygraph_import_hash: import_contract.table_only_bundle_hash.clone(),
             standards: self.manifest.standards.clone(),
-        })
+        }
     }
 
     fn computed_bundle_hash(&self) -> LakeCatResult<String> {

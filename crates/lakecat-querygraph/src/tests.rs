@@ -233,6 +233,7 @@ fn projects_iceberg_table_into_querygraph_bundle() {
     assert!(bundle.tables[0].osi.get("semantic_model").is_none());
     assert_eq!(bundle.open_lineage["eventType"], "COMPLETE");
     let verification = bundle.verify_manifest().unwrap();
+    assert_eq!(bundle.construction_summary().unwrap(), verification);
     assert_eq!(verification.table_count, 1);
     assert_eq!(verification.bundle_hash, bundle.bundle_hash);
     assert_eq!(verification.graph_hash, bundle.manifest.graph_hash);

@@ -459,7 +459,12 @@ pub(crate) async fn querygraph_bootstrap(
         tenant,
         view_version_receipts,
     )?;
-    let verification = bundle.verify_manifest()?;
+    let verification = bundle.construction_summary()?;
+    #[cfg(debug_assertions)]
+    {
+        let independently_verified = bundle.verify_manifest()?;
+        debug_assert_eq!(verification, independently_verified);
+    }
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
