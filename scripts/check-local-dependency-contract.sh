@@ -393,7 +393,7 @@ require_pattern 'const graphEdges = graphCount\("graph-edges"\)' scripts/qglake-
 require_pattern 'require_graph_projection_proof' crates/lakecat-cli/src/verify_proof.rs \
   "LakeCat handoff verifier must require graph projection proof"
 
-require_dir ../querygraph/qg-rust
+require_dir ../querygraph
 
 require_pattern 'cargo test -p lakecat-cli --features qglake-fixture qglake_fixture' .github/workflows/ci.yml \
   "manual CI matrix must keep explicit QGLake fixture feature coverage without automatic triggers"
@@ -409,8 +409,8 @@ require_pattern 'cargo test -p lakecat-cli --features qglake-fixture qglake_fixt
 # depends on `qglake-bundle`, it cannot silently drop the receipt-chain validation
 # without dropping the crate. The live handoff (scripts/qglake-handoff-local.sh
 # runs qg-rust `lakecat-verify` against a real bundle) remains the behavioral proof.
-require_file ../querygraph/qg-rust/Cargo.toml
-require_pattern '^qglake-bundle\b' ../querygraph/qg-rust/Cargo.toml \
+require_file ../querygraph/Cargo.toml
+require_pattern '^qglake-bundle\b' ../querygraph/Cargo.toml \
   "the QueryGraph importer must depend on the shared qglake-bundle crate rather than copy LakeCat's bundle wire/validation types"
 
 metadata_json="$tmpdir/metadata.json"

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Updated the QGLake dependency-contract and local handoff scripts for
+  QueryGraph's consolidated repository root.
+
 - Hardened the governed-scan owner boundary for Marciana: proof schema and
   proof-digest domain v2 now bind the catalog identity selected by trusted
   LakeCat process configuration. Snapshot and source-scope v1 digests are
