@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added a bounded end-to-end QueryGraph bootstrap benchmark spanning graph-read
+  authorization, tables and policy bindings, views and version receipts,
+  tenant projection, bundle and manifest construction, audit shaping, and Axum
+  response serialization at 1, 64, and 256 tables plus views. Same-container
+  baselines are about 0.934, 42.9, and 174.0 milliseconds respectively.
+
 - Added capability-access benchmarks for policy read restrictions and cached
   the validated typed restriction when scan and credential authority is
   established. Downstream planners now borrow capabilities, and audit shaping

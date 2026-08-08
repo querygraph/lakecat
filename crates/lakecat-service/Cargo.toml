@@ -54,3 +54,7 @@ required-features = ["sail-local", "turso-local"]
 [[bench]]
 name = "scan_path"
 harness = false
+
+[[bench]]
+name = "querygraph_path"
+harness = false
