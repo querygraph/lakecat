@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- LakeCat now enables RustCrypto's runtime-dispatched assembly SHA-2 backend,
+  accelerating every content and evidence hash while preserving the portable
+  software fallback. On the benchmark runner's ARM SHA2-capable CPU,
+  representative small/100-field JSON hashes fall from about 2.996/61.66 to
+  1.706/33.69 microseconds (43-45%). QueryGraph construction at 256 tables
+  falls from 62.62 to 39.70 milliseconds (36.6%), verification from 46.68 to
+  23.61 milliseconds (49.4%), and the 1/64/256 table-and-view service path
+  from about 0.319/14.56/57.79 to 0.226/9.96/40.24 milliseconds (29-32%).
+
 - QueryGraph full-bundle hashes now share one canonical hashing path between
   construction and verification and stream borrowed projections rather than
   cloning the full bundle into an intermediate JSON tree. Equivalence tests
