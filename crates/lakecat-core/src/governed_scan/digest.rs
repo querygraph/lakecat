@@ -1,8 +1,8 @@
 use serde::Serialize;
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 
 use super::{GOVERNED_SCAN_PROOF_VERSION, GovernedScanProof, GovernedScanProofEvidence};
-use crate::{LakeCatError, LakeCatResult, TableIdent, content_hash_bytes};
+use crate::{LakeCatError, LakeCatResult, TableIdent, content_hash_domain_json};
 
 const PROOF_DOMAIN: &str = "lakecat.governed-scan-proof.digest.v2";
 const PLAN_DOMAIN: &str = "lakecat.governed-scan-plan.digest.v1";
@@ -100,31 +100,26 @@ pub(super) fn domain_hash(
     domain: &str,
     evidence: &(impl Serialize + ?Sized),
 ) -> LakeCatResult<String> {
-    let evidence = serde_json::to_value(evidence).map_err(|error| {
+    let mut evidence = serde_json::to_value(evidence).map_err(|error| {
         LakeCatError::Internal(format!("failed to encode governed scan evidence: {error}"))
     })?;
-    let encoded = serde_json::to_vec(&canonical_json(&evidence)).map_err(|error| {
-        LakeCatError::Internal(format!("failed to encode governed scan evidence: {error}"))
-    })?;
-    let mut input = Vec::with_capacity(domain.len() + encoded.len() + 2);
-    input.extend_from_slice(domain.as_bytes());
-    input.push(0);
-    input.extend_from_slice(&encoded);
-    Ok(content_hash_bytes(&input))
+    canonicalize_json(&mut evidence);
+    content_hash_domain_json(domain, &evidence)
 }
 
-fn canonical_json(value: &Value) -> Value {
+fn canonicalize_json(value: &mut Value) {
     match value {
-        Value::Array(values) => Value::Array(values.iter().map(canonical_json).collect()),
-        Value::Object(values) => {
-            let mut keys = values.keys().collect::<Vec<_>>();
-            keys.sort();
-            let mut canonical = Map::new();
-            for key in keys {
-                canonical.insert(key.clone(), canonical_json(&values[key]));
+        Value::Array(values) => {
+            for value in values {
+                canonicalize_json(value);
             }
-            Value::Object(canonical)
         }
-        value => value.clone(),
+        Value::Object(values) => {
+            for value in values.values_mut() {
+                canonicalize_json(value);
+            }
+            values.sort_keys();
+        }
+        _ => {}
     }
 }

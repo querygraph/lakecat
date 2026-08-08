@@ -251,7 +251,19 @@ where
     let mut writer = Sha256Writer(Sha256::new());
     serde_json::to_writer(&mut writer, value)
         .map_err(|err| LakeCatError::Internal(format!("failed to encode JSON: {err}")))?;
-    Ok(format!("sha256:{}", hex::encode(writer.0.finalize())))
+    Ok(finalize_json_hash(writer))
+}
+
+pub(crate) fn content_hash_domain_json<T>(domain: &str, value: &T) -> LakeCatResult<String>
+where
+    T: Serialize + ?Sized,
+{
+    let mut writer = Sha256Writer(Sha256::new());
+    writer.0.update(domain.as_bytes());
+    writer.0.update([0]);
+    serde_json::to_writer(&mut writer, value)
+        .map_err(|err| LakeCatError::Internal(format!("failed to encode JSON: {err}")))?;
+    Ok(finalize_json_hash(writer))
 }
 
 pub fn content_hash_bytes(bytes: &[u8]) -> String {
@@ -260,6 +272,10 @@ pub fn content_hash_bytes(bytes: &[u8]) -> String {
 }
 
 struct Sha256Writer(Sha256);
+
+fn finalize_json_hash(writer: Sha256Writer) -> String {
+    format!("sha256:{}", hex::encode(writer.0.finalize()))
+}
 
 impl Write for Sha256Writer {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {

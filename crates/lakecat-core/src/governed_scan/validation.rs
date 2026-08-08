@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::HashSet;
 
 use super::{
     GOVERNED_SCAN_PROOF_VERSION, GovernedScanProof, GovernedScanProofEvidence,
@@ -150,7 +150,8 @@ fn validate_projection(fields: &[String], allow_empty: bool, label: &str) -> Lak
         )));
     }
     validate_string_budget(fields, label, MAX_GOVERNED_SCAN_PROJECTION_BYTES)?;
-    let unique = fields.iter().map(String::as_str).collect::<BTreeSet<_>>();
+    let mut unique = HashSet::with_capacity(fields.len());
+    unique.extend(fields.iter().map(String::as_str));
     if unique.len() != fields.len() {
         return Err(invalid(format!(
             "governed scan {label} fields must be unique"

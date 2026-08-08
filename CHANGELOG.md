@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Extended core benchmarks across governed evidence domain hashing, proof
+  issuance, integrity validation, and snapshot/source-scope derivation.
+  Canonical evidence is now sorted in place and streamed with its domain
+  separator directly into SHA-256, avoiding a second JSON tree and two staging
+  buffers; bounded projection uniqueness uses a pre-sized hash set. At the
+  256-field limit, domain hashing is about 42% faster and proof issue,
+  validation, and scope derivation are about 35% faster with unchanged digest,
+  domain-separation, and tamper-detection contracts.
+
 - Added scale benchmarks for OpenLineage projection and hashing plus LakeCat
   graph-event conversion and Grust memory persistence. Deterministic typed JSON
   evidence can now stream through the shared content hasher, so lineage run and

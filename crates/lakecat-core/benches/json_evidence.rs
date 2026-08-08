@@ -1,5 +1,11 @@
-use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
-use lakecat_core::content_hash_json;
+use criterion::{
+    BatchSize, BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main,
+};
+use lakecat_core::governed_scan::{
+    GovernedScanCatalogIdentity, GovernedScanProof, GovernedScanProofEvidence,
+    governed_evidence_digest, governed_scan_digests,
+};
+use lakecat_core::{Namespace, TableIdent, TableName, WarehouseName, content_hash_json};
 use serde_json::{Value, json};
 
 fn metadata(field_count: usize) -> Value {
@@ -54,5 +60,95 @@ fn bench_json_evidence(c: &mut Criterion) {
     encoding_group.finish();
 }
 
-criterion_group!(benches, bench_json_evidence);
+fn proof_evidence(projection_count: usize) -> GovernedScanProofEvidence {
+    let digest = "sha256:1111111111111111111111111111111111111111111111111111111111111111";
+    GovernedScanProofEvidence {
+        catalog_identity: GovernedScanCatalogIdentity::new("lakecat://local")
+            .expect("benchmark catalog identity"),
+        table: TableIdent::new(
+            WarehouseName::new("local").expect("static warehouse"),
+            Namespace::new(vec!["default".to_string()]).expect("static namespace"),
+            TableName::new("events").expect("static table"),
+        ),
+        table_version: 7,
+        snapshot_id: 42,
+        plan_task_digest: digest.to_string(),
+        principal_subject: "agent:benchmark".to_string(),
+        purpose: "performance-analysis".to_string(),
+        effective_projection: (0..projection_count)
+            .map(|index| format!("field_{index}"))
+            .collect(),
+        identity_context_digest: digest.to_string(),
+        authorization_receipt_digest: digest.to_string(),
+        policy_decision_digest: digest.to_string(),
+    }
+}
+
+fn proof(projection_count: usize) -> GovernedScanProof {
+    GovernedScanProof::issue(proof_evidence(projection_count)).expect("issue benchmark proof")
+}
+
+fn bench_governed_scan_evidence(c: &mut Criterion) {
+    let mut group = c.benchmark_group("governed_scan_evidence");
+    for projection_count in [1, 100, 256] {
+        let evidence = proof_evidence(projection_count);
+        let proof = proof(projection_count);
+        let digest_value = json!({
+            "projection": evidence.effective_projection,
+            "metadata": metadata(projection_count),
+        });
+        group.throughput(Throughput::Elements(projection_count as u64));
+        group.bench_with_input(
+            BenchmarkId::new("domain_digest", projection_count),
+            &projection_count,
+            |b, _| {
+                b.iter(|| {
+                    governed_evidence_digest(
+                        black_box("lakecat.benchmark.digest.v1"),
+                        black_box(&digest_value),
+                    )
+                    .expect("digest benchmark evidence")
+                });
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("issue", projection_count),
+            &projection_count,
+            |b, _| {
+                b.iter_batched(
+                    || evidence.clone(),
+                    |evidence| {
+                        GovernedScanProof::issue(black_box(evidence))
+                            .expect("issue benchmark proof")
+                    },
+                    BatchSize::SmallInput,
+                );
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("validate_integrity", projection_count),
+            &projection_count,
+            |b, _| {
+                b.iter(|| {
+                    black_box(&proof)
+                        .validate_integrity()
+                        .expect("validate benchmark proof")
+                });
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("snapshot_and_scope", projection_count),
+            &projection_count,
+            |b, _| {
+                b.iter(|| {
+                    governed_scan_digests(black_box(&proof))
+                        .expect("derive benchmark governed scan digests")
+                });
+            },
+        );
+    }
+    group.finish();
+}
+
+criterion_group!(benches, bench_json_evidence, bench_governed_scan_evidence);
 criterion_main!(benches);
