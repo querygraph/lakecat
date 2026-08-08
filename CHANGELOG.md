@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added Turso scale benchmarks for QueryGraph policy and view-receipt reads.
+  QueryGraph bootstrap now loads policies once per warehouse and receipt chains
+  once per namespace through compatible bulk store boundaries, while Memory
+  and Turso share validation and preserve per-table ordering. At 256 items,
+  policy loading falls from about 365.5 to 2.30 milliseconds (99.4%) and view
+  receipts from 13.47 to 1.26 milliseconds (90.6%).
+
 - Added a bounded end-to-end QueryGraph bootstrap benchmark spanning graph-read
   authorization, tables and policy bindings, views and version receipts,
   tenant projection, bundle and manifest construction, audit shaping, and Axum

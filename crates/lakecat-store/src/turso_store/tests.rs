@@ -6342,6 +6342,16 @@ async fn turso_store_persists_policy_bindings_and_matches_table_scope() {
         active[0].odrl["uid"],
         serde_json::json!("policy:agent-read")
     );
+    let other_table = TableIdent::new(
+        warehouse,
+        "default".parse::<Namespace>().unwrap(),
+        TableName::new("other").unwrap(),
+    );
+    let batch = store
+        .policy_bindings_for_tables(&[table, other_table])
+        .await
+        .unwrap();
+    assert_eq!(batch, vec![active, Vec::new()]);
 }
 
 #[tokio::test]

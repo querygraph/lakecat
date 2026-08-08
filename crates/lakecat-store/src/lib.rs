@@ -208,10 +208,18 @@ pub trait CatalogStore: Send + Sync + 'static {
     }
     async fn list_namespace_view_version_receipts(
         &self,
-        _warehouse: &WarehouseName,
-        _namespace: &Namespace,
+        warehouse: &WarehouseName,
+        namespace: &Namespace,
     ) -> LakeCatResult<Vec<ViewVersionReceipt>> {
-        Ok(Vec::new())
+        let views = self.list_views(warehouse, namespace).await?;
+        let mut receipts = Vec::new();
+        for view in views {
+            receipts.extend(
+                self.list_view_version_receipts(warehouse, namespace, &view.name)
+                    .await?,
+            );
+        }
+        Ok(receipts)
     }
     async fn load_view(
         &self,
@@ -276,6 +284,21 @@ pub trait CatalogStore: Send + Sync + 'static {
         _table: &TableIdent,
     ) -> LakeCatResult<Vec<PolicyBinding>> {
         Ok(Vec::new())
+    }
+    /// Return enforced policy bindings for each table in the same order.
+    ///
+    /// Stores can override this bulk boundary to share a catalog read across
+    /// many tables. The default preserves compatibility by delegating to the
+    /// single-table operation.
+    async fn policy_bindings_for_tables(
+        &self,
+        tables: &[TableIdent],
+    ) -> LakeCatResult<Vec<Vec<PolicyBinding>>> {
+        let mut bindings = Vec::with_capacity(tables.len());
+        for table in tables {
+            bindings.push(self.policy_bindings_for_table(table).await?);
+        }
+        Ok(bindings)
     }
     async fn storage_profile_for_table(
         &self,

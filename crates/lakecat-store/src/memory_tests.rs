@@ -1091,6 +1091,16 @@ async fn memory_store_rejects_corrupt_policy_bindings_on_read() {
         LakeCatError::InvalidArgument(message)
             if message.contains("table-scoped policy binding requires namespace")
     ));
+
+    let err = store
+        .policy_bindings_for_tables(std::slice::from_ref(&table))
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        LakeCatError::InvalidArgument(message)
+            if message.contains("table-scoped policy binding requires namespace")
+    ));
 }
 
 #[tokio::test]
@@ -1132,6 +1142,16 @@ async fn memory_store_rejects_policy_binding_map_scope_drift() {
     ));
 
     let err = store.policy_bindings_for_table(&table).await.unwrap_err();
+    assert!(matches!(
+        err,
+        LakeCatError::Internal(message)
+            if message.contains("policy binding row scope does not match")
+    ));
+
+    let err = store
+        .policy_bindings_for_tables(std::slice::from_ref(&table))
+        .await
+        .unwrap_err();
     assert!(matches!(
         err,
         LakeCatError::Internal(message)

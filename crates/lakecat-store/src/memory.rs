@@ -1059,6 +1059,25 @@ impl CatalogStore for MemoryCatalogStore {
         Ok(policy_bindings_for_table(bindings, table))
     }
 
+    async fn policy_bindings_for_tables(
+        &self,
+        tables: &[TableIdent],
+    ) -> LakeCatResult<Vec<Vec<PolicyBinding>>> {
+        let state = self.state.read().await;
+        let bindings = state
+            .policy_bindings
+            .iter()
+            .map(|(binding_key, binding)| {
+                validate_policy_binding_map_scope(binding, binding_key)?;
+                Ok(binding)
+            })
+            .collect::<LakeCatResult<Vec<_>>>()?;
+        Ok(tables
+            .iter()
+            .map(|table| policy_bindings_for_table(bindings.iter().copied(), table))
+            .collect())
+    }
+
     async fn record_audit_event(&self, event: CatalogAuditEvent) -> LakeCatResult<()> {
         event.validate_recordable()?;
         let event_id = audit_event_id(&event)?;

@@ -129,6 +129,16 @@ struct BenchmarkCatalogStore {
     view_receipts: Vec<ViewVersionReceipt>,
 }
 
+impl BenchmarkCatalogStore {
+    fn table_policy_bindings(&self, table: &TableIdent) -> Vec<PolicyBinding> {
+        self.policy_bindings
+            .iter()
+            .filter(|binding| binding.applies_to_table(table))
+            .cloned()
+            .collect()
+    }
+}
+
 #[async_trait]
 impl CatalogStore for BenchmarkCatalogStore {
     async fn create_namespace(
@@ -254,11 +264,16 @@ impl CatalogStore for BenchmarkCatalogStore {
         &self,
         table: &TableIdent,
     ) -> LakeCatResult<Vec<PolicyBinding>> {
-        Ok(self
-            .policy_bindings
+        Ok(self.table_policy_bindings(table))
+    }
+
+    async fn policy_bindings_for_tables(
+        &self,
+        tables: &[TableIdent],
+    ) -> LakeCatResult<Vec<Vec<PolicyBinding>>> {
+        Ok(tables
             .iter()
-            .filter(|binding| binding.applies_to_table(table))
-            .cloned()
+            .map(|table| self.table_policy_bindings(table))
             .collect())
     }
 

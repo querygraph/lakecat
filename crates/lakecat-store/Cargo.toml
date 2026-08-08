@@ -27,3 +27,8 @@ criterion = { workspace = true }
 name = "turso_commit"
 harness = false
 required-features = ["turso-local"]
+
+[[bench]]
+name = "querygraph_reads"
+harness = false
+required-features = ["turso-local"]

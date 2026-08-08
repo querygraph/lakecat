@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::HeaderMap;
@@ -18,7 +20,7 @@ use lakecat_sail::catalog_provider::{
     LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
 };
 use lakecat_security::TableScanCapability;
-use lakecat_store::{CatalogAuditEvent, TableRecord, ViewRecord, table_ident};
+use lakecat_store::{CatalogAuditEvent, TableRecord, ViewRecord, ViewVersionReceipt, table_ident};
 use serde_json::json;
 
 use crate::*;
@@ -427,20 +429,38 @@ pub(crate) async fn querygraph_bootstrap(
 ) -> Result<Json<QueryGraphBootstrap>, LakeCatHttpError> {
     let capability = authorize_graph_read(&state, request_identity(&headers)?).await?;
     let tables = state.store.list_tables(&state.warehouse).await?;
-    let mut table_policy_bindings = Vec::with_capacity(tables.len());
-    let mut policy_binding_count = 0usize;
-    for table in tables {
-        let policy_bindings = state.store.policy_bindings_for_table(&table.ident).await?;
-        policy_binding_count += policy_bindings.len();
-        table_policy_bindings.push((table, policy_bindings));
+    let table_idents = tables
+        .iter()
+        .map(|table| table.ident.clone())
+        .collect::<Vec<_>>();
+    let policy_bindings = state
+        .store
+        .policy_bindings_for_tables(&table_idents)
+        .await?;
+    if policy_bindings.len() != tables.len() {
+        return Err(LakeCatError::Internal(
+            "bulk policy lookup returned the wrong number of table scopes".to_string(),
+        )
+        .into());
     }
+    let policy_binding_count = policy_bindings.iter().map(Vec::len).sum::<usize>();
+    let table_policy_bindings = tables.into_iter().zip(policy_bindings);
     let namespaces = state.store.list_namespaces(&state.warehouse).await?;
     let mut views = Vec::new();
-    for namespace in namespaces {
-        views.extend(state.store.list_views(&state.warehouse, &namespace).await?);
+    for namespace in &namespaces {
+        views.extend(state.store.list_views(&state.warehouse, namespace).await?);
     }
     let tenant = querygraph_tenant_projection(&state).await?;
-    let view_version_receipts = querygraph_view_version_receipts(&state, &views).await?;
+    let mut view_receipts = Vec::new();
+    for namespace in &namespaces {
+        view_receipts.extend(
+            state
+                .store
+                .list_namespace_view_version_receipts(&state.warehouse, namespace)
+                .await?,
+        );
+    }
+    let view_version_receipts = querygraph_view_version_receipts(&views, &view_receipts)?;
     let bundle = lakecat_querygraph::bootstrap_from_tables_views_with_policy_bindings_and_tenant(
         state.warehouse.clone(),
         table_policy_bindings,
@@ -530,18 +550,26 @@ pub(crate) async fn querygraph_tenant_projection(
     ))
 }
 
-pub(crate) async fn querygraph_view_version_receipts(
-    state: &LakeCatState,
+pub(crate) fn querygraph_view_version_receipts(
     views: &[ViewRecord],
+    receipts: &[ViewVersionReceipt],
 ) -> LakeCatResult<Vec<QueryGraphViewReceiptEvidence>> {
-    let mut receipts = Vec::new();
+    let mut receipt_chains = HashMap::with_capacity(views.len());
+    for receipt in receipts {
+        receipt_chains
+            .entry((&receipt.warehouse, &receipt.namespace, &receipt.name))
+            .or_insert_with(Vec::new)
+            .push(receipt);
+    }
+    let mut evidence = Vec::with_capacity(views.len());
     for view in views {
-        let version_receipts = state
-            .store
-            .list_view_version_receipts(&view.warehouse, &view.namespace, &view.name)
-            .await?;
+        let version_receipts = receipt_chains
+            .get(&(&view.warehouse, &view.namespace, &view.name))
+            .map(Vec::as_slice)
+            .unwrap_or_default();
         let response_receipts = version_receipts
             .iter()
+            .copied()
             .map(view_version_receipt_response)
             .collect::<LakeCatResult<Vec<_>>>()?;
         if !view_version_receipt_chain_verified(&response_receipts) {
@@ -557,7 +585,7 @@ pub(crate) async fn querygraph_view_version_receipts(
             .rev()
             .find(|receipt| receipt.view_version == view.view_version)
         {
-            receipts.push(QueryGraphViewReceiptEvidence {
+            evidence.push(QueryGraphViewReceiptEvidence {
                 stable_id: receipt.stable_id.clone(),
                 view_version: receipt.view_version,
                 receipt_hash: receipt.receipt_hash.clone(),
@@ -572,5 +600,5 @@ pub(crate) async fn querygraph_view_version_receipts(
             )));
         }
     }
-    Ok(receipts)
+    Ok(evidence)
 }

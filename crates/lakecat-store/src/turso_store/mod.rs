@@ -1,7 +1,7 @@
 use std::future::Future;
 use std::pin::Pin;
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeSet, HashMap, HashSet},
     ops::Deref,
     sync::{Arc, Mutex},
 };
@@ -1874,6 +1874,32 @@ impl CatalogStore for TursoCatalogStore {
     ) -> LakeCatResult<Vec<PolicyBinding>> {
         let bindings = self.list_policy_bindings(&table.warehouse).await?;
         Ok(policy_bindings_for_table(bindings.iter(), table))
+    }
+
+    async fn policy_bindings_for_tables(
+        &self,
+        tables: &[TableIdent],
+    ) -> LakeCatResult<Vec<Vec<PolicyBinding>>> {
+        let mut seen_warehouses = HashSet::with_capacity(tables.len());
+        let mut bindings_by_warehouse = HashMap::new();
+        for table in tables {
+            if seen_warehouses.insert(&table.warehouse) {
+                bindings_by_warehouse.insert(
+                    table.warehouse.clone(),
+                    self.list_policy_bindings(&table.warehouse).await?,
+                );
+            }
+        }
+        let mut matches = Vec::with_capacity(tables.len());
+        for table in tables {
+            let bindings = bindings_by_warehouse.get(&table.warehouse).ok_or_else(|| {
+                LakeCatError::Internal(
+                    "bulk policy lookup lost a loaded warehouse scope".to_string(),
+                )
+            })?;
+            matches.push(policy_bindings_for_table(bindings.iter(), table));
+        }
+        Ok(matches)
     }
 }
 
