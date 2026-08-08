@@ -24,20 +24,8 @@ impl QueryGraphBootstrap {
         mut self,
         evidence: Vec<QueryGraphViewReceiptEvidence>,
     ) -> LakeCatResult<Self> {
-        validate_view_receipt_evidence(&self.views, &evidence)?;
-        let evidence_hash = if evidence.is_empty() {
-            None
-        } else {
-            Some(view_receipt_evidence_hash(&evidence)?)
-        };
-        let import_contract = self.manifest.querygraph_import.as_mut().ok_or_else(|| {
-            lakecat_core::LakeCatError::InvalidArgument(
-                "QueryGraph bootstrap manifest is missing querygraph-import compatibility contract"
-                    .to_string(),
-            )
-        })?;
-        import_contract.view_receipt_evidence = evidence;
-        import_contract.view_receipt_evidence_hash = evidence_hash;
+        self.manifest
+            .attach_view_receipt_evidence(&self.views, evidence)?;
         self.bundle_hash = self.computed_bundle_hash()?;
         Ok(self)
     }
@@ -306,6 +294,34 @@ impl QueryGraphBundleManifest {
             open_lineage_hash: content_hash_json(open_lineage)?,
             querygraph_import: None,
         })
+    }
+
+    /// Validate and install receipt evidence before the enclosing bundle hash
+    /// is computed.
+    ///
+    /// Existing bundles should use
+    /// [`QueryGraphBootstrap::with_view_receipt_evidence`] so their bundle hash
+    /// is refreshed after this manifest mutation.
+    pub fn attach_view_receipt_evidence(
+        &mut self,
+        views: &[QueryGraphViewProjection],
+        evidence: Vec<QueryGraphViewReceiptEvidence>,
+    ) -> LakeCatResult<()> {
+        validate_view_receipt_evidence(views, &evidence)?;
+        let evidence_hash = if evidence.is_empty() {
+            None
+        } else {
+            Some(view_receipt_evidence_hash(&evidence)?)
+        };
+        let import_contract = self.querygraph_import.as_mut().ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(
+                "QueryGraph bootstrap manifest is missing querygraph-import compatibility contract"
+                    .to_string(),
+            )
+        })?;
+        import_contract.view_receipt_evidence = evidence;
+        import_contract.view_receipt_evidence_hash = evidence_hash;
+        Ok(())
     }
 }
 

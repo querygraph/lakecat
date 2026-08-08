@@ -461,13 +461,13 @@ pub(crate) async fn querygraph_bootstrap(
         );
     }
     let view_version_receipts = querygraph_view_version_receipts(&views, &view_receipts)?;
-    let bundle = lakecat_querygraph::bootstrap_from_tables_views_with_policy_bindings_and_tenant(
+    let bundle = lakecat_querygraph::bootstrap_from_catalog_snapshot(
         state.warehouse.clone(),
         table_policy_bindings,
         views,
         tenant,
-    )?
-    .with_view_receipt_evidence(view_version_receipts)?;
+        view_version_receipts,
+    )?;
     let verification = bundle.verify_manifest()?;
     state
         .store

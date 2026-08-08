@@ -330,16 +330,19 @@ fn projects_catalog_views_into_querygraph_bundle() {
     ])
     .unwrap();
 
-    let bundle =
-        bootstrap_from_tables_views_with_policy_bindings(warehouse, Vec::new(), vec![view])
-            .unwrap()
-            .with_view_receipt_evidence(vec![QueryGraphViewReceiptEvidence {
-                stable_id: "lakecat:view:local:default:active_customers".to_string(),
-                view_version: 1,
-                receipt_hash: "sha256:view-version-receipt".to_string(),
-                receipt_chain_hash: "sha256:view-receipt-chain".to_string(),
-            }])
-            .unwrap();
+    let bundle = bootstrap_from_catalog_snapshot(
+        warehouse,
+        Vec::new(),
+        vec![view],
+        QueryGraphTenantProjection::default(),
+        vec![QueryGraphViewReceiptEvidence {
+            stable_id: "lakecat:view:local:default:active_customers".to_string(),
+            view_version: 1,
+            receipt_hash: "sha256:view-version-receipt".to_string(),
+            receipt_chain_hash: "sha256:view-receipt-chain".to_string(),
+        }],
+    )
+    .unwrap();
 
     assert_eq!(bundle.tables.len(), 0);
     assert_eq!(bundle.views.len(), 1);

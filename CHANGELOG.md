@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- QueryGraph catalog snapshots now attach validated view-receipt evidence
+  before computing the initial bundle hash, avoiding an immediately discarded
+  full-bundle digest while retaining the independent manifest verification.
+  Alternating same-container runs reduce the 256-table-plus-view service path
+  from about 173.8 to 150.1 milliseconds (13.7%).
+
 - Added Turso scale benchmarks for QueryGraph policy and view-receipt reads.
   QueryGraph bootstrap now loads policies once per warehouse and receipt chains
   once per namespace through compatible bulk store boundaries, while Memory

@@ -46,6 +46,34 @@ pub fn bootstrap_from_tables_views_with_policy_bindings_and_tenant(
     views: impl IntoIterator<Item = ViewRecord>,
     tenant: QueryGraphTenantProjection,
 ) -> LakeCatResult<QueryGraphBootstrap> {
+    bootstrap_from_catalog_snapshot_inner(warehouse, tables, views, tenant, None)
+}
+
+/// Build a catalog snapshot whose initial bundle hash already includes the
+/// supplied, validated view-receipt evidence.
+pub fn bootstrap_from_catalog_snapshot(
+    warehouse: WarehouseName,
+    tables: impl IntoIterator<Item = (TableRecord, Vec<PolicyBinding>)>,
+    views: impl IntoIterator<Item = ViewRecord>,
+    tenant: QueryGraphTenantProjection,
+    view_receipt_evidence: Vec<QueryGraphViewReceiptEvidence>,
+) -> LakeCatResult<QueryGraphBootstrap> {
+    bootstrap_from_catalog_snapshot_inner(
+        warehouse,
+        tables,
+        views,
+        tenant,
+        Some(view_receipt_evidence),
+    )
+}
+
+fn bootstrap_from_catalog_snapshot_inner(
+    warehouse: WarehouseName,
+    tables: impl IntoIterator<Item = (TableRecord, Vec<PolicyBinding>)>,
+    views: impl IntoIterator<Item = ViewRecord>,
+    tenant: QueryGraphTenantProjection,
+    view_receipt_evidence: Option<Vec<QueryGraphViewReceiptEvidence>>,
+) -> LakeCatResult<QueryGraphBootstrap> {
     let generated_at = Utc::now();
     let tables = tables
         .into_iter()
@@ -91,6 +119,9 @@ pub fn bootstrap_from_tables_views_with_policy_bindings_and_tenant(
         &open_lineage,
         views.len(),
     )?);
+    if let Some(view_receipt_evidence) = view_receipt_evidence {
+        manifest.attach_view_receipt_evidence(&views, view_receipt_evidence)?;
+    }
     let bundle_payload = json!({
         "warehouse": warehouse.as_str(),
         "manifest": &manifest,
