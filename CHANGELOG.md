@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Advance the locked Sail `lakecat` integration to revision `6471fb9a`,
+  consuming the optimized Iceberg object cache, metadata and manifest parsing,
+  delete matching, SQL frontend, catalog status, and metadata-discovery paths.
+
 - QueryGraph policy-binding and view-receipt evidence hashes now stream their
   existing canonical projections without allocating intermediate JSON trees.
   Policy hashing improves from about 1.702/99.03/403.11 microseconds at
