@@ -17,7 +17,9 @@ use lakecat_core::{
     LakeCatError, LakeCatResult, Namespace, TableIdent, TableName, WarehouseName,
     content_hash_bytes, content_hash_json,
 };
-use lakecat_security::{AuthorizationReceipt, ReadRestriction, ViewDropCapability};
+use lakecat_security::{
+    AuthorizationReceipt, ReadRestriction, TableScanCapability, ViewDropCapability,
+};
 use lakecat_store::{
     CatalogAuditEvent, CredentialIssuanceMode, PolicyBinding, ProjectRecord, ServerRecord,
     StorageProfile, StorageProvider, TableRecord, ViewRecord, WarehouseRecord, table_ident,
@@ -605,7 +607,7 @@ pub(crate) async fn load_credentials_in_warehouse(
     let capability = authorize_credentials_vend(&state, identity, ident).await?;
     let table = state.store.load_table(capability.table()).await?;
     let storage_profile = state.store.storage_profile_for_table(&table).await?;
-    let read_restriction = capability.read_restriction()?;
+    let read_restriction = capability.read_restriction();
     let max_credential_ttl_seconds = read_restriction.max_credential_ttl_seconds;
     let raw_exception = capability
         .receipt()
@@ -804,10 +806,11 @@ pub(crate) fn single_config_value(config: &[ConfigEntry], key: &str) -> Option<S
 pub(crate) fn table_scan_planned_audit_payload(
     ident: &TableIdent,
     table: &TableRecord,
-    receipt: &AuthorizationReceipt,
+    capability: &TableScanCapability,
     scan: &lakecat_core::sail::ScanPlan,
     scan_request_extensions: &Value,
 ) -> Value {
+    let receipt = capability.receipt();
     let mut audit_payload = json!({
         "event-type": "table.scan-planned",
         "table": ident,
@@ -820,7 +823,7 @@ pub(crate) fn table_scan_planned_audit_payload(
     });
     if let Some(restriction) = receipt.context.get("read-restriction") {
         audit_payload["read-restriction"] = restriction.clone();
-        append_read_restriction_requirements(&mut audit_payload, restriction);
+        append_read_restriction_requirements(&mut audit_payload, capability.read_restriction());
     }
     for field in [
         "requested-projection",
@@ -838,10 +841,11 @@ pub(crate) fn table_scan_planned_audit_payload(
 pub(crate) fn table_scan_tasks_fetched_audit_payload(
     ident: &TableIdent,
     table: &TableRecord,
-    receipt: &AuthorizationReceipt,
+    capability: &TableScanCapability,
     fetched: &lakecat_core::sail::FetchScanTasksPlan,
     fetch_extensions: &Value,
 ) -> Value {
+    let receipt = capability.receipt();
     let mut audit_payload = json!({
         "event-type": "table.scan-tasks-fetched",
         "table": ident,
@@ -857,7 +861,7 @@ pub(crate) fn table_scan_tasks_fetched_audit_payload(
     });
     if let Some(restriction) = receipt.context.get("read-restriction") {
         audit_payload["read-restriction"] = restriction.clone();
-        append_read_restriction_requirements(&mut audit_payload, restriction);
+        append_read_restriction_requirements(&mut audit_payload, capability.read_restriction());
     }
     for field in [
         "requested-stats-fields",
@@ -871,10 +875,11 @@ pub(crate) fn table_scan_tasks_fetched_audit_payload(
     audit_payload
 }
 
-pub(crate) fn append_read_restriction_requirements(audit_payload: &mut Value, restriction: &Value) {
-    if let Ok(restriction) = serde_json::from_value::<ReadRestriction>(restriction.clone())
-        && let Ok(required_projection) = restriction.effective_projection(&[])
-    {
+pub(crate) fn append_read_restriction_requirements(
+    audit_payload: &mut Value,
+    restriction: &ReadRestriction,
+) {
+    if let Ok(required_projection) = restriction.effective_projection(&[]) {
         audit_payload["required-projection"] = json!(required_projection.clone());
         audit_payload["effective-projection"] = json!(required_projection);
         audit_payload["required-filters"] = json!(restriction.mandatory_filters());

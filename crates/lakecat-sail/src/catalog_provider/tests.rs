@@ -523,7 +523,7 @@ async fn provider_scan_authorization_carries_policy_restriction() {
         .authorize_table_scan(&sail_namespace, "events")
         .await
         .unwrap();
-    let restriction = capability.read_restriction().unwrap();
+    let restriction = capability.read_restriction();
 
     assert_eq!(
         restriction.allowed_columns,

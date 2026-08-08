@@ -576,6 +576,16 @@ pub struct Capability<Action, Resource> {
     _action: std::marker::PhantomData<Action>,
 }
 
+/// Validated table scope carried by read capabilities.
+///
+/// The typed restriction is decoded once when authority is established and is
+/// then borrowed by downstream planners and credential adapters.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TableReadScope {
+    table: TableIdent,
+    restriction: ReadRestriction,
+}
+
 impl<Action, Resource> Capability<Action, Resource> {
     pub fn receipt(&self) -> &AuthorizationReceipt {
         &self.receipt
@@ -657,8 +667,8 @@ pub type TableLoadCapability = Capability<CanLoadTable, TableIdent>;
 pub type TableCommitCapability = Capability<CanCommitTable, TableIdent>;
 pub type TableDropCapability = Capability<CanDropTable, TableIdent>;
 pub type TableRestoreCapability = Capability<CanRestoreTable, TableIdent>;
-pub type TableScanCapability = Capability<CanPlanScan, TableIdent>;
-pub type CredentialsVendCapability = Capability<CanVendCredentials, TableIdent>;
+pub type TableScanCapability = Capability<CanPlanScan, TableReadScope>;
+pub type CredentialsVendCapability = Capability<CanVendCredentials, TableReadScope>;
 pub type ServerManageCapability = Capability<CanManageServers, ()>;
 pub type ProjectManageCapability = Capability<CanManageProjects, ()>;
 pub type WarehouseManageCapability = Capability<CanManageWarehouses, ()>;
@@ -674,6 +684,16 @@ pub type NamespaceCreateCapability = Capability<CanCreateNamespace, ()>;
 pub type NamespaceListCapability = Capability<CanListNamespaces, ()>;
 pub type NamespaceLoadCapability = Capability<CanLoadNamespace, ()>;
 pub type NamespaceDropCapability = Capability<CanDropNamespace, ()>;
+
+impl<Action> Capability<Action, TableReadScope> {
+    pub fn table(&self) -> &TableIdent {
+        &self.resource().table
+    }
+
+    pub fn read_restriction(&self) -> &ReadRestriction {
+        &self.resource().restriction
+    }
+}
 
 impl TableCreateCapability {
     pub fn from_receipt(receipt: AuthorizationReceipt, table: TableIdent) -> LakeCatResult<Self> {
@@ -727,53 +747,23 @@ impl TableRestoreCapability {
 
 impl TableScanCapability {
     pub fn from_receipt(receipt: AuthorizationReceipt, table: TableIdent) -> LakeCatResult<Self> {
-        table_capability_from_receipt(
+        table_read_capability_from_receipt(
             receipt,
             table,
             CatalogAction::TablePlanScan,
             "plan table scans",
         )
     }
-
-    pub fn table(&self) -> &TableIdent {
-        self.resource()
-    }
-
-    pub fn read_restriction(&self) -> LakeCatResult<ReadRestriction> {
-        match self.receipt().context.get("read-restriction") {
-            Some(value) => serde_json::from_value(value.clone()).map_err(|err| {
-                LakeCatError::InvalidArgument(format!(
-                    "authorization receipt carries invalid read restriction: {err}"
-                ))
-            }),
-            None => Ok(ReadRestriction::unrestricted()),
-        }
-    }
 }
 
 impl CredentialsVendCapability {
     pub fn from_receipt(receipt: AuthorizationReceipt, table: TableIdent) -> LakeCatResult<Self> {
-        table_capability_from_receipt(
+        table_read_capability_from_receipt(
             receipt,
             table,
             CatalogAction::CredentialsVend,
             "vend table credentials",
         )
-    }
-
-    pub fn table(&self) -> &TableIdent {
-        self.resource()
-    }
-
-    pub fn read_restriction(&self) -> LakeCatResult<ReadRestriction> {
-        match self.receipt().context.get("read-restriction") {
-            Some(value) => serde_json::from_value(value.clone()).map_err(|err| {
-                LakeCatError::InvalidArgument(format!(
-                    "authorization receipt carries invalid read restriction: {err}"
-                ))
-            }),
-            None => Ok(ReadRestriction::unrestricted()),
-        }
     }
 }
 
@@ -936,6 +926,32 @@ fn table_capability_from_receipt<Action>(
     Ok(Capability {
         receipt,
         resource: table,
+        _action: std::marker::PhantomData,
+    })
+}
+
+fn table_read_capability_from_receipt<Action>(
+    receipt: AuthorizationReceipt,
+    table: TableIdent,
+    expected_action: CatalogAction,
+    action_description: &str,
+) -> LakeCatResult<Capability<Action, TableReadScope>> {
+    let capability: Capability<Action, TableIdent> =
+        table_capability_from_receipt(receipt, table, expected_action, action_description)?;
+    let restriction = match capability.receipt.context.get("read-restriction") {
+        Some(value) => ReadRestriction::deserialize(value).map_err(|err| {
+            LakeCatError::InvalidArgument(format!(
+                "authorization receipt carries invalid read restriction: {err}"
+            ))
+        })?,
+        None => ReadRestriction::unrestricted(),
+    };
+    Ok(Capability {
+        receipt: capability.receipt,
+        resource: TableReadScope {
+            table: capability.resource,
+            restriction,
+        },
         _action: std::marker::PhantomData,
     })
 }

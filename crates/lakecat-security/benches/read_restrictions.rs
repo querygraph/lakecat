@@ -1,5 +1,6 @@
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
-use lakecat_security::ReadRestriction;
+use lakecat_core::{Namespace, Principal, TableIdent, TableName, WarehouseName};
+use lakecat_security::{AuthorizationReceipt, CatalogAction, ReadRestriction, TableScanCapability};
 use serde_json::{Value, json};
 
 fn columns(prefix: &str, count: usize) -> Vec<String> {
@@ -37,6 +38,46 @@ fn bench_read_restrictions(c: &mut Criterion) {
             allowed_columns: Some(allowed.clone()),
             ..ReadRestriction::unrestricted()
         };
+        let table = TableIdent::new(
+            WarehouseName::new("local").expect("static warehouse"),
+            Namespace::new(vec!["default".to_string()]).expect("static namespace"),
+            TableName::new("events").expect("static table"),
+        );
+        let receipt = AuthorizationReceipt {
+            principal: Principal::anonymous(),
+            action: CatalogAction::TablePlanScan,
+            table: Some(table.clone()),
+            allowed: true,
+            engine: "benchmark".to_string(),
+            policy_hash: None,
+            context: json!({"read-restriction": restriction}),
+            checked_at: chrono::Utc::now(),
+        };
+        let capability = TableScanCapability::from_receipt(receipt.clone(), table.clone())
+            .expect("benchmark scan capability");
+
+        group.bench_with_input(
+            BenchmarkId::new("capability_restriction", size),
+            &size,
+            |b, _| {
+                b.iter(|| black_box(&capability).read_restriction());
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("capability_construction_and_restriction", size),
+            &size,
+            |b, _| {
+                b.iter(|| {
+                    let capability = TableScanCapability::from_receipt(
+                        black_box(receipt.clone()),
+                        black_box(table.clone()),
+                    )
+                    .expect("benchmark scan capability");
+                    black_box(capability.read_restriction());
+                    capability
+                });
+            },
+        );
 
         group.bench_with_input(
             BenchmarkId::new("effective_projection", size),

@@ -91,7 +91,7 @@ pub(crate) fn issue_governed_scan_grant(
     requested_projection: Vec<String>,
     effective_projection: Vec<String>,
 ) -> LakeCatResult<Option<GovernedScanGrant>> {
-    let restriction = capability.read_restriction()?;
+    let restriction = capability.read_restriction();
     let Some(purpose) = restriction.purpose.clone() else {
         return Ok(None);
     };
@@ -113,7 +113,7 @@ pub(crate) fn issue_governed_scan_grant(
     let receipt = capability.receipt();
     let identity_context = verified_identity_context(receipt)?;
     let authorization_receipt_digest = authorization_digest(receipt)?;
-    let policy_decision_digest = policy_digest(receipt, &restriction)?;
+    let policy_decision_digest = policy_digest(receipt, restriction)?;
     let proof = GovernedScanProof::issue(GovernedScanProofEvidence {
         catalog_identity: catalog_identity.clone(),
         table: capability.table().clone(),
@@ -144,7 +144,7 @@ pub(crate) fn issue_governed_scan_grant(
             AUTHORIZATION_CONTEXT_DOMAIN,
             &receipt.context,
         )?,
-        read_restriction_digest: restriction_digest(&restriction)?,
+        read_restriction_digest: restriction_digest(restriction)?,
         table_metadata_digest: governed_evidence_digest(TABLE_METADATA_DOMAIN, &table.metadata)?,
         issued_at: Utc::now(),
     };
@@ -295,7 +295,7 @@ fn validate_fresh_policy(
     }
     let fresh_capability =
         TableScanCapability::from_receipt(receipt.clone(), grant.proof.table().clone())?;
-    if fresh_capability.read_restriction()? != *restriction {
+    if fresh_capability.read_restriction() != restriction {
         return Err(LakeCatError::Conflict(
             "fresh governed scan authorization carries different read restrictions".to_string(),
         ));

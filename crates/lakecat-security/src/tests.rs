@@ -963,6 +963,63 @@ fn table_capabilities_require_matching_allowed_receipts() {
 }
 
 #[test]
+fn read_capabilities_validate_and_cache_typed_restrictions() {
+    let table = TableIdent::new(
+        WarehouseName::new("local").unwrap(),
+        "default".parse::<Namespace>().unwrap(),
+        TableName::new("events").unwrap(),
+    );
+    let receipt = |action, context| AuthorizationReceipt {
+        principal: Principal {
+            subject: "agent:reader".to_string(),
+            kind: PrincipalKind::Agent,
+        },
+        action,
+        table: Some(table.clone()),
+        allowed: true,
+        engine: "test".to_string(),
+        policy_hash: None,
+        context,
+        checked_at: Utc::now(),
+    };
+    let restriction = ReadRestriction {
+        allowed_columns: Some(vec!["event_id".to_string(), "payload".to_string()]),
+        purpose: Some("resilience-demo".to_string()),
+        ..ReadRestriction::unrestricted()
+    };
+
+    let scan = TableScanCapability::from_receipt(
+        receipt(
+            CatalogAction::TablePlanScan,
+            json!({"read-restriction": restriction}),
+        ),
+        table.clone(),
+    )
+    .expect("valid scan restriction should mint a capability");
+    assert_eq!(scan.read_restriction(), &restriction);
+
+    let credentials = CredentialsVendCapability::from_receipt(
+        receipt(CatalogAction::CredentialsVend, json!({})),
+        table.clone(),
+    )
+    .expect("missing credential restriction should default to unrestricted");
+    assert_eq!(
+        credentials.read_restriction(),
+        &ReadRestriction::unrestricted()
+    );
+
+    let error = TableScanCapability::from_receipt(
+        receipt(
+            CatalogAction::TablePlanScan,
+            json!({"read-restriction": {"allowed-columns": "event_id"}}),
+        ),
+        table,
+    )
+    .expect_err("malformed restrictions must fail while authority is established");
+    assert!(error.to_string().contains("invalid read restriction"));
+}
+
+#[test]
 fn authorization_receipt_hashes_enforced_read_restriction_policies() {
     let table = TableIdent::new(
         WarehouseName::new("local").unwrap(),

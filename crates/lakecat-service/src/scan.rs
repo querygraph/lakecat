@@ -69,7 +69,7 @@ pub(crate) async fn plan_table_scan_in_warehouse(
     let mut audit_payload = table_scan_planned_audit_payload(
         &ident,
         &table,
-        capability.receipt(),
+        &capability,
         &scan,
         &scan_request_extensions,
     );
@@ -132,7 +132,7 @@ pub(crate) async fn plan_scan_with_capability(
     } = request.into_normalized()?;
     #[cfg(feature = "sail-local")]
     let _ = &table;
-    let restriction = capability.read_restriction()?;
+    let restriction = capability.read_restriction();
     let projection = restriction.effective_projection(&requested_projection)?;
     let stats_fields = restriction.effective_stats_fields(&requested_stats_fields);
     #[cfg(feature = "sail-local")]
@@ -187,7 +187,7 @@ pub(crate) async fn plan_scan_with_capability(
             projection,
             filters: {
                 let mut filters = filters;
-                if let Some(row_predicate) = restriction.row_predicate {
+                if let Some(row_predicate) = restriction.row_predicate.clone() {
                     filters.push(row_predicate);
                 }
                 filters
@@ -282,7 +282,7 @@ pub(crate) async fn fetch_scan_tasks_in_warehouse(
     let audit_payload = table_scan_tasks_fetched_audit_payload(
         &ident,
         &table,
-        capability.receipt(),
+        &capability,
         &fetched,
         &fetch_extensions,
     );
@@ -320,7 +320,7 @@ pub(crate) async fn fetch_scan_tasks_with_capability(
     #[cfg(feature = "sail-local")]
     let _ = &table;
     #[cfg(not(feature = "sail-local"))]
-    let restriction = capability.read_restriction()?;
+    let restriction = capability.read_restriction();
     #[cfg(feature = "sail-local")]
     let fetched = {
         let provider = LakeCatCatalogProvider::new(
@@ -375,7 +375,7 @@ pub(crate) fn merge_scan_request_extensions(
 pub(crate) fn fetch_scan_tasks_extensions(
     capability: &TableScanCapability,
 ) -> Result<serde_json::Value, LakeCatHttpError> {
-    let restriction = capability.read_restriction()?;
+    let restriction = capability.read_restriction();
     let required_projection = restriction.effective_projection(&[])?;
     let required_filters = restriction.mandatory_filters();
     let stats_fields = required_projection.clone();

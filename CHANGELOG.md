@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added capability-access benchmarks for policy read restrictions and cached
+  the validated typed restriction when scan and credential authority is
+  established. Downstream planners now borrow capabilities, and audit shaping
+  consumes the cached restriction instead of cloning and decoding its JSON
+  representation. At 256 columns, repeated restriction access falls from about
+  9.25 microseconds to a borrow and construction improves by about 1.3%; six
+  isolated alternating end-to-end measurements improve the mean governed scan
+  path from 1.111 to 1.101 milliseconds (about 0.9%).
+
 - Added a bounded end-to-end service scan benchmark spanning Axum routing and
   JSON decoding, TypeDID and policy authorization, catalog lookup, Sail
   delegation, governed proof issuance, audit evidence, and response shaping at
