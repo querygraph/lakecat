@@ -30,6 +30,12 @@ async fn memory_store_persists_server_records() {
     .unwrap();
     store.upsert_server(updated.clone()).await.unwrap();
 
+    assert_eq!(store.load_server("lakecat-local").await.unwrap(), updated);
+    assert!(matches!(
+        store.load_server("missing-server").await,
+        Err(LakeCatError::NotFound { object, name })
+            if object == "server" && name == "missing-server"
+    ));
     assert_eq!(store.list_servers().await.unwrap(), vec![updated]);
 }
 
@@ -575,6 +581,12 @@ async fn memory_store_persists_project_records() {
     .unwrap();
     store.upsert_project(updated.clone()).await.unwrap();
 
+    assert_eq!(store.load_project("default").await.unwrap(), updated);
+    assert!(matches!(
+        store.load_project("missing-project").await,
+        Err(LakeCatError::NotFound { object, name })
+            if object == "project" && name == "missing-project"
+    ));
     assert_eq!(store.list_projects().await.unwrap(), vec![updated]);
 
     let missing_server = ProjectRecord::new(

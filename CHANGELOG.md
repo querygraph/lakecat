@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added indexed project and server point reads to the catalog store contract,
+  with validated Memory and Turso implementations, and switched QueryGraph
+  tenant projection from catalog-wide list scans to scoped lookups. A new
+  1/64/256-tenant Turso benchmark shows the two-record read falling from about
+  70.8/417.8/1,545.9 microseconds to 52.3/54.4/54.7 microseconds, improving the
+  256-tenant case by 96.5% while retaining optional missing-link semantics.
+
 - QueryGraph catalog snapshots now attach validated view-receipt evidence
   before computing the initial bundle hash, avoiding an immediately discarded
   full-bundle digest while retaining the independent manifest verification.

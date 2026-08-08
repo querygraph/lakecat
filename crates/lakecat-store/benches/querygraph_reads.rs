@@ -4,7 +4,9 @@ use std::sync::Arc;
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use lakecat_core::{Namespace, Principal, TableIdent, TableName, WarehouseName};
 use lakecat_store::turso_store::TursoCatalogStore;
-use lakecat_store::{CatalogStore, PolicyBinding, ViewRecord, ViewVersionReceipt};
+use lakecat_store::{
+    CatalogStore, PolicyBinding, ProjectRecord, ServerRecord, ViewRecord, ViewVersionReceipt,
+};
 use serde_json::json;
 
 struct QueryGraphReadCase {
@@ -122,6 +124,89 @@ impl QueryGraphReadCase {
     }
 }
 
+struct TenantReadCase {
+    store: Arc<TursoCatalogStore>,
+    project_id: String,
+    server_id: String,
+}
+
+impl TenantReadCase {
+    async fn new(item_count: usize) -> Self {
+        let store = TursoCatalogStore::in_memory()
+            .await
+            .expect("create Turso benchmark store");
+        for index in 0..item_count {
+            let server_id = format!("server-{index:04}");
+            store
+                .upsert_server(
+                    ServerRecord::new(
+                        server_id.clone(),
+                        Some(format!("Server {index:04}")),
+                        None,
+                        BTreeMap::new(),
+                        Principal::anonymous(),
+                    )
+                    .expect("benchmark server"),
+                )
+                .await
+                .expect("persist benchmark server");
+            store
+                .upsert_project(
+                    ProjectRecord::new(
+                        format!("project-{index:04}"),
+                        Some(server_id),
+                        Some(format!("Project {index:04}")),
+                        BTreeMap::new(),
+                        Principal::anonymous(),
+                    )
+                    .expect("benchmark project"),
+                )
+                .await
+                .expect("persist benchmark project");
+        }
+        let target_index = item_count - 1;
+        Self {
+            store,
+            project_id: format!("project-{target_index:04}"),
+            server_id: format!("server-{target_index:04}"),
+        }
+    }
+
+    async fn list_and_find(&self) -> (ProjectRecord, ServerRecord) {
+        let project = self
+            .store
+            .list_projects()
+            .await
+            .expect("list benchmark projects")
+            .into_iter()
+            .find(|project| project.project_id == self.project_id)
+            .expect("target benchmark project");
+        let server = self
+            .store
+            .list_servers()
+            .await
+            .expect("list benchmark servers")
+            .into_iter()
+            .find(|server| server.server_id == self.server_id)
+            .expect("target benchmark server");
+        (project, server)
+    }
+
+    async fn load_points(&self) -> (ProjectRecord, ServerRecord) {
+        let project = self
+            .store
+            .load_project(&self.project_id)
+            .await
+            .expect("load benchmark project");
+        let server = self
+            .store
+            .load_server(&self.server_id)
+            .await
+            .expect("load benchmark server");
+        (project, server)
+    }
+}
+
 fn bench_querygraph_reads(c: &mut Criterion) {
     let runtime = tokio::runtime::Runtime::new().expect("benchmark runtime");
     let cases = [
@@ -169,5 +254,35 @@ fn bench_querygraph_reads(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_querygraph_reads);
+fn bench_tenant_reads(c: &mut Criterion) {
+    let runtime = tokio::runtime::Runtime::new().expect("benchmark runtime");
+    let cases = [
+        (1, runtime.block_on(TenantReadCase::new(1))),
+        (64, runtime.block_on(TenantReadCase::new(64))),
+        (256, runtime.block_on(TenantReadCase::new(256))),
+    ];
+    let mut group = c.benchmark_group("turso_tenant_reads");
+    group.sample_size(20);
+    for (item_count, case) in &cases {
+        group.bench_with_input(
+            BenchmarkId::new("list_and_find", item_count),
+            case,
+            |b, case| {
+                b.to_async(&runtime)
+                    .iter(|| async { black_box(case.list_and_find().await) });
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("load_points", item_count),
+            case,
+            |b, case| {
+                b.to_async(&runtime)
+                    .iter(|| async { black_box(case.load_points().await) });
+            },
+        );
+    }
+    group.finish();
+}
+
+criterion_group!(benches, bench_querygraph_reads, bench_tenant_reads);
 criterion_main!(benches);

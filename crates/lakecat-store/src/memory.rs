@@ -477,6 +477,22 @@ impl CatalogStore for MemoryCatalogStore {
         Ok(servers)
     }
 
+    async fn load_server(&self, server_id: &str) -> LakeCatResult<ServerRecord> {
+        validate_project_id(server_id)?;
+        let state = self.state.read().await;
+        let server =
+            state
+                .servers
+                .get(server_id)
+                .cloned()
+                .ok_or_else(|| LakeCatError::NotFound {
+                    object: "server",
+                    name: server_id.to_string(),
+                })?;
+        validate_server_record_map_scope(&server, server_id)?;
+        Ok(server)
+    }
+
     async fn upsert_project(&self, project: ProjectRecord) -> LakeCatResult<ProjectRecord> {
         project.validate()?;
         let mut state = self.state.write().await;
@@ -510,6 +526,22 @@ impl CatalogStore for MemoryCatalogStore {
             .collect::<LakeCatResult<Vec<_>>>()?;
         projects.sort_by(|left, right| left.project_id.cmp(&right.project_id));
         Ok(projects)
+    }
+
+    async fn load_project(&self, project_id: &str) -> LakeCatResult<ProjectRecord> {
+        validate_project_id(project_id)?;
+        let state = self.state.read().await;
+        let project =
+            state
+                .projects
+                .get(project_id)
+                .cloned()
+                .ok_or_else(|| LakeCatError::NotFound {
+                    object: "project",
+                    name: project_id.to_string(),
+                })?;
+        validate_project_record_map_scope(&project, project_id)?;
+        Ok(project)
     }
 
     async fn upsert_warehouse(&self, warehouse: WarehouseRecord) -> LakeCatResult<WarehouseRecord> {

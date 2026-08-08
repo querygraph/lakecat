@@ -943,6 +943,32 @@ impl CatalogStore for TursoCatalogStore {
         Ok(servers)
     }
 
+    async fn load_server(&self, server_id: &str) -> LakeCatResult<ServerRecord> {
+        validate_project_id(server_id)?;
+        let conn = self.checkout_read_conn()?;
+        let mut rows = conn
+            .query(
+                "select record_json, server_id from servers
+                     where server_id = ?1 limit 1",
+                (server_id,),
+            )
+            .await
+            .map_err(turso_error)?;
+        rows.next()
+            .await
+            .map_err(turso_error)?
+            .map(|row| {
+                let server: ServerRecord = decode_json(row_string(&row, 0)?)?;
+                crate::validate_server_record_scope(&server, &row_string(&row, 1)?)?;
+                Ok(server)
+            })
+            .transpose()?
+            .ok_or_else(|| LakeCatError::NotFound {
+                object: "server",
+                name: server_id.to_string(),
+            })
+    }
+
     async fn upsert_project(&self, project: ProjectRecord) -> LakeCatResult<ProjectRecord> {
         project.validate()?;
         self.write_txn(move |conn| {
@@ -1017,6 +1043,32 @@ impl CatalogStore for TursoCatalogStore {
             projects.push(project);
         }
         Ok(projects)
+    }
+
+    async fn load_project(&self, project_id: &str) -> LakeCatResult<ProjectRecord> {
+        validate_project_id(project_id)?;
+        let conn = self.checkout_read_conn()?;
+        let mut rows = conn
+            .query(
+                "select record_json, project_id from projects
+                     where project_id = ?1 limit 1",
+                (project_id,),
+            )
+            .await
+            .map_err(turso_error)?;
+        rows.next()
+            .await
+            .map_err(turso_error)?
+            .map(|row| {
+                let project: ProjectRecord = decode_json(row_string(&row, 0)?)?;
+                crate::validate_project_record_scope(&project, &row_string(&row, 1)?)?;
+                Ok(project)
+            })
+            .transpose()?
+            .ok_or_else(|| LakeCatError::NotFound {
+                object: "project",
+                name: project_id.to_string(),
+            })
     }
 
     async fn upsert_warehouse(&self, warehouse: WarehouseRecord) -> LakeCatResult<WarehouseRecord> {

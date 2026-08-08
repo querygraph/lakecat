@@ -517,37 +517,46 @@ pub(crate) async fn querygraph_bootstrap(
 pub(crate) async fn querygraph_tenant_projection(
     state: &LakeCatState,
 ) -> LakeCatResult<QueryGraphTenantProjection> {
-    let warehouse_record = match state.store.load_warehouse(&state.warehouse).await {
-        Ok(record) => Some(record),
-        Err(LakeCatError::NotFound {
-            object: "warehouse",
-            ..
-        }) => None,
-        Err(err) => return Err(err),
+    let warehouse_record = optional_management_record(
+        state.store.load_warehouse(&state.warehouse).await,
+        "warehouse",
+    )?;
+    let project_record = match warehouse_record.as_ref() {
+        Some(warehouse) => optional_management_record(
+            state.store.load_project(&warehouse.project_id).await,
+            "project",
+        )?,
+        None => None,
     };
-    let projects = state.store.list_projects().await?;
-    let project_record = warehouse_record.as_ref().and_then(|warehouse| {
-        projects
-            .iter()
-            .find(|project| project.project_id == warehouse.project_id)
-            .cloned()
-    });
-    let servers = state.store.list_servers().await?;
-    let server_record = project_record
+    let server_record = match project_record
         .as_ref()
         .and_then(|project| project.server_id.as_ref())
-        .and_then(|server_id| {
-            servers
-                .iter()
-                .find(|server| server.server_id == *server_id)
-                .cloned()
-        });
+    {
+        Some(server_id) => {
+            optional_management_record(state.store.load_server(server_id).await, "server")?
+        }
+        None => None,
+    };
     Ok(lakecat_querygraph::tenant_projection_from_records(
         &state.warehouse,
         warehouse_record.as_ref(),
         project_record.as_ref(),
         server_record.as_ref(),
     ))
+}
+
+fn optional_management_record<T>(
+    result: LakeCatResult<T>,
+    object: &'static str,
+) -> LakeCatResult<Option<T>> {
+    match result {
+        Ok(record) => Ok(Some(record)),
+        Err(LakeCatError::NotFound {
+            object: missing_object,
+            ..
+        }) if missing_object == object => Ok(None),
+        Err(err) => Err(err),
+    }
 }
 
 pub(crate) fn querygraph_view_version_receipts(

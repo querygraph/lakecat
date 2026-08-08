@@ -108,12 +108,34 @@ pub trait CatalogStore: Send + Sync + 'static {
     async fn list_servers(&self) -> LakeCatResult<Vec<ServerRecord>> {
         Ok(Vec::new())
     }
+    async fn load_server(&self, server_id: &str) -> LakeCatResult<ServerRecord> {
+        validate_project_id(server_id)?;
+        self.list_servers()
+            .await?
+            .into_iter()
+            .find(|server| server.server_id == server_id)
+            .ok_or_else(|| LakeCatError::NotFound {
+                object: "server",
+                name: server_id.to_string(),
+            })
+    }
     async fn upsert_project(&self, project: ProjectRecord) -> LakeCatResult<ProjectRecord> {
         project.validate()?;
         Ok(project)
     }
     async fn list_projects(&self) -> LakeCatResult<Vec<ProjectRecord>> {
         Ok(Vec::new())
+    }
+    async fn load_project(&self, project_id: &str) -> LakeCatResult<ProjectRecord> {
+        validate_project_id(project_id)?;
+        self.list_projects()
+            .await?
+            .into_iter()
+            .find(|project| project.project_id == project_id)
+            .ok_or_else(|| LakeCatError::NotFound {
+                object: "project",
+                name: project_id.to_string(),
+            })
     }
     async fn upsert_warehouse(&self, warehouse: WarehouseRecord) -> LakeCatResult<WarehouseRecord> {
         warehouse.validate()?;
