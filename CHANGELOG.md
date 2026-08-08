@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- QueryGraph graph and table-only import hashes now stream borrowed canonical
+  projections directly into SHA-256 instead of deep-materializing sorted JSON
+  trees and serializing them a second time. Legacy-value equivalence tests lock
+  the exact hash bytes. At 256 tables, graph hashing falls from about 1.315 to
+  0.774 milliseconds (41.4%), import hashing from 46.22 to 15.85 milliseconds
+  (65.6%), and full construction from 98.11 to 72.02 milliseconds (26.6%). The
+  already-optimized 1/64/256 service path improves again from about
+  0.484/21.46/86.9 milliseconds to 0.398/17.77/70.2 milliseconds.
+
 - QueryGraph production bootstrap now derives its audit summary from hashes
   already computed by the trusted in-process constructor instead of immediately
   re-verifying the freshly built bundle. Debug and test builds still run the

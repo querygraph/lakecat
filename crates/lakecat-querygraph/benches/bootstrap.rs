@@ -4,8 +4,8 @@ use criterion::{
 use lakecat_core::{Namespace, Principal, TableIdent, TableName, WarehouseName};
 use lakecat_querygraph::{
     QueryGraphViewReceiptEvidence, bootstrap_from_tables,
-    bootstrap_from_tables_views_with_policy_bindings, catalog_graph_from_tables,
-    table_projection_from_table, validate_view_receipt_evidence,
+    bootstrap_from_tables_views_with_policy_bindings, catalog_graph_from_tables, graph_hash,
+    table_only_querygraph_import_hash, table_projection_from_table, validate_view_receipt_evidence,
 };
 use lakecat_store::{TableRecord, ViewRecord};
 use serde_json::json;
@@ -123,6 +123,31 @@ fn bench_catalog_scale(c: &mut Criterion) {
                     },
                     BatchSize::SmallInput,
                 );
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("graph_hash", table_count),
+            &table_count,
+            |b, _| {
+                b.iter(|| {
+                    graph_hash(black_box(&bundle.graph)).expect("hash benchmark catalog graph")
+                });
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("import_hash", table_count),
+            &table_count,
+            |b, _| {
+                b.iter(|| {
+                    table_only_querygraph_import_hash(
+                        &bundle.warehouse,
+                        &bundle.manifest,
+                        &bundle.tables,
+                        &bundle.graph,
+                        &bundle.open_lineage,
+                    )
+                    .expect("hash benchmark import bundle")
+                });
             },
         );
         group.bench_with_input(

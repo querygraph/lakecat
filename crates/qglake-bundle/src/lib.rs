@@ -1,8 +1,9 @@
 use chrono::{DateTime, Utc};
 use lakecat_core::{
-    LakeCatResult, TableIdent, WarehouseName, content_hash_bytes, content_hash_json,
+    LakeCatResult, TableIdent, TableName, WarehouseName, content_hash_bytes, content_hash_json,
 };
-use serde::{Deserialize, Serialize};
+use serde::ser::SerializeSeq;
+use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -548,12 +549,7 @@ pub fn policy_bindings_value(table: &QueryGraphTableProjection) -> LakeCatResult
 }
 
 pub fn graph_hash(graph: &QueryGraphCatalogGraph) -> LakeCatResult<String> {
-    let value = serde_json::to_value(graph).map_err(|err| {
-        lakecat_core::LakeCatError::Internal(format!(
-            "failed to encode QueryGraph catalog graph: {err}"
-        ))
-    })?;
-    content_hash_json(&value)
+    content_hash_json(&CanonicalQueryGraph::from(graph))
 }
 
 pub fn table_only_querygraph_import_hash(
@@ -563,60 +559,186 @@ pub fn table_only_querygraph_import_hash(
     graph: &QueryGraphCatalogGraph,
     open_lineage: &Value,
 ) -> LakeCatResult<String> {
-    let graph = serde_json::to_value(graph).map_err(|err| {
-        lakecat_core::LakeCatError::Internal(format!(
-            "failed to encode QueryGraph catalog graph for import hash: {err}"
-        ))
-    })?;
-    content_hash_json(&json!({
-        "warehouse": warehouse.as_str(),
-        "manifest": table_only_querygraph_import_manifest(manifest),
-        "tables": tables
-            .iter()
-            .map(table_only_querygraph_import_table)
-            .collect::<Vec<_>>(),
-        "graph": graph,
-        "openLineage": open_lineage,
-    }))
-}
-
-fn table_only_querygraph_import_manifest(manifest: &QueryGraphBundleManifest) -> Value {
-    json!({
-        "schema-version": manifest.schema_version,
-        "producer": manifest.producer,
-        "standards": manifest.standards,
-        "table-artifacts": manifest
-            .table_artifacts
-            .iter()
-            .map(table_only_querygraph_import_table_artifact)
-            .collect::<Vec<_>>(),
-        "open-lineage-hash": manifest.open_lineage_hash,
+    content_hash_json(&TableOnlyQueryGraphImport {
+        graph: CanonicalQueryGraph::from(graph),
+        manifest: TableOnlyQueryGraphImportManifest::from(manifest),
+        open_lineage,
+        tables: TableOnlyQueryGraphImportTables(tables),
+        warehouse: warehouse.as_str(),
     })
 }
 
-fn table_only_querygraph_import_table_artifact(artifact: &QueryGraphTableArtifactHashes) -> Value {
-    json!({
-        "stable-id": artifact.stable_id,
-        "croissant-hash": artifact.croissant_hash,
-        "cdif-hash": artifact.cdif_hash,
-        "osi-hash": artifact.osi_hash,
-        "odrl-hash": artifact.odrl_hash,
-    })
+/// Borrowed JSON projection whose declaration order matches the sorted object
+/// keys emitted by the original `serde_json::Value` hash contract.
+#[derive(Serialize)]
+struct CanonicalQueryGraph<'a> {
+    edges: CanonicalQueryGraphEdges<'a>,
+    nodes: &'a [QueryGraphNode],
 }
 
-fn table_only_querygraph_import_table(table: &QueryGraphTableProjection) -> Value {
-    json!({
-        "ident": table.ident,
-        "stable-id": table.stable_id,
-        "location": table.location,
-        "metadata-location": table.metadata_location,
-        "version": table.version,
-        "format-version": table.format_version,
-        "croissant": table.croissant,
-        "cdif": table.cdif,
-        "osi": table.osi,
-        "odrl": table.odrl,
-    })
+impl<'a> From<&'a QueryGraphCatalogGraph> for CanonicalQueryGraph<'a> {
+    fn from(graph: &'a QueryGraphCatalogGraph) -> Self {
+        Self {
+            edges: CanonicalQueryGraphEdges(&graph.edges),
+            nodes: &graph.nodes,
+        }
+    }
+}
+
+struct CanonicalQueryGraphEdges<'a>(&'a [QueryGraphEdge]);
+
+impl Serialize for CanonicalQueryGraphEdges<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut sequence = serializer.serialize_seq(Some(self.0.len()))?;
+        for edge in self.0 {
+            sequence.serialize_element(&CanonicalQueryGraphEdge {
+                from: &edge.from,
+                label: &edge.label,
+                to: &edge.to,
+            })?;
+        }
+        sequence.end()
+    }
+}
+
+#[derive(Serialize)]
+struct CanonicalQueryGraphEdge<'a> {
+    from: &'a str,
+    label: &'a str,
+    to: &'a str,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TableOnlyQueryGraphImport<'a> {
+    graph: CanonicalQueryGraph<'a>,
+    manifest: TableOnlyQueryGraphImportManifest<'a>,
+    #[serde(rename = "openLineage")]
+    open_lineage: &'a Value,
+    tables: TableOnlyQueryGraphImportTables<'a>,
+    warehouse: &'a str,
+}
+
+#[derive(Serialize)]
+struct TableOnlyQueryGraphImportManifest<'a> {
+    #[serde(rename = "open-lineage-hash")]
+    open_lineage_hash: &'a str,
+    producer: &'a str,
+    #[serde(rename = "schema-version")]
+    schema_version: &'a str,
+    standards: &'a [String],
+    #[serde(rename = "table-artifacts")]
+    table_artifacts: TableOnlyQueryGraphImportTableArtifacts<'a>,
+}
+
+impl<'a> From<&'a QueryGraphBundleManifest> for TableOnlyQueryGraphImportManifest<'a> {
+    fn from(manifest: &'a QueryGraphBundleManifest) -> Self {
+        Self {
+            open_lineage_hash: &manifest.open_lineage_hash,
+            producer: &manifest.producer,
+            schema_version: &manifest.schema_version,
+            standards: &manifest.standards,
+            table_artifacts: TableOnlyQueryGraphImportTableArtifacts(&manifest.table_artifacts),
+        }
+    }
+}
+
+struct TableOnlyQueryGraphImportTableArtifacts<'a>(&'a [QueryGraphTableArtifactHashes]);
+
+impl Serialize for TableOnlyQueryGraphImportTableArtifacts<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut sequence = serializer.serialize_seq(Some(self.0.len()))?;
+        for artifact in self.0 {
+            sequence.serialize_element(&TableOnlyQueryGraphImportTableArtifact {
+                cdif_hash: &artifact.cdif_hash,
+                croissant_hash: &artifact.croissant_hash,
+                odrl_hash: &artifact.odrl_hash,
+                osi_hash: &artifact.osi_hash,
+                stable_id: &artifact.stable_id,
+            })?;
+        }
+        sequence.end()
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "kebab-case")]
+struct TableOnlyQueryGraphImportTableArtifact<'a> {
+    cdif_hash: &'a str,
+    croissant_hash: &'a str,
+    odrl_hash: &'a str,
+    osi_hash: &'a str,
+    stable_id: &'a str,
+}
+
+struct TableOnlyQueryGraphImportTables<'a>(&'a [QueryGraphTableProjection]);
+
+impl Serialize for TableOnlyQueryGraphImportTables<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut sequence = serializer.serialize_seq(Some(self.0.len()))?;
+        for table in self.0 {
+            sequence.serialize_element(&TableOnlyQueryGraphImportTable::from(table))?;
+        }
+        sequence.end()
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "kebab-case")]
+struct TableOnlyQueryGraphImportTable<'a> {
+    cdif: &'a Value,
+    croissant: &'a Value,
+    format_version: Option<i64>,
+    ident: CanonicalTableIdent<'a>,
+    location: &'a str,
+    metadata_location: Option<&'a str>,
+    odrl: &'a Value,
+    osi: &'a Value,
+    stable_id: &'a str,
+    version: u64,
+}
+
+impl<'a> From<&'a QueryGraphTableProjection> for TableOnlyQueryGraphImportTable<'a> {
+    fn from(table: &'a QueryGraphTableProjection) -> Self {
+        Self {
+            cdif: &table.cdif,
+            croissant: &table.croissant,
+            format_version: table.format_version,
+            ident: CanonicalTableIdent::from(&table.ident),
+            location: &table.location,
+            metadata_location: table.metadata_location.as_deref(),
+            odrl: &table.odrl,
+            osi: &table.osi,
+            stable_id: &table.stable_id,
+            version: table.version,
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct CanonicalTableIdent<'a> {
+    name: &'a TableName,
+    namespace: &'a lakecat_core::Namespace,
+    warehouse: &'a WarehouseName,
+}
+
+impl<'a> From<&'a TableIdent> for CanonicalTableIdent<'a> {
+    fn from(ident: &'a TableIdent) -> Self {
+        Self {
+            name: &ident.name,
+            namespace: &ident.namespace,
+            warehouse: &ident.warehouse,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

@@ -11,6 +11,40 @@ fn is_full_sha256_hash(value: &str) -> bool {
     digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
+fn legacy_table_only_querygraph_import_hash(bundle: &QueryGraphBootstrap) -> String {
+    content_hash_json(&json!({
+        "warehouse": bundle.warehouse.as_str(),
+        "manifest": {
+            "schema-version": bundle.manifest.schema_version,
+            "producer": bundle.manifest.producer,
+            "standards": bundle.manifest.standards,
+            "table-artifacts": bundle.manifest.table_artifacts.iter().map(|artifact| json!({
+                "stable-id": artifact.stable_id,
+                "croissant-hash": artifact.croissant_hash,
+                "cdif-hash": artifact.cdif_hash,
+                "osi-hash": artifact.osi_hash,
+                "odrl-hash": artifact.odrl_hash,
+            })).collect::<Vec<_>>(),
+            "open-lineage-hash": bundle.manifest.open_lineage_hash,
+        },
+        "tables": bundle.tables.iter().map(|table| json!({
+            "ident": table.ident,
+            "stable-id": table.stable_id,
+            "location": table.location,
+            "metadata-location": table.metadata_location,
+            "version": table.version,
+            "format-version": table.format_version,
+            "croissant": table.croissant,
+            "cdif": table.cdif,
+            "osi": table.osi,
+            "odrl": table.odrl,
+        })).collect::<Vec<_>>(),
+        "graph": bundle.graph,
+        "openLineage": bundle.open_lineage,
+    }))
+    .unwrap()
+}
+
 fn querygraph_test_table(name: &str) -> TableRecord {
     let ident = TableIdent::new(
         WarehouseName::new("local").unwrap(),
@@ -117,6 +151,10 @@ fn projects_iceberg_table_into_querygraph_bundle() {
         bundle.manifest.graph_hash,
         graph_hash(&bundle.graph).unwrap()
     );
+    assert_eq!(
+        bundle.manifest.graph_hash,
+        content_hash_json(&serde_json::to_value(&bundle.graph).unwrap()).unwrap()
+    );
     let import_contract = bundle
         .manifest
         .querygraph_import
@@ -138,6 +176,10 @@ fn projects_iceberg_table_into_querygraph_bundle() {
             &bundle.open_lineage
         )
         .unwrap()
+    );
+    assert_eq!(
+        import_contract.table_only_bundle_hash,
+        legacy_table_only_querygraph_import_hash(&bundle)
     );
     assert!(bundle.manifest.standards.iter().any(|item| item == "CDIF"));
     assert!(
