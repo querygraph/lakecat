@@ -57,6 +57,10 @@ fn legacy_querygraph_bundle_hash(bundle: &QueryGraphBootstrap) -> String {
     .unwrap()
 }
 
+fn legacy_view_receipt_evidence_hash(evidence: &[QueryGraphViewReceiptEvidence]) -> String {
+    content_hash_json(&serde_json::to_value(evidence).unwrap()).unwrap()
+}
+
 fn querygraph_test_table(name: &str) -> TableRecord {
     let ident = TableIdent::new(
         WarehouseName::new("local").unwrap(),
@@ -343,6 +347,10 @@ fn projects_policy_bindings_into_querygraph_bundle() {
 
     assert_eq!(bundle.tables[0].policy_bindings.len(), 1);
     assert_eq!(bundle.bundle_hash, legacy_querygraph_bundle_hash(&bundle));
+    assert_eq!(
+        bundle.manifest.table_artifacts[0].policy_bindings_hash,
+        content_hash_json(&policy_bindings_value(&bundle.tables[0]).unwrap()).unwrap()
+    );
     assert_eq!(bundle.tables[0].policy_bindings[0].policy_id, "agent-read");
     assert_eq!(
         bundle.tables[0].policy_bindings[0].odrl["lakecat:read-restriction"]["allowed-columns"],
@@ -483,6 +491,17 @@ fn projects_catalog_views_into_querygraph_bundle() {
             .view_receipt_evidence,
     )
     .unwrap();
+    assert_eq!(
+        expected_evidence_hash,
+        legacy_view_receipt_evidence_hash(
+            &bundle
+                .manifest
+                .querygraph_import
+                .as_ref()
+                .unwrap()
+                .view_receipt_evidence
+        )
+    );
     assert_eq!(
         bundle
             .manifest

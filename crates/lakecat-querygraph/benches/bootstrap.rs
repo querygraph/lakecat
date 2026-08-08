@@ -1,14 +1,16 @@
 use criterion::{
     BatchSize, BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main,
 };
-use lakecat_core::{Namespace, Principal, TableIdent, TableName, WarehouseName};
+use lakecat_core::{Namespace, Principal, TableIdent, TableName, WarehouseName, content_hash_json};
 use lakecat_querygraph::{
-    QueryGraphViewReceiptEvidence, bootstrap_from_tables,
+    QueryGraphTableArtifactHashes, QueryGraphViewReceiptEvidence, bootstrap_from_tables,
     bootstrap_from_tables_views_with_policy_bindings, catalog_graph_from_tables, graph_hash,
-    querygraph_bundle_hash, table_only_querygraph_import_hash, table_projection_from_table,
-    validate_view_receipt_evidence,
+    policy_bindings_hash, policy_bindings_value, querygraph_bundle_hash,
+    table_only_querygraph_import_hash, table_projection_from_table,
+    table_projection_from_table_with_policies, validate_view_receipt_evidence,
+    view_receipt_evidence_hash,
 };
-use lakecat_store::{TableRecord, ViewRecord};
+use lakecat_store::{PolicyBinding, TableRecord, ViewRecord};
 use serde_json::json;
 
 fn table(name: &str, field_count: usize) -> TableRecord {
@@ -50,6 +52,25 @@ fn tables(count: usize, field_count: usize) -> Vec<TableRecord> {
         .collect()
 }
 
+fn policies(table: &TableRecord, count: usize) -> Vec<PolicyBinding> {
+    (0..count)
+        .map(|index| {
+            PolicyBinding::new(
+                format!("policy-{index}"),
+                table.ident.warehouse.clone(),
+                Some(table.ident.namespace.clone()),
+                Some(table.ident.name.clone()),
+                true,
+                json!({
+                    "uid": format!("policy:benchmark:{index}"),
+                    "permission": [{"action": "read"}],
+                }),
+            )
+            .expect("benchmark policy binding")
+        })
+        .collect()
+}
+
 fn views(count: usize) -> Vec<ViewRecord> {
     (0..count)
         .map(|index| {
@@ -82,6 +103,90 @@ fn bench_table_projection(c: &mut Criterion) {
                     |input| table_projection_from_table(black_box(input)),
                     BatchSize::SmallInput,
                 );
+            },
+        );
+    }
+    group.finish();
+}
+
+fn bench_table_artifacts(c: &mut Criterion) {
+    let mut group = c.benchmark_group("querygraph_table_artifacts");
+    for field_count in [1, 100, 1_000] {
+        let projection = table_projection_from_table(table("events", field_count));
+        group.throughput(Throughput::Elements(field_count as u64));
+        group.bench_with_input(
+            BenchmarkId::from_parameter(field_count),
+            &field_count,
+            |b, _| {
+                b.iter(|| {
+                    QueryGraphTableArtifactHashes::from_table(black_box(&projection))
+                        .expect("hash benchmark table artifacts")
+                });
+            },
+        );
+    }
+    group.finish();
+
+    let mut group = c.benchmark_group("querygraph_table_artifact_hashes");
+    for field_count in [1, 100, 1_000] {
+        let projection = table_projection_from_table(table("events", field_count));
+        group.throughput(Throughput::Elements(field_count as u64));
+        for (name, value) in [
+            ("croissant", &projection.croissant),
+            ("cdif", &projection.cdif),
+            ("osi", &projection.osi),
+            ("odrl", &projection.odrl),
+        ] {
+            group.bench_with_input(BenchmarkId::new(name, field_count), &field_count, |b, _| {
+                b.iter(|| {
+                    content_hash_json(black_box(value)).expect("hash benchmark table artifact")
+                });
+            });
+        }
+        group.bench_with_input(
+            BenchmarkId::new("policy_bindings", field_count),
+            &field_count,
+            |b, _| {
+                b.iter(|| {
+                    policy_bindings_hash(black_box(&projection))
+                        .expect("hash benchmark policy bindings")
+                });
+            },
+        );
+    }
+    group.finish();
+}
+
+fn bench_policy_binding_hashes(c: &mut Criterion) {
+    let mut group = c.benchmark_group("querygraph_policy_binding_hashes");
+    for policy_count in [1, 64, 256] {
+        let table = table("events", 1);
+        let projection = table_projection_from_table_with_policies(
+            table.clone(),
+            policies(&table, policy_count),
+        );
+        group.throughput(Throughput::Elements(policy_count as u64));
+        group.bench_with_input(
+            BenchmarkId::new("streamed", policy_count),
+            &policy_count,
+            |b, _| {
+                b.iter(|| {
+                    policy_bindings_hash(black_box(&projection))
+                        .expect("hash benchmark policy bindings")
+                });
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("materialized", policy_count),
+            &policy_count,
+            |b, _| {
+                b.iter(|| {
+                    content_hash_json(
+                        &policy_bindings_value(black_box(&projection))
+                            .expect("encode benchmark policy bindings"),
+                    )
+                    .expect("hash benchmark materialized policy bindings")
+                });
             },
         );
     }
@@ -230,6 +335,16 @@ fn bench_view_receipts(c: &mut Criterion) {
             },
         );
         group.bench_with_input(
+            BenchmarkId::new("evidence_hash", view_count),
+            &view_count,
+            |b, _| {
+                b.iter(|| {
+                    view_receipt_evidence_hash(black_box(&evidence))
+                        .expect("hash benchmark view receipt evidence")
+                });
+            },
+        );
+        group.bench_with_input(
             BenchmarkId::new("attach", view_count),
             &view_count,
             |b, _| {
@@ -262,6 +377,8 @@ fn bench_view_receipts(c: &mut Criterion) {
 criterion_group!(
     benches,
     bench_table_projection,
+    bench_table_artifacts,
+    bench_policy_binding_hashes,
     bench_catalog_scale,
     bench_view_receipts
 );

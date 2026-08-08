@@ -480,12 +480,7 @@ pub fn validate_view_receipt_evidence(
 pub fn view_receipt_evidence_hash(
     evidence: &[QueryGraphViewReceiptEvidence],
 ) -> LakeCatResult<String> {
-    let value = serde_json::to_value(evidence).map_err(|err| {
-        lakecat_core::LakeCatError::Internal(format!(
-            "failed to encode QueryGraph view receipt evidence: {err}"
-        ))
-    })?;
-    content_hash_json(&value)
+    content_hash_json(&CanonicalJsonSlice::new(evidence))
 }
 
 pub fn querygraph_bootstrap_standards() -> Vec<String> {
@@ -540,7 +535,7 @@ impl QueryGraphTableArtifactHashes {
             cdif_hash: content_hash_json(&table.cdif)?,
             osi_hash: content_hash_json(&table.osi)?,
             odrl_hash: content_hash_json(&table.odrl)?,
-            policy_bindings_hash: content_hash_json(&policy_bindings_value(table)?)?,
+            policy_bindings_hash: policy_bindings_hash(table)?,
         })
     }
 
@@ -552,10 +547,14 @@ impl QueryGraphTableArtifactHashes {
         verify_hash(
             "policy bindings",
             &self.policy_bindings_hash,
-            &policy_bindings_value(table)?,
+            &CanonicalJsonSlice::new(&table.policy_bindings),
         )?;
         Ok(())
     }
+}
+
+pub fn policy_bindings_hash(table: &QueryGraphTableProjection) -> LakeCatResult<String> {
+    content_hash_json(&CanonicalJsonSlice::new(&table.policy_bindings))
 }
 
 pub fn policy_bindings_value(table: &QueryGraphTableProjection) -> LakeCatResult<Value> {
@@ -1163,7 +1162,10 @@ pub fn insert_node(nodes: &mut BTreeMap<String, QueryGraphNode>, node: QueryGrap
     nodes.entry(node.id.clone()).or_insert(node);
 }
 
-pub fn verify_hash(label: &str, expected: &str, value: &Value) -> LakeCatResult<()> {
+pub fn verify_hash<T>(label: &str, expected: &str, value: &T) -> LakeCatResult<()>
+where
+    T: Serialize + ?Sized,
+{
     let computed = content_hash_json(value)?;
     if expected != computed {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(

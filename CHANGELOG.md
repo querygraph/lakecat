@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- QueryGraph policy-binding and view-receipt evidence hashes now stream their
+  existing canonical projections without allocating intermediate JSON trees.
+  Policy hashing improves from about 1.702/99.03/403.11 microseconds at
+  1/64/256 bindings to 0.816/32.38/129.19 microseconds (52-68%); 256-record
+  receipt hashing falls from 239.43 to 94.96 microseconds (60.3%), reducing
+  receipt attach/verify by 8.2%/4.5%. The 1/64/256 table-and-view HTTP path
+  improves from about 0.226/9.96/40.17 to 0.211/9.18/37.31 milliseconds
+  (6.6-7.8%). Legacy-value equivalence tests cover both evidence contracts.
+
 - LakeCat now enables RustCrypto's runtime-dispatched assembly SHA-2 backend,
   accelerating every content and evidence hash while preserving the portable
   software fallback. On the benchmark runner's ARM SHA2-capable CPU,
