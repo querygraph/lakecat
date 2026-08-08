@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added a bounded end-to-end service scan benchmark spanning Axum routing and
+  JSON decoding, TypeDID and policy authorization, catalog lookup, Sail
+  delegation, governed proof issuance, audit evidence, and response shaping at
+  1, 100, and 256 fields. Its no-accumulation benchmark store isolates service
+  work while preserving the complete request path; same-container 256-field
+  baselines are about 754 microseconds unrestricted and 1.086 milliseconds
+  governed.
+
 - Added scale benchmarks for Iceberg REST scan-request decoding and
   normalization. Scan aliases now normalize into an owned canonical request,
   moving projection, filter, and statistics payloads across the service

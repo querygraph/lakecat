@@ -50,3 +50,7 @@ trybuild = { workspace = true }
 name = "commit_path"
 harness = false
 required-features = ["sail-local", "turso-local"]
+
+[[bench]]
+name = "scan_path"
+harness = false
