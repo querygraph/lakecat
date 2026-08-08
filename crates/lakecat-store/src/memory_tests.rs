@@ -1629,6 +1629,16 @@ async fn memory_store_rejects_corrupt_view_receipts_on_read() {
         LakeCatError::Internal(message)
             if message.contains("view receipt hash must be a SHA-256 digest")
     ));
+
+    let err = store
+        .list_warehouse_view_version_receipts(&warehouse)
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        LakeCatError::Internal(message)
+            if message.contains("view receipt hash must be a SHA-256 digest")
+    ));
 }
 
 #[tokio::test]

@@ -921,6 +921,36 @@ impl CatalogStore for MemoryCatalogStore {
         Ok(receipts)
     }
 
+    async fn list_warehouse_view_version_receipts(
+        &self,
+        warehouse: &WarehouseName,
+    ) -> LakeCatResult<Vec<ViewVersionReceipt>> {
+        let state = self.state.read().await;
+        let mut receipts = state
+            .view_version_receipts
+            .iter()
+            .filter(|receipt| view_key_matches_warehouse(&receipt.view_key, warehouse))
+            .map(|receipt| {
+                validate_memory_view_receipt_scope(
+                    receipt,
+                    warehouse,
+                    &receipt.receipt.namespace,
+                    Some(&receipt.receipt.name),
+                )?;
+                Ok(receipt.receipt.clone())
+            })
+            .collect::<LakeCatResult<Vec<_>>>()?;
+        receipts.sort_by(|left, right| {
+            left.namespace
+                .cmp(&right.namespace)
+                .then_with(|| left.name.as_str().cmp(right.name.as_str()))
+                .then_with(|| left.view_version.cmp(&right.view_version))
+                .then_with(|| left.recorded_at.cmp(&right.recorded_at))
+        });
+        validate_view_receipt_chains(&receipts)?;
+        Ok(receipts)
+    }
+
     async fn load_view(
         &self,
         warehouse: &WarehouseName,
@@ -1023,6 +1053,28 @@ impl CatalogStore for MemoryCatalogStore {
             .cloned()
             .collect::<Vec<_>>();
         views.sort_by(|left, right| left.name.as_str().cmp(right.name.as_str()));
+        Ok(views)
+    }
+
+    async fn list_warehouse_views(
+        &self,
+        warehouse: &WarehouseName,
+    ) -> LakeCatResult<Vec<ViewRecord>> {
+        let state = self.state.read().await;
+        let mut views = state
+            .views
+            .iter()
+            .filter(|(view_key, _)| view_key_matches_warehouse(view_key, warehouse))
+            .map(|(view_key, view)| {
+                validate_view_record_map_scope(view, view_key)?;
+                Ok(view.clone())
+            })
+            .collect::<LakeCatResult<Vec<_>>>()?;
+        views.sort_by(|left, right| {
+            left.namespace
+                .cmp(&right.namespace)
+                .then_with(|| left.name.as_str().cmp(right.name.as_str()))
+        });
         Ok(views)
     }
 

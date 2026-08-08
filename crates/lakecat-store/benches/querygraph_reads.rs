@@ -207,6 +207,97 @@ impl TenantReadCase {
     }
 }
 
+struct WarehouseViewReadCase {
+    store: Arc<TursoCatalogStore>,
+    warehouse: WarehouseName,
+    namespaces: Vec<Namespace>,
+}
+
+impl WarehouseViewReadCase {
+    async fn new(item_count: usize) -> Self {
+        let store = TursoCatalogStore::in_memory()
+            .await
+            .expect("create Turso benchmark store");
+        let warehouse = WarehouseName::new("local").expect("static warehouse");
+        let namespace_count = item_count.clamp(1, 16);
+        let namespaces = (0..namespace_count)
+            .map(|index| {
+                Namespace::new(vec![format!("namespace_{index:02}")]).expect("benchmark namespace")
+            })
+            .collect::<Vec<_>>();
+        for namespace in &namespaces {
+            store
+                .create_namespace(&warehouse, namespace.clone())
+                .await
+                .expect("persist benchmark namespace");
+        }
+        for index in 0..item_count {
+            let namespace = namespaces[index % namespace_count].clone();
+            store
+                .upsert_view(
+                    ViewRecord::new(
+                        warehouse.clone(),
+                        namespace,
+                        TableName::new(format!("view_{index:04}")).expect("benchmark view name"),
+                        format!("select * from table_{index:04}"),
+                        "spark",
+                        Some(1),
+                        BTreeMap::new(),
+                        Principal::anonymous(),
+                    )
+                    .expect("benchmark view"),
+                )
+                .await
+                .expect("persist benchmark view");
+        }
+        Self {
+            store,
+            warehouse,
+            namespaces,
+        }
+    }
+
+    async fn namespace_views(&self) -> Vec<ViewRecord> {
+        let mut views = Vec::new();
+        for namespace in &self.namespaces {
+            views.extend(
+                self.store
+                    .list_views(&self.warehouse, namespace)
+                    .await
+                    .expect("list benchmark namespace views"),
+            );
+        }
+        views
+    }
+
+    async fn warehouse_views(&self) -> Vec<ViewRecord> {
+        self.store
+            .list_warehouse_views(&self.warehouse)
+            .await
+            .expect("list benchmark warehouse views")
+    }
+
+    async fn namespace_receipts(&self) -> Vec<ViewVersionReceipt> {
+        let mut receipts = Vec::new();
+        for namespace in &self.namespaces {
+            receipts.extend(
+                self.store
+                    .list_namespace_view_version_receipts(&self.warehouse, namespace)
+                    .await
+                    .expect("list benchmark namespace receipts"),
+            );
+        }
+        receipts
+    }
+
+    async fn warehouse_receipts(&self) -> Vec<ViewVersionReceipt> {
+        self.store
+            .list_warehouse_view_version_receipts(&self.warehouse)
+            .await
+            .expect("list benchmark warehouse receipts")
+    }
+}
+
 fn bench_querygraph_reads(c: &mut Criterion) {
     let runtime = tokio::runtime::Runtime::new().expect("benchmark runtime");
     let cases = [
@@ -284,5 +375,57 @@ fn bench_tenant_reads(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_querygraph_reads, bench_tenant_reads);
+fn bench_warehouse_view_reads(c: &mut Criterion) {
+    let runtime = tokio::runtime::Runtime::new().expect("benchmark runtime");
+    let cases = [
+        (1, runtime.block_on(WarehouseViewReadCase::new(1))),
+        (64, runtime.block_on(WarehouseViewReadCase::new(64))),
+        (256, runtime.block_on(WarehouseViewReadCase::new(256))),
+    ];
+    let mut group = c.benchmark_group("turso_warehouse_view_reads");
+    group.sample_size(20);
+    for (item_count, case) in &cases {
+        group.throughput(Throughput::Elements(*item_count as u64));
+        group.bench_with_input(
+            BenchmarkId::new("namespace_views", item_count),
+            case,
+            |b, case| {
+                b.to_async(&runtime)
+                    .iter(|| async { black_box(case.namespace_views().await) });
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("warehouse_views", item_count),
+            case,
+            |b, case| {
+                b.to_async(&runtime)
+                    .iter(|| async { black_box(case.warehouse_views().await) });
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("namespace_receipts", item_count),
+            case,
+            |b, case| {
+                b.to_async(&runtime)
+                    .iter(|| async { black_box(case.namespace_receipts().await) });
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("warehouse_receipts", item_count),
+            case,
+            |b, case| {
+                b.to_async(&runtime)
+                    .iter(|| async { black_box(case.warehouse_receipts().await) });
+            },
+        );
+    }
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    bench_querygraph_reads,
+    bench_tenant_reads,
+    bench_warehouse_view_reads
+);
 criterion_main!(benches);

@@ -1429,6 +1429,38 @@ impl CatalogStore for TursoCatalogStore {
         Ok(receipts)
     }
 
+    async fn list_warehouse_view_version_receipts(
+        &self,
+        warehouse: &WarehouseName,
+    ) -> LakeCatResult<Vec<ViewVersionReceipt>> {
+        let conn = self.checkout_read_conn()?;
+        let mut rows = conn
+            .query(
+                "select receipt_json, namespace_path, view_name
+                     from view_version_receipts
+                     where warehouse = ?1
+                     order by namespace_path, view_name, view_version, recorded_at, receipt_id",
+                (warehouse.as_str(),),
+            )
+            .await
+            .map_err(turso_error)?;
+        let mut receipts = Vec::new();
+        while let Some(row) = rows.next().await.map_err(turso_error)? {
+            let receipt: ViewVersionReceipt = decode_json(row_string(&row, 0)?)?;
+            let row_namespace = row_string(&row, 1)?.parse::<Namespace>()?;
+            let row_view = TableName::new(row_string(&row, 2)?)?;
+            crate::validate_view_receipt_scope(
+                &receipt,
+                warehouse,
+                &row_namespace,
+                Some(&row_view),
+            )?;
+            receipts.push(receipt);
+        }
+        validate_view_receipt_chains(&receipts)?;
+        Ok(receipts)
+    }
+
     async fn load_view(
         &self,
         warehouse: &WarehouseName,
@@ -1593,6 +1625,32 @@ impl CatalogStore for TursoCatalogStore {
                      where warehouse = ?1 and namespace_path = ?2
                      order by view_name",
                 (warehouse.as_str(), namespace.path().as_str()),
+            )
+            .await
+            .map_err(turso_error)?;
+        let mut views = Vec::new();
+        while let Some(row) = rows.next().await.map_err(turso_error)? {
+            let view: ViewRecord = decode_json(row_string(&row, 0)?)?;
+            let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
+            let row_namespace = row_string(&row, 2)?.parse::<Namespace>()?;
+            let row_view = TableName::new(row_string(&row, 3)?)?;
+            crate::validate_view_record_scope(&view, &row_warehouse, &row_namespace, &row_view)?;
+            views.push(view);
+        }
+        Ok(views)
+    }
+
+    async fn list_warehouse_views(
+        &self,
+        warehouse: &WarehouseName,
+    ) -> LakeCatResult<Vec<ViewRecord>> {
+        let conn = self.checkout_read_conn()?;
+        let mut rows = conn
+            .query(
+                "select record_json, warehouse, namespace_path, view_name from views
+                     where warehouse = ?1
+                     order by namespace_path, view_name",
+                (warehouse.as_str(),),
             )
             .await
             .map_err(turso_error)?;

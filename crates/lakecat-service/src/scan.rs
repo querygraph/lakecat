@@ -445,21 +445,12 @@ pub(crate) async fn querygraph_bootstrap(
     }
     let policy_binding_count = policy_bindings.iter().map(Vec::len).sum::<usize>();
     let table_policy_bindings = tables.into_iter().zip(policy_bindings);
-    let namespaces = state.store.list_namespaces(&state.warehouse).await?;
-    let mut views = Vec::new();
-    for namespace in &namespaces {
-        views.extend(state.store.list_views(&state.warehouse, namespace).await?);
-    }
+    let views = state.store.list_warehouse_views(&state.warehouse).await?;
     let tenant = querygraph_tenant_projection(&state).await?;
-    let mut view_receipts = Vec::new();
-    for namespace in &namespaces {
-        view_receipts.extend(
-            state
-                .store
-                .list_namespace_view_version_receipts(&state.warehouse, namespace)
-                .await?,
-        );
-    }
+    let view_receipts = state
+        .store
+        .list_warehouse_view_version_receipts(&state.warehouse)
+        .await?;
     let view_version_receipts = querygraph_view_version_receipts(&views, &view_receipts)?;
     let bundle = lakecat_querygraph::bootstrap_from_catalog_snapshot(
         state.warehouse.clone(),

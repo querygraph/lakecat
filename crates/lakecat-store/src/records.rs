@@ -921,6 +921,14 @@ pub(crate) fn memory_view_receipt_key_matches_namespace(
     )
 }
 
+pub(crate) fn view_key_matches_warehouse(view_key: &str, warehouse: &WarehouseName) -> bool {
+    let mut parts = view_key.split('\u{1f}');
+    matches!(
+        (parts.next(), parts.next(), parts.next(), parts.next()),
+        (Some(row_warehouse), Some(_), Some(_), None) if row_warehouse == warehouse.as_str()
+    )
+}
+
 pub(crate) fn validate_view_receipt_chains(receipts: &[ViewVersionReceipt]) -> LakeCatResult<()> {
     let mut grouped = BTreeMap::<&str, Vec<&ViewVersionReceipt>>::new();
     for receipt in receipts {

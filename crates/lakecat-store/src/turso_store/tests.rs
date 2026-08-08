@@ -34,6 +34,82 @@ async fn turso_read_pool_reuses_connections_and_caps_idle_capacity() {
     assert_eq!(store.read_pool.lock().unwrap().len(), READ_POOL_MAX_IDLE);
 }
 
+async fn assert_warehouse_scoped_view_reads<S: CatalogStore>(store: &S) {
+    let local = WarehouseName::new("local").unwrap();
+    let other = WarehouseName::new("other").unwrap();
+    let alpha = "alpha".parse::<Namespace>().unwrap();
+    let beta = "beta".parse::<Namespace>().unwrap();
+    for (warehouse, namespace) in [
+        (&local, alpha.clone()),
+        (&local, beta.clone()),
+        (&other, alpha.clone()),
+    ] {
+        store.create_namespace(warehouse, namespace).await.unwrap();
+    }
+
+    let alpha_view = ViewRecord::new(
+        local.clone(),
+        alpha,
+        TableName::new("zeta_view").unwrap(),
+        "select 1",
+        "sql",
+        Some(1),
+        BTreeMap::new(),
+        Principal::anonymous(),
+    )
+    .unwrap();
+    let beta_view = ViewRecord::new(
+        local.clone(),
+        beta,
+        TableName::new("alpha_view").unwrap(),
+        "select 2",
+        "sql",
+        Some(1),
+        BTreeMap::new(),
+        Principal::anonymous(),
+    )
+    .unwrap();
+    let other_view = ViewRecord::new(
+        other.clone(),
+        "alpha".parse::<Namespace>().unwrap(),
+        TableName::new("other_view").unwrap(),
+        "select 3",
+        "sql",
+        Some(1),
+        BTreeMap::new(),
+        Principal::anonymous(),
+    )
+    .unwrap();
+    for view in [beta_view.clone(), other_view.clone(), alpha_view.clone()] {
+        store.upsert_view(view).await.unwrap();
+    }
+
+    assert_eq!(
+        store.list_warehouse_views(&local).await.unwrap(),
+        vec![alpha_view.clone(), beta_view.clone()]
+    );
+    assert_eq!(
+        store.list_warehouse_views(&other).await.unwrap(),
+        vec![other_view]
+    );
+    let receipts = store
+        .list_warehouse_view_version_receipts(&local)
+        .await
+        .unwrap();
+    assert_eq!(receipts.len(), 2);
+    assert_eq!(receipts[0].stable_id, "lakecat:view:local:alpha:zeta_view");
+    assert_eq!(receipts[1].stable_id, "lakecat:view:local:beta:alpha_view");
+}
+
+#[tokio::test]
+async fn warehouse_scoped_view_reads_span_namespaces_and_isolate_warehouses() {
+    let memory = MemoryCatalogStore::new();
+    assert_warehouse_scoped_view_reads(memory.as_ref()).await;
+
+    let turso = TursoCatalogStore::in_memory().await.unwrap();
+    assert_warehouse_scoped_view_reads(turso.as_ref()).await;
+}
+
 #[tokio::test]
 async fn turso_store_persists_server_records() {
     let store = TursoCatalogStore::in_memory().await.unwrap();
@@ -1231,6 +1307,16 @@ async fn turso_store_rejects_corrupt_view_receipts_on_read() {
 
     let err = store
         .list_namespace_view_version_receipts(&warehouse, &namespace)
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        LakeCatError::Internal(message)
+            if message.contains("view receipt hash must be a SHA-256 digest")
+    ));
+
+    let err = store
+        .list_warehouse_view_version_receipts(&warehouse)
         .await
         .unwrap_err();
     assert!(matches!(

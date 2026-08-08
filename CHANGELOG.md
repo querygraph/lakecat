@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added warehouse-scoped view and version-receipt store reads with compatible
+  namespace-based defaults and validated single-query Memory and Turso paths.
+  QueryGraph bootstrap now avoids up to 32 namespace fan-out reads. Across
+  1/64/256 views in up to 16 namespaces, Turso view loading falls from about
+  89.0/1,250.5/2,982.9 microseconds to 32.3/469.6/2,112.8 microseconds, while
+  receipt loading falls from 89.5/1,633.9/4,136.6 microseconds to
+  34.7/423.8/1,321.4 microseconds.
+
 - Added indexed project and server point reads to the catalog store contract,
   with validated Memory and Turso implementations, and switched QueryGraph
   tenant projection from catalog-wide list scans to scoped lookups. A new

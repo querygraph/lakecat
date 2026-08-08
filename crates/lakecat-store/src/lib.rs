@@ -243,6 +243,20 @@ pub trait CatalogStore: Send + Sync + 'static {
         }
         Ok(receipts)
     }
+    async fn list_warehouse_view_version_receipts(
+        &self,
+        warehouse: &WarehouseName,
+    ) -> LakeCatResult<Vec<ViewVersionReceipt>> {
+        let namespaces = self.list_namespaces(warehouse).await?;
+        let mut receipts = Vec::new();
+        for namespace in namespaces {
+            receipts.extend(
+                self.list_namespace_view_version_receipts(warehouse, &namespace)
+                    .await?,
+            );
+        }
+        Ok(receipts)
+    }
     async fn load_view(
         &self,
         warehouse: &WarehouseName,
@@ -290,6 +304,17 @@ pub trait CatalogStore: Send + Sync + 'static {
         _namespace: &Namespace,
     ) -> LakeCatResult<Vec<ViewRecord>> {
         Ok(Vec::new())
+    }
+    async fn list_warehouse_views(
+        &self,
+        warehouse: &WarehouseName,
+    ) -> LakeCatResult<Vec<ViewRecord>> {
+        let namespaces = self.list_namespaces(warehouse).await?;
+        let mut views = Vec::new();
+        for namespace in namespaces {
+            views.extend(self.list_views(warehouse, &namespace).await?);
+        }
+        Ok(views)
     }
     async fn upsert_policy_binding(&self, binding: PolicyBinding) -> LakeCatResult<PolicyBinding> {
         binding.validate()?;
