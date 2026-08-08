@@ -1,8 +1,3 @@
-#[cfg(feature = "sail-local")]
-use lakecat_sail::catalog_provider::{
-    LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
-};
-
 #[cfg(feature = "typesec-local")]
 pub mod typesec_credential_issuer;
 #[cfg(feature = "typesec-local")]

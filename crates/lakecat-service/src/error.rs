@@ -2,10 +2,6 @@ use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use lakecat_core::LakeCatError;
-#[cfg(feature = "sail-local")]
-use lakecat_sail::catalog_provider::{
-    LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
-};
 use serde_json::json;
 
 #[derive(Debug)]

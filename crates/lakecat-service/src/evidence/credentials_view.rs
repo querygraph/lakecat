@@ -1,10 +1,6 @@
 use std::collections::BTreeSet;
 
 use lakecat_core::{LakeCatError, Namespace, TableName, WarehouseName, content_hash_json};
-#[cfg(feature = "sail-local")]
-use lakecat_sail::catalog_provider::{
-    LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
-};
 use lakecat_store::{CredentialIssuanceMode, OutboxEvent, StorageProvider};
 use serde_json::{Value, json};
 
@@ -237,9 +233,9 @@ pub(crate) fn validate_credential_block_reason_evidence(
                 "credential-vend blocked credential evidence must not carry credentials",
             ));
         }
-        if !reason
+        if reason
             .as_str()
-            .is_some_and(|reason| !reason.trim().is_empty())
+            .is_none_or(|reason| reason.trim().is_empty())
         {
             return Err(outbox_evidence_error(
                 event,

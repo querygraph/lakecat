@@ -1,9 +1,5 @@
 use axum::http::HeaderMap;
 use lakecat_core::{LakeCatError, Principal, PrincipalKind, TableIdent, content_hash_bytes};
-#[cfg(feature = "sail-local")]
-use lakecat_sail::catalog_provider::{
-    LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
-};
 use lakecat_security::{
     AuthorizationReceipt, AuthorizationRequest, CatalogAction, CatalogConfigCapability,
     CredentialsVendCapability, GraphReadCapability, LineageReadCapability,

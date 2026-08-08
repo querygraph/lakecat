@@ -10,10 +10,6 @@ use lakecat_core::{
 };
 use lakecat_graph::{GraphAction, GraphEvent};
 use lakecat_lineage::{LineageEvent, LineageEventType, LineageReceipt};
-#[cfg(feature = "sail-local")]
-use lakecat_sail::catalog_provider::{
-    LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
-};
 use lakecat_store::OutboxEvent;
 use serde_json::{Value, json};
 

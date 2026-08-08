@@ -1,8 +1,4 @@
 use lakecat_core::{LakeCatError, Principal, content_hash_bytes};
-#[cfg(feature = "sail-local")]
-use lakecat_sail::catalog_provider::{
-    LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
-};
 use lakecat_security::CatalogAction;
 use lakecat_store::OutboxEvent;
 use serde_json::Value;
@@ -376,7 +372,7 @@ pub(crate) fn validate_table_commit_hash_evidence(event: &OutboxEvent) -> Result
         "committed-at",
         "table commit evidence committed_at timestamp",
     )?;
-    if !aliased_evidence_field(
+    if aliased_evidence_field(
         event,
         commit,
         "new_metadata_location",
@@ -384,7 +380,7 @@ pub(crate) fn validate_table_commit_hash_evidence(event: &OutboxEvent) -> Result
         "table commit",
     )?
     .and_then(Value::as_str)
-    .is_some_and(|location| !location.trim().is_empty())
+    .is_none_or(|location| location.trim().is_empty())
     {
         return Err(outbox_evidence_error(
             event,
@@ -410,9 +406,9 @@ pub(crate) fn validate_table_commit_hash_evidence(event: &OutboxEvent) -> Result
         "table commit",
     )?
     .is_some_and(|location| {
-        !location
+        location
             .as_str()
-            .is_some_and(|location| !location.trim().is_empty())
+            .is_none_or(|location| location.trim().is_empty())
     }) {
         return Err(outbox_evidence_error(
             event,

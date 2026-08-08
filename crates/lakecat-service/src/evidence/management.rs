@@ -10,10 +10,6 @@ use lakecat_core::{
     LakeCatError, Namespace, Principal, TableName, WarehouseName, content_hash_bytes,
     content_hash_json,
 };
-#[cfg(feature = "sail-local")]
-use lakecat_sail::catalog_provider::{
-    LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
-};
 use lakecat_store::{
     CredentialIssuanceMode, OutboxEvent, PolicyBinding, ProjectRecord, ServerRecord,
     StorageProfile, StorageProvider, WarehouseRecord,
