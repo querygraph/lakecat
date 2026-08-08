@@ -117,7 +117,14 @@ impl FromStr for Namespace {
 
 impl Display for Namespace {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.path())
+        if let Some((first, rest)) = self.0.split_first() {
+            f.write_str(first)?;
+            for part in rest {
+                f.write_str(".")?;
+                f.write_str(part)?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -231,7 +238,16 @@ impl AuditStamp {
     }
 }
 
-pub fn content_hash_json(value: &serde_json::Value) -> LakeCatResult<String> {
+/// Hash the compact JSON serialization produced by Serde.
+///
+/// Evidence callers must use deterministic map and field ordering. Existing
+/// [`serde_json::Value`] callers retain their canonical sorted-map encoding,
+/// while typed callers can stream borrowed evidence without an intermediate
+/// JSON tree.
+pub fn content_hash_json<T>(value: &T) -> LakeCatResult<String>
+where
+    T: Serialize + ?Sized,
+{
     let mut writer = Sha256Writer(Sha256::new());
     serde_json::to_writer(&mut writer, value)
         .map_err(|err| LakeCatError::Internal(format!("failed to encode JSON: {err}")))?;

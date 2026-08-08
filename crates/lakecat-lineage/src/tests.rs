@@ -503,6 +503,47 @@ fn projects_credential_vend_attempt_to_openlineage_run_facet() {
     );
 }
 
+#[test]
+fn streaming_lineage_hashes_preserve_the_json_evidence_contract() {
+    let event = LineageEvent::new(
+        LineageEventType::TableCommitted,
+        Principal {
+            subject: "agent:writer".to_string(),
+            kind: PrincipalKind::Agent,
+        },
+        Some(TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default.analytics".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        )),
+        json!({
+            "metadata-location": "s3://warehouse/events/metadata/00001.json",
+            "nested": {"z": 1, "a": [true, false]},
+        }),
+    );
+    let identity = CanonicalLineageIdentity::from_event(&event);
+
+    let original_event_hash = content_hash_json(&serde_json::to_value(&event).unwrap()).unwrap();
+    assert_eq!(
+        lineage_event_hash(&event, &identity).unwrap(),
+        original_event_hash
+    );
+
+    let event_type = lineage_event_type_name(&event.event_type);
+    let original_run_hash = content_hash_json(&json!({
+        "event-type": event_type,
+        "principal": event.principal,
+        "table": event.table,
+        "payload": event.payload,
+        "emitted-at": event.emitted_at,
+    }))
+    .unwrap();
+    assert_eq!(
+        lineage_run_hash(&event, event_type, &identity).unwrap(),
+        original_run_hash
+    );
+}
+
 #[tokio::test]
 async fn hash_sink_receipts_include_openlineage_hash() {
     let sink = HashOnlyLineageSink;

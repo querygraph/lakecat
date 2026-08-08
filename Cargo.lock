@@ -3969,6 +3969,7 @@ version = "0.3.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "criterion",
  "grust-graph",
  "grust-turso",
  "lakecat-core",
@@ -3983,6 +3984,7 @@ version = "0.3.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "criterion",
  "lakecat-core",
  "serde",
  "serde_json",

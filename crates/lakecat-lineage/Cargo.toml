@@ -14,4 +14,9 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
+criterion = { workspace = true }
 tokio = { workspace = true }
+
+[[bench]]
+name = "lineage_events"
+harness = false

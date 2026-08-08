@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Added scale benchmarks for OpenLineage projection and hashing plus LakeCat
+  graph-event conversion and Grust memory persistence. Deterministic typed JSON
+  evidence can now stream through the shared content hasher, so lineage run and
+  receipt hashes borrow large payloads instead of cloning temporary JSON trees;
+  at 1,000 fields this reduces OpenLineage projection by about 27% and the full
+  hash-only receipt by about 21% with explicit hash-contract equivalence tests.
+  Allocation-free namespace formatting and direct composite graph IDs reduce
+  commit/column/snapshot ID generation by 58% and large Grust conversion by
+  about 4% without changing identifier bytes.
+
 - Added scale benchmarks for QueryGraph table projection, graph construction,
   bundle creation, manifest verification, and view-receipt evidence. Bootstrap
   construction now retains its typed tables, views, and graph instead of

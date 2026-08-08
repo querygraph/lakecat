@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -272,15 +273,15 @@ pub fn namespace_stable_id(warehouse: &WarehouseName, namespace: &Namespace) -> 
     format!(
         "lakecat:warehouse:{}:namespace:{}",
         warehouse.as_str(),
-        namespace.path()
+        namespace
     )
 }
 
 pub fn view_stable_id(warehouse: &WarehouseName, namespace: &Namespace, name: &str) -> String {
     format!(
-        "{}:view:{}",
-        namespace_stable_id(warehouse, namespace),
-        name
+        "lakecat:warehouse:{}:namespace:{}:view:{name}",
+        warehouse.as_str(),
+        namespace
     )
 }
 
@@ -305,15 +306,22 @@ pub fn scan_plan_stable_id(plan_id: &str) -> String {
 }
 
 pub fn commit_stable_id(table: &TableIdent, sequence_number: u64) -> String {
-    format!("lakecat:commit:{}:{sequence_number}", table.stable_id())
+    table_scoped_stable_id("commit", table, sequence_number)
 }
 
 pub fn column_stable_id(table: &TableIdent, column_id: &str) -> String {
-    format!("lakecat:column:{}:{column_id}", table.stable_id())
+    table_scoped_stable_id("column", table, column_id)
 }
 
 pub fn snapshot_stable_id(table: &TableIdent, snapshot_id: &str) -> String {
-    format!("lakecat:snapshot:{}:{snapshot_id}", table.stable_id())
+    table_scoped_stable_id("snapshot", table, snapshot_id)
+}
+
+fn table_scoped_stable_id(kind: &str, table: &TableIdent, local_id: impl Display) -> String {
+    format!(
+        "lakecat:{kind}:lakecat:table:{}:{}:{}:{local_id}",
+        table.warehouse, table.namespace, table.name
+    )
 }
 
 pub fn principal_stable_id(principal: &Principal) -> String {
