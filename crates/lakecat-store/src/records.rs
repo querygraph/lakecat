@@ -101,6 +101,7 @@ impl TableCommitSnapshot {
         &self.ident
     }
 
+    #[cfg(feature = "turso-local")]
     pub(crate) fn to_table_record(&self, metadata: Value) -> TableRecord {
         TableRecord {
             ident: self.ident.clone(),

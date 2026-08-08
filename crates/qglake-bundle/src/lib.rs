@@ -4,7 +4,7 @@ use lakecat_core::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "kebab-case")]
@@ -68,22 +68,22 @@ impl QueryGraphBootstrap {
             self.tables.iter().map(|table| table.stable_id.as_str()),
         )?;
         validate_duplicate_free_stable_ids(
+            "QueryGraph bootstrap view projections",
+            self.views.iter().map(|view| view.stable_id.as_str()),
+        )?;
+        let table_artifacts = index_duplicate_free_stable_ids(
             "QueryGraph bootstrap table artifacts",
             self.manifest
                 .table_artifacts
                 .iter()
-                .map(|artifact| artifact.stable_id.as_str()),
+                .map(|artifact| (artifact.stable_id.as_str(), artifact)),
         )?;
-        validate_duplicate_free_stable_ids(
-            "QueryGraph bootstrap view projections",
-            self.views.iter().map(|view| view.stable_id.as_str()),
-        )?;
-        validate_duplicate_free_stable_ids(
+        let view_artifacts = index_duplicate_free_stable_ids(
             "QueryGraph bootstrap view artifacts",
             self.manifest
                 .view_artifacts
                 .iter()
-                .map(|artifact| artifact.stable_id.as_str()),
+                .map(|artifact| (artifact.stable_id.as_str(), artifact)),
         )?;
 
         let open_lineage_hash = content_hash_json(&self.open_lineage)?;
@@ -102,11 +102,8 @@ impl QueryGraphBootstrap {
         }
 
         for table in &self.tables {
-            let expected = self
-                .manifest
-                .table_artifacts
-                .iter()
-                .find(|artifact| artifact.stable_id == table.stable_id)
+            let expected = table_artifacts
+                .get(table.stable_id.as_str())
                 .ok_or_else(|| {
                     lakecat_core::LakeCatError::InvalidArgument(format!(
                         "QueryGraph bootstrap manifest is missing table {}",
@@ -116,17 +113,12 @@ impl QueryGraphBootstrap {
             expected.verify(table)?;
         }
         for view in &self.views {
-            let expected = self
-                .manifest
-                .view_artifacts
-                .iter()
-                .find(|artifact| artifact.stable_id == view.stable_id)
-                .ok_or_else(|| {
-                    lakecat_core::LakeCatError::InvalidArgument(format!(
-                        "QueryGraph bootstrap manifest is missing view {}",
-                        view.stable_id
-                    ))
-                })?;
+            let expected = view_artifacts.get(view.stable_id.as_str()).ok_or_else(|| {
+                lakecat_core::LakeCatError::InvalidArgument(format!(
+                    "QueryGraph bootstrap manifest is missing view {}",
+                    view.stable_id
+                ))
+            })?;
             expected.verify(view)?;
         }
 
@@ -385,11 +377,20 @@ pub fn validate_view_receipt_evidence(
             views.len()
         )));
     }
+    let mut evidence_by_id = HashMap::with_capacity(evidence.len());
+    for record in evidence {
+        if evidence_by_id
+            .insert(record.stable_id.as_str(), record)
+            .is_some()
+        {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QueryGraph bootstrap import contract view receipt evidence must be duplicate-free by stable id: {}",
+                record.stable_id
+            )));
+        }
+    }
     for view in views {
-        let Some(record) = evidence
-            .iter()
-            .find(|record| record.stable_id == view.stable_id)
-        else {
+        let Some(record) = evidence_by_id.get(view.stable_id.as_str()) else {
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
                 "QueryGraph bootstrap import contract is missing view receipt evidence for {}",
                 view.stable_id
@@ -704,7 +705,7 @@ fn validate_duplicate_free_stable_ids<'a>(
     label: &str,
     values: impl IntoIterator<Item = &'a str>,
 ) -> LakeCatResult<()> {
-    let mut seen = BTreeSet::new();
+    let mut seen = HashSet::new();
     for value in values {
         if !seen.insert(value) {
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
@@ -713,4 +714,20 @@ fn validate_duplicate_free_stable_ids<'a>(
         }
     }
     Ok(())
+}
+
+fn index_duplicate_free_stable_ids<'a, T>(
+    label: &str,
+    values: impl IntoIterator<Item = (&'a str, &'a T)>,
+) -> LakeCatResult<HashMap<&'a str, &'a T>> {
+    let values = values.into_iter();
+    let mut index = HashMap::with_capacity(values.size_hint().0);
+    for (stable_id, value) in values {
+        if index.insert(stable_id, value).is_some() {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label} must be duplicate-free by stable id: {stable_id}"
+            )));
+        }
+    }
+    Ok(index)
 }

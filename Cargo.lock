@@ -3994,6 +3994,7 @@ name = "lakecat-querygraph"
 version = "0.3.0"
 dependencies = [
  "chrono",
+ "criterion",
  "lakecat-core",
  "lakecat-store",
  "qglake-bundle",

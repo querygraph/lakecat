@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added scale benchmarks for QueryGraph table projection, graph construction,
+  bundle creation, manifest verification, and view-receipt evidence. Bootstrap
+  construction now retains its typed tables, views, and graph instead of
+  rebuilding them through JSON, reducing 1–256 table bundle creation by
+  10–16%. Manifest and receipt lookups use duplicate-checking indexes, and
+  shared namespace nodes and edges are constructed once; the latter reduces
+  64–256 table graph construction by 15–20% while preserving sorted output.
+
 - Added scale benchmarks for ODRL read-restriction parsing, composition,
   projection, and statistics filtering. Large column sets now use shared,
   order-preserving hash indexes while small schemas retain the allocation-light

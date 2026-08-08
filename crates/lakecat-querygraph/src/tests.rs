@@ -635,6 +635,33 @@ fn verification_rejects_missing_view_receipt_evidence() {
 }
 
 #[test]
+fn verification_rejects_duplicate_view_receipt_evidence() {
+    let bundle = bootstrap_from_tables_views_with_policy_bindings(
+        WarehouseName::new("local").unwrap(),
+        Vec::new(),
+        vec![
+            querygraph_test_view("active_events"),
+            querygraph_test_view("recent_events"),
+        ],
+    )
+    .unwrap();
+    let duplicate = QueryGraphViewReceiptEvidence {
+        stable_id: bundle.views[0].stable_id.clone(),
+        view_version: bundle.views[0].view_version,
+        receipt_hash: "receipt-hash".to_string(),
+        receipt_chain_hash: "receipt-chain-hash".to_string(),
+    };
+
+    let err = bundle
+        .with_view_receipt_evidence(vec![duplicate.clone(), duplicate])
+        .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("view receipt evidence must be duplicate-free")
+    );
+}
+
+#[test]
 fn verification_rejects_querygraph_bundle_hash_mismatch() {
     let ident = TableIdent::new(
         WarehouseName::new("local").unwrap(),
