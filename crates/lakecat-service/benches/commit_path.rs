@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::body::Body;
-use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use http::{Request, StatusCode};
 use lakecat_core::{Namespace, Principal, TableIdent, TableName, WarehouseName};
 use lakecat_service::{LakeCatState, app};
@@ -21,7 +21,7 @@ struct CommitCase {
 }
 
 impl CommitCase {
-    async fn new(store: Arc<dyn CatalogStore>) -> Self {
+    async fn new(store: Arc<dyn CatalogStore>, field_count: usize) -> Self {
         let metadata_root = tempfile::tempdir().expect("create metadata benchmark directory");
         let table_path = metadata_root.path().join("events");
         let table_location = url::Url::from_directory_path(&table_path)
@@ -45,7 +45,7 @@ impl CommitCase {
                 ident,
                 table_location.clone(),
                 Some(format!("{table_location}/metadata/00000.metadata.json")),
-                table_metadata(&table_location),
+                table_metadata(&table_location, field_count),
                 Principal::anonymous(),
             ))
             .await
@@ -81,18 +81,28 @@ impl CommitCase {
     }
 }
 
-fn table_metadata(table_location: &str) -> Value {
+fn table_metadata(table_location: &str, field_count: usize) -> Value {
+    let fields = (0..field_count)
+        .map(|index| {
+            json!({
+                "id": index + 1,
+                "name": format!("field_{index}"),
+                "type": if index == 0 { "long" } else { "string" },
+                "required": index == 0,
+            })
+        })
+        .collect::<Vec<_>>();
     json!({
         "format-version": 2,
         "table-uuid": TABLE_UUID,
         "location": table_location,
         "last-sequence-number": 0,
         "last-updated-ms": 1_710_000_000_000_i64,
-        "last-column-id": 1,
+        "last-column-id": field_count,
         "schemas": [{
             "type": "struct",
             "schema-id": 0,
-            "fields": [{"id": 1, "name": "id", "type": "long", "required": false}],
+            "fields": fields,
         }],
         "current-schema-id": 0,
         "partition-specs": [{"spec-id": 0, "fields": []}],
@@ -111,25 +121,38 @@ fn table_metadata(table_location: &str) -> Value {
 
 fn bench_commit_path(c: &mut Criterion) {
     let runtime = tokio::runtime::Runtime::new().expect("benchmark runtime");
-    let turso = runtime.block_on(async {
-        CommitCase::new(
-            TursoCatalogStore::in_memory()
-                .await
-                .expect("create Turso store"),
-        )
-        .await
+    let turso_one = runtime.block_on(async {
+        let store = TursoCatalogStore::in_memory()
+            .await
+            .expect("create Turso store");
+        CommitCase::new(store, 1).await
     });
-    let memory = runtime.block_on(CommitCase::new(MemoryCatalogStore::new()));
+    let turso_hundred = runtime.block_on(async {
+        let store = TursoCatalogStore::in_memory()
+            .await
+            .expect("create Turso store");
+        CommitCase::new(store, 100).await
+    });
+    let memory_one = runtime.block_on(CommitCase::new(MemoryCatalogStore::new(), 1));
+    let memory_hundred = runtime.block_on(CommitCase::new(MemoryCatalogStore::new(), 100));
 
     let mut group = c.benchmark_group("service_commit_path");
     group.sample_size(20);
     group.throughput(Throughput::Elements(1));
-    group.bench_function("turso_sail_local_file", |b| {
-        b.to_async(&runtime).iter(|| turso.commit());
-    });
-    group.bench_function("memory_sail_local_file", |b| {
-        b.to_async(&runtime).iter(|| memory.commit());
-    });
+    for (store, field_count, case) in [
+        ("turso_sail_local_file", 1, &turso_one),
+        ("turso_sail_local_file", 100, &turso_hundred),
+        ("memory_sail_local_file", 1, &memory_one),
+        ("memory_sail_local_file", 100, &memory_hundred),
+    ] {
+        group.bench_with_input(
+            BenchmarkId::new(store, format!("{field_count}_fields")),
+            case,
+            |b, case| {
+                b.to_async(&runtime).iter(|| case.commit());
+            },
+        );
+    }
     group.finish();
 }
 

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Extended the service commit benchmark to cover both one-field and 100-field
+  Iceberg schemas. The handler now moves Sail's prepared metadata and location
+  into the store commit instead of deep-cloning them after the metadata write,
+  reducing the 100-field in-memory commit path by about 7% without changing the
+  one-field path or commit semantics.
+
 - Added reproducible Criterion benchmarks for evidence hashing, metadata JSON
   encoding, Sail commit preparation, Turso table commits and reads, and the
   full service commit path with both Turso and memory stores. Commit

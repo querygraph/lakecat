@@ -1,7 +1,7 @@
 use axum::Json;
 use axum::http::HeaderMap;
 use lakecat_api::{CommitTableRequest, CommitTableResponse};
-use lakecat_core::sail::CommitPreparationRequest;
+use lakecat_core::sail::{CommitPlan, CommitPreparationRequest};
 use lakecat_core::{LakeCatError, WarehouseName, content_hash_json};
 #[cfg(feature = "sail-local")]
 use lakecat_sail::catalog_provider::{
@@ -73,16 +73,23 @@ pub(crate) async fn commit_table_in_warehouse(
         &storage_profile,
     )?;
     let metadata_write = write_planned_metadata(&commit_plan).await?;
+    let CommitPlan {
+        requirements,
+        updates,
+        new_metadata_location,
+        new_metadata,
+        ..
+    } = commit_plan;
     let table = match state
         .store
         .commit_table(
             capability.table(),
             TableCommit {
-                requirements: commit_plan.requirements,
-                updates: commit_plan.updates,
+                requirements,
+                updates,
                 expected_previous_metadata_location: current_metadata_location.clone(),
-                new_metadata_location: commit_plan.new_metadata_location.clone(),
-                new_metadata: Some(commit_plan.new_metadata.clone()),
+                new_metadata_location,
+                new_metadata: Some(new_metadata),
                 idempotency_key,
                 idempotency_request_hash,
                 principal: capability.receipt().principal.clone(),
