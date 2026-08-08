@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Reused a bounded pool of Turso read connections for table loads,
+  idempotency replay, storage-profile lookup, and policy-binding lookup,
+  eliminating repeated connection setup on commit-adjacent reads.
+
 - Updated the QGLake dependency-contract and local handoff scripts for
   QueryGraph's consolidated repository root.
 

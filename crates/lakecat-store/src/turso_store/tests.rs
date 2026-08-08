@@ -10,6 +10,31 @@ use crate::{
 use super::*;
 
 #[tokio::test]
+async fn turso_read_pool_reuses_connections_and_caps_idle_capacity() {
+    let store = TursoCatalogStore::in_memory().await.unwrap();
+    let ident = TableIdent::new(
+        WarehouseName::new("local").unwrap(),
+        "default".parse::<Namespace>().unwrap(),
+        TableName::new("missing").unwrap(),
+    );
+
+    assert!(matches!(
+        store.load_table(&ident).await,
+        Err(LakeCatError::NotFound { .. })
+    ));
+    assert_eq!(store.read_pool.lock().unwrap().len(), 1);
+
+    let checked_out = (0..=READ_POOL_MAX_IDLE)
+        .map(|_| store.checkout_read_conn())
+        .collect::<LakeCatResult<Vec<_>>>()
+        .unwrap();
+    assert!(store.read_pool.lock().unwrap().is_empty());
+
+    drop(checked_out);
+    assert_eq!(store.read_pool.lock().unwrap().len(), READ_POOL_MAX_IDLE);
+}
+
+#[tokio::test]
 async fn turso_store_persists_server_records() {
     let store = TursoCatalogStore::in_memory().await.unwrap();
     assert_eq!(store.list_servers().await.unwrap(), vec![]);

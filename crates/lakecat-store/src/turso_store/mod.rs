@@ -2,6 +2,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::{
     collections::BTreeSet,
+    ops::Deref,
     sync::{Arc, Mutex},
 };
 
@@ -35,6 +36,40 @@ pub struct TursoCatalogStore {
     /// unchanged — only the per-commit connection setup is amortized. `Arc` so a
     /// cloned store shares the pool (and the underlying database).
     write_pool: Arc<Mutex<Vec<Connection>>>,
+    /// Read connections are also reused. Commit requests perform several small
+    /// catalog reads before the write transaction; opening a fresh Turso
+    /// connection for each of those reads otherwise adds avoidable setup cost.
+    read_pool: Arc<Mutex<Vec<Connection>>>,
+}
+
+struct PooledReadConnection<'pool> {
+    conn: Option<Connection>,
+    pool: &'pool Mutex<Vec<Connection>>,
+}
+
+impl Deref for PooledReadConnection<'_> {
+    type Target = Connection;
+
+    fn deref(&self) -> &Self::Target {
+        self.conn
+            .as_ref()
+            .expect("pooled read connection must exist until drop")
+    }
+}
+
+impl Drop for PooledReadConnection<'_> {
+    fn drop(&mut self) {
+        let Some(conn) = self.conn.take() else {
+            return;
+        };
+        let mut pool = self
+            .pool
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        if pool.len() < READ_POOL_MAX_IDLE {
+            pool.push(conn);
+        }
+    }
 }
 
 impl TursoCatalogStore {
@@ -58,6 +93,7 @@ impl TursoCatalogStore {
         let store = Arc::new(Self {
             db,
             write_pool: Arc::new(Mutex::new(Vec::new())),
+            read_pool: Arc::new(Mutex::new(Vec::new())),
         });
         store.migrate().await?;
         Ok(store)
@@ -169,6 +205,23 @@ impl TursoCatalogStore {
 
     fn connect(&self) -> LakeCatResult<Connection> {
         self.db.connect().map_err(turso_error)
+    }
+
+    fn checkout_read_conn(&self) -> LakeCatResult<PooledReadConnection<'_>> {
+        let conn = if let Some(conn) = self
+            .read_pool
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .pop()
+        {
+            conn
+        } else {
+            self.connect()?
+        };
+        Ok(PooledReadConnection {
+            conn: Some(conn),
+            pool: &self.read_pool,
+        })
     }
 
     #[cfg(test)]
@@ -410,7 +463,7 @@ impl CatalogStore for TursoCatalogStore {
     }
 
     async fn load_table(&self, ident: &TableIdent) -> LakeCatResult<TableRecord> {
-        let conn = self.connect()?;
+        let conn = self.checkout_read_conn()?;
         let mut rows = conn
             .query(
                 "select record_json, table_key, warehouse, namespace_path, table_name
@@ -689,14 +742,14 @@ impl CatalogStore for TursoCatalogStore {
     ) -> LakeCatResult<Option<TableRecord>> {
         crate::validate_idempotency_key_shape(idempotency_key)?;
         crate::validate_idempotency_request_hash_shape(idempotency_request_hash)?;
-        let conn = self.connect()?;
+        let conn = self.checkout_read_conn()?;
         let mut rows = conn
-                .query(
-                    "select table_key, request_hash, response_json from idempotency_records where idem_key = ?1",
-                    (idempotency_record_key(ident, idempotency_key),),
-                )
-                .await
-                .map_err(turso_error)?;
+            .query(
+                "select table_key, request_hash, response_json from idempotency_records where idem_key = ?1",
+                (idempotency_record_key(ident, idempotency_key),),
+            )
+            .await
+            .map_err(turso_error)?;
         let Some(row) = rows.next().await.map_err(turso_error)? else {
             return Ok(None);
         };
@@ -1915,17 +1968,17 @@ impl CatalogStore for TursoCatalogStore {
         &self,
         warehouse: &WarehouseName,
     ) -> LakeCatResult<Vec<StorageProfile>> {
-        let conn = self.connect()?;
+        let conn = self.checkout_read_conn()?;
         let mut rows = conn
-                .query(
-                    "select profile_json, profile_key, profile_id, location_prefix, provider, issuance_mode
+            .query(
+                "select profile_json, profile_key, profile_id, location_prefix, provider, issuance_mode
                      from storage_profiles
                      where warehouse = ?1
                      order by profile_id",
-                    (warehouse.as_str(),),
-                )
-                .await
-                .map_err(turso_error)?;
+                (warehouse.as_str(),),
+            )
+            .await
+            .map_err(turso_error)?;
         let mut profiles = Vec::new();
         while let Some(row) = rows.next().await.map_err(turso_error)? {
             let profile: StorageProfile = decode_json(row_string(&row, 0)?)?;
@@ -2013,7 +2066,7 @@ impl CatalogStore for TursoCatalogStore {
         &self,
         warehouse: &WarehouseName,
     ) -> LakeCatResult<Vec<PolicyBinding>> {
-        let conn = self.connect()?;
+        let conn = self.checkout_read_conn()?;
         let mut rows = conn
             .query(
                 "select binding_json, policy_id, namespace_path, table_name, enforced
@@ -2533,6 +2586,11 @@ const WRITE_TXN_MAX_ATTEMPTS: u32 = 8;
 /// while comfortably covering the expected concurrent-writer count; connections
 /// beyond this are dropped on return rather than pooled.
 const WRITE_POOL_MAX_IDLE: usize = 16;
+
+/// Maximum idle read connections retained for the short catalog lookups that
+/// surround a commit. This is bounded separately from write connections so a
+/// burst of requests cannot grow the pool without limit.
+const READ_POOL_MAX_IDLE: usize = 16;
 
 /// Best-effort per-connection pragmas for write transactions. `journal_mode`
 /// returns a row, so `execute_batch` reports it as an error even though the mode
