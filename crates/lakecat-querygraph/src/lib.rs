@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use lakecat_core::{LakeCatResult, WarehouseName, content_hash_json};
+use lakecat_core::{LakeCatResult, WarehouseName};
 use lakecat_store::{
     PolicyBinding, ProjectRecord, ServerRecord, TableRecord, ViewRecord, WarehouseRecord,
 };
@@ -122,15 +122,14 @@ fn bootstrap_from_catalog_snapshot_inner(
     if let Some(view_receipt_evidence) = view_receipt_evidence {
         manifest.attach_view_receipt_evidence(&views, view_receipt_evidence)?;
     }
-    let bundle_payload = json!({
-        "warehouse": warehouse.as_str(),
-        "manifest": &manifest,
-        "tables": &tables,
-        "views": &views,
-        "graph": &graph,
-        "openLineage": &open_lineage,
-    });
-    let bundle_hash = content_hash_json(&bundle_payload)?;
+    let bundle_hash = querygraph_bundle_hash(
+        &warehouse,
+        &manifest,
+        &tables,
+        &views,
+        &graph,
+        &open_lineage,
+    )?;
     Ok(QueryGraphBootstrap {
         warehouse,
         generated_at,

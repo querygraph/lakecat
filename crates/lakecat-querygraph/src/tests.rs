@@ -2,7 +2,7 @@ use super::*;
 use lakecat_store::ViewColumnRecord;
 use std::collections::BTreeMap;
 
-use lakecat_core::{Namespace, Principal, TableIdent, TableName};
+use lakecat_core::{Namespace, Principal, TableIdent, TableName, content_hash_json};
 
 fn is_full_sha256_hash(value: &str) -> bool {
     let Some(digest) = value.strip_prefix("sha256:") else {
@@ -39,6 +39,18 @@ fn legacy_table_only_querygraph_import_hash(bundle: &QueryGraphBootstrap) -> Str
             "osi": table.osi,
             "odrl": table.odrl,
         })).collect::<Vec<_>>(),
+        "graph": bundle.graph,
+        "openLineage": bundle.open_lineage,
+    }))
+    .unwrap()
+}
+
+fn legacy_querygraph_bundle_hash(bundle: &QueryGraphBootstrap) -> String {
+    content_hash_json(&json!({
+        "warehouse": bundle.warehouse.as_str(),
+        "manifest": bundle.manifest,
+        "tables": bundle.tables,
+        "views": bundle.views,
         "graph": bundle.graph,
         "openLineage": bundle.open_lineage,
     }))
@@ -181,6 +193,7 @@ fn projects_iceberg_table_into_querygraph_bundle() {
         import_contract.table_only_bundle_hash,
         legacy_table_only_querygraph_import_hash(&bundle)
     );
+    assert_eq!(bundle.bundle_hash, legacy_querygraph_bundle_hash(&bundle));
     assert!(bundle.manifest.standards.iter().any(|item| item == "CDIF"));
     assert!(
         bundle
@@ -329,6 +342,7 @@ fn projects_policy_bindings_into_querygraph_bundle() {
         bootstrap_from_tables_with_policy_bindings(warehouse, vec![(table, vec![policy])]).unwrap();
 
     assert_eq!(bundle.tables[0].policy_bindings.len(), 1);
+    assert_eq!(bundle.bundle_hash, legacy_querygraph_bundle_hash(&bundle));
     assert_eq!(bundle.tables[0].policy_bindings[0].policy_id, "agent-read");
     assert_eq!(
         bundle.tables[0].policy_bindings[0].odrl["lakecat:read-restriction"]["allowed-columns"],
@@ -389,6 +403,7 @@ fn projects_catalog_views_into_querygraph_bundle() {
 
     assert_eq!(bundle.tables.len(), 0);
     assert_eq!(bundle.views.len(), 1);
+    assert_eq!(bundle.bundle_hash, legacy_querygraph_bundle_hash(&bundle));
     assert_eq!(bundle.views[0].name, "active_customers");
     assert_eq!(bundle.views[0].view_version, 1);
     assert_eq!(bundle.views[0].columns[0]["name"], json!("id"));

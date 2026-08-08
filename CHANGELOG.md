@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- QueryGraph full-bundle hashes now share one canonical hashing path between
+  construction and verification and stream borrowed projections rather than
+  cloning the full bundle into an intermediate JSON tree. Equivalence tests
+  cover tables, policy bindings, views, artifacts, and receipt evidence. At
+  256 tables, full-bundle hashing falls from about 27.72 to 15.87 milliseconds
+  (42.8%) and construction from 72.02 to 62.64 milliseconds (13.0%). The
+  1/64/256 table-and-view service path improves from about 0.398/17.77/70.20
+  milliseconds to 0.319/14.56/57.79 milliseconds (17.7-19.9%).
+
 - QueryGraph graph and table-only import hashes now stream borrowed canonical
   projections directly into SHA-256 instead of deep-materializing sorted JSON
   trees and serializing them a second time. Legacy-value equivalence tests lock

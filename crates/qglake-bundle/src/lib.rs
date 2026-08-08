@@ -237,15 +237,33 @@ impl QueryGraphBootstrap {
     }
 
     fn computed_bundle_hash(&self) -> LakeCatResult<String> {
-        content_hash_json(&json!({
-            "warehouse": self.warehouse.as_str(),
-            "manifest": self.manifest,
-            "tables": self.tables,
-            "views": self.views,
-            "graph": self.graph,
-            "openLineage": self.open_lineage,
-        }))
+        querygraph_bundle_hash(
+            &self.warehouse,
+            &self.manifest,
+            &self.tables,
+            &self.views,
+            &self.graph,
+            &self.open_lineage,
+        )
     }
+}
+
+pub fn querygraph_bundle_hash(
+    warehouse: &WarehouseName,
+    manifest: &QueryGraphBundleManifest,
+    tables: &[QueryGraphTableProjection],
+    views: &[QueryGraphViewProjection],
+    graph: &QueryGraphCatalogGraph,
+    open_lineage: &Value,
+) -> LakeCatResult<String> {
+    content_hash_json(&CanonicalQueryGraphBundle {
+        graph: CanonicalQueryGraph::from(graph),
+        manifest: CanonicalQueryGraphBundleManifest::from(manifest),
+        open_lineage,
+        tables: CanonicalJsonSlice::new(tables),
+        views: CanonicalJsonSlice::new(views),
+        warehouse: warehouse.as_str(),
+    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -572,33 +590,50 @@ pub fn table_only_querygraph_import_hash(
 /// keys emitted by the original `serde_json::Value` hash contract.
 #[derive(Serialize)]
 struct CanonicalQueryGraph<'a> {
-    edges: CanonicalQueryGraphEdges<'a>,
-    nodes: &'a [QueryGraphNode],
+    edges: CanonicalJsonSlice<'a, QueryGraphEdge>,
+    nodes: CanonicalJsonSlice<'a, QueryGraphNode>,
 }
 
 impl<'a> From<&'a QueryGraphCatalogGraph> for CanonicalQueryGraph<'a> {
     fn from(graph: &'a QueryGraphCatalogGraph) -> Self {
         Self {
-            edges: CanonicalQueryGraphEdges(&graph.edges),
-            nodes: &graph.nodes,
+            edges: CanonicalJsonSlice::new(&graph.edges),
+            nodes: CanonicalJsonSlice::new(&graph.nodes),
         }
     }
 }
 
-struct CanonicalQueryGraphEdges<'a>(&'a [QueryGraphEdge]);
+trait CanonicalJson {
+    type Projection<'a>: Serialize
+    where
+        Self: 'a;
 
-impl Serialize for CanonicalQueryGraphEdges<'_> {
+    fn canonical_json(&self) -> Self::Projection<'_>;
+}
+
+struct CanonicalJsonSlice<'a, T>(&'a [T]);
+
+impl<'a, T> CanonicalJsonSlice<'a, T> {
+    fn new(values: &'a [T]) -> Self {
+        Self(values)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl<T> Serialize for CanonicalJsonSlice<'_, T>
+where
+    T: CanonicalJson,
+{
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         let mut sequence = serializer.serialize_seq(Some(self.0.len()))?;
-        for edge in self.0 {
-            sequence.serialize_element(&CanonicalQueryGraphEdge {
-                from: &edge.from,
-                label: &edge.label,
-                to: &edge.to,
-            })?;
+        for value in self.0 {
+            sequence.serialize_element(&value.canonical_json())?;
         }
         sequence.end()
     }
@@ -609,6 +644,281 @@ struct CanonicalQueryGraphEdge<'a> {
     from: &'a str,
     label: &'a str,
     to: &'a str,
+}
+
+impl CanonicalJson for QueryGraphEdge {
+    type Projection<'a> = CanonicalQueryGraphEdge<'a>;
+
+    fn canonical_json(&self) -> Self::Projection<'_> {
+        CanonicalQueryGraphEdge {
+            from: &self.from,
+            label: &self.label,
+            to: &self.to,
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct CanonicalQueryGraphNode<'a> {
+    id: &'a str,
+    label: &'a str,
+    properties: &'a Value,
+}
+
+impl CanonicalJson for QueryGraphNode {
+    type Projection<'a> = CanonicalQueryGraphNode<'a>;
+
+    fn canonical_json(&self) -> Self::Projection<'_> {
+        CanonicalQueryGraphNode {
+            id: &self.id,
+            label: &self.label,
+            properties: &self.properties,
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct CanonicalQueryGraphBundle<'a> {
+    graph: CanonicalQueryGraph<'a>,
+    manifest: CanonicalQueryGraphBundleManifest<'a>,
+    #[serde(rename = "openLineage")]
+    open_lineage: &'a Value,
+    tables: CanonicalJsonSlice<'a, QueryGraphTableProjection>,
+    views: CanonicalJsonSlice<'a, QueryGraphViewProjection>,
+    warehouse: &'a str,
+}
+
+#[derive(Serialize)]
+struct CanonicalQueryGraphBundleManifest<'a> {
+    #[serde(rename = "graph-hash")]
+    graph_hash: &'a str,
+    #[serde(rename = "open-lineage-hash")]
+    open_lineage_hash: &'a str,
+    producer: &'a str,
+    #[serde(rename = "querygraph-import", skip_serializing_if = "Option::is_none")]
+    querygraph_import: Option<CanonicalQueryGraphImport<'a>>,
+    #[serde(rename = "schema-version")]
+    schema_version: &'a str,
+    standards: &'a [String],
+    #[serde(rename = "table-artifacts")]
+    table_artifacts: CanonicalJsonSlice<'a, QueryGraphTableArtifactHashes>,
+    #[serde(rename = "view-artifacts")]
+    view_artifacts: CanonicalJsonSlice<'a, QueryGraphViewArtifactHashes>,
+}
+
+impl<'a> From<&'a QueryGraphBundleManifest> for CanonicalQueryGraphBundleManifest<'a> {
+    fn from(manifest: &'a QueryGraphBundleManifest) -> Self {
+        Self {
+            graph_hash: &manifest.graph_hash,
+            open_lineage_hash: &manifest.open_lineage_hash,
+            producer: &manifest.producer,
+            querygraph_import: manifest
+                .querygraph_import
+                .as_ref()
+                .map(CanonicalQueryGraphImport::from),
+            schema_version: &manifest.schema_version,
+            standards: &manifest.standards,
+            table_artifacts: CanonicalJsonSlice::new(&manifest.table_artifacts),
+            view_artifacts: CanonicalJsonSlice::new(&manifest.view_artifacts),
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct CanonicalQueryGraphImport<'a> {
+    #[serde(rename = "graph-hash")]
+    graph_hash: &'a str,
+    #[serde(rename = "schema-version")]
+    schema_version: &'a str,
+    #[serde(rename = "table-only-bundle-hash")]
+    table_only_bundle_hash: &'a str,
+    #[serde(rename = "view-count")]
+    view_count: usize,
+    #[serde(
+        rename = "view-receipt-evidence",
+        skip_serializing_if = "CanonicalJsonSlice::is_empty"
+    )]
+    view_receipt_evidence: CanonicalJsonSlice<'a, QueryGraphViewReceiptEvidence>,
+    #[serde(
+        rename = "view-receipt-evidence-hash",
+        skip_serializing_if = "Option::is_none"
+    )]
+    view_receipt_evidence_hash: Option<&'a str>,
+}
+
+impl<'a> From<&'a QueryGraphImportCompatibility> for CanonicalQueryGraphImport<'a> {
+    fn from(import: &'a QueryGraphImportCompatibility) -> Self {
+        Self {
+            graph_hash: &import.graph_hash,
+            schema_version: &import.schema_version,
+            table_only_bundle_hash: &import.table_only_bundle_hash,
+            view_count: import.view_count,
+            view_receipt_evidence: CanonicalJsonSlice::new(&import.view_receipt_evidence),
+            view_receipt_evidence_hash: import.view_receipt_evidence_hash.as_deref(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "kebab-case")]
+struct CanonicalQueryGraphViewReceiptEvidence<'a> {
+    receipt_chain_hash: &'a str,
+    receipt_hash: &'a str,
+    stable_id: &'a str,
+    view_version: u64,
+}
+
+impl CanonicalJson for QueryGraphViewReceiptEvidence {
+    type Projection<'a> = CanonicalQueryGraphViewReceiptEvidence<'a>;
+
+    fn canonical_json(&self) -> Self::Projection<'_> {
+        CanonicalQueryGraphViewReceiptEvidence {
+            receipt_chain_hash: &self.receipt_chain_hash,
+            receipt_hash: &self.receipt_hash,
+            stable_id: &self.stable_id,
+            view_version: self.view_version,
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "kebab-case")]
+struct CanonicalQueryGraphTableArtifact<'a> {
+    cdif_hash: &'a str,
+    croissant_hash: &'a str,
+    odrl_hash: &'a str,
+    osi_hash: &'a str,
+    policy_bindings_hash: &'a str,
+    stable_id: &'a str,
+}
+
+impl CanonicalJson for QueryGraphTableArtifactHashes {
+    type Projection<'a> = CanonicalQueryGraphTableArtifact<'a>;
+
+    fn canonical_json(&self) -> Self::Projection<'_> {
+        CanonicalQueryGraphTableArtifact {
+            cdif_hash: &self.cdif_hash,
+            croissant_hash: &self.croissant_hash,
+            odrl_hash: &self.odrl_hash,
+            osi_hash: &self.osi_hash,
+            policy_bindings_hash: &self.policy_bindings_hash,
+            stable_id: &self.stable_id,
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "kebab-case")]
+struct CanonicalQueryGraphViewArtifact<'a> {
+    osi_hash: &'a str,
+    stable_id: &'a str,
+}
+
+impl CanonicalJson for QueryGraphViewArtifactHashes {
+    type Projection<'a> = CanonicalQueryGraphViewArtifact<'a>;
+
+    fn canonical_json(&self) -> Self::Projection<'_> {
+        CanonicalQueryGraphViewArtifact {
+            osi_hash: &self.osi_hash,
+            stable_id: &self.stable_id,
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "kebab-case")]
+struct CanonicalQueryGraphTable<'a> {
+    cdif: &'a Value,
+    croissant: &'a Value,
+    format_version: Option<i64>,
+    ident: CanonicalTableIdent<'a>,
+    location: &'a str,
+    metadata_location: Option<&'a str>,
+    odrl: &'a Value,
+    osi: &'a Value,
+    policy_bindings: CanonicalJsonSlice<'a, QueryGraphPolicyBindingProjection>,
+    stable_id: &'a str,
+    version: u64,
+}
+
+impl CanonicalJson for QueryGraphTableProjection {
+    type Projection<'a> = CanonicalQueryGraphTable<'a>;
+
+    fn canonical_json(&self) -> Self::Projection<'_> {
+        CanonicalQueryGraphTable {
+            cdif: &self.cdif,
+            croissant: &self.croissant,
+            format_version: self.format_version,
+            ident: CanonicalTableIdent::from(&self.ident),
+            location: &self.location,
+            metadata_location: self.metadata_location.as_deref(),
+            odrl: &self.odrl,
+            osi: &self.osi,
+            policy_bindings: CanonicalJsonSlice::new(&self.policy_bindings),
+            stable_id: &self.stable_id,
+            version: self.version,
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "kebab-case")]
+struct CanonicalQueryGraphPolicyBinding<'a> {
+    enforced: bool,
+    namespace: Option<&'a [String]>,
+    odrl: &'a Value,
+    policy_id: &'a str,
+    table: Option<&'a str>,
+}
+
+impl CanonicalJson for QueryGraphPolicyBindingProjection {
+    type Projection<'a> = CanonicalQueryGraphPolicyBinding<'a>;
+
+    fn canonical_json(&self) -> Self::Projection<'_> {
+        CanonicalQueryGraphPolicyBinding {
+            enforced: self.enforced,
+            namespace: self.namespace.as_deref(),
+            odrl: &self.odrl,
+            policy_id: &self.policy_id,
+            table: self.table.as_deref(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "kebab-case")]
+struct CanonicalQueryGraphView<'a> {
+    columns: &'a Value,
+    dialect: &'a str,
+    name: &'a str,
+    namespace: &'a [String],
+    osi: &'a Value,
+    properties: &'a Value,
+    schema_version: Option<u64>,
+    sql: &'a str,
+    stable_id: &'a str,
+    view_version: u64,
+    warehouse: &'a str,
+}
+
+impl CanonicalJson for QueryGraphViewProjection {
+    type Projection<'a> = CanonicalQueryGraphView<'a>;
+
+    fn canonical_json(&self) -> Self::Projection<'_> {
+        CanonicalQueryGraphView {
+            columns: &self.columns,
+            dialect: &self.dialect,
+            name: &self.name,
+            namespace: &self.namespace,
+            osi: &self.osi,
+            properties: &self.properties,
+            schema_version: self.schema_version,
+            sql: &self.sql,
+            stable_id: &self.stable_id,
+            view_version: self.view_version,
+            warehouse: &self.warehouse,
+        }
+    }
 }
 
 #[derive(Serialize)]
