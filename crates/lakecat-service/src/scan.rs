@@ -3,7 +3,7 @@ use axum::extract::{Path, State};
 use axum::http::HeaderMap;
 use lakecat_api::{
     FetchScanTasksRequest as ApiFetchScanTasksRequest, FetchScanTasksResponse,
-    PlanTableScanRequest, PlanTableScanResponse, TableIdentifier,
+    NormalizedPlanTableScanRequest, PlanTableScanRequest, PlanTableScanResponse, TableIdentifier,
 };
 #[cfg(not(feature = "sail-local"))]
 use lakecat_core::sail::FetchScanTasksRequest as SailFetchScanTasksRequest;
@@ -119,25 +119,35 @@ pub(crate) async fn plan_scan_with_capability(
     ),
     LakeCatHttpError,
 > {
-    request.validate_scan_mode()?;
+    let NormalizedPlanTableScanRequest {
+        projection: requested_projection,
+        filters,
+        limit,
+        snapshot_id,
+        case_sensitive,
+        use_snapshot_schema,
+        start_snapshot_id,
+        end_snapshot_id,
+        stats_fields: requested_stats_fields,
+    } = request.into_normalized()?;
     #[cfg(feature = "sail-local")]
     let _ = &table;
-    let requested_projection = request.projected_fields();
     let restriction = capability.read_restriction()?;
     let projection = restriction.effective_projection(&requested_projection)?;
-    let filters = request.filter_values();
-    let stats_fields = restriction.effective_stats_fields(&request.stats_fields);
+    let stats_fields = restriction.effective_stats_fields(&requested_stats_fields);
+    #[cfg(feature = "sail-local")]
     let grant_requested_projection = requested_projection.clone();
+    #[cfg(not(feature = "sail-local"))]
     let grant_effective_projection = projection.clone();
     let scan_request_extensions = json!({
-        "case-sensitive": request.case_sensitive,
-        "use-snapshot-schema": request.use_snapshot_schema,
-        "start-snapshot-id": request.start_snapshot_id,
-        "end-snapshot-id": request.end_snapshot_id,
+        "case-sensitive": case_sensitive,
+        "use-snapshot-schema": use_snapshot_schema,
+        "start-snapshot-id": start_snapshot_id,
+        "end-snapshot-id": end_snapshot_id,
         "requested-projection": requested_projection,
         "effective-projection": projection,
         "read-restriction": restriction,
-        "requested-stats-fields": request.stats_fields,
+        "requested-stats-fields": requested_stats_fields,
         "effective-stats-fields": stats_fields,
         "stats-fields": stats_fields,
     });
@@ -157,10 +167,10 @@ pub(crate) async fn plan_scan_with_capability(
                 ProviderScanPlanningRequest {
                     projection: requested_projection,
                     filters,
-                    limit: request.limit,
-                    snapshot_id: request.snapshot_id,
-                    start_snapshot_id: request.start_snapshot_id,
-                    end_snapshot_id: request.end_snapshot_id,
+                    limit,
+                    snapshot_id,
+                    start_snapshot_id,
+                    end_snapshot_id,
                 },
             )
             .await
@@ -177,17 +187,21 @@ pub(crate) async fn plan_scan_with_capability(
             projection,
             filters: {
                 let mut filters = filters;
-                if let Some(row_predicate) = restriction.row_predicate.clone() {
+                if let Some(row_predicate) = restriction.row_predicate {
                     filters.push(row_predicate);
                 }
                 filters
             },
-            limit: request.limit,
-            snapshot_id: request.snapshot_id,
-            start_snapshot_id: request.start_snapshot_id,
-            end_snapshot_id: request.end_snapshot_id,
+            limit,
+            snapshot_id,
+            start_snapshot_id,
+            end_snapshot_id,
         })
         .await?;
+    #[cfg(not(feature = "sail-local"))]
+    let grant_requested_projection = requested_projection;
+    #[cfg(feature = "sail-local")]
+    let grant_effective_projection = projection;
     let governed_scan_grant = crate::governed_scan::issue_governed_scan_grant(
         state.catalog_identity(),
         capability,

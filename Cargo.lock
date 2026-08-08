@@ -3925,6 +3925,7 @@ dependencies = [
 name = "lakecat-api"
 version = "0.3.0"
 dependencies = [
+ "criterion",
  "lakecat-core",
  "serde",
  "serde_json",

@@ -213,3 +213,49 @@ fn catalog_config_endpoints_advertise_querygraph_integration_routes() {
     assert!(endpoints.contains("POST /management/v1/lineage/drain"));
     assert!(endpoints.contains("GET /querygraph/v1/bootstrap"));
 }
+
+#[test]
+fn scan_request_normalization_moves_aliases_into_canonical_fields() {
+    let request = PlanTableScanRequest {
+        projection: vec!["legacy".to_string()],
+        select: vec!["id".to_string(), "payload".to_string()],
+        filters: vec![serde_json::json!({"type": "eq", "term": "id", "value": 7})],
+        filter: Some(serde_json::json!({"type": "always-true"})),
+        limit: Some(100),
+        snapshot_id: Some(42),
+        case_sensitive: Some(true),
+        use_snapshot_schema: Some(false),
+        start_snapshot_id: None,
+        end_snapshot_id: None,
+        stats_fields: vec!["id".to_string()],
+    };
+
+    let normalized = request.into_normalized().unwrap();
+    assert_eq!(normalized.projection, ["id", "payload"]);
+    assert_eq!(normalized.filters.len(), 2);
+    assert_eq!(
+        normalized.filters[1],
+        serde_json::json!({"type": "always-true"})
+    );
+    assert_eq!(normalized.stats_fields, ["id"]);
+    assert_eq!(normalized.snapshot_id, Some(42));
+}
+
+#[test]
+fn scan_request_normalization_validates_incremental_mode_before_consuming() {
+    let request = PlanTableScanRequest {
+        projection: Vec::new(),
+        select: Vec::new(),
+        filters: Vec::new(),
+        filter: None,
+        limit: None,
+        snapshot_id: Some(42),
+        case_sensitive: None,
+        use_snapshot_schema: None,
+        start_snapshot_id: Some(40),
+        end_snapshot_id: Some(42),
+        stats_fields: Vec::new(),
+    };
+
+    assert!(request.into_normalized().is_err());
+}

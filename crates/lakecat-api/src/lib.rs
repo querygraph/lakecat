@@ -796,6 +796,24 @@ pub struct PlanTableScanRequest {
     pub stats_fields: Vec<String>,
 }
 
+/// Canonical scan-planning input after Iceberg REST compatibility aliases are
+/// resolved and the scan mode is validated.
+///
+/// This owned form lets service and engine boundaries move request payloads
+/// instead of deep-cloning projections and JSON filters after deserialization.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NormalizedPlanTableScanRequest {
+    pub projection: Vec<String>,
+    pub filters: Vec<Value>,
+    pub limit: Option<u64>,
+    pub snapshot_id: Option<i64>,
+    pub case_sensitive: Option<bool>,
+    pub use_snapshot_schema: Option<bool>,
+    pub start_snapshot_id: Option<i64>,
+    pub end_snapshot_id: Option<i64>,
+    pub stats_fields: Vec<String>,
+}
+
 impl PlanTableScanRequest {
     pub fn validate_scan_mode(&self) -> LakeCatResult<()> {
         if self.snapshot_id.is_some() && self.is_incremental_scan() {
@@ -837,6 +855,42 @@ impl PlanTableScanRequest {
             filters.push(filter.clone());
         }
         filters
+    }
+
+    /// Validate and consume the wire request into its canonical planning form.
+    pub fn into_normalized(self) -> LakeCatResult<NormalizedPlanTableScanRequest> {
+        self.validate_scan_mode()?;
+        let Self {
+            projection,
+            select,
+            mut filters,
+            filter,
+            limit,
+            snapshot_id,
+            case_sensitive,
+            use_snapshot_schema,
+            start_snapshot_id,
+            end_snapshot_id,
+            stats_fields,
+        } = self;
+        if let Some(filter) = filter {
+            filters.push(filter);
+        }
+        Ok(NormalizedPlanTableScanRequest {
+            projection: if select.is_empty() {
+                projection
+            } else {
+                select
+            },
+            filters,
+            limit,
+            snapshot_id,
+            case_sensitive,
+            use_snapshot_schema,
+            start_snapshot_id,
+            end_snapshot_id,
+            stats_fields,
+        })
     }
 }
 

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added scale benchmarks for Iceberg REST scan-request decoding and
+  normalization. Scan aliases now normalize into an owned canonical request,
+  moving projection, filter, and statistics payloads across the service
+  boundary and retaining only the one projection copy required by each Sail
+  adapter; the remote adapter also moves its policy predicate. Normalizing 256
+  fields and JSON filters fell from about 78.4 microseconds to 2.39
+  microseconds (about 97%) with unchanged alias and scan-mode semantics.
+
 - Extended core benchmarks across governed evidence domain hashing, proof
   issuance, integrity validation, and snapshot/source-scope derivation.
   Canonical evidence is now sorted in place and streamed with its domain
