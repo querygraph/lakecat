@@ -2,6 +2,7 @@ pub mod governed_scan;
 pub mod sail;
 
 use std::fmt::{Display, Formatter};
+use std::io::{self, Write};
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
@@ -231,14 +232,28 @@ impl AuditStamp {
 }
 
 pub fn content_hash_json(value: &serde_json::Value) -> LakeCatResult<String> {
-    let bytes = serde_json::to_vec(value)
+    let mut writer = Sha256Writer(Sha256::new());
+    serde_json::to_writer(&mut writer, value)
         .map_err(|err| LakeCatError::Internal(format!("failed to encode JSON: {err}")))?;
-    Ok(content_hash_bytes(&bytes))
+    Ok(format!("sha256:{}", hex::encode(writer.0.finalize())))
 }
 
 pub fn content_hash_bytes(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
     format!("sha256:{}", hex::encode(digest))
+}
+
+struct Sha256Writer(Sha256);
+
+impl Write for Sha256Writer {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.0.update(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 fn validate_name(kind: &str, value: &str) -> LakeCatResult<()> {
@@ -256,4 +271,22 @@ fn validate_name(kind: &str, value: &str) -> LakeCatResult<()> {
         )));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn streaming_json_hash_preserves_the_encoded_evidence_contract() {
+        let value = serde_json::json!({
+            "z": [1, 2, 3],
+            "a": {"nested": true},
+        });
+        let encoded = serde_json::to_vec(&value).unwrap();
+        assert_eq!(
+            content_hash_json(&value).unwrap(),
+            content_hash_bytes(&encoded)
+        );
+    }
 }

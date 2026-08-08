@@ -40,6 +40,8 @@ trybuild = "1"
 turso = { version = "0.7.0-pre.10", default-features = false }
 url = "2.5.8"
 uuid = { version = "1", features = ["serde", "v4"] }
+criterion = { version = "0.5.1", features = ["async_tokio"] }
+tempfile = "3.24.0"
 
 lakecat-api = { path = "crates/lakecat-api", version = "0.3.0" }
 lakecat-core = { path = "crates/lakecat-core", version = "0.3.0" }

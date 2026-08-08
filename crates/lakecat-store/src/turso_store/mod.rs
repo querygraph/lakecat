@@ -504,12 +504,15 @@ impl CatalogStore for TursoCatalogStore {
         commit: TableCommit,
     ) -> LakeCatResult<TableRecord> {
         commit.validate()?;
-        let ident = ident.clone();
+        let ident = Arc::new(ident.clone());
+        let commit = Arc::new(commit);
         self.write_txn(move |conn| {
-            let ident = ident.clone();
-            let commit = commit.clone();
+            let ident = Arc::clone(&ident);
+            let commit = Arc::clone(&commit);
             Box::pin(async move {
-                let ident = &ident;
+                let ident = ident.as_ref();
+                let commit = commit.as_ref();
+        let table_key_value = table_key(ident);
         let request_hash = content_hash_json(&serde_json::json!({
             "requirements": &commit.requirements,
             "updates": &commit.updates,
@@ -519,9 +522,9 @@ impl CatalogStore for TursoCatalogStore {
         }))?;
         let idempotency_request_hash = commit
             .idempotency_request_hash
-            .clone()
-            .unwrap_or_else(|| request_hash.clone());
-        if let Some(idempotency_key) = &commit.idempotency_key {
+            .as_deref()
+            .unwrap_or(request_hash.as_str());
+        if let Some(idempotency_key) = commit.idempotency_key.as_deref() {
             let idem_key = idempotency_record_key(ident, idempotency_key);
             let mut rows = conn
                     .query(
@@ -554,7 +557,7 @@ impl CatalogStore for TursoCatalogStore {
                        and not exists (
                          select 1 from soft_deletes d where d.table_key = t.table_key
                        )",
-                (table_key(ident),),
+                (table_key_value.as_str(),),
             )
             .await
             .map_err(turso_error)?;
@@ -585,15 +588,20 @@ impl CatalogStore for TursoCatalogStore {
                 previous_metadata_location.as_deref(),
             ));
         }
-        table.metadata_location = commit.new_metadata_location.clone();
-        if let Some(new_metadata) = commit.new_metadata {
-            table.metadata = new_metadata;
+        table.metadata_location.clone_from(&commit.new_metadata_location);
+        if let Some(new_metadata) = commit.new_metadata.as_ref() {
+            table.metadata.clone_from(new_metadata);
         }
         table.version += 1;
         table.updated_at = Utc::now();
         table.metadata["lakecat:version"] = serde_json::json!(table.version);
         table.metadata["lakecat:last-request-hash"] = serde_json::json!(request_hash);
 
+        let table_value = serde_json::to_value(&table).map_err(|err| {
+            LakeCatError::Internal(format!("failed to encode table commit response: {err}"))
+        })?;
+        let (table_json, table_response_hash) = encode_json_with_hash(&table_value)?;
+        let committed_at = table.updated_at.to_rfc3339();
         let updated_rows = conn
             .execute(
                 "update tables
@@ -604,11 +612,11 @@ impl CatalogStore for TursoCatalogStore {
                      or metadata_location = ?7
                    )",
                 (
-                    table_key(ident),
+                    table_key_value.as_str(),
                     table.metadata_location.as_deref(),
                     checked_i64(table.version, "table version")?,
-                    encode_json(&table)?,
-                    table.updated_at.to_rfc3339(),
+                    table_json.as_str(),
+                    committed_at.as_str(),
                     commit.expected_previous_metadata_location.as_deref(),
                     commit.expected_previous_metadata_location.as_deref(),
                 ),
@@ -633,10 +641,12 @@ impl CatalogStore for TursoCatalogStore {
             snapshot_id: crate::table_commit_snapshot_id(&table),
             policy_hash: crate::table_commit_policy_hash(commit.authorization_receipt.as_ref()),
             request_hash,
-            response_hash: crate::table_response_hash(&table)?,
+            response_hash: table_response_hash,
             idempotency_key_sha256,
             committed_at: table.updated_at,
         };
+        let principal_json = encode_json(&record.principal)?;
+        let record_json = encode_json(&record)?;
         conn.execute(
             "insert into metadata_pointer_log (
                     table_key, sequence_number, previous_metadata_location,
@@ -645,14 +655,14 @@ impl CatalogStore for TursoCatalogStore {
                  )
                  values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             (
-                table_key(ident),
+                table_key_value.as_str(),
                 checked_i64(record.sequence_number, "sequence number")?,
                 record.previous_metadata_location.as_deref(),
                 record.new_metadata_location.as_deref(),
-                encode_json(&record.principal)?,
+                principal_json.as_str(),
                 record.request_hash.as_str(),
-                record.committed_at.to_rfc3339(),
-                encode_json(&record)?,
+                committed_at.as_str(),
+                record_json.as_str(),
             ),
         )
         .await
@@ -662,9 +672,9 @@ impl CatalogStore for TursoCatalogStore {
             "event-type": "table.commit",
             "table": ident,
             "commit": record,
-            "authorization-receipt": commit.authorization_receipt,
+            "authorization-receipt": &commit.authorization_receipt,
         });
-        let audit_payload_hash = content_hash_json(&audit_payload)?;
+        let (audit_payload_json, audit_payload_hash) = encode_json_with_hash(&audit_payload)?;
         conn.execute(
             "insert into audit_events (
                     event_id, event_type, table_key, principal_json,
@@ -674,40 +684,37 @@ impl CatalogStore for TursoCatalogStore {
             (
                 audit_payload_hash.as_str(),
                 "table.commit",
-                table_key(ident),
-                encode_json(&commit.principal)?,
+                table_key_value.as_str(),
+                principal_json.as_str(),
                 audit_payload_hash.as_str(),
-                encode_json(&audit_payload)?,
-                table.updated_at.to_rfc3339(),
+                audit_payload_json.as_str(),
+                committed_at.as_str(),
             ),
         )
         .await
         .map_err(turso_error)?;
 
-        let outbox_payload = serde_json::json!({
-            "audit-event-id": audit_payload_hash,
-            "event-type": "table.commit",
-            "table": ident,
-            "commit": record,
-            "authorization-receipt": audit_payload["authorization-receipt"].clone(),
-        });
+        let mut outbox_payload = audit_payload;
+        outbox_payload["audit-event-id"] = JsonValue::String(audit_payload_hash);
+        let (outbox_payload_json, outbox_payload_hash) =
+            encode_json_with_hash(&outbox_payload)?;
         conn.execute(
             "insert into outbox_events (
                     event_id, sink, event_type, payload_json, created_at
                  )
                  values (?1, ?2, ?3, ?4, ?5)",
             (
-                content_hash_json(&outbox_payload)?,
+                outbox_payload_hash,
                 "lakecat.lineage-and-graph",
                 "table.commit",
-                encode_json(&outbox_payload)?,
-                table.updated_at.to_rfc3339(),
+                outbox_payload_json,
+                committed_at.as_str(),
             ),
         )
         .await
         .map_err(turso_error)?;
 
-        if let Some(idempotency_key) = commit.idempotency_key {
+        if let Some(idempotency_key) = commit.idempotency_key.as_deref() {
             conn.execute(
                 "insert into idempotency_records (
                         idem_key, table_key, request_hash, response_json, created_at
@@ -715,13 +722,13 @@ impl CatalogStore for TursoCatalogStore {
                      values (?1, ?2, ?3, ?4, ?5)",
                 (
                     idempotency_record_key(ident, &idempotency_key),
-                    table_key(ident),
+                    table_key_value.as_str(),
                     commit
                         .idempotency_request_hash
                         .as_deref()
                         .unwrap_or(record.request_hash.as_str()),
-                    encode_json(&table)?,
-                    table.updated_at.to_rfc3339(),
+                    table_json.as_str(),
+                    committed_at.as_str(),
                 ),
             )
             .await
@@ -2256,6 +2263,15 @@ const TURSO_MIGRATION: &[&str] = &[
 fn encode_json(value: impl serde::Serialize) -> LakeCatResult<String> {
     serde_json::to_string(&value)
         .map_err(|err| LakeCatError::Internal(format!("failed to encode store JSON: {err}")))
+}
+
+fn encode_json_with_hash(value: &JsonValue) -> LakeCatResult<(String, String)> {
+    let bytes = serde_json::to_vec(value)
+        .map_err(|err| LakeCatError::Internal(format!("failed to encode store JSON: {err}")))?;
+    let hash = content_hash_bytes(&bytes);
+    let encoded = String::from_utf8(bytes)
+        .expect("serde_json always produces valid UTF-8 when encoding a JSON value");
+    Ok((encoded, hash))
 }
 
 fn decode_json<T: DeserializeOwned>(value: String) -> LakeCatResult<T> {

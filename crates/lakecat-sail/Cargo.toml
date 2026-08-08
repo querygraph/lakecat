@@ -38,4 +38,10 @@ url = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true }
 
 [dev-dependencies]
+criterion = { workspace = true }
 tokio = { workspace = true }
+
+[[bench]]
+name = "commit_preparation"
+harness = false
+required-features = ["sail-local"]

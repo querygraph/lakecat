@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Added reproducible Criterion benchmarks for evidence hashing, metadata JSON
+  encoding, Sail commit preparation, Turso table commits and reads, and the
+  full service commit path with both Turso and memory stores. Commit
+  preparation now deserializes borrowed REST values and moves owned request
+  data instead of rebuilding and cloning JSON envelopes, metadata inspection
+  avoids a JSON byte round trip, evidence hashes stream directly into SHA-256,
+  metadata files use compact JSON, and Turso commit persistence reuses encoded
+  values and their exact hashes. The same-container benchmarks reduce Sail
+  commit preparation by 36–44% and metadata inspection by about 40% while
+  preserving the existing wire, evidence-hash, and commit semantics.
+
 - Reused a bounded pool of Turso read connections for table loads,
   idempotency replay, storage-profile lookup, and policy-binding lookup,
   eliminating repeated connection setup on commit-adjacent reads.

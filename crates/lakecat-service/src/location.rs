@@ -77,7 +77,7 @@ pub(crate) async fn write_planned_metadata(
         return Ok(None);
     };
     let (store, object_path) = metadata_object_store(location)?;
-    let payload = serde_json::to_vec_pretty(&commit_plan.new_metadata)
+    let payload = serde_json::to_vec(&commit_plan.new_metadata)
         .map_err(|err| LakeCatError::Internal(format!("failed to encode metadata JSON: {err}")))?;
     store
         .put_opts(
