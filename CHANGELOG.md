@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Refresh the benchmark chapter from the final six-round, production-build
+  catalog sweep. LakeCat is the error-free leader at 153.0 concurrent and
+  335.5 sequential commits/s; Nessie's faster 190.0/s raw concurrent row is
+  retained as DQ because every measured round returned HTTP 500s. The chapter
+  now records strict validity, MinIO object auditing, the complete optimization
+  sequence, and the exact boundary of what the warm benchmark establishes.
+
 - Advance the locked Sail `lakecat` integration to revision `6471fb9a`,
   consuming the optimized Iceberg object cache, metadata and manifest parsing,
   delete matching, SQL frontend, catalog status, and metadata-discovery paths.
