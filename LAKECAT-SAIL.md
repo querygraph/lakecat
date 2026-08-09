@@ -231,6 +231,24 @@ passed with `--all-targets -- -D warnings`, and all 14 object-store tests passed
 The corresponding upstream #2400 run passed Rust build/tests/lint, Spark 3.5 and
 4.2, Python/Spark Connect 3.5–4.2, Ibis, docs, title validation, and Codecov.
 
+LakeCat was then validated from clean detached source commit `07635ad5` against
+the exact locked Sail revision above. `lakecat-sail --features sail-local`
+passed 19 tests; `lakecat-sail --features catalog-provider` passed 12; and
+`lakecat-service --features sail-local` passed 464 unit tests, the compile-fail
+API-authority test, and doctests. Test links used LLVM `lld` with test-only debug
+information disabled because the GNU debug linker exceeded the runner's memory;
+this does not alter the tested code or runtime behavior.
+
+The production `lakecat-service` executable was built in that same container
+with Rust 1.96.0, `opt-level=3`, `target-cpu=native`, thin LTO, one codegen unit,
+stripped symbols, `panic=abort`, and incremental compilation disabled. Fat LTO
+was attempted with both GNU ld and `lld`, but the final link was killed at the
+runner's 7.8 GiB memory ceiling; thin LTO is therefore the strongest reproducible
+production profile on this runner. The resulting aarch64 ELF is 20,310,656
+bytes, contains no debug sections, has SHA-256
+`61938db9f8cfaec4f5bace41d034c46fe0fb3312b64531b72f9d37606ac2e4f6`, and
+survived a bounded startup smoke test.
+
 **Toolchain.** Stable only — never run `cargo +nightly` (including `cargo +nightly
 fmt`). Sail's CI uses nightly fmt; let Sail's CI handle it, don't run it locally.
 
