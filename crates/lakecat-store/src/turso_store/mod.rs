@@ -3,7 +3,7 @@ use std::pin::Pin;
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
     ops::Deref,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, Weak},
 };
 
 use async_trait::async_trait;
@@ -36,6 +36,13 @@ pub struct TursoCatalogStore {
     /// unchanged — only the per-commit connection setup is amortized. `Arc` so a
     /// cloned store shares the pool (and the underlying database).
     write_pool: Arc<Mutex<Vec<Connection>>>,
+    /// Same-table commits share a short keyed gate around the final database
+    /// transaction. This turns stale concurrent requests into deterministic
+    /// metadata-pointer conflicts instead of allowing a continuous stream of
+    /// writers to exhaust bounded Turso busy retries. Different tables still use
+    /// distinct gates and retain MVCC parallelism. Weak entries avoid retaining
+    /// one mutex for every table that has ever been committed.
+    table_commit_locks: Arc<Mutex<HashMap<String, Weak<tokio::sync::Mutex<()>>>>>,
     /// Read connections are also reused. Commit requests perform several small
     /// catalog reads before the write transaction; opening a fresh Turso
     /// connection for each of those reads otherwise adds avoidable setup cost.
@@ -93,6 +100,7 @@ impl TursoCatalogStore {
         let store = Arc::new(Self {
             db,
             write_pool: Arc::new(Mutex::new(Vec::new())),
+            table_commit_locks: Arc::new(Mutex::new(HashMap::new())),
             read_pool: Arc::new(Mutex::new(Vec::new())),
         });
         store.migrate().await?;
@@ -236,6 +244,8 @@ impl TursoCatalogStore {
         commit: TableCommit,
     ) -> LakeCatResult<TableRecord> {
         commit.validate()?;
+        let table_commit_lock = self.table_commit_lock(ident);
+        let _table_commit_guard = table_commit_lock.lock().await;
         let ident = Arc::new(ident.clone());
         let commit = Arc::new(commit);
         let snapshot = snapshot.map(Arc::new);
@@ -251,6 +261,21 @@ impl TursoCatalogStore {
             })
         })
         .await
+    }
+
+    fn table_commit_lock(&self, ident: &TableIdent) -> Arc<tokio::sync::Mutex<()>> {
+        let key = table_key(ident);
+        let mut locks = self
+            .table_commit_locks
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        locks.retain(|_, lock| lock.strong_count() > 0);
+        if let Some(lock) = locks.get(&key).and_then(Weak::upgrade) {
+            return lock;
+        }
+        let lock = Arc::new(tokio::sync::Mutex::new(()));
+        locks.insert(key, Arc::downgrade(&lock));
+        lock
     }
 
     #[cfg(test)]
