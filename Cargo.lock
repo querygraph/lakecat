@@ -5241,7 +5241,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03da047801ff44bb6a4d407d4860c05fd70bb81714e6b2f3812603d5b145b042"
 dependencies = [
  "heck",
- "itertools 0.10.5",
+ "itertools 0.12.1",
  "log",
  "multimap",
  "petgraph",
@@ -5262,7 +5262,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b570b25f7617e43d59005d0990ccb79e950a423952cea19671b7a876da390adf"
 dependencies = [
  "anyhow",
- "itertools 0.10.5",
+ "itertools 0.12.1",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -6015,7 +6015,7 @@ checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 [[package]]
 name = "sail-build-scripts"
 version = "0.6.4"
-source = "git+https://github.com/querygraph/sail.git?branch=lakecat#6471fb9a82620e046d825219eaad26cd569ed91f"
+source = "git+https://github.com/querygraph/sail.git?branch=lakecat#dbff52b0dfff5fed302d09a72eeb7feb92f50725"
 dependencies = [
  "lazy_static",
  "prettyplease",
@@ -6030,7 +6030,7 @@ dependencies = [
 [[package]]
 name = "sail-catalog"
 version = "0.6.4"
-source = "git+https://github.com/querygraph/sail.git?branch=lakecat#6471fb9a82620e046d825219eaad26cd569ed91f"
+source = "git+https://github.com/querygraph/sail.git?branch=lakecat#dbff52b0dfff5fed302d09a72eeb7feb92f50725"
 dependencies = [
  "async-trait",
  "datafusion",
@@ -6052,7 +6052,7 @@ dependencies = [
 [[package]]
 name = "sail-catalog-iceberg"
 version = "0.6.4"
-source = "git+https://github.com/querygraph/sail.git?branch=lakecat#6471fb9a82620e046d825219eaad26cd569ed91f"
+source = "git+https://github.com/querygraph/sail.git?branch=lakecat#dbff52b0dfff5fed302d09a72eeb7feb92f50725"
 dependencies = [
  "async-trait",
  "percent-encoding",
@@ -6072,7 +6072,7 @@ dependencies = [
 [[package]]
 name = "sail-common"
 version = "0.6.4"
-source = "git+https://github.com/querygraph/sail.git?branch=lakecat#6471fb9a82620e046d825219eaad26cd569ed91f"
+source = "git+https://github.com/querygraph/sail.git?branch=lakecat#dbff52b0dfff5fed302d09a72eeb7feb92f50725"
 dependencies = [
  "arrow",
  "arrow-buffer",
@@ -6095,7 +6095,7 @@ dependencies = [
 [[package]]
 name = "sail-common-datafusion"
 version = "0.6.4"
-source = "git+https://github.com/querygraph/sail.git?branch=lakecat#6471fb9a82620e046d825219eaad26cd569ed91f"
+source = "git+https://github.com/querygraph/sail.git?branch=lakecat#dbff52b0dfff5fed302d09a72eeb7feb92f50725"
 dependencies = [
  "arrow-schema",
  "async-trait",
@@ -6132,7 +6132,7 @@ dependencies = [
 [[package]]
 name = "sail-data-source"
 version = "0.6.4"
-source = "git+https://github.com/querygraph/sail.git?branch=lakecat#6471fb9a82620e046d825219eaad26cd569ed91f"
+source = "git+https://github.com/querygraph/sail.git?branch=lakecat#dbff52b0dfff5fed302d09a72eeb7feb92f50725"
 dependencies = [
  "arrow",
  "arrow-schema",
@@ -6173,7 +6173,7 @@ dependencies = [
 [[package]]
 name = "sail-function"
 version = "0.6.4"
-source = "git+https://github.com/querygraph/sail.git?branch=lakecat#6471fb9a82620e046d825219eaad26cd569ed91f"
+source = "git+https://github.com/querygraph/sail.git?branch=lakecat#dbff52b0dfff5fed302d09a72eeb7feb92f50725"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -6220,7 +6220,7 @@ dependencies = [
 [[package]]
 name = "sail-iceberg"
 version = "0.6.4"
-source = "git+https://github.com/querygraph/sail.git?branch=lakecat#6471fb9a82620e046d825219eaad26cd569ed91f"
+source = "git+https://github.com/querygraph/sail.git?branch=lakecat#dbff52b0dfff5fed302d09a72eeb7feb92f50725"
 dependencies = [
  "apache-avro",
  "arrow-schema",
@@ -6259,7 +6259,7 @@ dependencies = [
 [[package]]
 name = "sail-logical-plan"
 version = "0.6.4"
-source = "git+https://github.com/querygraph/sail.git?branch=lakecat#6471fb9a82620e046d825219eaad26cd569ed91f"
+source = "git+https://github.com/querygraph/sail.git?branch=lakecat#dbff52b0dfff5fed302d09a72eeb7feb92f50725"
 dependencies = [
  "comfy-table",
  "datafusion",
@@ -6276,7 +6276,7 @@ dependencies = [
 [[package]]
 name = "sail-physical-plan"
 version = "0.6.4"
-source = "git+https://github.com/querygraph/sail.git?branch=lakecat#6471fb9a82620e046d825219eaad26cd569ed91f"
+source = "git+https://github.com/querygraph/sail.git?branch=lakecat#dbff52b0dfff5fed302d09a72eeb7feb92f50725"
 dependencies = [
  "datafusion",
  "datafusion-common",
@@ -6293,7 +6293,7 @@ dependencies = [
 [[package]]
 name = "sail-pyarrow"
 version = "0.6.4"
-source = "git+https://github.com/querygraph/sail.git?branch=lakecat#6471fb9a82620e046d825219eaad26cd569ed91f"
+source = "git+https://github.com/querygraph/sail.git?branch=lakecat#dbff52b0dfff5fed302d09a72eeb7feb92f50725"
 dependencies = [
  "arrow-array",
  "arrow-data",
@@ -6304,7 +6304,7 @@ dependencies = [
 [[package]]
 name = "sail-sql-analyzer"
 version = "0.6.4"
-source = "git+https://github.com/querygraph/sail.git?branch=lakecat#6471fb9a82620e046d825219eaad26cd569ed91f"
+source = "git+https://github.com/querygraph/sail.git?branch=lakecat#dbff52b0dfff5fed302d09a72eeb7feb92f50725"
 dependencies = [
  "chrono",
  "chumsky 0.12.0",
@@ -6319,7 +6319,7 @@ dependencies = [
 [[package]]
 name = "sail-sql-macro"
 version = "0.6.4"
-source = "git+https://github.com/querygraph/sail.git?branch=lakecat#6471fb9a82620e046d825219eaad26cd569ed91f"
+source = "git+https://github.com/querygraph/sail.git?branch=lakecat#dbff52b0dfff5fed302d09a72eeb7feb92f50725"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6329,7 +6329,7 @@ dependencies = [
 [[package]]
 name = "sail-sql-parser"
 version = "0.6.4"
-source = "git+https://github.com/querygraph/sail.git?branch=lakecat#6471fb9a82620e046d825219eaad26cd569ed91f"
+source = "git+https://github.com/querygraph/sail.git?branch=lakecat#dbff52b0dfff5fed302d09a72eeb7feb92f50725"
 dependencies = [
  "chumsky 0.12.0",
  "either",

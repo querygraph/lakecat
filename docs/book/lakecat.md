@@ -659,13 +659,17 @@ The cache is a per-worker, read-through *page* cache in Sail's `sail-object-stor
 crate — `CachingObjectStore` over a `CacheConfig` — added to answer Sail issue #1015.
 It is ported from lancedb/ocra, attributed in the crate, with the original Moka
 backing store swapped for Foyer. It is opt-in: `SAIL_OBJECT_STORE_CACHE` turns it on,
-and `SAIL_OBJECT_STORE_CACHE_PAGE_SIZE`, `_MEMORY`, and `_METADATA` tune it — by
-default 1 MiB pages, 1 GiB of value memory, and 64 MiB of metadata. Because
+and `SAIL_OBJECT_STORE_CACHE_PAGE_SIZE`, `_MEMORY`, `_METADATA`, and
+`_METADATA_TTL_SECS` tune it — by default 1 MiB pages, 1 GiB of value memory,
+64 MiB of combined metadata/path-identity memory, and a 60 second metadata TTL. Because
 `object_store` exposes its read methods as a non-overridable blanket trait, the cache
 cannot wrap them directly; it intercepts the two range entry points the engine
 actually reads through — `get_opts` and `get_ranges` — and serves whole pages from
 memory. The current tier is in-memory only; Foyer's hybrid disk tiering is a follow-up
-the same seam already anticipates.
+the same seam already anticipates. Writes invalidate before and after mutation;
+external replacements rotate the object's compact cache identity after TTL
+revalidation; conditional and version-specific requests bypass the cache. Page,
+metadata, and path-identity state are all capacity bounded.
 
 On the same files the difference is roughly twenty-six fold: the per-file scan median
 falls from about 47.5 ms cold and uncached to 1.81 ms warm. None of this lives in
@@ -842,10 +846,14 @@ questions LakeCat sends to Sail are the ones that require table-format knowledge
 
 For Ocelot, the Sail crates report version `0.6.4` and resolve from the
 `lakecat` branch of `github.com/querygraph/sail`. `Cargo.lock` pins that
-branch to revision `bddb1706ba2308e5029d47f04f03121236edbfa6`. The branch is
+branch to revision `dbff52b0dfff5fed302d09a72eeb7feb92f50725`. The branch is
 explicit release provenance: it carries the Iceberg planning, snapshot-append,
-and Foyer cache work LakeCat needs until those APIs can move to an upstream or
-published Sail line.
+Foyer cache, and measured SQL/Iceberg hot-path work LakeCat needs until those APIs
+can move to an upstream or published Sail line. The reusable cache and hot-path
+changes are proposed to LakeSail in
+[`lakehq/sail#2400`](https://github.com/lakehq/sail/pull/2400); QueryGraph's cache
+implementation is aligned with that reviewed source while retaining LakeCat-only
+provider and commit seams.
 
 LakeCat evolves under three rules: conform to Iceberg v3 for ordinary clients;
 preserve unknown/emerging v4 metadata without claiming settled semantics; prefer
@@ -916,7 +924,7 @@ versions and sources; the lockfile records the exact build:
 | LakeCat workspace | `0.3.0`, Ocelot | All LakeCat crates and `qglake-bundle` share the workspace version. |
 | Grust | `0.12.0`, Lobster, crates.io | `grust-graph` and `grust-turso` provide graph projection, Cypher, and the durable Turso graph backend. |
 | TypeSec | `0.12.0`, Torcello, crates.io | The `typesec` facade provides the authorization and receipt boundary used by `lakecat-security`. |
-| Sail | `0.6.4`, git branch `querygraph/sail#lakecat`, locked at `bddb1706` | Sail supplies Iceberg planning, model, commit-update, and object-store-cache behavior not yet consumed from a published release. |
+| Sail | `0.6.4`, git branch `querygraph/sail#lakecat`, locked at `dbff52b0` | Sail supplies Iceberg planning, model, commit-update, finalized object-store-cache behavior, and measured SQL/Iceberg hot paths not yet consumed from a published release; reusable work is proposed upstream in `lakehq/sail#2400`. |
 | QueryGraph | `0.4.0`, Sentinel | Acceptance peer rather than a compiled LakeCat dependency; its importer consumes LakeCat `qglake-bundle` and `lakecat-core` `0.3.0` while the handoff gate drives verify/import under `--locked`. |
 
 This distinction matters operationally. Updating a version in prose is not a

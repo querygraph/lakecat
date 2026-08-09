@@ -27,10 +27,12 @@ The full rationale lives in `CLAUDE.md` ("🔗 Sail dependency"); the short vers
 - **Not a path dep**, because the build must be fetchable by Cargo with no Sail
   checkout present — locally or in CI. `Cargo.lock` pins the exact
   `git+…?branch=lakecat#<sha>` rev, so every build resolves to one Sail commit.
-- **Not upstream PRs**, because the Sail maintainers are actively redesigning
-  catalog/table internals and asked that uncoordinated PRs wait. The
-  `querygraph/sail` `lakecat` branch decouples LakeCat's velocity from the
-  upstream PR timeline while keeping a single, stable, fetchable source.
+- **Not only upstream Sail**, because LakeCat still needs catalog-provider and
+  commit-update seams that are specific to its integration timeline. Reusable
+  performance work is being proposed upstream in
+  [`lakehq/sail#2400`](https://github.com/lakehq/sail/pull/2400); the
+  `querygraph/sail` `lakecat` branch keeps LakeCat's additional APIs available
+  while that review proceeds.
 - The branch is meant to **shrink over time**: rebase it onto `lakehq/sail` main
   periodically, and when everything LakeCat needs is upstream, point the git dep
   at `lakehq/sail` (or a published crate) and retire the branch.
@@ -47,9 +49,12 @@ rev.
 
 ## What the `lakecat` branch carries today
 
-The branch is upstream `lakehq/sail` main plus the minimal set of commits LakeCat
-needs. As of the current pin (`querygraph/sail` `lakecat` at **`bddb1706`**) it
-carries three groups of work:
+The branch forked from upstream after `lakehq/sail#2134` and carries the selected
+LakeCat integration and performance commits that have accumulated since then. It
+is not currently a rebased copy of upstream `main`; general-purpose changes are
+kept patch-aligned with their upstream candidates while LakeCat-only APIs remain
+on this line. As of the current pin (`querygraph/sail` `lakecat` at
+**`dbff52b0dfff5fed302d09a72eeb7feb92f50725`**) it carries four groups of work:
 
 1. **The original LakeCat-needed Sail commits** (the baseline that made the
    `sail-local` / `catalog-provider` feature builds compile and pass):
@@ -63,20 +68,27 @@ carries three groups of work:
    - the Iceberg planning / `models` exposure plus the `CatalogProvider`
      commit-table seam.
 
-2. **The Foyer object-store cache** (PR candidate branch
-   `feat/object-store-foyer-cache`, addressing lakehq/sail issue **#1015**) — a
-   per-worker read-through page cache in Sail's `sail-object-store` crate. See
-   "The object-store read cache" below.
+2. **The Foyer object-store cache** (addressing lakehq/sail issue **#1015** and
+   proposed upstream in **#2400**) — a per-worker read-through page cache in
+   Sail's `sail-object-store` crate. The QueryGraph implementation is
+   semantically identical to the upstream PR, with only branch-local rustfmt
+   layout differences. See "The object-store read cache" below.
 
-3. **The snapshot-append updates** (PR candidate branch
+3. **The snapshot-append updates** (originally developed on
    `feat/apply-table-updates-snapshots`) — `apply_table_updates` now handles
    `add-snapshot` and `set-snapshot-ref`, the two updates a data append produces.
    This is what lets a stock Iceberg client's `table.append` land as new table
    metadata under a `sail-local` LakeCat (see "Default build vs `sail-local`").
 
-Groups 2 and 3 were merged into `lakecat` from their PR-candidate branches; both
-are written to be upstreamable to `lakehq/sail` on their own, so they can graduate
-out of the `lakecat` branch independently.
+4. **Measured SQL, catalog, and Iceberg hot paths** — single-statement parsing,
+   direct typed metadata deserialization, newest-first current metadata lookup,
+   Avro reader reuse, indexed catalog schema relationships, streamlined delete
+   matching/routing, shared immutable delete descriptors, and streaming metadata
+   discovery. Each optimization is paired with a focused benchmark.
+
+The reusable cache, SQL, and Iceberg work is organized for independent upstream
+review in #2400. The LakeCat-specific provider and metadata-update seams can
+graduate separately as upstream APIs converge.
 
 ---
 
@@ -127,19 +139,36 @@ cache — `CachingObjectStore` over a `CacheConfig` — added for lakehq/sail #1
 It is ported from lancedb/ocra (attributed in the crate), with the original Moka
 backing store swapped for **Foyer**.
 
-- **Opt-in.** `SAIL_OBJECT_STORE_CACHE` enables it;
-  `SAIL_OBJECT_STORE_CACHE_PAGE_SIZE`, `_MEMORY`, and `_METADATA` tune it.
-  Defaults: **1 MiB** pages, **1 GiB** value memory, **64 MiB** metadata.
+- **Opt-in.** `SAIL_OBJECT_STORE_CACHE` enables it. Defaults are **1 MiB** pages,
+  **1 GiB** of weighted page memory, **64 MiB** of combined metadata/path-identity
+  memory, and a **60 second** metadata revalidation TTL.
+- **Configuration.** `SAIL_OBJECT_STORE_CACHE_PAGE_SIZE`,
+  `SAIL_OBJECT_STORE_CACHE_MEMORY`, `SAIL_OBJECT_STORE_CACHE_METADATA`, and
+  `SAIL_OBJECT_STORE_CACHE_METADATA_TTL_SECS` tune those values. A TTL of `0`
+  revalidates metadata on every read.
 - **Interception point.** `object_store` 0.13.2 exposes its read methods as a
   non-overridable blanket trait, so the cache cannot wrap them directly; it
   intercepts the two range entry points the engine reads through — `get_opts` and
   `get_ranges` — and serves whole pages from memory.
 - **Tiering.** The current tier is in-memory only; Foyer's `HybridCache` disk
   tiering is a planned follow-up on the same seam.
+- **Consistency.** Writes through the wrapper invalidate before and after the
+  mutation, including multipart completion, copy, rename, and delete. External
+  replacements are detected by size, modification time, ETag, and version after
+  the TTL; a changed or evicted metadata identity rotates the compact object id,
+  making stale pages unreachable in O(1). Conditional, version-specific, and
+  backend-extension requests bypass the cache.
+- **Bounded state.** Page bytes, metadata, and path identities all have weighted
+  capacity bounds. Sail depends on `foyer-common` and `foyer-memory` directly, so
+  enabling an in-memory cache does not pull Foyer's storage/io_uring tier into
+  the build.
 
 The cache is entirely a Sail concern — a reusable engine capability — so LakeCat
-owns no cache code; it benefits through the dependency. The benchmark suite
-measures it (warm-vs-cold scan ≈ 26×); see `docs/book/lakecat.md`.
+owns no cache code; it benefits through the dependency. The end-to-end benchmark
+measures a warm-vs-cold scan improvement of about 26×. Production microbenchmarks
+for #2400 additionally measure 1.73× faster cached 4 KiB reads, 5.42× faster
+32-range batches, and 1.80× faster 16-way concurrent reads; see
+`docs/book/lakecat.md` and the upstream PR description.
 
 ### Scan planning
 
@@ -180,7 +209,8 @@ The development loop (full version in `CLAUDE.md`):
 2. Advance the locked rev from LakeCat:
 
    ```sh
-   cargo update -p sail-catalog          # or the specific crate you bumped
+   CARGO_NET_GIT_FETCH_WITH_CLI=true \
+     cargo update -p sail-catalog --precise <full-sail-commit>
    ```
 
    (`sail-catalog`, `sail-catalog-iceberg`, `sail-common-datafusion`,
@@ -194,6 +224,12 @@ The development loop (full version in `CLAUDE.md`):
 
 4. When a change touches Sail, run that repo's focused tests too and report each
    repo separately.
+
+The `dbff52b0` alignment was validated in the shared Linux/aarch64 Docker runner
+with stable Rust 1.96.0: branch formatting passed, strict object-store Clippy
+passed with `--all-targets -- -D warnings`, and all 14 object-store tests passed.
+The corresponding upstream #2400 run passed Rust build/tests/lint, Spark 3.5 and
+4.2, Python/Spark Connect 3.5–4.2, Ibis, docs, title validation, and Codecov.
 
 **Toolchain.** Stable only — never run `cargo +nightly` (including `cargo +nightly
 fmt`). Sail's CI uses nightly fmt; let Sail's CI handle it, don't run it locally.
