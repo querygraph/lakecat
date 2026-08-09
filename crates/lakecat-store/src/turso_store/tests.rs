@@ -7176,6 +7176,82 @@ async fn turso_concurrent_commits_to_same_table_yield_one_winner() {
     let _ = std::fs::remove_file(&path);
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+async fn turso_sustained_same_table_contention_never_leaks_busy_errors() {
+    let path = fw16_db_path("sustained-same-table");
+    let store = TursoCatalogStore::connect_local(&path).await.unwrap();
+    let warehouse = WarehouseName::new("local").unwrap();
+    let namespace = "default".parse::<Namespace>().unwrap();
+    store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
+    let ident = TableIdent::new(warehouse, namespace, TableName::new("events").unwrap());
+    let initial = "file:///tmp/fw16/events/metadata/00000.json";
+    store
+        .create_table(fw16_table(&ident, initial))
+        .await
+        .unwrap();
+
+    const WRITERS: usize = 8;
+    const ROUNDS: usize = 12;
+    let barrier = std::sync::Arc::new(tokio::sync::Barrier::new(WRITERS));
+    let mut handles = Vec::with_capacity(WRITERS);
+    for writer in 0..WRITERS {
+        let store = store.clone();
+        let ident = ident.clone();
+        let barrier = barrier.clone();
+        handles.push(tokio::spawn(async move {
+            let mut successes = 0usize;
+            let mut conflicts = 0usize;
+            let mut unexpected = Vec::new();
+            for round in 0..ROUNDS {
+                let current = store.load_table(&ident).await.unwrap();
+                let previous = current.metadata_location.clone().unwrap();
+                let snapshot = TableCommitSnapshot::try_from_table(&current).unwrap();
+                let next = format!("file:///tmp/fw16/events/metadata/{round:05}-{writer:02}.json");
+                barrier.wait().await;
+                match store
+                    .commit_table_with_snapshot(snapshot, fw16_commit(&previous, &next))
+                    .await
+                {
+                    Ok(_) => successes += 1,
+                    Err(LakeCatError::Conflict(_)) => conflicts += 1,
+                    Err(other) => unexpected.push(other.to_string()),
+                }
+                // Do not let a fast loser load the next snapshot before the
+                // round's winning transaction has committed.
+                barrier.wait().await;
+            }
+            (successes, conflicts, unexpected)
+        }));
+    }
+
+    let mut successes = 0usize;
+    let mut conflicts = 0usize;
+    let mut unexpected = Vec::new();
+    for handle in handles {
+        let (task_successes, task_conflicts, task_unexpected) = handle.await.unwrap();
+        successes += task_successes;
+        conflicts += task_conflicts;
+        unexpected.extend(task_unexpected);
+    }
+    assert!(
+        unexpected.is_empty(),
+        "contention must resolve to commits or logical conflicts, got: {unexpected:?}"
+    );
+    assert_eq!(
+        successes, ROUNDS,
+        "each synchronized round needs one winner"
+    );
+    assert_eq!(conflicts, (WRITERS - 1) * ROUNDS);
+    assert_eq!(
+        store.load_table(&ident).await.unwrap().version,
+        ROUNDS as u64
+    );
+    let _ = std::fs::remove_file(&path);
+}
+
 #[tokio::test]
 async fn turso_store_rejects_duplicate_namespace_create() {
     let store = TursoCatalogStore::in_memory().await.unwrap();

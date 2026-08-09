@@ -128,10 +128,15 @@ impl TursoCatalogStore {
         let mut attempt = 0u32;
         loop {
             attempt += 1;
-            // A failure to even begin the transaction means the connection is in
-            // an unknown state; drop it (do not return it to the pool).
-            if let Err(err) = conn.execute_batch("BEGIN CONCURRENT").await {
-                return Err(turso_error(err));
+            match conn.execute_batch("BEGIN CONCURRENT").await {
+                Ok(()) => {}
+                Err(err) if is_retryable_conflict(&err) && attempt < WRITE_TXN_MAX_ATTEMPTS => {
+                    backoff(attempt).await;
+                    continue;
+                }
+                // A non-contention failure to begin leaves the connection in an
+                // unknown state; drop it rather than returning it to the pool.
+                Err(err) => return Err(turso_error(err)),
             }
             match body(&conn).await {
                 Ok(value) => match conn.execute_batch("COMMIT").await {
@@ -2787,9 +2792,7 @@ fn is_retryable_conflict(err: &turso::Error) -> bool {
     matches!(err, turso::Error::Busy(_) | turso::Error::BusySnapshot(_))
         || matches!(
             err,
-            turso::Error::Error(message)
-                if message.contains("Write-write conflict")
-                    || message.contains("Commit dependency aborted")
+            turso::Error::Error(message) if is_retryable_turso_message(message)
         )
 }
 
@@ -2800,10 +2803,14 @@ fn is_retryable_conflict(err: &turso::Error) -> bool {
 fn is_retryable_lakecat(err: &LakeCatError) -> bool {
     matches!(
         err,
-        LakeCatError::Internal(message)
-            if message.contains("Write-write conflict")
-                || message.contains("Commit dependency aborted")
+        LakeCatError::Internal(message) if is_retryable_turso_message(message)
     )
+}
+
+fn is_retryable_turso_message(message: &str) -> bool {
+    message.contains("database is locked")
+        || message.contains("Write-write conflict")
+        || message.contains("Commit dependency aborted")
 }
 
 async fn backoff(attempt: u32) {
