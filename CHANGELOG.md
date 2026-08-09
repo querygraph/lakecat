@@ -9,9 +9,10 @@
   now records strict validity, MinIO object auditing, the complete optimization
   sequence, and the exact boundary of what the warm benchmark establishes.
 
-- Advance the locked Sail `lakecat` integration to revision `6471fb9a`,
-  consuming the optimized Iceberg object cache, metadata and manifest parsing,
-  delete matching, SQL frontend, catalog status, and metadata-discovery paths.
+- Advance the locked Sail `lakecat` integration to revision `dbff52b0`,
+  consuming the cache-consistency hardening and the optimized Iceberg object
+  cache, metadata and manifest parsing, delete matching, SQL frontend, catalog
+  status, and metadata-discovery paths documented for upstream Sail PR #2400.
 
 - QueryGraph policy-binding and view-receipt evidence hashes now stream their
   existing canonical projections without allocating intermediate JSON trees.
