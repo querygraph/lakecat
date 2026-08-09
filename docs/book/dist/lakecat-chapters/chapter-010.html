@@ -163,10 +163,15 @@ to read?</li>
 resolve from the <code>lakecat</code> branch of
 <code>github.com/querygraph/sail</code>. <code>Cargo.lock</code> pins
 that branch to revision
-<code>bddb1706ba2308e5029d47f04f03121236edbfa6</code>. The branch is
+<code>dbff52b0dfff5fed302d09a72eeb7feb92f50725</code>. The branch is
 explicit release provenance: it carries the Iceberg planning,
-snapshot-append, and Foyer cache work LakeCat needs until those APIs can
-move to an upstream or published Sail line.</p>
+snapshot-append, Foyer cache, and measured SQL/Iceberg hot-path work
+LakeCat needs until those APIs can move to an upstream or published Sail
+line. The reusable cache and hot-path changes are proposed to LakeSail
+in <a
+href="https://github.com/lakehq/sail/pull/2400"><code>lakehq/sail#2400</code></a>;
+QueryGraph’s cache implementation is aligned with that reviewed source
+while retaining LakeCat-only provider and commit seams.</p>
 <p>LakeCat evolves under three rules: conform to Iceberg v3 for ordinary
 clients; preserve unknown/emerging v4 metadata without claiming settled
 semantics; prefer typed Sail support the moment it exists, using JSON
@@ -307,10 +312,11 @@ receipt boundary used by <code>lakecat-security</code>.</td>
 <tr>
 <td>Sail</td>
 <td><code>0.6.4</code>, git branch <code>querygraph/sail#lakecat</code>,
-locked at <code>bddb1706</code></td>
-<td>Sail supplies Iceberg planning, model, commit-update, and
-object-store-cache behavior not yet consumed from a published
-release.</td>
+locked at <code>dbff52b0</code></td>
+<td>Sail supplies Iceberg planning, model, commit-update, finalized
+object-store-cache behavior, and measured SQL/Iceberg hot paths not yet
+consumed from a published release; reusable work is proposed upstream in
+<code>lakehq/sail#2400</code>.</td>
 </tr>
 <tr>
 <td>QueryGraph</td>

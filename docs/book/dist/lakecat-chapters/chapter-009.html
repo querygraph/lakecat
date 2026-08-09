@@ -224,14 +224,19 @@ is ported from lancedb/ocra, attributed in the crate, with the original
 Moka backing store swapped for Foyer. It is opt-in:
 <code>SAIL_OBJECT_STORE_CACHE</code> turns it on, and
 <code>SAIL_OBJECT_STORE_CACHE_PAGE_SIZE</code>, <code>_MEMORY</code>,
-and <code>_METADATA</code> tune it — by default 1 MiB pages, 1 GiB of
-value memory, and 64 MiB of metadata. Because <code>object_store</code>
-exposes its read methods as a non-overridable blanket trait, the cache
-cannot wrap them directly; it intercepts the two range entry points the
-engine actually reads through — <code>get_opts</code> and
-<code>get_ranges</code> — and serves whole pages from memory. The
-current tier is in-memory only; Foyer’s hybrid disk tiering is a
-follow-up the same seam already anticipates.</p>
+<code>_METADATA</code>, and <code>_METADATA_TTL_SECS</code> tune it — by
+default 1 MiB pages, 1 GiB of value memory, 64 MiB of combined
+metadata/path-identity memory, and a 60 second metadata TTL. Because
+<code>object_store</code> exposes its read methods as a non-overridable
+blanket trait, the cache cannot wrap them directly; it intercepts the
+two range entry points the engine actually reads through —
+<code>get_opts</code> and <code>get_ranges</code> — and serves whole
+pages from memory. The current tier is in-memory only; Foyer’s hybrid
+disk tiering is a follow-up the same seam already anticipates. Writes
+invalidate before and after mutation; external replacements rotate the
+object’s compact cache identity after TTL revalidation; conditional and
+version-specific requests bypass the cache. Page, metadata, and
+path-identity state are all capacity bounded.</p>
 <p>On the same files the difference is roughly twenty-six fold: the
 per-file scan median falls from about 47.5 ms cold and uncached to 1.81
 ms warm. None of this lives in LakeCat. A read-through object-store
