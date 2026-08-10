@@ -593,15 +593,15 @@ executables built in that same ARM64 runner.
 
 | Rank | Catalog | Concurrent | Sequential | p50 / p99 | Error rate / total |
 | --- | --- | --- | --- | --- | --- |
-| DQ (raw #1) | Nessie 0.108.4 | 190.0 /s | 312.3 /s | 2.986 / 5.602 ms | 0.366% / 97 |
 | **1** | **LakeCat 0.3.0** | **153.0 /s** | **335.5 /s** | **2.697 / 5.641 ms** | **0% / 0** |
 | 2 | Polaris 1.5.0 | 129.1 /s | 135.0 /s | 7.115 / 11.533 ms | 0% / 0 |
 | 3 | Gravitino 1.1.0 | 116.9 /s | 74.2 /s | 12.838 / 19.225 ms | 0% / 0 |
+| Err | Nessie 0.108.4 | 190.0 /s | 312.3 /s | 2.986 / 5.602 ms | 0.366% / 97 |
 
-The table is sorted by successful concurrent throughput, but a numeric rank
-requires zero request errors in all five measured rounds. Nessie's raw row is
-therefore evidence, not a valid result: every measured round returned Quarkus
-request-context HTTP 500s. LakeCat, Polaris, and Gravitino completed all five
+A numeric rank requires zero request errors in all five measured rounds, so the
+ranking covers only error-free rows. The Nessie row is the fastest by raw
+successful throughput, but every measured round returned Quarkus request-context
+HTTP 500s, so it sits last, marked Err — evidence, not a valid result. LakeCat, Polaris, and Gravitino completed all five
 rounds without a request error. LakeCat is the valid leader on both concurrent
 and sequential throughput, while its 85.42% conflict rate also shows the strictest
 same-table compare-and-swap policy in the valid set. All 24 MinIO object audits

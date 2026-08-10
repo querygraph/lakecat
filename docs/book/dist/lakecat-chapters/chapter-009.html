@@ -5,7 +5,7 @@
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
   <meta name="author" content="Alexy Khrabrov" />
-  <meta name="dcterms.date" content="2026-08-09" />
+  <meta name="dcterms.date" content="2026-08-10" />
   <title>The Benchmark Suite</title>
   <style>
     div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
@@ -122,14 +122,6 @@ built in that same ARM64 runner.</p>
 </thead>
 <tbody>
 <tr>
-<td>DQ (raw #1)</td>
-<td>Nessie 0.108.4</td>
-<td>190.0 /s</td>
-<td>312.3 /s</td>
-<td>2.986 / 5.602 ms</td>
-<td>0.366% / 97</td>
-</tr>
-<tr>
 <td><strong>1</strong></td>
 <td><strong>LakeCat 0.3.0</strong></td>
 <td><strong>153.0 /s</strong></td>
@@ -153,18 +145,26 @@ built in that same ARM64 runner.</p>
 <td>12.838 / 19.225 ms</td>
 <td>0% / 0</td>
 </tr>
+<tr>
+<td>Err</td>
+<td>Nessie 0.108.4</td>
+<td>190.0 /s</td>
+<td>312.3 /s</td>
+<td>2.986 / 5.602 ms</td>
+<td>0.366% / 97</td>
+</tr>
 </tbody>
 </table>
-<p>The table is sorted by successful concurrent throughput, but a
-numeric rank requires zero request errors in all five measured rounds.
-Nessie’s raw row is therefore evidence, not a valid result: every
-measured round returned Quarkus request-context HTTP 500s. LakeCat,
-Polaris, and Gravitino completed all five rounds without a request
-error. LakeCat is the valid leader on both concurrent and sequential
-throughput, while its 85.42% conflict rate also shows the strictest
-same-table compare-and-swap policy in the valid set. All 24 MinIO object
-audits passed; LakeCat’s object growth exactly covered every accepted
-commit in every round.</p>
+<p>A numeric rank requires zero request errors in all five measured
+rounds, so the ranking covers only error-free rows. The Nessie row is
+the fastest by raw successful throughput, but every measured round
+returned Quarkus request-context HTTP 500s, so it sits last, marked Err
+— evidence, not a valid result. LakeCat, Polaris, and Gravitino
+completed all five rounds without a request error. LakeCat is the valid
+leader on both concurrent and sequential throughput, while its 85.42%
+conflict rate also shows the strictest same-table compare-and-swap
+policy in the valid set. All 24 MinIO object audits passed; LakeCat’s
+object growth exactly covered every accepted commit in every round.</p>
 <h2 data-number="8.3" id="what-it-took-to-get-there"><span
 class="header-section-number">8.3</span> What it took to get there</h2>
 <p>The first honest LakeCat numbers were not competitive — its commit
