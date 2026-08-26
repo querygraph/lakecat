@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Book artifacts: rebuild the checked-in PDF, EPUB, MOBI, browser HTML, and
+  chapter bundle from `164a7eba`, incorporating the accepted C1-05 table
+  lifecycle, shared-MinIO proof, catalog matrix, and publication boundary into
+  the versioned reader artifacts.
+
 - Book reader links: replace source-tree Markdown targets in the C1-05 chapter
   with immutable GitHub links so the acceptance ledger and table guide remain
   usable from PDF, EPUB, MOBI, single-file HTML, and split HTML readers.

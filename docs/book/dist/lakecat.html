@@ -203,19 +203,21 @@ baseline</a></li>
 <li><a href="#starting-the-catalog" id="toc-starting-the-catalog"><span class="toc-section-number">10.1</span> Starting The Catalog</a></li>
 <li><a href="#namespace-behavior-is-a-component-contract" id="toc-namespace-behavior-is-a-component-contract"><span class="toc-section-number">10.2</span> Namespace Behavior Is A Component
 Contract</a></li>
-<li><a href="#registering-the-warehouse-shape" id="toc-registering-the-warehouse-shape"><span class="toc-section-number">10.3</span> Registering The Warehouse
+<li><a href="#table-lifecycle-is-a-storage-and-governance-contract" id="toc-table-lifecycle-is-a-storage-and-governance-contract"><span class="toc-section-number">10.3</span> Table Lifecycle Is A Storage And
+Governance Contract</a></li>
+<li><a href="#registering-the-warehouse-shape" id="toc-registering-the-warehouse-shape"><span class="toc-section-number">10.4</span> Registering The Warehouse
 Shape</a></li>
-<li><a href="#storage-profiles-and-credential-roots" id="toc-storage-profiles-and-credential-roots"><span class="toc-section-number">10.4</span> Storage Profiles And Credential
+<li><a href="#storage-profiles-and-credential-roots" id="toc-storage-profiles-and-credential-roots"><span class="toc-section-number">10.5</span> Storage Profiles And Credential
 Roots</a></li>
-<li><a href="#a-pyspark-user-reads-iceberg" id="toc-a-pyspark-user-reads-iceberg"><span class="toc-section-number">10.5</span> A PySpark User Reads
+<li><a href="#a-pyspark-user-reads-iceberg" id="toc-a-pyspark-user-reads-iceberg"><span class="toc-section-number">10.6</span> A PySpark User Reads
 Iceberg</a></li>
-<li><a href="#a-notebook-requests-credentials" id="toc-a-notebook-requests-credentials"><span class="toc-section-number">10.6</span> A Notebook Requests
+<li><a href="#a-notebook-requests-credentials" id="toc-a-notebook-requests-credentials"><span class="toc-section-number">10.7</span> A Notebook Requests
 Credentials</a></li>
-<li><a href="#a-view-becomes-part-of-the-catalog-story" id="toc-a-view-becomes-part-of-the-catalog-story"><span class="toc-section-number">10.7</span> A View Becomes Part Of The
+<li><a href="#a-view-becomes-part-of-the-catalog-story" id="toc-a-view-becomes-part-of-the-catalog-story"><span class="toc-section-number">10.8</span> A View Becomes Part Of The
 Catalog Story</a></li>
-<li><a href="#querygraph-bootstrap" id="toc-querygraph-bootstrap"><span class="toc-section-number">10.8</span> QueryGraph Bootstrap</a></li>
-<li><a href="#draining-the-outbox" id="toc-draining-the-outbox"><span class="toc-section-number">10.9</span> Draining The Outbox</a></li>
-<li><a href="#an-agentic-qglake-flow" id="toc-an-agentic-qglake-flow"><span class="toc-section-number">10.10</span> An Agentic QGLake Flow</a></li>
+<li><a href="#querygraph-bootstrap" id="toc-querygraph-bootstrap"><span class="toc-section-number">10.9</span> QueryGraph Bootstrap</a></li>
+<li><a href="#draining-the-outbox" id="toc-draining-the-outbox"><span class="toc-section-number">10.10</span> Draining The Outbox</a></li>
+<li><a href="#an-agentic-qglake-flow" id="toc-an-agentic-qglake-flow"><span class="toc-section-number">10.11</span> An Agentic QGLake Flow</a></li>
 </ul></li>
 <li><a href="#operating-the-books-example-system" id="toc-operating-the-books-example-system"><span class="toc-section-number">11</span> Operating The Book’s Example
 System</a></li>
@@ -1546,7 +1548,117 @@ keeps them distinct. A safe repair must migrate every namespace-,
 table-, view-, and policy-derived key to one versioned unambiguous
 encoding. Until then, operators should avoid those colliding identities,
 and LakeCat does not claim arbitrary-punctuation namespace coverage.</p>
-<h2 data-number="10.3" id="registering-the-warehouse-shape"><span class="header-section-number">10.3</span> Registering The Warehouse
+<h2 data-number="10.3" id="table-lifecycle-is-a-storage-and-governance-contract"><span class="header-section-number">10.3</span> Table Lifecycle Is A Storage
+And Governance Contract</h2>
+<p>The table lifecycle begins before a catalog pointer becomes visible.
+A standard schema-based create writes its generated initial metadata
+document create-only through the selected storage profile, then admits
+the catalog state. A successful response therefore names an object that
+already exists. If pointer admission fails, bounded cleanup removes only
+that uncommitted object and preserves the original error. Duplicate
+identity remains a 409; LakeCat never overwrites an object to make the
+create appear successful.</p>
+<p>That durable object makes the standard false-overwrite registration
+workflow real rather than decorative. LakeCat authorizes
+<code>table.register</code>, proves the namespace exists, scope-checks
+and reads at most 64 MiB from the client-supplied metadata location,
+validates ordinary Iceberg metadata, and admits a new catalog name
+without changing UUID, body, table location, or metadata pointer. Rename
+is the complementary identity operation: one memory/Turso transaction
+preserves the metadata while moving current table, commit-history, and
+table-policy scope, retiring old name-bound replay state, and emitting
+one source-to-destination graph/OpenLineage transformation.</p>
+<p>A subtle no-snapshot boundary matters to both operations. Iceberg’s
+<code>current-snapshot-id: -1</code> is valid wire metadata for a table
+with no current snapshot. LakeCat’s internal commit evidence represents
+that state as zero. A property-only update once copied <code>-1</code>
+into durable history; a later rename revalidated the record and returned
+HTTP 500. The accepted implementation normalizes exactly that sentinel,
+reads legacy <code>-1</code> compatibly, rejects other negative values,
+and validates/stages complete memory and Turso transitions before
+mutation.</p>
+<p>The catalog-neutral C1-05 proof ran one optimized stable-Rust
+executable against all five catalogs from one Docker network and one
+local MinIO bucket:</p>
+<table>
+<thead>
+<tr>
+<th>Catalog</th>
+<th style="text-align: right;">Required table behavior</th>
+<th>Rename</th>
+<th>Register</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LakeCat</td>
+<td style="text-align: right;"><strong>pass, 15/15</strong></td>
+<td>pass</td>
+<td>pass</td>
+</tr>
+<tr>
+<td>Apache Gravitino</td>
+<td style="text-align: right;"><strong>pass, 15/15</strong></td>
+<td>pass</td>
+<td>pass</td>
+</tr>
+<tr>
+<td>Lakekeeper</td>
+<td style="text-align: right;"><strong>pass, 15/15</strong></td>
+<td>pass</td>
+<td>pass</td>
+</tr>
+<tr>
+<td>Apache Polaris</td>
+<td style="text-align: right;"><strong>pass, 15/15</strong></td>
+<td>pass</td>
+<td>pass</td>
+</tr>
+<tr>
+<td>Apache Nessie</td>
+<td style="text-align: right;"><strong>fail, 14/15</strong></td>
+<td>pass</td>
+<td>pass</td>
+</tr>
+</tbody>
+</table>
+<p>The required checks cover authentication/config routing,
+collision-safe fixture ownership, two-table create/list/load, immutable
+property update, bounded pagination or a complete permitted fallback,
+duplicate and missing-resource errors, non-purging drop, complete
+candidate reconciliation, and transcript sanitization. Rename and
+registration are optional in classification but were attempted and
+passed for every catalog.</p>
+<p>Storage topology was an acceptance condition, not a Compose
+assumption. One diagnostic LakeCat pass was rejected because the old
+runner omitted the declared S3 location and accepted
+<code>file:///tmp</code>. A later whole matrix was rejected because
+Gravitino’s shorter environment names were ignored by its pinned image,
+leaving memory and <code>/tmp</code> defaults. The final deployment uses
+the image’s exact <code>GRAVITINO_ICEBERG_REST_*</code> contract,
+file-backed SQLite, an idempotent least-privilege volume initializer,
+and S3FileIO.</p>
+<p>Every final response named <code>s3://warehouse/...</code>. An
+independent pinned MinIO client found original primary, updated primary,
+and sibling metadata for every catalog: 15 referenced objects out of 15.
+Every fixture name and namespace was then proved absent after
+<code>purgeRequested=false</code> cleanup, and every transcript reported
+no persisted secret or raw response body.</p>
+<p>Nessie’s one table mismatch is narrow: listing under an absent
+namespace returns an empty HTTP 200 page where the pinned Iceberg
+contract requires 404. That is not its separate historical
+concurrent-commit result, which remains unranked because measured rounds
+contained request HTTP 500s. Behavioral conformance does not imply
+timing or concurrency performance.</p>
+<p>The exact production binaries, image digests, profile/scenario
+hashes, transcript hashes, rejected diagnostics, object ETags, and
+repository gates are in the <a href="https://github.com/querygraph/lakecat/blob/9ff8dc76777f3dce2389dbb8e4da6bb030000d77/docs/catalog-community/PHASE-1-ACCEPTANCE.md#c1-05--table-behavior">Phase
+1 acceptance ledger</a> and <a href="https://github.com/querygraph/lakecat/blob/9ff8dc76777f3dce2389dbb8e4da6bb030000d77/docs/ICEBERG-TABLES.md">table
+lifecycle guide</a>. These runs remain reviewed smoke evidence. C1-09
+owns immutable bundle generation and public publication; C1-06 first
+proves commit requirements, stale pointers, exact retry, and idempotency
+drift.</p>
+<h2 data-number="10.4" id="registering-the-warehouse-shape"><span class="header-section-number">10.4</span> Registering The Warehouse
 Shape</h2>
 <p>An operator usually starts with management objects. A server groups
 projects. A project groups warehouses. A warehouse owns namespaces,
@@ -1589,7 +1701,7 @@ content hash, namespace/table/view lifecycle replay carries the matching
 action receipt, and raw endpoint or storage-root material is replaced by
 full hash evidence before graph, OpenLineage, QGLake, or QueryGraph sees
 it.</p>
-<h2 data-number="10.4" id="storage-profiles-and-credential-roots"><span class="header-section-number">10.4</span> Storage Profiles And
+<h2 data-number="10.5" id="storage-profiles-and-credential-roots"><span class="header-section-number">10.5</span> Storage Profiles And
 Credential Roots</h2>
 <p>Storage profiles bind a warehouse to physical storage roots and
 credential issuance policy. A local profile can return scoped local file
@@ -1646,7 +1758,7 @@ Returned credentials must stay inside the selected storage profile
 prefix, carry the policy-derived TTL cap, and preserve LakeCat-owned
 profile/provider/mode/principal evidence. Replay records redacted prefix
 and issuer hashes, not credential material.</p>
-<h2 data-number="10.5" id="a-pyspark-user-reads-iceberg"><span class="header-section-number">10.5</span> A PySpark User Reads
+<h2 data-number="10.6" id="a-pyspark-user-reads-iceberg"><span class="header-section-number">10.6</span> A PySpark User Reads
 Iceberg</h2>
 <p>A PySpark user should not need to know about QueryGraph. They
 configure Spark’s Iceberg REST catalog and point it at LakeCat:</p>
@@ -1686,7 +1798,7 @@ and effective stats fields. QGLake handoff proof compares planned and
 fetched evidence so a saved artifact cannot widen the server-derived
 purpose, TTL cap, allowed columns, row predicate, stats fields, or
 policy hashes.</p>
-<h2 data-number="10.6" id="a-notebook-requests-credentials"><span class="header-section-number">10.6</span> A Notebook Requests
+<h2 data-number="10.7" id="a-notebook-requests-credentials"><span class="header-section-number">10.7</span> A Notebook Requests
 Credentials</h2>
 <p>Credential vending is deliberately different from scan planning.
 Returning storage credentials gives the client broader power than
@@ -1708,7 +1820,7 @@ principal, policy can allow an audited raw credential exception, but the
 audit and replay evidence still carry the principal, table, decision,
 reason, TTL cap, storage-profile anchor, and redacted returned-prefix
 hashes.</p>
-<h2 data-number="10.7" id="a-view-becomes-part-of-the-catalog-story"><span class="header-section-number">10.7</span> A View Becomes Part Of The
+<h2 data-number="10.8" id="a-view-becomes-part-of-the-catalog-story"><span class="header-section-number">10.8</span> A View Becomes Part Of The
 Catalog Story</h2>
 <p>Views are catalog objects too. LakeCat stores durable view records
 with SQL, dialect, schema version, typed columns, properties, creator,
@@ -1770,7 +1882,7 @@ QueryGraph verify the version chain, including tombstones after the
 current view row is gone, while keeping the richer view history model
 available for a future Sail-owned implementation. Appendix C captures
 the exact receipt-chain rules.</p>
-<h2 data-number="10.8" id="querygraph-bootstrap"><span class="header-section-number">10.8</span> QueryGraph Bootstrap</h2>
+<h2 data-number="10.9" id="querygraph-bootstrap"><span class="header-section-number">10.9</span> QueryGraph Bootstrap</h2>
 <p>QueryGraph should import LakeCat facts through a verified handoff,
 not by scraping service internals. The bootstrap endpoint publishes a
 bundle with catalog tables, views, policy bindings, graph artifacts,
@@ -1823,7 +1935,7 @@ runs QueryGraph’s <code>lakecat-verify</code> and
 table scope, LakeCat replay status, QueryGraph-verified table/view
 counts, and semantic bundle/graph/OpenLineage/import hashes plus
 accepted standards. Appendix D is the detailed handoff proof map.</p>
-<h2 data-number="10.9" id="draining-the-outbox"><span class="header-section-number">10.9</span> Draining The Outbox</h2>
+<h2 data-number="10.10" id="draining-the-outbox"><span class="header-section-number">10.10</span> Draining The Outbox</h2>
 <p>LakeCat records side effects as durable outbox events. Draining the
 outbox is what turns committed catalog facts into graph and lineage
 receipts:</p>
@@ -1852,7 +1964,7 @@ LakeCat selects undelivered outbox events by
 durable Turso store, and duplicate or malformed pending records fail
 with hash-only evidence before graph emission, lineage emission, or
 acknowledgement.</p>
-<h2 data-number="10.10" id="an-agentic-qglake-flow"><span class="header-section-number">10.10</span> An Agentic QGLake Flow</h2>
+<h2 data-number="10.11" id="an-agentic-qglake-flow"><span class="header-section-number">10.11</span> An Agentic QGLake Flow</h2>
 <p>The agentic path is the reason LakeCat has to be more than a passive
 catalog. Imagine a resilience supervisor agent investigating
 incidents:</p>
