@@ -38,14 +38,25 @@ failed scenario may retain useful timing samples, but those samples cannot silen
 be ranked with passing runs. Raw evidence is immutable; corrections create a new
 derived matrix or superseding bundle and retain the original artifacts.
 
-The canonical schema, profile, validation, and matrix commands will be documented
-in `catalog-bench` and linked here by exact contract version. Until that Phase 0
-unit lands, the existing invocation remains:
+The Phase 0 contract is pinned at
+[`catalog-bench@c0637076`](https://github.com/querygraph/catalog-bench/tree/c0637076dd4dc2ac871cdde393900dbe87f05583).
+Its [contract guide](https://github.com/querygraph/catalog-bench/blob/c0637076dd4dc2ac871cdde393900dbe87f05583/docs/CONTRACT.md),
+[historical manifest](https://github.com/querygraph/catalog-bench/blob/c0637076dd4dc2ac871cdde393900dbe87f05583/results/v1/2026-08-08/manifest.json),
+and [generated concurrent matrix](https://github.com/querygraph/catalog-bench/blob/c0637076dd4dc2ac871cdde393900dbe87f05583/results/v1/2026-08-08/MATRIX.md)
+are the exact publication boundary. Reproduce the checked-in contract and evidence
+without running new timings:
 
 ```sh
 git clone https://github.com/querygraph/catalog-bench.git
 cd catalog-bench
-cargo run -q -p catalog-bench -- list
+git checkout c0637076dd4dc2ac871cdde393900dbe87f05583
+cargo run -p catalog-bench-contract --locked -- schemas check
+cargo run -p catalog-bench-contract --locked -- historical-import check --root .
+cargo run -p catalog-bench-contract --locked -- bundle validate \
+  --manifest results/v1/2026-08-08/manifest.json
+cargo run -p catalog-bench-contract --locked -- matrix check \
+  --manifest results/v1/2026-08-08/manifest.json \
+  --output results/v1/2026-08-08/MATRIX.md
 ```
 
 Production measurements must use the optimized build recipe recorded in the

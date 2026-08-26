@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Catalog community Phase 0 evidence integration: pinned LakeCat documentation
+  to `catalog-bench@c0637076`, replaced the obsolete copied commit table and
+  nonexistent repository with the generated v1 historical matrix/manifest,
+  documented the pass-only concurrent ranking and Nessie `fail` outcome, updated
+  the executable reproduction commands and delivery ledger, and rebuilt all
+  tracked book artifacts from the corrected source.
+
 - Catalog community Phase 0: tracked the neutral interoperability and Apache
   Ossie program, accepted explicit repository/type ownership in `DESIGN.md`, and
   added a version- and digest-pinned baseline audit plus an independently

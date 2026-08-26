@@ -12,16 +12,16 @@ this checklist alone.
 | --- | --- | --- | --- |
 | C0-01 | done | LakeCat | Read repository guidance and inventory LakeCat, catalog-bench, QueryGraph, Sail, Grust, and TypeSec at exact revisions. Evidence: `PHASE-0-BASELINE.md`. |
 | C0-02 | done | LakeCat | Verify all three historical result hashes and independently read the aggregate ranking/error counts. Evidence: hashes and values in the baseline. |
-| C0-03 | done with discrepancy | LakeCat | Attempt clean-checkout source and live Docker reproduction. LakeCat's locked source check passes; catalog-bench's ambient Sail path and Docker VM exhaustion are documented exactly. |
+| C0-03 | done with explained discrepancy | LakeCat | Attempt clean-checkout source and live Docker reproduction. LakeCat's locked source check passes; the historical catalog-bench ambient Sail defect and Docker VM exhaustion are documented exactly. The dependency defect is repaired by C0-09; no live timing is fabricated. |
 | C0-04 | done | LakeCat | Verify current catalog, client, engine, object-store, and database versions from primary sources; select compatible Spark/Flink + Iceberg intersections. |
 | C0-05 | done with test gap | LakeCat | Inspect pinned Apache Ossie schema, validator, TPC-DS example, Python models, converters, and Polaris boundary. Validator/TPC-DS and 9 Python tests pass; Maven test gap recorded. |
 | C0-06 | done | LakeCat | Record neutral harness and Ossie ownership in `DESIGN.md` before implementation. |
-| C0-07 | pending | catalog-bench | Add closed, versioned Draft 2020-12 schemas and typed Rust ADTs for scenario, profile, manifest, artifact, assertion, measurement, and four-way outcome records. Checked-in schemas must equal generated schemas. |
-| C0-08 | pending | catalog-bench | Add historical and current profiles with exact source revisions, tags, index/platform digests, state backends, build recipes, and unresolved-artifact rejection. |
-| C0-09 | pending | catalog-bench | Replace ambient Sail path dependencies with one immutable source revision; prove `cargo test --workspace --locked` from a standalone clean worktree. |
-| C0-10 | pending | catalog-bench | Import 2026-08-08 evidence without changing meaning; validate all records; generate the human matrix from records; verify source TSV hashes. |
-| C0-11 | pending | catalog-bench | Add contract/profile/result validation and matrix-generation commands, fixtures, separate integration tests, README, and changelog. |
-| C0-12 | pending | LakeCat | Replace stale book repository/ranking claims with the generated historical matrix and explicit scope; run the book build. |
+| C0-07 | done | catalog-bench | Closed Rust ADTs, semantic validation, and generated Draft 2020-12 schemas landed in `afdb6b0`; schema equality is covered by integration tests and `schemas check`. |
+| C0-08 | done | catalog-bench | Historical/current profiles, source/image/build provenance, explicit uncertainty, aggregate identity, and unresolved-artifact rejection landed through `6ff118e`. |
+| C0-09 | done | catalog-bench | `1aed9f9` replaces all ambient Sail paths with immutable `querygraph/sail@bddb1706`; a detached clean worktree passed `cargo test --workspace --locked`. |
+| C0-10 | done | catalog-bench | `7af1fb7` hash-verifies and recomputes all preserved TSV evidence into four aggregate records, an immutable manifest, and the generated pass-only concurrent matrix. |
+| C0-11 | done | catalog-bench | `7af1fb7` adds document/bundle/import/matrix commands, separate integration and tamper tests, result/profile docs, and report migration; all strict workspace gates pass. |
+| C0-12 | done | LakeCat | The book and program entry point now consume exact `catalog-bench@c0637076` evidence, remove the obsolete copied table/nonexistent repository, state the historical/live-rerun scope, and pass the unified full-book build. |
 | C0-13 | pending | both | Run Phase 0 gates from clean worktrees, record exact commands, commit and push each repository independently, and close the phase only if all exit criteria hold. |
 
 ## Phase 1 — Lakekeeper and behavioral conformance

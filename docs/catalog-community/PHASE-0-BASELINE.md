@@ -56,7 +56,8 @@ Polaris 129.142092/s, Gravitino 116.884276/s, and Nessie 190.005562/s with 97 HT
 errors. The first three have five valid measured rounds; Nessie has none. Nessie's
 scenario outcome is therefore `fail`, while its successful-request timings remain
 diagnostic evidence. `DQ` in the TSV and `Err` in later prose are two labels for
-the same validity fact and must be replaced by one generated outcome view.
+the same validity fact; the v1 historical importer preserves the source field for
+audit while the generated matrix now presents one `fail` outcome.
 
 ## Reproduction findings
 
@@ -83,6 +84,10 @@ The audit performed read-only or isolated checks before changing source:
    `cargo test --workspace --locked` wants to rewrite `Cargo.lock`: it resolves
    whichever Sail checkout happens to occupy `../sail`. Phase 0 must replace the
    path with an immutable source revision before claiming standalone reproduction.
+
+   Resolution: `catalog-bench@1aed9f9` pins all three consumers to
+   `querygraph/sail@bddb1706ba2308e5029d47f04f03121236edbfa6`; a detached clean
+   worktree then passed the full locked workspace suite.
 
 4. Docker Desktop 4.73.0 was launched to run the live protocol, but its engine
    never became available. The backend's last engine failure is `no space left on
@@ -169,16 +174,18 @@ tests were not run: the host has Java 20 and no Maven, while the converter requi
 Java 21; the intended Maven-in-Docker fallback was unavailable because of the
 Docker VM failure above. This is a recorded test gap, not an inferred pass.
 
-## Known gaps and stale claims
+## Known gaps and stale-claim resolution
 
-- LakeCat's book names a nonexistent `catalog-commit-bench` repository and embeds
-  an obsolete one-off ranking (LakeCat 0.2.0 and Nessie 0.107.5). It must consume
-  the generated 2026-08-08 matrix and explain that it is historical.
-- `catalog-bench` has TSV evidence but no versioned neutral scenario, profile,
-  manifest, or result schema. Its `BenchReport` only distinguishes `ready` and
-  `scaffold`, which cannot represent the required four outcomes.
-- The historical summary says `DQ` while public prose later says `Err`; generated
-  output must remove this hand-maintained terminology drift.
+- **Resolved:** LakeCat's book no longer names the nonexistent
+  `catalog-commit-bench` repository or embeds the obsolete LakeCat 0.2.0/Nessie
+  0.107.5 table. It links the generated 2026-08-08 matrix and states that the
+  bundle is a historical import, not a new live run.
+- **Resolved:** `catalog-bench@c0637076` adds versioned neutral scenario, profile,
+  manifest, result, evidence, and environment contracts without replacing the
+  small process-local `BenchReport`.
+- **Resolved:** the raw TSV retains its `DQ` field for immutable audit, while the
+  generated matrix uses the closed `fail` outcome and no hand-maintained `Err`
+  presentation label.
 - The self-contained compose pins historical Polaris 1.5.0 and Gravitino 1.1.0
   and has no Lakekeeper. Those tags remain valid only in the historical profile.
 - `boat` uses mutable `minio/minio:latest`. Every future run must use an exact

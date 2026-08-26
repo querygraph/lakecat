@@ -550,25 +550,25 @@ Two disciplines keep the spine trustworthy:
 # The Benchmark Suite
 
 A catalog lives on more than one path, so LakeCat is measured on more than one. The
-suite covers four axes a catalog and its engine actually exercise — committing under
-contention, scanning cold and warm through an object-store cache, competing against a
-JVM engine on identical files, and carrying a *stock* Iceberg client through a full
-write-and-read. The commit benchmark lives in `querygraph/catalog-commit-bench`; the
-cache-scan, rust-versus-jvm, and read-write benchmarks live in the broader
-`querygraph/catalog-bench` suite. All of them run behind the same impartial
-Docker/MinIO harness, so every number compares systems doing identical work against
-identical storage. This chapter walks them in turn, beginning with the commit path
-the rest of the catalog is built to serve.
+suite covers five axes a catalog and its engine actually exercise — committing under
+contention, writing realistic Parquet data, scanning cold and warm through an
+object-store cache, competing against a JVM engine on identical files, and carrying
+a *stock* Iceberg client through a full write-and-read. Every driver lives in
+[`querygraph/catalog-bench`](https://github.com/querygraph/catalog-bench). Comparable
+runs use the same Docker network and MinIO warehouse so the catalog, engine, and
+object-store boundaries stay explicit. This chapter walks them in turn, beginning
+with the commit path the rest of the catalog is built to serve.
 
 The commit path is where a catalog earns its keep, and it is exactly the part the
 usual benchmarks ignore. TPC-DS and TPC-H measure query engines; they touch the
 catalog only incidentally. To measure the catalog itself, LakeCat is exercised by
-`catalog-commit-bench` — a small, catalog-agnostic driver that issues
+`catalog-bench-commit` — a small, catalog-agnostic driver that issues
 `set-properties` commits with no data files, so each request runs the commit
 machinery and nothing else: validate the update, write a fresh `metadata.json`,
 advance the metadata pointer under compare-and-swap, and persist durably. It reports
-two numbers — sequential per-commit latency, and concurrent throughput under eight
-writers contending on one table.
+sequential latency and throughput plus accepted commits, HTTP 409 conflicts, every
+other request error, and object-growth evidence under eight writers contending on
+one table.
 
 ## Measuring catalogs, not object stores
 
@@ -584,20 +584,30 @@ catalogs.
 
 ## Where LakeCat lands
 
-One impartial sweep, 1000 sequential commits then eight concurrent writers for six
-seconds, every catalog writing to the same MinIO:
+The current public comparison is the historical 2026-08-08 sweep: six rotated
+rounds on Linux ARM64, with round one recorded as conditioning and medians computed
+from rounds two through six. Every run performs 50 warmup commits, 1,000 sequential
+commits, then eight same-table writers for six seconds. The canonical
+[generated matrix](https://github.com/querygraph/catalog-bench/blob/c0637076dd4dc2ac871cdde393900dbe87f05583/results/v1/2026-08-08/MATRIX.md)
+is rendered from typed result records after exact artifact and cross-document
+validation; this book does not keep a second hand-edited table.
 
-| Catalog | Sequential | p50 | Concurrent (8 writers) |
-| --- | --- | --- | --- |
-| Nessie 0.107.5 | 228.6 /s | 4.04 ms | 164.0 /s |
-| LakeCat 0.2.0 | 198.2 /s | 4.52 ms | 311.6 /s |
-| Gravitino | 163.9 /s | 5.74 ms | 340.2 /s |
-| Polaris 1.5.0 | 97.6 /s | 9.81 ms | 91.5 /s |
+Among `pass` outcomes, LakeCat ranks first at 153.0 successful concurrent commits
+per second, followed by Apache Polaris at 129.1/s and Apache Gravitino at 116.9/s.
+LakeCat also leads the passing sequential rows at 335.5/s with a 2.697 ms p50.
+Apache Nessie records the fastest raw concurrent value, 190.0/s, but 97 HTTP 500
+responses leave it with zero valid measured rounds. Its outcome is therefore an
+unranked `fail`; the diagnostic timing remains visible rather than being hidden or
+misreported as a conflict. Numeric ranks are correctness claims, not a raw-speed
+sort.
 
-LakeCat's per-commit latency sits second of the four — its median is within a hair
-of Nessie's and ahead of Gravitino and Polaris — and on concurrent throughput it is
-second only to Gravitino, well ahead of Nessie. Polaris is the heaviest per commit;
-its RBAC checks and credential subscoping are real governance cost, not inefficiency.
+The bundle is explicitly a
+[historical import](https://github.com/querygraph/catalog-bench/blob/c0637076dd4dc2ac871cdde393900dbe87f05583/results/v1/2026-08-08/manifest.json),
+not a fresh 2026-08-26 timing run. Its source TSV hashes and arithmetic reproduce,
+but the live rerun was not attempted after Docker Desktop reported that its VM had
+no space left. No images or volumes were deleted to manufacture a result. The
+contract also records unknown or approximate historical environment fields instead
+of inventing exact values.
 
 ## What it took to get there
 
@@ -613,20 +623,29 @@ transaction opened a new Turso connection and re-applied its MVCC pragmas on eve
 commit; pooling pragma-warmed connections — still a distinct one per concurrent
 writer, so MVCC concurrency is unchanged — cut the median again. Together these took
 the median commit from about 12.6 ms to about 4.5 ms, moving LakeCat from the
-slowest of the field to the front of it.
+slowest of the field to the front of it. Subsequent production-artifact work and the
+strict five-round sweep measure the 2.697 ms passing median above; the immutable
+profile, rather than this optimization narrative, identifies the exact executable.
 
-## Audit and idempotency: the durable cost of features
+## Audit, idempotency, and honest conflicts
 
-The small remaining gap to Nessie is not speed; it is work LakeCat does that the
-others do not. Every LakeCat commit performs several writes inside one transaction:
+The strict sweep no longer supports the old claim that LakeCat trails Nessie: LakeCat
+leads the passing rows, while Nessie's faster raw value fails the request-error gate.
+Every LakeCat commit still performs several writes inside one transaction:
 the metadata-pointer compare-and-swap, a pointer-log row, an audit event, a
 transactional-outbox row staged atomically with the commit — so lineage and graph
 events can never be lost or emitted without it — and an idempotency record, so a
 retried commit replays its prior result rather than double-applying. That is a
 durable audit trail, an atomic outbox, and idempotency, fsynced per commit —
-guarantees the leaner version stores do not provide in the same transaction. LakeCat
-is paying for the spine described in *The Architecture*, by design; the gap closes
-by relaxing those guarantees, not by changing languages.
+the durable spine described in *The Architecture*, not benchmark decoration.
+
+LakeCat's 85.4% conflict rate is not a Turso error rate. Eight writers deliberately
+race one metadata pointer; stale requirements become correct HTTP 409
+optimistic-concurrency conflicts. LakeCat returns zero non-conflict request errors
+in all five measured rounds. A short per-table gate serializes only the final Turso
+CAS window, while object-store preparation and commits to different tables remain
+parallel. The full boundary is documented in
+[`CAS-CONFLICTS.md`](https://github.com/querygraph/catalog-bench/blob/c0637076dd4dc2ac871cdde393900dbe87f05583/docs/CAS-CONFLICTS.md).
 
 This is also why Rust did not, by itself, win the benchmark. The commit path is
 I/O-bound, so runtime CPU speed is nearly irrelevant against a network PUT and an
@@ -638,8 +657,19 @@ no GC pauses and so steadier tail latency, a far smaller resident footprint, and
 instant cold start — properties that matter for serverless, edge, and
 many-tenant-per-host deployments rather than for a single warm server in a loop.
 
-The driver, the impartial Docker/MinIO harness, and the full results live in
-`querygraph/catalog-commit-bench`.
+The driver, impartial Docker/MinIO harness, versioned contract, raw evidence, and
+generated reports live in
+[`querygraph/catalog-bench`](https://github.com/querygraph/catalog-bench).
+
+## The realistic data-write path
+
+The `write-data` benchmark keeps catalog commits separate from file throughput while
+still exercising both honestly. It writes an actual Parquet data file to the shared
+MinIO warehouse, then commits the resulting Iceberg metadata through LakeCat. That
+distinguishes time spent encoding and uploading data from time spent validating and
+advancing catalog state; a metadata-only commit number is never relabeled as data
+write throughput. The exact payload, environment, and measurements remain in the
+catalog-bench report.
 
 ## The object-store cache and the scan benchmark
 
@@ -728,10 +758,11 @@ genuine snapshot (`snapshots_after = 1`), then scans 1000 rows back, all against
 150× faster than cold. What had been declared impossible is now a benchmark that
 passes on every run.
 
-The cache-scan, rust-versus-jvm, and read-write drivers, the MinIO harness, and the
-stock-client round-trip live in `querygraph/catalog-bench`; the integration seam they
-exercise — how LakeCat consumes Sail, and which Sail commits the round-trip depends on
-— is documented in `LAKECAT-SAIL.md`.
+The commit, write-data, cache-scan, rust-versus-jvm, and read-write drivers, the
+MinIO harness, and the stock-client round-trip live in
+[`querygraph/catalog-bench`](https://github.com/querygraph/catalog-bench); the
+integration seam they exercise — how LakeCat consumes Sail, and which Sail commits
+the round-trip depends on — is documented in `LAKECAT-SAIL.md`.
 
 
 # The Siblings and the Engine Path
