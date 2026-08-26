@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Book reader links: pin the C1-06 commit-correctness guide to its immutable
+  acceptance revision and rebuild every checked-in reader artifact from that
+  committed manuscript.
+
 - Catalog community C1-06 acceptance: document LakeCat's deterministic Iceberg
   REST requirement admission, stale-schema 409 and complete pointer-state
   atomicity, config-gated retry boundary, production-optimized canonical

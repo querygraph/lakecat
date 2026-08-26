@@ -682,7 +682,7 @@ The canonical C1-06 run uses stable Rust 1.97.1 production executables on the
 same Docker network and MinIO. A direct audit resolves all 16 metadata objects
 referenced by the five sanitized transcripts. The complete contract, exact
 artifact and transcript hashes, matrix, cleanup proof, and non-claims are in
-[`ICEBERG-COMMITS.md`](https://github.com/querygraph/lakecat/blob/codex/catalog-community-phase-1/docs/ICEBERG-COMMITS.md)
+[`ICEBERG-COMMITS.md`](https://github.com/querygraph/lakecat/blob/dcc3d397cc594345ecdeb052b2364352d47a7a52/docs/ICEBERG-COMMITS.md)
 and the neutral
 [`catalog-bench` report](https://github.com/querygraph/catalog-bench/blob/fdb2a9af1d8570ef36491beb408aabb71570cce6/docs/COMMIT-CONFORMANCE.md).
 
