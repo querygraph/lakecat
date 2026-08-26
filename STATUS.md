@@ -12,19 +12,19 @@ Updated: 2026-08-26
   as `docs/completed/GOAL1.md`. The new `GOAL.md` is the concise live
   release-and-next-stage charter and defers detailed execution guidance to the
   current design, status, release, book, and agent documents.
-- Latest catalog-community acceptance: C1-05 table behavior is complete at
-  `catalog-bench@621cc4b`/`75c95cf`/`99971e8`/`6bc668b` and
-  `lakecat@af442023`/`ef94b550`. Stable Rust 1.97.1 production builds ran from
-  one Docker network against one local MinIO. LakeCat, Gravitino, Lakekeeper,
-  and Polaris passed all 15 required and both optional rename/register
-  assertions; Nessie passed 14 required assertions and both optional operations,
-  failing only because missing-namespace table listing returned an empty HTTP
-  200 page instead of the required 404. All five catalogs' three distinct
-  transcript-referenced metadata objects were found directly in shared MinIO,
-  and every fixture cleanup and secret-sanitization assertion passed. Exact
-  artifacts, transcript hashes, rejected-run analysis, tests, and non-claims are
-  in `docs/catalog-community/PHASE-1-ACCEPTANCE.md` and
-  `docs/ICEBERG-TABLES.md`.
+- Latest catalog-community acceptance: C1-06 deterministic commit correctness
+  is complete at `catalog-bench@f072422`/`fdb2a9a` and canonical
+  `lakecat@ef94b550`. Stable Rust 1.97.1 production executables ran on one
+  Docker network against one local MinIO. LakeCat, Gravitino, and Polaris pass
+  all 10 required assertions; Lakekeeper and Nessie pass 9 of 10, preserving
+  complete state but returning nonstandard stale-conflict error types.
+  Lakekeeper alone advertises idempotency: exact replay passes, while same-key
+  content drift returns a cached 200 instead of 409 without applying drifted
+  state. All 16 transcript-referenced metadata objects were found directly in
+  MinIO, and every fixture cleanup and secret-sanitization assertion passed.
+  Exact artifacts, transcript hashes, findings, tests, and non-claims are in
+  `docs/catalog-community/PHASE-1-ACCEPTANCE.md` and
+  `docs/ICEBERG-COMMITS.md`.
 - Table lifecycle compatibility: missing-parent list is a spec-shaped 404,
   duplicate create is 409, standard create durably writes initial metadata,
   false-overwrite registration preserves the source UUID and metadata pointer,
@@ -33,8 +33,10 @@ Updated: 2026-08-26
   normalizes to LakeCat's zero-valued commit evidence so a property-only update
   cannot poison later rename validation. Memory and Turso stage and validate
   transitions before mutation. `overwrite=true` registration remains explicitly
-  unsupported; commit requirements, stale pointers, exact retries, and
-  idempotency drift are the next C1-06 unit.
+  unsupported. Deterministic requirement admission, stale-schema rejection,
+  pointer atomicity, and the config-gated exact-retry boundary are now covered
+  by `docs/ICEBERG-COMMITS.md`; LakeCat makes no optional standard-idempotency
+  claim until it advertises and passes that profile end to end.
 - Latest namespace compatibility correction: REST paths now decode multipart
   U+001F identifiers, list only top-level or immediate-child namespaces, reject
   a missing parent with 404, paginate deterministically with bounded opaque

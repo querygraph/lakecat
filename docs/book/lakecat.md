@@ -653,6 +653,39 @@ CAS window, while object-store preparation and commits to different tables remai
 parallel. The full boundary is documented in
 [`CAS-CONFLICTS.md`](https://github.com/querygraph/catalog-bench/blob/c0637076dd4dc2ac871cdde393900dbe87f05583/docs/CAS-CONFLICTS.md).
 
+## Deterministic commit correctness
+
+The contention sweep answers how much useful work survives eight writers racing
+one table. It does not prove that one specific stale request is rejected
+atomically. C1-06 adds that deterministic proof. A neutral production runner
+creates schema 0, admits a matching property transition, admits schema 1, and
+then submits a request that still requires schema 0. It requires the exact
+Iceberg HTTP/code 409 `CommitFailedException` envelope and independently reloads
+the table to prove UUID, metadata pointer, schema, last field, and the complete
+property map did not move.
+
+LakeCat, Gravitino, and Polaris pass all 10 required assertions. Lakekeeper and
+Nessie each pass 9: both reject the request and preserve complete state, but
+Lakekeeper reports `CatalogCommitConflicts` and Nessie leaves the error type
+empty. Lakekeeper alone advertises a standard idempotency lifetime. Its exact
+same-key retry advances only once and passes; reusing the key with different
+content returns the cached HTTP 200 instead of 409, although the drifted value
+does not become current.
+
+LakeCat does not advertise `idempotency-key-lifetime`, so the neutral runner
+sends no idempotency header and makes no optional retry claim for LakeCat. That
+is deliberate evidence discipline: internal retry machinery and unit tests do
+not become a cross-client compatibility claim until the service advertises the
+profile and passes its exact-replay and content-binding branches end to end.
+
+The canonical C1-06 run uses stable Rust 1.97.1 production executables on the
+same Docker network and MinIO. A direct audit resolves all 16 metadata objects
+referenced by the five sanitized transcripts. The complete contract, exact
+artifact and transcript hashes, matrix, cleanup proof, and non-claims are in
+[`ICEBERG-COMMITS.md`](https://github.com/querygraph/lakecat/blob/codex/catalog-community-phase-1/docs/ICEBERG-COMMITS.md)
+and the neutral
+[`catalog-bench` report](https://github.com/querygraph/catalog-bench/blob/fdb2a9af1d8570ef36491beb408aabb71570cce6/docs/COMMIT-CONFORMANCE.md).
+
 This is also why Rust did not, by itself, win the benchmark. The commit path is
 I/O-bound, so runtime CPU speed is nearly irrelevant against a network PUT and an
 fsynced transaction, and a warm, long-running server running a tight commit loop is
@@ -1227,8 +1260,8 @@ not imply timing or concurrency performance.
 
 The exact production binaries, image digests, profile/scenario hashes,
 transcript hashes, rejected diagnostics, object ETags, and repository gates are
-in the [Phase 1 acceptance ledger](https://github.com/querygraph/lakecat/blob/9ff8dc76777f3dce2389dbb8e4da6bb030000d77/docs/catalog-community/PHASE-1-ACCEPTANCE.md#c1-05--table-behavior)
-and [table lifecycle guide](https://github.com/querygraph/lakecat/blob/9ff8dc76777f3dce2389dbb8e4da6bb030000d77/docs/ICEBERG-TABLES.md).
+in the [Phase 1 acceptance ledger](https://github.com/querygraph/lakecat/blob/91527e0ad4fcda7fce4c9c292734879c3febb8ad/docs/catalog-community/PHASE-1-ACCEPTANCE.md#c1-05--table-behavior)
+and [table lifecycle guide](https://github.com/querygraph/lakecat/blob/91527e0ad4fcda7fce4c9c292734879c3febb8ad/docs/ICEBERG-TABLES.md).
 These runs remain reviewed
 smoke evidence. C1-09 owns immutable bundle generation and public publication;
 C1-06 first proves commit requirements, stale pointers, exact retry, and

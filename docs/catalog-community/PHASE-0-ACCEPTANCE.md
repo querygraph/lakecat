@@ -14,8 +14,12 @@ migration, or Apache Ossie integration are implemented.
 | Repository | Accepted revision | Role |
 | --- | --- | --- |
 | `querygraph/catalog-bench` | `c0637076dd4dc2ac871cdde393900dbe87f05583` | Neutral v1 contracts, profiles, scenario, historical bundle, generated matrix, and validators. |
-| `querygraph/lakecat` manuscript | `0b7f1fe5598d1cbac360f553a8d5a641600ffd73` | Corrected benchmark chapter and Phase 0 program documentation. |
-| `querygraph/lakecat` artifact package | `1b0b9501b606f2eaa7d27600fca74095cc29f485` | PDF, EPUB, MOBI, HTML, chapter reader, and versioned artifact metadata generated from the manuscript revision above. |
+| `querygraph/lakecat` manuscript | canonical `f528be07ca6ccee9d1f90bf327afb9b6fd11fdfd` | Corrected benchmark chapter and Phase 0 program documentation. |
+| `querygraph/lakecat` artifact package | canonical `0b3366ec56fd15b6abc03522ad7a65527d56c0b0` | PDF, EPUB, MOBI, HTML, chapter reader, and versioned artifact metadata generated from the manuscript revision above. |
+
+The LakeCat identifiers are their reachable equivalents after the privacy-only
+history rewrite. The manuscript and artifact inputs are source-identical; all
+historical hashes and observed evidence below remain unchanged.
 
 The corresponding draft pull requests are
 [`catalog-bench#2`](https://github.com/querygraph/catalog-bench/pull/2) and
@@ -78,7 +82,7 @@ matched it exactly.
 
 ## Clean-worktree LakeCat documentation gates
 
-A detached worktree at `1b0b9501` began clean. The unified build then regenerated
+A detached worktree at canonical `0b3366ec` began clean. The unified build then regenerated
 all artifacts from that checkout and passed:
 
 ```sh

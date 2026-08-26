@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Catalog community C1-06 acceptance: document LakeCat's deterministic Iceberg
+  REST requirement admission, stale-schema 409 and complete pointer-state
+  atomicity, config-gated retry boundary, production-optimized canonical
+  artifact identities, five-catalog required/optional matrix, 16-of-16 shared
+  MinIO audit, uniform cleanup, complete sanitization, and the distinction from
+  scheduler-dependent contention conflicts. LakeCat passes all 10 required
+  assertions; it makes no optional standard-idempotency claim while the config
+  does not advertise that capability.
+
 - Canonical public provenance: replace obsolete catalog-community milestone
   identifiers after a privacy-only history rewrite with their reachable
   endpoint, namespace, no-snapshot, and table equivalents. An isolated
@@ -15,7 +24,7 @@
   its final reference to a non-public planning artifact.
 
 - Book artifacts: rebuild the checked-in PDF, EPUB, MOBI, browser HTML, and
-  chapter bundle from `164a7eba`, incorporating the accepted C1-05 table
+  chapter bundle from `24b05953`, incorporating the accepted C1-05 table
   lifecycle, shared-MinIO proof, catalog matrix, and publication boundary into
   the versioned reader artifacts.
 
@@ -90,7 +99,7 @@
 
 - Book artifacts: rebuilt and revalidated the PDF, EPUB, MOBI, HTML, and
   chapter-reader editions from the committed C1-04 acceptance manuscript at
-  `27fc145f`; the 60-page PDF, metadata, version marker, Kindle naming, and
+  `3782d0b2`; the 60-page PDF, metadata, version marker, Kindle naming, and
   library artifact contracts all pass.
 
 - Catalog community C1-04 acceptance: documented the component-correct
@@ -145,7 +154,7 @@
   ledger without claiming behavioral conformance or publishable timings.
 
 - Book artifacts: rebuilt and revalidated PDF, EPUB, MOBI, HTML, and chapter
-  editions at `fac78867` so the QueryGraph root-manifest operator command and
+  editions at `4cc60fe3` so the QueryGraph root-manifest operator command and
   source stamp match the accepted manuscript.
 
 - QueryGraph handoff contract: followed the Rust package's move from the removed
@@ -169,7 +178,7 @@
   exit-criteria mapping, and explicit draft-profile inputs carried into Phase 1.
 
 - Book artifacts: regenerated and revalidated the PDF, EPUB, MOBI, HTML, and
-  chapter-reader editions from catalog-ranking source commit `0b7f1fe5`; the
+  chapter-reader editions from catalog-ranking source commit `f528be07`; the
   tracked version marker and artifact links now identify that exact manuscript.
 
 - Catalog community Phase 0 evidence integration: pinned LakeCat documentation

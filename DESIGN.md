@@ -344,6 +344,12 @@ The current working plan is:
    affected key and compatibility read together, and prove cross-object parity.
    The accepted behavior and migration boundary are specified in
    `docs/ICEBERG-NAMESPACES.md`.
+8. Keep deterministic commit correctness separate from contention throughput.
+   Standard requirements must admit current state, stale state must return the
+   exact Iceberg 409 envelope without moving any pointer or property, and retry
+   claims must be gated by the resolved config advertisement. The accepted
+   C1-06 behavior and non-claims are specified in
+   `docs/ICEBERG-COMMITS.md`.
 
 ### Done-State Expectations
 
@@ -612,6 +618,12 @@ The versioned neutral scenario/result schemas are owned and reviewed in
 `catalog-bench`. LakeCat documentation links to an exact schema version and
 result bundle rather than keeping a second copy. The full audit, pin policy, and
 incremental delivery ledger live under `docs/catalog-community/`.
+
+The incremental behavior ledger is accepted through C1-06: owned Lakekeeper
+infrastructure, typed adapters, config negotiation, namespaces, tables, and
+deterministic commit correctness. These are conformance proofs, not a replacement
+for the separately generated concurrent ranking. C1-07 through C1-10 and the
+phase exit gates remain open.
 
 ## Compatibility Rules
 

@@ -162,6 +162,41 @@ short per-table gate serializes only the final Turso CAS window, while
 object-store preparation and commits to different tables remain
 parallel. The full boundary is documented in <a
 href="https://github.com/querygraph/catalog-bench/blob/c0637076dd4dc2ac871cdde393900dbe87f05583/docs/CAS-CONFLICTS.md"><code>CAS-CONFLICTS.md</code></a>.</p>
+<h2 data-number="8.5" id="deterministic-commit-correctness"><span
+class="header-section-number">8.5</span> Deterministic commit
+correctness</h2>
+<p>The contention sweep answers how much useful work survives eight
+writers racing one table. It does not prove that one specific stale
+request is rejected atomically. C1-06 adds that deterministic proof. A
+neutral production runner creates schema 0, admits a matching property
+transition, admits schema 1, and then submits a request that still
+requires schema 0. It requires the exact Iceberg HTTP/code 409
+<code>CommitFailedException</code> envelope and independently reloads
+the table to prove UUID, metadata pointer, schema, last field, and the
+complete property map did not move.</p>
+<p>LakeCat, Gravitino, and Polaris pass all 10 required assertions.
+Lakekeeper and Nessie each pass 9: both reject the request and preserve
+complete state, but Lakekeeper reports
+<code>CatalogCommitConflicts</code> and Nessie leaves the error type
+empty. Lakekeeper alone advertises a standard idempotency lifetime. Its
+exact same-key retry advances only once and passes; reusing the key with
+different content returns the cached HTTP 200 instead of 409, although
+the drifted value does not become current.</p>
+<p>LakeCat does not advertise <code>idempotency-key-lifetime</code>, so
+the neutral runner sends no idempotency header and makes no optional
+retry claim for LakeCat. That is deliberate evidence discipline:
+internal retry machinery and unit tests do not become a cross-client
+compatibility claim until the service advertises the profile and passes
+its exact-replay and content-binding branches end to end.</p>
+<p>The canonical C1-06 run uses stable Rust 1.97.1 production
+executables on the same Docker network and MinIO. A direct audit
+resolves all 16 metadata objects referenced by the five sanitized
+transcripts. The complete contract, exact artifact and transcript
+hashes, matrix, cleanup proof, and non-claims are in <a
+href="https://github.com/querygraph/lakecat/blob/codex/catalog-community-phase-1/docs/ICEBERG-COMMITS.md"><code>ICEBERG-COMMITS.md</code></a>
+and the neutral <a
+href="https://github.com/querygraph/catalog-bench/blob/fdb2a9af1d8570ef36491beb408aabb71570cce6/docs/COMMIT-CONFORMANCE.md"><code>catalog-bench</code>
+report</a>.</p>
 <p>This is also why Rust did not, by itself, win the benchmark. The
 commit path is I/O-bound, so runtime CPU speed is nearly irrelevant
 against a network PUT and an fsynced transaction, and a warm,
@@ -176,8 +211,8 @@ rather than for a single warm server in a loop.</p>
 <p>The driver, impartial Docker/MinIO harness, versioned contract, raw
 evidence, and generated reports live in <a
 href="https://github.com/querygraph/catalog-bench"><code>querygraph/catalog-bench</code></a>.</p>
-<h2 data-number="8.5" id="the-realistic-data-write-path"><span
-class="header-section-number">8.5</span> The realistic data-write
+<h2 data-number="8.6" id="the-realistic-data-write-path"><span
+class="header-section-number">8.6</span> The realistic data-write
 path</h2>
 <p>The <code>write-data</code> benchmark keeps catalog commits separate
 from file throughput while still exercising both honestly. It writes an
@@ -187,9 +222,9 @@ spent encoding and uploading data from time spent validating and
 advancing catalog state; a metadata-only commit number is never
 relabeled as data write throughput. The exact payload, environment, and
 measurements remain in the catalog-bench report.</p>
-<h2 data-number="8.6"
+<h2 data-number="8.7"
 id="the-object-store-cache-and-the-scan-benchmark"><span
-class="header-section-number">8.6</span> The object-store cache and the
+class="header-section-number">8.7</span> The object-store cache and the
 scan benchmark</h2>
 <p>Where the commit benchmark holds the object store constant to isolate
 the catalog, the cache-scan benchmark does the opposite: it puts the
@@ -221,8 +256,8 @@ consumes it through the same dependency seam it uses for planning and
 benefits without owning a line of cache code. How that seam is wired —
 and which Sail commits carry the cache — is the subject of
 <code>LAKECAT-SAIL.md</code>.</p>
-<h2 data-number="8.7" id="rust-versus-the-jvm"><span
-class="header-section-number">8.7</span> Rust versus the JVM</h2>
+<h2 data-number="8.8" id="rust-versus-the-jvm"><span
+class="header-section-number">8.8</span> Rust versus the JVM</h2>
 <p>The commit chapter was careful about what Rust did and did not buy:
 on an I/O-bound, fsynced commit loop against a warm JVM, runtime CPU
 speed barely registers. The rust-versus-jvm benchmark asks the same
@@ -241,9 +276,9 @@ living in the engine — not from Rust itself. What Rust keeps
 independently is what a warm steady-state benchmark hides — steadier
 tail latency with no GC pauses, a smaller resident footprint, and
 instant cold start.</p>
-<h2 data-number="8.8"
+<h2 data-number="8.9"
 id="the-read-write-benchmark-and-the-stock-client-round-trip"><span
-class="header-section-number">8.8</span> The read-write benchmark and
+class="header-section-number">8.9</span> The read-write benchmark and
 the stock-client round-trip</h2>
 <p>The most demanding test in the suite is also the simplest to state:
 can an <em>unmodified</em> Iceberg client create a table, write real

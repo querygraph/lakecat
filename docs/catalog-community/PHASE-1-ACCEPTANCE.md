@@ -637,7 +637,7 @@ Accepted revisions:
 - [`catalog-bench@6bc668b`](https://github.com/querygraph/catalog-bench/commit/6bc668b)
   records the final matrix, exact artifacts, direct shared-MinIO audit, rejected
   evidence, reproduction workflow, and publication boundary;
-- [`lakecat@c1abd976`](https://github.com/querygraph/lakecat/commit/c1abd976)
+- [`lakecat@e05cba42`](https://github.com/querygraph/lakecat/commit/e05cba42984a9897e2e7f9304dbf0a3380450679)
   completes standard table lifecycle behavior, including governed registration
   and atomic same-warehouse rename; and
 - [`lakecat@af442023`](https://github.com/querygraph/lakecat/commit/af44202398dc49a68bc8545d55a8bb1045fe3d40)
@@ -811,8 +811,150 @@ idempotency retirement, outbox evidence, and cleanup.
 
 This closes C1-05 only. It is behavioral evidence, not a performance ranking.
 The exact transcripts remain ignored smoke files rather than immutable
-`catalog-bench/v1` result records. C1-06 next owns commit requirements, stale
-metadata pointers, exact retry, and idempotency-content drift. C1-09 still owns
+`catalog-bench/v1` result records. The C1-06 section below owns commit
+requirements, stale-state pointer atomicity, exact retry, and
+idempotency-content drift. C1-09 still owns
 final optimized artifact materialization, immutable bundle generation, manual
 redaction review, public matrix/report generation, adversari.al publication, and
 site verification.
+
+## C1-06 — deterministic commit correctness
+
+Accepted revisions:
+
+- [`catalog-bench@f07242219b5ef889507e288ed8f0d23ff4701ef9`](https://github.com/querygraph/catalog-bench/commit/f07242219b5ef889507e288ed8f0d23ff4701ef9)
+  completes the strict required workflow and independently observable,
+  config-gated optional idempotency branch;
+- [`catalog-bench@fdb2a9af1d8570ef36491beb408aabb71570cce6`](https://github.com/querygraph/catalog-bench/commit/fdb2a9af1d8570ef36491beb408aabb71570cce6)
+  records the canonical-source production rebuild, refreshed five-catalog
+  matrix, all exact artifact/transcript identities, 16-object MinIO audit,
+  cleanup/sanitization proof, rejected diagnostics, and reproduction boundary;
+  and
+- [`lakecat@ef94b5508e94554f51f4764af932cbb819ae3e41`](https://github.com/querygraph/lakecat/commit/ef94b5508e94554f51f4764af932cbb819ae3e41)
+  is the reachable canonical LakeCat table/commit source used by the optimized
+  accepted runtime.
+
+LakeCat's component contract is
+[`docs/ICEBERG-COMMITS.md`](../ICEBERG-COMMITS.md). The neutral source of the
+complete result is catalog-bench's
+[`COMMIT-CONFORMANCE.md`](https://github.com/querygraph/catalog-bench/blob/fdb2a9af1d8570ef36491beb408aabb71570cce6/docs/COMMIT-CONFORMANCE.md).
+
+### Deterministic scenario
+
+The runner derives one fresh namespace and table per catalog and refuses every
+mutation unless a spec-shaped namespace 404 proves ownership. It creates schema
+0, admits one matching UUID/current-schema property transition, admits one
+matching UUID/schema/last-field transition to schema 1, and then submits a
+request that still requires schema 0.
+
+Ten required assertions prove authentication/config readiness, fixture
+isolation, committed-table creation, both valid transitions, exact stale
+requirement rejection, independent complete final-state equality, cleanup, and
+sanitization. A valid stale response is HTTP/code 409 with Iceberg type
+`CommitFailedException`. The reload must preserve UUID, final metadata location,
+schema 1, last field 2, and the complete property map while excluding the stale
+property.
+
+The runner schedules optional exact-replay and same-key/content-drift requests
+only when the resolved config advertises `idempotency-key-lifetime`. A UUIDv7
+key may cross the HTTP boundary but has no serialization/display path; persisted
+evidence receives only `<redacted>`. Exact replay must return equivalent success
+without a second pointer transition. Content drift must return a spec-shaped
+409 and leave complete state unchanged.
+
+### Exact production identity
+
+| Input or artifact | Identity |
+| --- | --- |
+| Candidate profile | `catalog-community-current-2026-08-26-linux-arm64`, SHA-256 `2a428c2bb6ce31eae626d0abcb82db101e9165c5497185111b84288012fbe96d` |
+| Scenario | `iceberg-rest.commit.correctness` version 1, SHA-256 `7df567363927001aa25e55c607f60feb63b2fe5442d82d800d298d87e8bc886d` |
+| Iceberg REST OpenAPI | 1.11.0, SHA-256 `80d2ec83a70eeff6e7194853f8791c17cceb14610fae6a0e6afdd2921806ee4a` |
+| Runner executable | SHA-256 `243f16e0f2f375113df2516eb593b36d6a736cf3f25a76055409bd8b5e96391f`; 3,805,952 bytes |
+| LakeCat source | `ef94b5508e94554f51f4764af932cbb819ae3e41`; version `0.3.0-32-gef94b550` |
+| LakeCat executable | SHA-256 `0d74e70378f73a9f59eb402cc342e037b29995a3587fc20d2c27f857c671dbaa`; 19,560,096 bytes |
+| LakeCat local image | Linux ARM64 image ID `sha256:7d1eab5295e46e7df06ee14ef807f71fe8e678cc7fa167ead4c4b85a177761e1`; 60,016,569 bytes |
+| Rust builder | stable Rust/Cargo 1.97.1, LLVM 22.1.6, Linux ARM64 |
+| Production build | opt-level 3, fat LTO, one codegen unit, stripped symbols, `panic=abort`, disabled debug/incremental, `-Dwarnings`, `-Ctarget-cpu=native`, locked, `-j1` |
+| LakeCat features | `turso-local,sail-local`; Sail `bddb1706ba2308e5029d47f04f03121236edbfa6`; Turso `0.7.0-pre.10` |
+| Shared MinIO | `RELEASE.2025-10-15T17-29-55Z`, source `9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a` |
+
+Docker Desktop's registry frontend resolution stalled during the canonical
+Compose rebuild attempt, and that attempt was interrupted without accepting an
+artifact. The exact canonical checkout was instead mounted read-only into the
+already-running, digest-pinned Rust 1.97.1 Linux ARM64 builder on
+`catalog-bench-net`. Cargo performed a real LakeCat crate rebuild and fat-LTO
+link under the flags above. The executable was installed into the verified slim
+runtime layer entirely inside Docker, labeled with the canonical source, and
+accepted only after the real config health check passed.
+
+### Live outcomes
+
+| Catalog | Required | Stale requirement | Idempotency advertisement | Exact retry | Content drift | Sanitized transcript SHA-256 |
+| --- | ---: | --- | --- | --- | --- | --- |
+| LakeCat | **pass, 10/10** | pass: 409 `CommitFailedException`; state unchanged | not advertised | not evaluated | not evaluated | `fe827bc9d315311fa6881580a9a7c55adcae2d22d9abec87939b8947eab1b4a3` |
+| Apache Gravitino | **pass, 10/10** | pass: 409 `CommitFailedException`; state unchanged | not advertised | not evaluated | not evaluated | `1cf2d5759d71a076491dc4ccb86be7aa6b718316dcae14f8364f79795fb69bf7` |
+| Apache Polaris | **pass, 10/10** | pass: 409 `CommitFailedException`; state unchanged | not advertised | not evaluated | not evaluated | `ca5419aa8de66bba918775ffb6817beb830ca9731258242f4d7ca154c6a9db10` |
+| Lakekeeper | **fail, 9/10** | fail: 409 `CatalogCommitConflicts`; state unchanged | pass: `PT30M` | pass | fail: cached 200; state unchanged | `daee0c1405f72355070a01085fd5ddc3f16d4f2091e3cab7a8e9659b742b7728` |
+| Apache Nessie | **fail, 9/10** | fail: 409 with empty type; state unchanged | not advertised | not evaluated | not evaluated | `eeb654907fa64f0d132a5314555c9a8f7d3ddd4cb816dd1ddcc3ec7240a8fdd8` |
+
+LakeCat's required branch is fully conformant. Its resolved config does not
+advertise the optional standard idempotency property, so the runner sends no
+idempotency header and makes no optional claim. LakeCat's internal idempotency
+records and tests remain implementation evidence rather than being silently
+promoted into a cross-client result.
+
+Lakekeeper and Nessie both reject the stale request with status/code 409 and
+preserve complete state. Their one required mismatch is the error type.
+Lakekeeper's advertised first keyed commit advances required object `00002` to
+optional object `00003`. Its exact replay returns equivalent success and stays
+on `00003`. The drifted request also returns the cached success rather than 409,
+but the reload remains on `00003` with the accepted-once value; the drifted value
+never becomes current.
+
+### Shared MinIO, cleanup, and sanitization
+
+The five transcripts reference 16 distinct metadata objects: three each for
+LakeCat, Gravitino, Polaris, and Nessie, plus four for Lakekeeper's optional
+first keyed transition. A digest-pinned `mc` client on the same Docker network
+statted every location directly against MinIO: 16 of 16 succeeded.
+
+| Catalog | Audited objects | Final observed bytes | Final observed ETag |
+| --- | ---: | ---: | --- |
+| LakeCat | 3 | 1,278 | `3fd02c39afcea465d2a50da65d839015` |
+| Apache Gravitino | 3 | 1,313 | `3a2918fb9e779d3b2bca052546b3e89c` |
+| Apache Polaris | 3 | 1,365 | `3756b60eba2480e603dcd55e4d626817` |
+| Apache Nessie | 3 | 985 | `29efbc33d2259219cb569a8ad780d745` |
+| Lakekeeper | 4 | 504 | `8027815c9b34014ac6e97c851db34f16` |
+
+Every transcript contains 21 operation slots and the same cleanup sequence:
+table drop 204, table-absence proof 404, namespace drop 204, and
+namespace-absence proof 404. Non-purging cleanup keeps metadata objects for the
+independent audit while removing every catalog fixture.
+
+All five transcripts report no persisted raw secrets and no raw response body.
+Lakekeeper records 39 recursive redactions, including three idempotency headers;
+Polaris records 18 OAuth-backed response redactions. Every persisted
+authorization or idempotency header equals `<redacted>`, and a separate literal
+credential/bearer scan passes.
+
+### Repository gates and next boundary
+
+Catalog-bench passed stable formatting, the full workspace tests, strict
+workspace/all-target Clippy, semantic validation of every checked-in contract,
+generated-schema parity, historical bundle/matrix tests, diff checks, and the
+live five-catalog matrix. The named conformance suites include 15 commit, 14
+config, 13 namespace, and 17 table adversarial tests.
+
+LakeCat's accepted executable is a fully optimized production build from the
+canonical source tree. The public documentation and unified reader artifacts
+are rebuilt under the LakeCat book and FirstPair contracts. No LakeCat code
+change was required for the required C1-06 branch: the scenario independently
+proves the existing implementation already satisfies it.
+
+This closes C1-06 only. It is deterministic behavioral evidence, not a
+throughput, latency, variance, RSS, or contention ranking. It does not prove
+ambiguous network-write recovery or a LakeCat standard idempotency profile.
+The exact transcripts remain ignored smoke files. C1-07 next owns the stock
+PyIceberg matrix; C1-09 retains final runnable profile/result materialization,
+manual redaction review, secret scanning, generated public reports,
+adversari.al publication, and live site verification.

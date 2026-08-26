@@ -249,6 +249,9 @@ result bundle, generated report, manual redaction review, and public site.
 
 Exact identities and hashes are in
 [`PHASE-1-ACCEPTANCE.md`](catalog-community/PHASE-1-ACCEPTANCE.md#c1-05--table-behavior).
+Deterministic requirement admission, stale-state rejection, pointer atomicity,
+and config-gated retry evidence are specified separately in
+[`ICEBERG-COMMITS.md`](ICEBERG-COMMITS.md).
 
 ## Verification
 
