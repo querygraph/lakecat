@@ -88,9 +88,9 @@ database paths or backend text. TypeSec remains on the published `typesec`
 the required Sail APIs are published.
 
 The local QueryGraph handoff path has a separate compatibility contract:
-`/Users/alexy/src/querygraph/qg-rust` (released 0.3.0) consumes `lakecat-core`
-and `qglake-bundle` as local path dependencies and the sibling Grust `0.12.0`
-checkout for `lakecat-verify` and `lakecat-import`. The handoff harness starts
+`/Users/alexy/src/querygraph` (0.4.2) consumes the released `lakecat-core` and
+`qglake-bundle` 0.3.0 crates plus Grust 0.12.1 for `lakecat-verify` and
+`lakecat-import`. The handoff harness starts
 LakeCat with `grust-turso-local` plus `LAKECAT_GRUST_TURSO_PATH`, so the
 end-to-end QueryGraph acceptance path exercises Grust's Turso-backed catalog
 graph sink. The handoff summary carries hash-only `graphProjectionProof`

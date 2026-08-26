@@ -95,7 +95,7 @@ to a temporary artifact directory via `LAKECAT_BOOK_DIST_DIR`, so the gate still
 validates EPUB/PDF/MOBI generation without letting nondeterministic binary
 metadata dirty the candidate commit.
 The QGLake handoff proof must run QueryGraph `lakecat-verify` and
-`lakecat-import` through `cargo run --locked` against the local `qg-rust`
+`lakecat-import` through `cargo run --locked` against the local QueryGraph root
 manifest, then persist both outputs in the saved handoff summary.
 
 After a full release-candidate proof has passed, a post-proof

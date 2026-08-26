@@ -1350,7 +1350,7 @@ durable tenant chain.
 The QueryGraph side verifies the bundle before importing it:
 
 ```sh
-cd /Users/alexy/src/querygraph/qg-rust
+cd /Users/alexy/src/querygraph
 
 cargo run -- lakecat-verify \
   --bundle /Users/alexy/src/lakecat/target/qglake/lakecat-bootstrap.json

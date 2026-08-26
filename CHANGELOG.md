@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- QueryGraph handoff contract: followed the Rust package's move from the removed
+  `querygraph/qg-rust` subdirectory to the QueryGraph repository root while
+  retaining the shared `qglake-bundle` dependency assertion and live
+  `lakecat-verify`/`lakecat-import` proof boundary; refreshed current dependency
+  versions and operator commands.
+
 - Book build contract: restored the LakeCat wrapper's explicit
   `LAKECAT_BOOK_DIST_DIR` forwarding and isolated Calibre state after the shared
   FirstPair-builder migration, and aligned the dependency preflight with the
