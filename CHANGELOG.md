@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Book artifacts: rebuilt and revalidated PDF, EPUB, MOBI, HTML, and chapter
+  editions at `fac78867` so the QueryGraph root-manifest operator command and
+  source stamp match the accepted manuscript.
+
 - QueryGraph handoff contract: followed the Rust package's move from the removed
   `querygraph/qg-rust` subdirectory to the QueryGraph repository root while
   retaining the shared `qglake-bundle` dependency assertion and live
