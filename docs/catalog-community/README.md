@@ -1,11 +1,10 @@
 # Catalog Community Program
 
-This directory is LakeCat's architectural entry point for
-[`CATALOG-COMMUNITY-PLAN.md`](../../CATALOG-COMMUNITY-PLAN.md). It records what
-LakeCat promises at the catalog boundary, how to invoke the neutral lab, and how
-evidence moves into the rest of QueryGraph without turning LakeCat into the
-benchmark owner, a query engine, a policy engine, a graph database, or a semantic
-modeling system.
+This directory is LakeCat's public architectural and evidence entry point for
+the catalog-community program. It records what LakeCat promises at the catalog
+boundary, how to invoke the neutral lab, and how evidence moves into the rest of
+QueryGraph without turning LakeCat into the benchmark owner, a query engine, a
+policy engine, a graph database, or a semantic modeling system.
 
 ## Repository ownership
 

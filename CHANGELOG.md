@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Public documentation hygiene: make the catalog-community architecture and
+  delivery records self-contained and remove references to non-public planning
+  artifacts from the public repository.
+
 - Catalog community Phase 0 closure: recorded the accepted LakeCat and
   catalog-bench revisions, historical hash/arithmetic verdict, detached
   clean-worktree commands and test counts, full book gate, Docker discrepancy,

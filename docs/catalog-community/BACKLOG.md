@@ -3,8 +3,8 @@
 Each unit is intended to be one reviewable commit or a deliberately small commit
 series in one repository. `done` means the named acceptance evidence exists;
 `blocked` requires a concrete external condition; `pending` does not imply support.
-Phase transitions follow `CATALOG-COMMUNITY-PLAN.md` and cannot be declared from
-this checklist alone.
+Phase transitions require the program's phase exit criteria and global
+acceptance gates; they cannot be declared from this checklist alone.
 
 ## Phase 0 — baseline and design
 

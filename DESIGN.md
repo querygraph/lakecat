@@ -552,8 +552,7 @@ evidence.
 
 ### Catalog interoperability and Apache Ossie boundary
 
-Status: **accepted 2026-08-26** for the catalog-community program in
-`CATALOG-COMMUNITY-PLAN.md`.
+Status: **accepted 2026-08-26** for the catalog-community program.
 
 The neutral interoperability lab belongs in
 [`querygraph/catalog-bench`](https://github.com/querygraph/catalog-bench), not in
