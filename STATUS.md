@@ -14,7 +14,7 @@ Updated: 2026-08-26
   current design, status, release, book, and agent documents.
 - Latest catalog-community acceptance: C1-05 table behavior is complete at
   `catalog-bench@621cc4b`/`75c95cf`/`99971e8`/`6bc668b` and
-  `lakecat@335f94ef`/`762527c7`. Stable Rust 1.97.1 production builds ran from
+  `lakecat@af442023`/`ef94b550`. Stable Rust 1.97.1 production builds ran from
   one Docker network against one local MinIO. LakeCat, Gravitino, Lakekeeper,
   and Polaris passed all 15 required and both optional rename/register
   assertions; Nessie passed 14 required assertions and both optional operations,

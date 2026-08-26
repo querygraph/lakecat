@@ -2,7 +2,7 @@
 
 This document is the operator and contributor contract for LakeCat's Apache
 Iceberg REST namespace surface. Revision
-`42b2f34b85d7cbcce1b36d4008211075b6c51593` is the first implementation
+`c821a0dcb4b326c23f4a56472a2a5e574ef33fea` is the first implementation
 accepted by the catalog-neutral C1-04 namespace scenario across the production
 `turso-local,sail-local` build.
 

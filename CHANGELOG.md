@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Canonical public provenance: replace obsolete catalog-community milestone
+  identifiers after a privacy-only history rewrite with their reachable
+  endpoint, namespace, no-snapshot, and table equivalents. An isolated
+  pre/post-rewrite comparison proved `Cargo.toml`, `Cargo.lock`, and every crate
+  source-identical; historical executable, image, transcript, and object hashes
+  remain explicitly labeled as the artifacts observed by their original runs.
+  Rebuilt and revalidated the unified PDF, EPUB, MOBI, HTML, chapter, metadata,
+  and library artifact contracts from the sanitized canonical branch tip.
+
 - Public acceptance hygiene: make the Phase 1 ledger self-contained and remove
   its final reference to a non-public planning artifact.
 
@@ -25,7 +34,7 @@
   manuscript.
 
 - Book artifacts: rebuilt the checked-in PDF, EPUB, MOBI, browser HTML, and
-  chapter bundle from `335f94ef`, incorporating the completed table lifecycle
+  chapter bundle from `af442023`, incorporating the completed table lifecycle
   documentation and no-snapshot commit-history semantics into the versioned
   reader artifacts.
 
@@ -103,7 +112,7 @@
   production-feature coverage for the optimized catalog benchmark path.
 
 - Catalog community Phase 1: accepted C1-03 at
-  `catalog-bench@feb803f8`/`ec3e40d6` and `lakecat@09dd7ee3` after strict
+  `catalog-bench@feb803f8`/`ec3e40d6` and `lakecat@10d98cbe` after strict
   config negotiation, endpoint validation, sanitized evidence, optimized
   same-Docker production builds, complete readiness replay, and all repository
   gates passed. Recorded four conformant config probes, Apache Polaris 1.7.0's

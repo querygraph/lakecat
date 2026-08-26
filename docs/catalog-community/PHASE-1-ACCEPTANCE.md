@@ -10,6 +10,17 @@ profile remains `draft`, and C1-09 still owns optimized production builds,
 same-Docker execution, immutable raw bundles, generated reports, and secret
 scanning.
 
+## Canonical source provenance
+
+LakeCat's public branch underwent a privacy-only history rewrite after the
+first five units were accepted. An isolated pre/post-rewrite comparison proved
+`Cargo.toml`, `Cargo.lock`, and every file under `crates/` source-identical at
+the affected endpoint, namespace, no-snapshot, and table milestones. This
+ledger names only their reachable canonical commits. Historical executable,
+image, transcript, profile, and MinIO hashes remain the exact artifacts observed
+by each original run. Subsequent acceptance units must build and run only from
+canonical source.
+
 ## C1-01 — owned Lakekeeper infrastructure
 
 Accepted catalog-bench revisions:
@@ -229,7 +240,7 @@ Accepted revisions:
 - [`catalog-bench@ec3e40d6b530c6dae32d0fe8bddce55b02e874d3`](https://github.com/querygraph/catalog-bench/commit/ec3e40d6b530c6dae32d0fe8bddce55b02e874d3)
   pins the implementation and independently accepted LakeCat revision in the
   current candidate profile; and
-- [`lakecat@09dd7ee358e79d4acd04b5732e61e0330b7c1c97`](https://github.com/querygraph/lakecat/commit/09dd7ee358e79d4acd04b5732e61e0330b7c1c97)
+- [`lakecat@10d98cbea884520d2c783f6b2eab5cea5c7fea17`](https://github.com/querygraph/lakecat/commit/10d98cbea884520d2c783f6b2eab5cea5c7fea17)
   corrects LakeCat's config advertisement and resolves the Rust 1.97
   warning-denying production-gate debt exposed while preparing the run.
 
@@ -291,7 +302,7 @@ with mount aliases, management endpoints, compatibility aliases, and QueryGraph
 control-plane routes. That over-advertisement was a LakeCat defect, not something
 the harness could normalize away.
 
-`lakecat@09dd7ee3` replaces those variants with one shared, duplicate-free list
+`lakecat@10d98cbe` replaces those variants with one shared, duplicate-free list
 of the 13 Apache Iceberg 1.11 operations actually implemented by the production
 service. Config-read replay, the QGLake handoff, CLI proof verification, tests,
 design documentation, and the book now all require that exact list. LakeCat's
@@ -363,7 +374,7 @@ false`, and `raw_response_body_persisted: false`.
 | Catalog | Config result | Routing / advertisement | Transcript SHA-256 |
 | --- | --- | --- | --- |
 | Apache Gravitino 1.3.0 | `pass`, HTTP 200, 7/7 required assertions | unprefixed / explicit standard endpoints | `d5a86a62b65d21f775bc2b60963c58403260c687246afc517eccc2c306b7fb2a` |
-| LakeCat 0.3.0-20-g09dd7ee3 | `pass`, HTTP 200, 7/7 required assertions | unprefixed / exact 13-route advertisement | `bf66e4ec6dffbfce84c27c6476dbb43e16b601dc2e5eb30cb4058035fa835076` |
+| LakeCat canonical source 0.3.0-21-g10d98cbe; acceptance adapter label predates rewrite | `pass`, HTTP 200, 7/7 required assertions | unprefixed / exact 13-route advertisement | `bf66e4ec6dffbfce84c27c6476dbb43e16b601dc2e5eb30cb4058035fa835076` |
 | Lakekeeper 0.13.3 | `pass`, HTTP 200, 7/7 required assertions | config-negotiated warehouse prefix / explicit standard endpoints | `a6868cfb601589f4ceb5827bb6a1fc1993af39f425d1cd41b20bf318edd585aa` |
 | Apache Nessie 0.108.4 | `pass`, HTTP 200, 7/7 required assertions | static `main` prefix / explicit standard endpoints | `5226dd522a88720d910f42b05132d58aa0195ba31e35435dbf2e0d4d932dd0a1` |
 | Apache Polaris 1.7.0 | `fail`, HTTP 200, 6/7 required assertions | static `bench` prefix / invalid proprietary additions | `18cc1e0df6b896ee8ddc9197637fbd95308375ee168730fdfddab4d72f7358e8` |
@@ -422,7 +433,7 @@ run included the focused four config-fixture tests plus the API (10), CLI (501),
 service library (471), service binary (5), and store (189) suites. The full book
 build rendered eight Mermaid diagrams and a 59-page PDF, then passed PDF, EPUB,
 library, and version contracts; tracked PDF, EPUB, MOBI, HTML, and chapter
-artifacts identify source `09dd7ee3`.
+artifacts correspond to canonical source `10d98cbe`.
 
 This closes C1-03 only. No latency or throughput was measured, the transcripts
 are not checked in as result records, and the candidate profile remains `draft`.
@@ -442,7 +453,7 @@ Accepted revisions:
 - [`catalog-bench@b149ee74d574d13c51a894d9f440606be2b5a0c1`](https://github.com/querygraph/catalog-bench/commit/b149ee74d574d13c51a894d9f440606be2b5a0c1)
   records the exact five-catalog acceptance matrix, artifact identities,
   findings, and reproduction boundary; and
-- [`lakecat@42b2f34b85d7cbcce1b36d4008211075b6c51593`](https://github.com/querygraph/lakecat/commit/42b2f34b85d7cbcce1b36d4008211075b6c51593)
+- [`lakecat@c821a0dcb4b326c23f4a56472a2a5e574ef33fea`](https://github.com/querygraph/lakecat/commit/c821a0dcb4b326c23f4a56472a2a5e574ef33fea)
   corrects LakeCat's namespace protocol, properties, storage, governance, and
   replay behavior.
 
@@ -454,7 +465,7 @@ The exact contract and optimized executable inputs are:
 | Scenario | `iceberg-rest.namespace.behavior` version 1, SHA-256 `0cd6262c9bda87ac217e8fc618cf3138ddabe6ca89aac94ee05628a67729b7ac` |
 | Runner executable | SHA-256 `6a81806f955924dd2961bc6bfe68fab97cd24d302a50532d6410bccbf9c0f78e` |
 | LakeCat executable | SHA-256 `5a6a867c0e3923505f107d418f2a3cc327fd7fa73566b9ac89af77dc588ab839` |
-| LakeCat local runtime image | tag `lakecat-service:c104-42b2f34b`; image ID `sha256:33dfed34779cd601cf8b98b30dde49d0f363020b0daac8f27baa35756e118691` |
+| LakeCat local runtime image | canonical source alias `lakecat-service:c104-c821a0dc`; image ID `sha256:33dfed34779cd601cf8b98b30dde49d0f363020b0daac8f27baa35756e118691` |
 | Rust toolchain | stable Rust 1.97.1; Cargo 1.97.1 |
 | Production build | opt-level 3, fat LTO, one codegen unit, stripped symbols, `panic=abort`, disabled incremental compilation, `-Dwarnings`, `-Ctarget-cpu=native`, `-j1` |
 | LakeCat features | `turso-local,sail-local` |
@@ -629,9 +640,9 @@ Accepted revisions:
 - [`lakecat@c1abd976`](https://github.com/querygraph/lakecat/commit/c1abd976)
   completes standard table lifecycle behavior, including governed registration
   and atomic same-warehouse rename; and
-- [`lakecat@335f94ef`](https://github.com/querygraph/lakecat/commit/335f94ef)
+- [`lakecat@af442023`](https://github.com/querygraph/lakecat/commit/af44202398dc49a68bc8545d55a8bb1045fe3d40)
   normalizes valid Iceberg no-snapshot state at the durable commit-evidence
-  boundary, with [`lakecat@762527c7`](https://github.com/querygraph/lakecat/commit/762527c7)
+  boundary, with [`lakecat@ef94b550`](https://github.com/querygraph/lakecat/commit/ef94b5508e94554f51f4764af932cbb819ae3e41)
   carrying the exact regenerated reader artifacts used by the accepted runtime.
 
 The neutral source of detail is catalog-bench's
@@ -647,7 +658,7 @@ LakeCat's durable protocol and governance contract is
 | Candidate profile | `catalog-community-current-2026-08-26-linux-arm64`, SHA-256 `a8d86ab535ac84780ad3694775deec7ae74556ccdf4ed9bf65f97335a18edf52` |
 | Scenario | `iceberg-rest.table.behavior` version 1, SHA-256 `50237ef4dfefb2e3f58f0cca3d6a0550c6b7d08a3cceccf4ecc68d5a606fe6e9` |
 | Runner executable | SHA-256 `e2f1d622640a3dc987322c185a2ff369f6612780ed62ae57651f2c57bbcfb3a7`; 3,609,344 bytes |
-| LakeCat source | `762527c7d27730dd789cf41b1cdee021ab712aef`, version `0.3.0-31-g762527c7` |
+| LakeCat source | `ef94b5508e94554f51f4764af932cbb819ae3e41`, version `0.3.0-32-gef94b550` |
 | LakeCat executable | SHA-256 `70bc7d84b5c08a9addf52848edec4c0746f65a2680074d1c606dd2889ae60abd`; 19,560,096 bytes |
 | LakeCat local image | Linux ARM64 image ID `sha256:3936e3576bfee378e2fde0227a4a1f9f2eb6b75322291feb3b67b4fd87ae23f6`; 60,017,816 bytes |
 | Rust builder | `rust:1.97.1-bookworm@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97`, ARM64 `sha256:6e957ef098dcc77d33e310261e4ed5843bb108d5c3b5dc2b476cbc8b6caf53fa` |
