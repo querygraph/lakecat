@@ -43,6 +43,11 @@ The current implementation exposes an Iceberg REST-compatible catalog surface
 under `/catalog/v1` and a QueryGraph bootstrap bundle at
 `/querygraph/v1/bootstrap`. The bootstrap bundle projects live catalog tables
 into Croissant, CDIF, OSI, ODRL, OpenLineage, and a Grust-ready graph envelope.
+Standard table metadata can be registered through
+`POST /catalog/v1[/<warehouse>]/namespaces/<namespace>/register`; LakeCat reads
+and validates the referenced metadata object, preserves its identity and
+pointer, and records governed registration evidence. Registration is currently
+false-overwrite only.
 The full local release-readiness gate is green as of July 4, 2026 (see the
 recorded proof ref below); keep that local proof green before making release
 or cloud-automation claims. Use [RELEASE.md](RELEASE.md) for the release

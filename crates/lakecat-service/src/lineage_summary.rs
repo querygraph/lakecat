@@ -116,7 +116,7 @@ pub(crate) fn lineage_drain_event_summary(
     }
     if matches!(
         event.event_type.as_str(),
-        "table.created" | "table.loaded" | "table.deleted" | "table.restored"
+        "table.created" | "table.registered" | "table.loaded" | "table.deleted" | "table.restored"
     ) {
         let payload = event.payload.get("payload").unwrap_or(&event.payload);
         validate_table_lifecycle_event_evidence(event, payload)?;

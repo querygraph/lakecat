@@ -9,6 +9,8 @@ use url::Url;
 
 use crate::*;
 
+pub(crate) const MAX_TABLE_METADATA_BYTES: u64 = 64 * 1024 * 1024;
+
 /// Process-global cache of constructed object stores, keyed by scheme+authority
 /// (one client per bucket/host). Building an object store — credential-chain
 /// resolution, the HTTP client, and its connection pool — is expensive; the
@@ -103,6 +105,34 @@ pub(crate) async fn write_metadata_object(
     })
 }
 
+pub(crate) async fn read_metadata_object(
+    location: &str,
+) -> Result<serde_json::Value, LakeCatError> {
+    validate_metadata_object_location_shape(location)?;
+    let (store, object_path) = metadata_object_store(location)?;
+    let result = store
+        .get(&object_path)
+        .await
+        .map_err(|err| metadata_object_read_error(location, err))?;
+    if result.meta.size > MAX_TABLE_METADATA_BYTES {
+        return Err(metadata_object_size_error(location, result.meta.size));
+    }
+    let bytes = result
+        .bytes()
+        .await
+        .map_err(|err| metadata_object_read_error(location, err))?;
+    if bytes.len() as u64 > MAX_TABLE_METADATA_BYTES {
+        return Err(metadata_object_size_error(location, bytes.len() as u64));
+    }
+    serde_json::from_slice(&bytes).map_err(|err| {
+        LakeCatError::InvalidArgument(format!(
+            "metadata object {} is not valid JSON: {}",
+            metadata_location_hash_context(location),
+            error_detail_hash_context(err)
+        ))
+    })
+}
+
 pub(crate) fn validate_planned_metadata_location(
     commit_plan: &lakecat_core::sail::CommitPlan,
     current_metadata_location: Option<&str>,
@@ -134,30 +164,7 @@ pub(crate) fn validate_metadata_object_location(
             metadata_location_hash_context(new_metadata_location)
         )));
     }
-    if location_has_dot_path_segment(new_metadata_location) {
-        return Err(LakeCatError::InvalidArgument(format!(
-            "metadata object location {} must not contain dot path segments",
-            metadata_location_hash_context(new_metadata_location)
-        )));
-    }
-    if location_has_query_or_fragment(new_metadata_location) {
-        return Err(LakeCatError::InvalidArgument(format!(
-            "metadata object location {} must not include query strings or fragments",
-            metadata_location_hash_context(new_metadata_location)
-        )));
-    }
-    if location_has_userinfo(new_metadata_location) {
-        return Err(LakeCatError::InvalidArgument(format!(
-            "metadata object location {} must not include userinfo",
-            metadata_location_hash_context(new_metadata_location)
-        )));
-    }
-    if location_has_credential_marker(new_metadata_location) {
-        return Err(LakeCatError::InvalidArgument(format!(
-            "metadata object location {} must not contain credential material",
-            metadata_location_hash_context(new_metadata_location)
-        )));
-    }
+    validate_metadata_object_location_shape(new_metadata_location)?;
     if !location_is_strictly_within_prefix(
         new_metadata_location,
         storage_profile.location_prefix.as_str(),
@@ -166,6 +173,36 @@ pub(crate) fn validate_metadata_object_location(
             "metadata object location {} is outside the selected storage profile prefix or is not a child object; storage-profile-prefix-hash={}",
             metadata_location_hash_context(new_metadata_location),
             content_hash_bytes(storage_profile.location_prefix.as_bytes())
+        )));
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_metadata_object_location_shape(
+    metadata_location: &str,
+) -> Result<(), LakeCatError> {
+    if location_has_dot_path_segment(metadata_location) {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "metadata object location {} must not contain dot path segments",
+            metadata_location_hash_context(metadata_location)
+        )));
+    }
+    if location_has_query_or_fragment(metadata_location) {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "metadata object location {} must not include query strings or fragments",
+            metadata_location_hash_context(metadata_location)
+        )));
+    }
+    if location_has_userinfo(metadata_location) {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "metadata object location {} must not include userinfo",
+            metadata_location_hash_context(metadata_location)
+        )));
+    }
+    if location_has_credential_marker(metadata_location) {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "metadata object location {} must not contain credential material",
+            metadata_location_hash_context(metadata_location)
         )));
     }
     Ok(())
@@ -315,6 +352,24 @@ pub(crate) fn metadata_object_write_error(
         "failed to write metadata object {}: {}",
         metadata_location_hash_context(metadata_location),
         error_detail_hash_context(err)
+    ))
+}
+
+pub(crate) fn metadata_object_read_error(
+    metadata_location: &str,
+    err: impl std::fmt::Display,
+) -> LakeCatError {
+    LakeCatError::InvalidArgument(format!(
+        "failed to read metadata object {}: {}",
+        metadata_location_hash_context(metadata_location),
+        error_detail_hash_context(err)
+    ))
+}
+
+pub(crate) fn metadata_object_size_error(metadata_location: &str, size: u64) -> LakeCatError {
+    LakeCatError::InvalidArgument(format!(
+        "metadata object {} has {size} bytes, exceeding the {MAX_TABLE_METADATA_BYTES}-byte safety limit",
+        metadata_location_hash_context(metadata_location)
     ))
 }
 

@@ -1086,7 +1086,9 @@ pub(crate) fn outbox_principal(event: &OutboxEvent) -> Result<Principal, LakeCat
 
 pub(crate) fn outbox_table_projection(event_type: &str) -> Option<(GraphAction, LineageEventType)> {
     match event_type {
-        "table.created" => Some((GraphAction::Created, LineageEventType::TableCreated)),
+        "table.created" | "table.registered" => {
+            Some((GraphAction::Created, LineageEventType::TableCreated))
+        }
         "table.loaded" => Some((GraphAction::Loaded, LineageEventType::TableLoaded)),
         "table.scan-planned" => {
             Some((GraphAction::PlannedScan, LineageEventType::TableScanPlanned))

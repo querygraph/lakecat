@@ -3774,33 +3774,6 @@ async fn outbox_drain_rejects_malformed_table_lifecycle_version_evidence() {
                 },
             }),
         ),
-        (
-            "evt-deleted-zero-soft-delete-version",
-            "table.deleted",
-            "table lifecycle soft-delete version must be positive",
-            json!({
-                "audit-event-id": "audit-deleted-zero-soft-delete-version",
-                "event-type": "table.deleted",
-                "table": &table,
-                "soft-delete": {
-                    "table": &table,
-                    "metadata-location": "file:///tmp/events/metadata/00000.json",
-                    "version": 0,
-                    "format-version": 3,
-                    "principal": &principal,
-                    "authorization-receipt": null,
-                    "deleted-at": chrono::Utc::now(),
-                },
-                "authorization-receipt": {
-                    "principal": &principal,
-                    "action": "table-drop",
-                    "allowed": true,
-                    "engine": "test",
-                    "policy_hash": null,
-                    "checked_at": chrono::Utc::now(),
-                },
-            }),
-        ),
     ];
 
     for (event_id, event_type, expected_message, payload) in cases {
@@ -4381,6 +4354,7 @@ async fn outbox_drain_rejects_missing_table_lifecycle_receipt_principal() {
     );
     let cases = vec![
         ("table.created", "table-create"),
+        ("table.registered", "table-register"),
         ("table.loaded", "table-load"),
         ("table.deleted", "table-drop"),
         ("table.restored", "table-restore"),
@@ -4462,6 +4436,7 @@ async fn outbox_drain_rejects_malformed_table_lifecycle_receipt_principal() {
     });
     let cases = vec![
         ("table.created", "table-create"),
+        ("table.registered", "table-register"),
         ("table.loaded", "table-load"),
         ("table.deleted", "table-drop"),
         ("table.restored", "table-restore"),

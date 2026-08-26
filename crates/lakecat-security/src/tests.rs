@@ -675,6 +675,24 @@ fn table_capabilities_require_matching_allowed_receipts() {
             .expect("matching create receipt should mint capability");
     assert_eq!(create_capability.table(), capability.table());
 
+    let register_receipt = AuthorizationReceipt {
+        principal: Principal {
+            subject: "agent:writer".to_string(),
+            kind: PrincipalKind::Agent,
+        },
+        action: CatalogAction::TableRegister,
+        table: Some(capability.table().clone()),
+        allowed: true,
+        engine: "test".to_string(),
+        policy_hash: None,
+        context: serde_json::json!({}),
+        checked_at: Utc::now(),
+    };
+    let register_capability =
+        TableRegisterCapability::from_receipt(register_receipt, capability.table().clone())
+            .expect("matching register receipt should mint capability");
+    assert_eq!(register_capability.table(), capability.table());
+
     let credentials_receipt = AuthorizationReceipt {
         principal: Principal {
             subject: "agent:reader".to_string(),

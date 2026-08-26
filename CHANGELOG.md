@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Iceberg REST table registration: implemented the canonical default and
+  warehouse-prefixed `registerTable` routes with typed request models,
+  `table.register` authorization, namespace-first validation, size-bounded
+  object-store reads, exact metadata/UUID preservation, storage-profile scope
+  checks, duplicate protection, and governed `table.registered` graph/lineage
+  replay. Registration currently rejects `overwrite=true` before metadata
+  access. Soft-delete evidence now serializes canonical kebab-case fields while
+  accepting persisted snake_case rows, and correctly permits deletion of a
+  freshly created version-zero table. Added wire, capability, redaction,
+  oversize, round-trip, duplicate, and full replay regressions.
+
 - Iceberg table metadata durability: standard schema-based `createTable` now
   performs a create-only write of the generated initial metadata document before
   admitting the catalog pointer. The same storage-profile containment and

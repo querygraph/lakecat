@@ -17,6 +17,7 @@ mod responses;
 mod router;
 mod scan;
 mod state;
+mod table_registration;
 
 pub(crate) use commit::*;
 pub use error::*;
@@ -30,6 +31,7 @@ pub(crate) use responses::*;
 pub use router::*;
 pub(crate) use scan::*;
 pub use state::*;
+pub(crate) use table_registration::*;
 
 pub(crate) use evidence::*;
 

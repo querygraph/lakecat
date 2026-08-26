@@ -1126,14 +1126,22 @@ impl ViewColumnRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "kebab-case")]
 pub struct SoftDeleteRecord {
     pub table: TableIdent,
+    #[serde(alias = "metadata_location")]
     pub metadata_location: Option<String>,
     pub version: u64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "format_version"
+    )]
     pub format_version: Option<i32>,
     pub principal: Principal,
+    #[serde(alias = "authorization_receipt")]
     pub authorization_receipt: Option<Value>,
+    #[serde(alias = "deleted_at")]
     pub deleted_at: DateTime<Utc>,
 }
 

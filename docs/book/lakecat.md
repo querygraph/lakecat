@@ -1096,6 +1096,25 @@ immutable audit and outbox evidence remains. Recreating the same namespace
 therefore starts a clean catalog lifecycle instead of exposing or colliding with
 an old tombstone.
 
+The optional standard `registerTable` operation is available at the canonical
+default and warehouse-prefixed routes. LakeCat first authorizes the destination
+as `table.register`, proves its namespace exists, and only then reads the
+client-provided metadata location through the cached `object_store` seam. The
+document is bounded to 64 MiB, must be valid Iceberg metadata with a nonempty
+table location, and must place its metadata object inside the selected storage
+profile. A successful false-overwrite registration preserves the source UUID,
+metadata body, and metadata location exactly. Duplicate identity remains a 409;
+malformed, decorated, credential-bearing, or out-of-scope locations fail with
+hash-only diagnostics. `overwrite=true` is currently rejected before object
+access rather than implementing a non-atomic pointer replacement.
+
+Registration emits `table.registered`, not `table.created`. Replay validates the
+distinct authorization action, then projects the new catalog object through the
+same Grust-created and OpenLineage-table-created vocabulary. Delete records use
+canonical kebab-case evidence while retaining read aliases for older persisted
+snake_case rows; version zero is valid evidence when a newly registered table is
+dropped before its first commit.
+
 The memory store keeps namespace identity and properties in one atomic map.
 Turso keeps the original namespace identity row plus a transactional property
 side row; legacy rows without that side row load as empty and materialize on
@@ -1877,7 +1896,8 @@ the evidence needed to check that statement.
 The `0.3.0` catalog spine includes:
 
 - standard Iceberg REST config, namespace, table-load, table-create,
-  `listTables`, and table-commit paths, including warehouse-prefixed routing;
+  false-overwrite table-register, `listTables`, and table-commit paths,
+  including warehouse-prefixed routing;
 - the Rust service and `CatalogStore` seam with Turso-backed durable state and
   memory-store parity for embedded tests;
 - metadata-pointer compare-and-swap, pointer history, idempotent replay, audit,

@@ -27,6 +27,10 @@ pub fn app(state: LakeCatState) -> Router {
             get(list_tables_for_warehouse).post(create_table_for_warehouse),
         )
         .route(
+            "/catalog/v1/{warehouse}/namespaces/{namespace}/register",
+            post(register_table_for_warehouse),
+        )
+        .route(
             "/catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}",
             // Iceberg REST `updateTable` is a bare POST on the table path. The
             // `/commit` route below is kept as a LakeCat alias.
@@ -80,6 +84,10 @@ pub fn app(state: LakeCatState) -> Router {
         .route(
             "/catalog/v1/namespaces/{namespace}/tables",
             get(list_tables).post(create_table),
+        )
+        .route(
+            "/catalog/v1/namespaces/{namespace}/register",
+            post(register_table),
         )
         .route(
             "/catalog/v1/namespaces/{namespace}/tables/{table}",

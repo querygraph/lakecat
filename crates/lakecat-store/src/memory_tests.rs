@@ -5,6 +5,50 @@ use lakecat_core::{AuditStamp, Principal, TableName, content_hash_bytes, content
 
 use super::*;
 
+#[test]
+fn soft_delete_records_write_canonical_fields_and_read_legacy_aliases() {
+    let record = SoftDeleteRecord {
+        table: table_ident("local", "default", "events").unwrap(),
+        metadata_location: Some("file:///tmp/events/metadata/00000.json".to_string()),
+        version: 0,
+        format_version: Some(2),
+        principal: Principal::anonymous(),
+        authorization_receipt: Some(serde_json::json!({"allowed": true})),
+        deleted_at: Utc::now(),
+    };
+
+    let canonical = serde_json::to_value(&record).unwrap();
+    for field in [
+        "metadata-location",
+        "format-version",
+        "authorization-receipt",
+        "deleted-at",
+    ] {
+        assert!(canonical.get(field).is_some(), "missing canonical {field}");
+    }
+    for field in [
+        "metadata_location",
+        "format_version",
+        "authorization_receipt",
+        "deleted_at",
+    ] {
+        assert!(canonical.get(field).is_none(), "serialized legacy {field}");
+    }
+
+    let mut legacy = canonical.as_object().unwrap().clone();
+    for (canonical, alias) in [
+        ("metadata-location", "metadata_location"),
+        ("format-version", "format_version"),
+        ("authorization-receipt", "authorization_receipt"),
+        ("deleted-at", "deleted_at"),
+    ] {
+        let value = legacy.remove(canonical).unwrap();
+        legacy.insert(alias.to_string(), value);
+    }
+    let decoded: SoftDeleteRecord = serde_json::from_value(Value::Object(legacy)).unwrap();
+    assert_eq!(decoded, record);
+}
+
 #[tokio::test]
 async fn memory_store_persists_server_records() {
     let store = MemoryCatalogStore::new();

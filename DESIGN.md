@@ -1569,14 +1569,14 @@ Raw lineage-drain summary extraction must apply those same validators for
 `namespace.dropped`, including count-bound and duplicate-free namespace
 inventory, event-matching receipt actions, closed wrappers, and namespace path
 validation before compact QGLake standard catalog proof inherits the evidence.
-Table lifecycle replay for create, load, delete, and restore events must carry
+Table lifecycle replay for create, register, load, delete, and restore events must carry
 the same valid authorization receipt principal plus an event-matching catalog
 action, affirmative allowed decision, non-empty engine, and RFC3339 `checked_at`
 timestamp before projection, so table lifecycle graph/OpenLineage facts cannot
 be actorless or action-drifted even when the standard Iceberg REST response
 shape remains unchanged.
 Service replay must also close the top-level table lifecycle payload schema
-over the fields current producers emit, so create/load/delete/restore replay
+over the fields current producers emit, so create/register/load/delete/restore replay
 cannot append unverified table lifecycle, storage, lineage, graph, QueryGraph,
 or application claims beside checked table identity, version, format-version,
 soft-delete, location, and authorization evidence. Service replay now also
@@ -1595,11 +1595,11 @@ projection; reusable graph taxonomy and richer projection semantics remain
 Grust-owned.
 Raw lineage-drain summary extraction must apply the same table lifecycle
 validators before compact QGLake proof inherits archived replay evidence, so
-`table.created`, `table.loaded`, `table.deleted`, and `table.restored`
+`table.created`, `table.registered`, `table.loaded`, `table.deleted`, and `table.restored`
 summaries reject malformed wrappers, unverified metadata-graph claims,
 duplicate soft-delete format-version aliases, invalid locations, invalid
 format versions, and action-drifted receipts just as full service replay does.
-Create, load, and restore replay must also carry both the unsigned table
+Create, register, load, and restore replay must also carry both the unsigned table
 version that current producers emit and positive Iceberg `format-version`
 evidence. Delete replay carries the same pointer-generation and table-format
 evidence through required `soft-delete.version` and `soft-delete.format_version`

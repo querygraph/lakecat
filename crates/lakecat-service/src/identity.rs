@@ -7,8 +7,9 @@ use lakecat_security::{
     NamespaceLoadCapability, NamespaceUpdateCapability, PolicyManageCapability,
     ProjectManageCapability, ReadRestriction, ServerManageCapability,
     StorageProfileManageCapability, TableCommitCapability, TableCreateCapability,
-    TableDropCapability, TableLoadCapability, TableRestoreCapability, TableScanCapability,
-    ViewDropCapability, ViewLoadCapability, ViewManageCapability, WarehouseManageCapability,
+    TableDropCapability, TableLoadCapability, TableRegisterCapability, TableRestoreCapability,
+    TableScanCapability, ViewDropCapability, ViewLoadCapability, ViewManageCapability,
+    WarehouseManageCapability,
 };
 use serde_json::{Value, json};
 
@@ -378,6 +379,21 @@ pub(crate) async fn authorize_table_create(
     )
     .await?;
     Ok(TableCreateCapability::from_receipt(receipt, table)?)
+}
+
+pub(crate) async fn authorize_table_register(
+    state: &LakeCatState,
+    identity: RequestIdentity,
+    table: TableIdent,
+) -> Result<TableRegisterCapability, LakeCatHttpError> {
+    let receipt = authorize(
+        state,
+        identity,
+        CatalogAction::TableRegister,
+        Some(table.clone()),
+    )
+    .await?;
+    Ok(TableRegisterCapability::from_receipt(receipt, table)?)
 }
 
 pub(crate) async fn authorize_catalog_config(

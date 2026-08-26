@@ -30,8 +30,12 @@ Updated: 2026-08-26
   implementation slice, not C1-05 acceptance. Standard schema-based table create
   now also writes its generated initial metadata document create-only before
   pointer admission and removes that object if catalog admission fails, making
-  the returned metadata location durable enough for standard registration.
-  The optimized same-Docker rerun and register/rename coverage remain pending.
+  the returned metadata location durable enough for standard registration. The
+  standard false-overwrite register route now reads that document through the
+  bounded object-store seam, preserves its UUID and metadata pointer exactly,
+  authorizes `table.register`, and drains distinct `table.registered` evidence;
+  `overwrite=true` remains explicitly rejected. The optimized same-Docker rerun
+  and rename coverage remain pending.
 - Latest namespace compatibility correction: REST paths now decode multipart
   U+001F identifiers, list only top-level or immediate-child namespaces, reject
   a missing parent with 404, paginate deterministically with bounded opaque

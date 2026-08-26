@@ -160,7 +160,7 @@ pub(crate) fn validate_outbox_event_evidence(event: &OutboxEvent) -> Result<(), 
     }
     if matches!(
         event.event_type.as_str(),
-        "table.created" | "table.loaded" | "table.deleted" | "table.restored"
+        "table.created" | "table.registered" | "table.loaded" | "table.deleted" | "table.restored"
     ) {
         validate_table_lifecycle_event_evidence(event, payload)?;
     }
@@ -284,6 +284,7 @@ pub(crate) fn is_known_outbox_event_type(event_type: &str) -> bool {
             | "table.commit"
             | "table.commits-listed"
             | "table.created"
+            | "table.registered"
             | "table.deleted"
             | "table.loaded"
             | "table.restored"

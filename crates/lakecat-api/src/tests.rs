@@ -154,6 +154,24 @@ fn catalog_config_endpoints_advertise_canonical_iceberg_routes() {
 }
 
 #[test]
+fn register_table_request_uses_the_iceberg_wire_shape() {
+    let request: RegisterTableRequest = serde_json::from_value(serde_json::json!({
+        "name": "events",
+        "metadata-location": "s3://warehouse/events/metadata/00000.json"
+    }))
+    .unwrap();
+    assert!(!request.overwrite);
+    assert_eq!(
+        serde_json::to_value(&request).unwrap(),
+        serde_json::json!({
+            "name": "events",
+            "metadata-location": "s3://warehouse/events/metadata/00000.json",
+            "overwrite": false
+        })
+    );
+}
+
+#[test]
 fn catalog_config_endpoints_exclude_mount_and_control_plane_routes() {
     let endpoints = CatalogConfigResponse::default()
         .endpoints
@@ -205,7 +223,7 @@ fn list_tables_response_serializes_as_identifier_objects() {
 }
 
 #[test]
-fn catalog_config_endpoints_advertise_table_list_routes() {
+fn catalog_config_endpoints_advertise_table_collection_and_registration_routes() {
     let endpoints = CatalogConfigResponse::default()
         .endpoints
         .into_iter()
@@ -214,6 +232,7 @@ fn catalog_config_endpoints_advertise_table_list_routes() {
     // listTables is represented once with the OpenAPI `{prefix}` placeholder;
     // deployment mount aliases do not belong in protocol capability data.
     assert!(endpoints.contains("GET /v1/{prefix}/namespaces/{namespace}/tables"));
+    assert!(endpoints.contains("POST /v1/{prefix}/namespaces/{namespace}/register"));
 }
 
 #[test]

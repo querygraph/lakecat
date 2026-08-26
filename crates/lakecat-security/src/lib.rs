@@ -568,6 +568,9 @@ impl<Action, Resource> Capability<Action, Resource> {
 pub struct CanCreateTable;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanRegisterTable;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanLoadTable;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -634,6 +637,7 @@ pub struct CanUpdateNamespace;
 pub struct CanDropNamespace;
 
 pub type TableCreateCapability = Capability<CanCreateTable, TableIdent>;
+pub type TableRegisterCapability = Capability<CanRegisterTable, TableIdent>;
 pub type TableLoadCapability = Capability<CanLoadTable, TableIdent>;
 pub type TableCommitCapability = Capability<CanCommitTable, TableIdent>;
 pub type TableDropCapability = Capability<CanDropTable, TableIdent>;
@@ -660,6 +664,21 @@ pub type NamespaceDropCapability = Capability<CanDropNamespace, ()>;
 impl TableCreateCapability {
     pub fn from_receipt(receipt: AuthorizationReceipt, table: TableIdent) -> LakeCatResult<Self> {
         table_capability_from_receipt(receipt, table, CatalogAction::TableCreate, "create table")
+    }
+
+    pub fn table(&self) -> &TableIdent {
+        self.resource()
+    }
+}
+
+impl TableRegisterCapability {
+    pub fn from_receipt(receipt: AuthorizationReceipt, table: TableIdent) -> LakeCatResult<Self> {
+        table_capability_from_receipt(
+            receipt,
+            table,
+            CatalogAction::TableRegister,
+            "register table",
+        )
     }
 
     pub fn table(&self) -> &TableIdent {

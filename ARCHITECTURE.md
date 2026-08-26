@@ -320,12 +320,17 @@ Current implementation status: `lakecat-store` has an opt-in `turso-local`
 feature with a Turso-backed `TursoCatalogStore` for namespaces, tables, metadata
 pointer history, idempotency records, audit events, and outbox rows. The service
 binary uses it when built with `turso-local` and `LAKECAT_TURSO_PATH` is set.
-Table commits now write metadata objects through the Rust `object_store` URL
-dispatch seam when commit plans carry new metadata, advance table pointers
-through compare-and-swap, persist idempotency/audit/outbox records with both the
+Initial table creation and later commits write metadata objects through the Rust
+`object_store` URL dispatch seam. Standard false-overwrite registration uses the
+same cached object-store clients to read a bounded existing metadata document,
+then validates its Iceberg shape, table location, and selected storage-profile
+scope before catalog admission. Commits advance table pointers through
+compare-and-swap, persist idempotency/audit/outbox records with both the
 normalized request hash and stored response hash plus compact format-version,
 snapshot-id, and policy-hash summary evidence, and expose a service-level drain
-that projects committed events to graph and lineage sinks.
+that projects committed events to graph and lineage sinks. Registration emits a
+distinct governed `table.registered` event which projects as creation of the
+catalog object without relabeling the client operation as `createTable`.
 Outbox draining is all-or-retry across each selected batch. Embedded and Turso
 stores expose the same pending prefix by ordering on `created_at,event_id`
 before applying the caller's batch limit; if a later graph or lineage

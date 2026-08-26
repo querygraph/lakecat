@@ -145,7 +145,7 @@ pub(crate) fn validate_table_lifecycle_event_evidence(
     validate_table_lifecycle_payload_scope(event, payload, &table, "table lifecycle")?;
     if matches!(
         event.event_type.as_str(),
-        "table.created" | "table.loaded" | "table.restored"
+        "table.created" | "table.registered" | "table.loaded" | "table.restored"
     ) {
         require_positive_i64_field(event, payload, "format-version", "table lifecycle")?;
         if payload.get("version").and_then(Value::as_u64).is_none() {
@@ -202,14 +202,6 @@ pub(crate) fn validate_table_lifecycle_event_evidence(
             return Err(outbox_evidence_error(
                 event,
                 "table lifecycle soft-delete evidence must contain unsigned version",
-            ));
-        }
-        if event.event_type == "table.deleted"
-            && soft_delete.get("version").and_then(Value::as_u64) == Some(0)
-        {
-            return Err(outbox_evidence_error(
-                event,
-                "table lifecycle soft-delete version must be positive",
             ));
         }
         require_positive_i64_field(

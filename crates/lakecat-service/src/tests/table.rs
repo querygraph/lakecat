@@ -75,6 +75,20 @@ use url::Url;
 use super::common::*;
 use crate::*;
 
+async fn collect_json_response(response: Response) -> (StatusCode, Value) {
+    let status = response.status();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let value = serde_json::from_slice(&body).unwrap_or_else(|error| {
+        panic!(
+            "response body was not JSON ({error}): {}",
+            String::from_utf8_lossy(&body)
+        )
+    });
+    (status, value)
+}
+
 #[tokio::test]
 async fn create_table_generates_metadata_from_standard_schema() {
     // Spec `createTable`: client sends name + schema (no metadata, no
@@ -240,6 +254,273 @@ async fn failed_standard_create_removes_its_uncommitted_metadata_object() {
     if root.exists() {
         std::fs::remove_dir_all(root).unwrap();
     }
+}
+
+#[tokio::test]
+async fn standard_register_round_trips_dropped_table_metadata_and_replay_evidence() {
+    let store = MemoryCatalogStore::new();
+    let governance = Arc::new(RecordingGovernance::default());
+    let mut state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone());
+    state.governance = governance.clone();
+    let app = app(state);
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
+    let root = std::env::temp_dir().join(format!(
+        "lakecat-register-round-trip-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let table_location = Url::from_directory_path(root.join("events"))
+        .expect("temporary table location must be a file URL")
+        .to_string();
+    let create = Request::builder()
+        .method(Method::POST)
+        .uri("/catalog/v1/namespaces/default/tables")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "name": "events",
+                "location": table_location,
+                "schema": {
+                    "type": "struct",
+                    "schema-id": 0,
+                    "fields": [{
+                        "id": 1,
+                        "name": "id",
+                        "required": true,
+                        "type": "long"
+                    }]
+                },
+                "properties": {"owner": "registration-proof"}
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let (status, created) = collect_json_response(app.clone().oneshot(create).await.unwrap()).await;
+    assert_eq!(status, StatusCode::OK, "create failed: {created}");
+    let metadata_location = created["metadata-location"].as_str().unwrap().to_string();
+    let source_uuid = created["metadata"]["table-uuid"].clone();
+
+    let drop_source = Request::builder()
+        .method(Method::DELETE)
+        .uri("/catalog/v1/namespaces/default/tables/events?purgeRequested=false")
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(drop_source).await.unwrap().status(),
+        StatusCode::NO_CONTENT
+    );
+
+    let register = Request::builder()
+        .method(Method::POST)
+        .uri("/catalog/v1/namespaces/default/register")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "name": "events_registered",
+                "metadata-location": metadata_location,
+                "overwrite": false
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let (status, registered) =
+        collect_json_response(app.clone().oneshot(register).await.unwrap()).await;
+    assert_eq!(status, StatusCode::OK, "register failed: {registered}");
+    assert_eq!(
+        registered["metadata-location"],
+        created["metadata-location"]
+    );
+    assert_eq!(registered["metadata"], created["metadata"]);
+    assert_eq!(registered["metadata"]["table-uuid"], source_uuid);
+    assert_eq!(registered["identifier"]["name"], "events_registered");
+
+    let duplicate = Request::builder()
+        .method(Method::POST)
+        .uri("/catalog/v1/namespaces/default/register")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "name": "events_registered",
+                "metadata-location": metadata_location,
+                "overwrite": false
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let (status, duplicate) =
+        collect_json_response(app.clone().oneshot(duplicate).await.unwrap()).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(duplicate["error"]["type"], "AlreadyExistsException");
+
+    let load = Request::builder()
+        .method(Method::GET)
+        .uri("/catalog/v1/namespaces/default/tables/events_registered")
+        .body(Body::empty())
+        .unwrap();
+    let (status, loaded) = collect_json_response(app.clone().oneshot(load).await.unwrap()).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(loaded["metadata-location"], created["metadata-location"]);
+    assert_eq!(loaded["metadata"], created["metadata"]);
+
+    assert!(
+        governance
+            .actions
+            .lock()
+            .await
+            .contains(&CatalogAction::TableRegister)
+    );
+    let events = store.pending_outbox_events(None, 100).await.unwrap();
+    let registered_event = events
+        .iter()
+        .find(|event| event.event_type == "table.registered")
+        .expect("register must emit durable replay evidence");
+    assert_eq!(
+        registered_event
+            .payload
+            .pointer("/payload/authorization-receipt/action"),
+        Some(&json!("table-register"))
+    );
+
+    let drain = Request::builder()
+        .method(Method::POST)
+        .uri("/management/v1/lineage/drain")
+        .body(Body::empty())
+        .unwrap();
+    let (status, drained) = collect_json_response(app.clone().oneshot(drain).await.unwrap()).await;
+    assert_eq!(status, StatusCode::OK, "lineage drain failed: {drained}");
+    assert!(
+        drained["event-types"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("table.registered"))
+    );
+    assert!(
+        store
+            .pending_outbox_events(None, 100)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
+async fn register_rejects_missing_namespace_before_metadata_access() {
+    let sensitive_location = "not-a-uri/registration-secret/metadata.json";
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/catalog/v1/namespaces/absent/register")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "name": "events",
+                "metadata-location": sensitive_location
+            })
+            .to_string(),
+        ))
+        .unwrap();
+
+    let (status, response) =
+        collect_json_response(test_app().oneshot(request).await.unwrap()).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(response["error"]["type"], "NoSuchNamespaceException");
+    assert!(!response.to_string().contains(sensitive_location));
+}
+
+#[tokio::test]
+async fn register_rejects_overwrite_before_metadata_access() {
+    let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
+    let sensitive_location = "not-a-uri/registration-secret/metadata.json";
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/catalog/v1/namespaces/default/register")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "name": "events",
+                "metadata-location": sensitive_location,
+                "overwrite": true
+            })
+            .to_string(),
+        ))
+        .unwrap();
+
+    let (status, response) = collect_json_response(app.oneshot(request).await.unwrap()).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(response["error"]["type"], "BadRequestException");
+    assert!(!response.to_string().contains(sensitive_location));
+}
+
+#[tokio::test]
+async fn register_rejects_malformed_metadata_without_catalog_mutation() {
+    let store = MemoryCatalogStore::new();
+    let app = app(LakeCatState::new(
+        WarehouseName::new("local").unwrap(),
+        store.clone(),
+    ));
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
+    let root =
+        std::env::temp_dir().join(format!("lakecat-register-invalid-{}", uuid::Uuid::new_v4()));
+    let metadata_path = root.join("events/metadata/00000.json");
+    std::fs::create_dir_all(metadata_path.parent().unwrap()).unwrap();
+    std::fs::write(&metadata_path, b"not valid JSON: registration-secret").unwrap();
+    let metadata_location = Url::from_file_path(&metadata_path)
+        .expect("temporary metadata path must be a file URL")
+        .to_string();
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/catalog/v1/namespaces/default/register")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "name": "events",
+                "metadata-location": metadata_location
+            })
+            .to_string(),
+        ))
+        .unwrap();
+
+    let (status, response) = collect_json_response(app.oneshot(request).await.unwrap()).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let evidence = response.to_string();
+    assert!(evidence.contains("metadata-location-hash=sha256:"));
+    assert!(!evidence.contains(&metadata_location));
+    assert!(!evidence.contains("registration-secret"));
+    assert!(
+        store
+            .list_tables(&WarehouseName::new("local").unwrap())
+            .await
+            .unwrap()
+            .is_empty()
+    );
+
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
+async fn metadata_reader_rejects_oversized_objects_without_collecting_them() {
+    let root = std::env::temp_dir().join(format!(
+        "lakecat-register-oversized-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let metadata_path = root.join("events/metadata/00000.json");
+    std::fs::create_dir_all(metadata_path.parent().unwrap()).unwrap();
+    let file = std::fs::File::create(&metadata_path).unwrap();
+    file.set_len(MAX_TABLE_METADATA_BYTES + 1).unwrap();
+    let metadata_location = Url::from_file_path(&metadata_path)
+        .expect("temporary metadata path must be a file URL")
+        .to_string();
+
+    let error = read_metadata_object(&metadata_location)
+        .await
+        .expect_err("oversized metadata must be rejected from object metadata");
+    let message = error.to_string();
+    assert!(message.contains("exceeding the"));
+    assert!(message.contains("metadata-location-hash=sha256:"));
+    assert!(!message.contains(&metadata_location));
+
+    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

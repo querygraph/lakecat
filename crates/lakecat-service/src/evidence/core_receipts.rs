@@ -685,6 +685,7 @@ pub(crate) fn authorization_receipt_action_matches_event(
         "table.commit" => matches!(action, CatalogAction::TableCommit),
         "table.commits-listed" | "table.loaded" => matches!(action, CatalogAction::TableLoad),
         "table.created" => matches!(action, CatalogAction::TableCreate),
+        "table.registered" => matches!(action, CatalogAction::TableRegister),
         "table.deleted" => matches!(action, CatalogAction::TableDrop),
         "table.restored" => matches!(action, CatalogAction::TableRestore),
         "table.scan-planned" | "table.scan-tasks-fetched" => {
