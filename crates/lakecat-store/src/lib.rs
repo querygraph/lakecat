@@ -326,6 +326,10 @@ mod memory_tests;
 #[cfg(test)]
 mod namespace_tests;
 #[cfg(test)]
+mod records_tests;
+#[cfg(test)]
+mod table_commit_tests;
+#[cfg(test)]
 mod table_rename_tests;
 
 #[cfg(feature = "turso-local")]

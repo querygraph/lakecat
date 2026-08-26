@@ -2280,7 +2280,7 @@ async fn turso_store_rejects_malformed_commit_history_records() {
     ));
 
     let mut negative_snapshot_record = base_record.clone();
-    negative_snapshot_record.snapshot_id = Some(-1);
+    negative_snapshot_record.snapshot_id = Some(-2);
     conn.execute(
         "update metadata_pointer_log set record_json = ?2 where table_key = ?1",
         (

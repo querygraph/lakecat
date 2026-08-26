@@ -508,7 +508,10 @@ Three invariant groups make this safe, each enforced once:
 Commit records carry compact evidence — Iceberg format version, current snapshot
 id, request/response/idempotency/policy hashes, principal — so operators and
 QueryGraph can answer audit questions from the pointer log without parsing full
-metadata. Operators read it through a governed endpoint:
+metadata. Iceberg's `current-snapshot-id: -1` sentinel for a table with no current
+snapshot is represented as LakeCat's established zero-valued no-snapshot evidence;
+other negative snapshot ids remain invalid. Operators read the log through a
+governed endpoint:
 
 ```sh
 curl -s -H 'x-lakecat-principal: operator@example.com' \

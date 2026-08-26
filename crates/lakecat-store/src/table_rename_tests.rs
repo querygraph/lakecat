@@ -230,6 +230,69 @@ async fn exercise_table_rename_contract(store: Arc<dyn CatalogStore>) {
     );
 }
 
+async fn exercise_no_snapshot_commit_rename_contract(store: Arc<dyn CatalogStore>) {
+    let warehouse = WarehouseName::new("local").unwrap();
+    let namespace = "default".parse::<Namespace>().unwrap();
+    store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
+    let source = ident(&warehouse, &namespace, "empty_events");
+    let destination = ident(&warehouse, &namespace, "renamed_empty_events");
+    let mut initial = table(source.clone());
+    initial.metadata["format-version"] = json!(2);
+    initial.metadata["current-snapshot-id"] = json!(-1);
+    store.create_table(initial).await.unwrap();
+
+    store
+        .commit_table(
+            &source,
+            TableCommit {
+                requirements: Vec::new(),
+                updates: vec![json!({
+                    "action": "set-properties",
+                    "updates": {"catalog-bench.state": "after"},
+                })],
+                expected_previous_metadata_location: Some(
+                    "file:///tmp/events/metadata/00000.json".to_string(),
+                ),
+                new_metadata_location: Some("file:///tmp/events/metadata/00001.json".to_string()),
+                new_metadata: Some(json!({
+                    "format-version": 2,
+                    "table-uuid": "b3b373c2-017a-4fa8-97f8-7f16cb555402",
+                    "current-snapshot-id": -1,
+                    "properties": {"catalog-bench.state": "after"},
+                })),
+                idempotency_key: None,
+                idempotency_request_hash: None,
+                principal: Principal::anonymous(),
+                authorization_receipt: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    let records = store.table_commit_records(&source, 0, None).await.unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].snapshot_id, Some(0));
+
+    store
+        .rename_table(&source, &destination, Principal::anonymous(), None)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        store.load_table(&destination).await.unwrap().ident,
+        destination
+    );
+    let renamed_records = store
+        .table_commit_records(&destination, 0, None)
+        .await
+        .unwrap();
+    assert_eq!(renamed_records.len(), 1);
+    assert_eq!(renamed_records[0].snapshot_id, Some(0));
+}
+
 async fn exercise_table_rename_failure_contract(store: Arc<dyn CatalogStore>) {
     let warehouse = WarehouseName::new("local").unwrap();
     let source_namespace = "source".parse::<Namespace>().unwrap();
@@ -322,6 +385,11 @@ async fn memory_store_satisfies_table_rename_contract() {
 }
 
 #[tokio::test]
+async fn memory_store_renames_after_no_snapshot_commit() {
+    exercise_no_snapshot_commit_rename_contract(MemoryCatalogStore::new()).await;
+}
+
+#[tokio::test]
 async fn memory_store_rejects_table_rename_without_partial_mutation() {
     exercise_table_rename_failure_contract(MemoryCatalogStore::new()).await;
 }
@@ -331,6 +399,15 @@ async fn memory_store_rejects_table_rename_without_partial_mutation() {
 async fn turso_store_satisfies_table_rename_contract() {
     exercise_table_rename_contract(turso_store::TursoCatalogStore::in_memory().await.unwrap())
         .await;
+}
+
+#[cfg(feature = "turso-local")]
+#[tokio::test]
+async fn turso_store_renames_after_no_snapshot_commit() {
+    exercise_no_snapshot_commit_rename_contract(
+        turso_store::TursoCatalogStore::in_memory().await.unwrap(),
+    )
+    .await;
 }
 
 #[cfg(feature = "turso-local")]

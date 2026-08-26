@@ -3885,7 +3885,7 @@ async fn memory_store_rejects_malformed_commit_history_records() {
     ));
 
     let mut negative_snapshot_record = base_record.clone();
-    negative_snapshot_record.snapshot_id = Some(-1);
+    negative_snapshot_record.snapshot_id = Some(-2);
     store.state.write().await.commits[0].record = negative_snapshot_record;
 
     let err = store

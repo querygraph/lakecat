@@ -6,7 +6,7 @@ use lakecat_core::{
     AuditStamp, LakeCatError, LakeCatResult, Namespace, Principal, TableIdent, TableName,
     WarehouseName, content_hash_bytes, content_hash_json,
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
 use crate::*;
@@ -286,7 +286,11 @@ pub struct TableCommitRecord {
     pub principal: Principal,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub format_version: Option<i32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_table_commit_snapshot_id"
+    )]
     pub snapshot_id: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub policy_hash: Option<String>,
@@ -448,13 +452,29 @@ pub(crate) fn table_commit_format_version(table: &TableRecord) -> Option<i32> {
 }
 
 pub(crate) fn table_commit_snapshot_id(table: &TableRecord) -> Option<i64> {
-    Some(
+    normalize_table_commit_snapshot_id(Some(
         table
             .metadata
             .get("current-snapshot-id")
             .and_then(Value::as_i64)
             .unwrap_or(0),
-    )
+    ))
+}
+
+fn deserialize_table_commit_snapshot_id<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<i64>::deserialize(deserializer).map(normalize_table_commit_snapshot_id)
+}
+
+fn normalize_table_commit_snapshot_id(snapshot_id: Option<i64>) -> Option<i64> {
+    match snapshot_id {
+        // Iceberg uses -1 for a table with no current snapshot. LakeCat commit
+        // evidence has historically represented that state as zero.
+        Some(-1) => Some(0),
+        snapshot_id => snapshot_id,
+    }
 }
 
 pub(crate) fn table_commit_policy_hash(authorization_receipt: Option<&Value>) -> Option<String> {

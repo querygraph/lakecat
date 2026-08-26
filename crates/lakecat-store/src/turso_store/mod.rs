@@ -1133,6 +1133,22 @@ impl CatalogStore for TursoCatalogStore {
         table.metadata["lakecat:version"] = serde_json::json!(table.version);
         table.metadata["lakecat:last-request-hash"] = serde_json::json!(request_hash);
 
+        let record = TableCommitRecord {
+            table: ident.clone(),
+            previous_metadata_location,
+            new_metadata_location: table.metadata_location.clone(),
+            sequence_number: table.version,
+            principal: commit.principal.clone(),
+            format_version: crate::table_commit_format_version(&table),
+            snapshot_id: crate::table_commit_snapshot_id(&table),
+            policy_hash: crate::table_commit_policy_hash(commit.authorization_receipt.as_ref()),
+            request_hash,
+            response_hash: crate::table_response_hash(&table)?,
+            idempotency_key_sha256,
+            committed_at: table.updated_at,
+        };
+        record.validate_for_table(ident)?;
+
         let updated_rows = conn
             .execute(
                 "update tables
@@ -1158,24 +1174,10 @@ impl CatalogStore for TursoCatalogStore {
             return Err(metadata_pointer_conflict(
                 ident,
                 commit.expected_previous_metadata_location.as_deref(),
-                previous_metadata_location.as_deref(),
+                record.previous_metadata_location.as_deref(),
             ));
         }
 
-        let record = TableCommitRecord {
-            table: ident.clone(),
-            previous_metadata_location,
-            new_metadata_location: table.metadata_location.clone(),
-            sequence_number: table.version,
-            principal: commit.principal.clone(),
-            format_version: crate::table_commit_format_version(&table),
-            snapshot_id: crate::table_commit_snapshot_id(&table),
-            policy_hash: crate::table_commit_policy_hash(commit.authorization_receipt.as_ref()),
-            request_hash,
-            response_hash: crate::table_response_hash(&table)?,
-            idempotency_key_sha256,
-            committed_at: table.updated_at,
-        };
         conn.execute(
             "insert into metadata_pointer_log (
                     table_key, sequence_number, previous_metadata_location,

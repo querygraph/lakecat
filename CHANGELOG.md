@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- No-snapshot commit history: Iceberg's valid `current-snapshot-id: -1`
+  sentinel now normalizes to LakeCat's established zero-valued no-snapshot
+  commit evidence instead of persisting an internally invalid negative snapshot
+  id. Legacy serialized `-1` records decode compatibly, while other negative
+  values remain rejected. Memory and Turso validate generated commit records
+  before persistence, and memory stages the next table value before mutation so
+  validation failures cannot leave partial state. Added shared create, property
+  commit, history, and rename coverage for both stores.
+
 - Iceberg REST table rename: the canonical default and warehouse-prefixed
   `renameTable` routes now perform typed source-to-destination authorization and
   return the standard empty 204 response. Memory and Turso move an active table

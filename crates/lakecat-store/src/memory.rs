@@ -495,15 +495,16 @@ impl CatalogStore for MemoryCatalogStore {
             committed_at,
             table,
         ) = {
-            let table = state
+            let current = state
                 .tables
-                .get_mut(&key)
+                .get(&key)
                 .ok_or_else(|| LakeCatError::NotFound {
                     object: "table",
                     name: ident.stable_id(),
                 })?;
-            validate_table_record_map_scope(table, &key)?;
-            validate_table_record_identity(table, ident)?;
+            validate_table_record_map_scope(current, &key)?;
+            validate_table_record_identity(current, ident)?;
+            let mut table = current.clone();
             let previous_metadata_location = table.metadata_location.clone();
             if previous_metadata_location != commit.expected_previous_metadata_location {
                 return Err(metadata_pointer_conflict(
@@ -525,7 +526,7 @@ impl CatalogStore for MemoryCatalogStore {
                 commit.new_metadata_location.clone(),
                 table.version,
                 table.updated_at,
-                table.clone(),
+                table,
             )
         };
 
@@ -543,6 +544,7 @@ impl CatalogStore for MemoryCatalogStore {
             idempotency_key_sha256,
             committed_at,
         };
+        record.validate_for_table(ident)?;
         let replay_request_hash = record.request_hash.clone();
         let audit_payload = serde_json::json!({
             "event-type": "table.commit",
@@ -559,6 +561,7 @@ impl CatalogStore for MemoryCatalogStore {
             "authorization-receipt": audit_payload["authorization-receipt"].clone(),
         });
         let outbox_event = outbox_event_from_payload(&outbox_payload, committed_at)?;
+        state.tables.insert(key, table.clone());
         state.audit_events.push(CatalogAuditEvent {
             event_type: "table.commit".to_string(),
             table: Some(ident.clone()),
