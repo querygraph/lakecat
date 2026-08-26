@@ -201,19 +201,21 @@ baseline</a></li>
 <li><a href="#workflow-examples" id="toc-workflow-examples"><span class="toc-section-number">10</span> Workflow Examples</a>
 <ul>
 <li><a href="#starting-the-catalog" id="toc-starting-the-catalog"><span class="toc-section-number">10.1</span> Starting The Catalog</a></li>
-<li><a href="#registering-the-warehouse-shape" id="toc-registering-the-warehouse-shape"><span class="toc-section-number">10.2</span> Registering The Warehouse
+<li><a href="#namespace-behavior-is-a-component-contract" id="toc-namespace-behavior-is-a-component-contract"><span class="toc-section-number">10.2</span> Namespace Behavior Is A Component
+Contract</a></li>
+<li><a href="#registering-the-warehouse-shape" id="toc-registering-the-warehouse-shape"><span class="toc-section-number">10.3</span> Registering The Warehouse
 Shape</a></li>
-<li><a href="#storage-profiles-and-credential-roots" id="toc-storage-profiles-and-credential-roots"><span class="toc-section-number">10.3</span> Storage Profiles And Credential
+<li><a href="#storage-profiles-and-credential-roots" id="toc-storage-profiles-and-credential-roots"><span class="toc-section-number">10.4</span> Storage Profiles And Credential
 Roots</a></li>
-<li><a href="#a-pyspark-user-reads-iceberg" id="toc-a-pyspark-user-reads-iceberg"><span class="toc-section-number">10.4</span> A PySpark User Reads
+<li><a href="#a-pyspark-user-reads-iceberg" id="toc-a-pyspark-user-reads-iceberg"><span class="toc-section-number">10.5</span> A PySpark User Reads
 Iceberg</a></li>
-<li><a href="#a-notebook-requests-credentials" id="toc-a-notebook-requests-credentials"><span class="toc-section-number">10.5</span> A Notebook Requests
+<li><a href="#a-notebook-requests-credentials" id="toc-a-notebook-requests-credentials"><span class="toc-section-number">10.6</span> A Notebook Requests
 Credentials</a></li>
-<li><a href="#a-view-becomes-part-of-the-catalog-story" id="toc-a-view-becomes-part-of-the-catalog-story"><span class="toc-section-number">10.6</span> A View Becomes Part Of The
+<li><a href="#a-view-becomes-part-of-the-catalog-story" id="toc-a-view-becomes-part-of-the-catalog-story"><span class="toc-section-number">10.7</span> A View Becomes Part Of The
 Catalog Story</a></li>
-<li><a href="#querygraph-bootstrap" id="toc-querygraph-bootstrap"><span class="toc-section-number">10.7</span> QueryGraph Bootstrap</a></li>
-<li><a href="#draining-the-outbox" id="toc-draining-the-outbox"><span class="toc-section-number">10.8</span> Draining The Outbox</a></li>
-<li><a href="#an-agentic-qglake-flow" id="toc-an-agentic-qglake-flow"><span class="toc-section-number">10.9</span> An Agentic QGLake Flow</a></li>
+<li><a href="#querygraph-bootstrap" id="toc-querygraph-bootstrap"><span class="toc-section-number">10.8</span> QueryGraph Bootstrap</a></li>
+<li><a href="#draining-the-outbox" id="toc-draining-the-outbox"><span class="toc-section-number">10.9</span> Draining The Outbox</a></li>
+<li><a href="#an-agentic-qglake-flow" id="toc-an-agentic-qglake-flow"><span class="toc-section-number">10.10</span> An Agentic QGLake Flow</a></li>
 </ul></li>
 <li><a href="#operating-the-books-example-system" id="toc-operating-the-books-example-system"><span class="toc-section-number">11</span> Operating The Book’s Example
 System</a></li>
@@ -1443,7 +1445,48 @@ advertised endpoints prove that the supported standard REST surface was
 present, and QueryGraph sees compact config proof only after service
 replay accepts it. Dedicated management and QueryGraph responses and
 outbox events prove those control-plane surfaces independently.</p>
-<h2 data-number="10.2" id="registering-the-warehouse-shape"><span class="header-section-number">10.2</span> Registering The Warehouse
+<h2 data-number="10.2" id="namespace-behavior-is-a-component-contract"><span class="header-section-number">10.2</span> Namespace Behavior Is A
+Component Contract</h2>
+<p>Iceberg namespaces are ordered component arrays, not dot-split
+strings. On the REST path LakeCat follows Iceberg’s default U+001F
+separator, encoded as <code>%1F</code>:
+<code>[&quot;accounting&quot;, &quot;tax&quot;]</code> loads through
+<code>/catalog/v1/namespaces/accounting%1Ftax</code>. An unscoped list
+returns top-level namespaces; <code>parent=accounting</code> first
+proves that parent exists and then returns only its immediate children.
+A missing parent is a 404 <code>NoSuchNamespaceException</code>, not an
+empty successful page.</p>
+<p>Namespace listing is component-sorted and supports bounded opaque
+<code>pageToken</code>/<code>pageSize</code> traversal. Namespace create
+and load round-trip string properties. Property updates preserve
+unmentioned keys and distinguish updated, removed, and already-missing
+keys; naming one key in both removal and update is an unchanged-state
+422 <code>UnprocessableEntityException</code>. Duplicate create is 409,
+and parent drop is rejected while child namespaces, tables, views, or
+policy bindings remain.</p>
+<p>The memory store keeps namespace identity and properties in one
+atomic map. Turso keeps the original namespace identity row plus a
+transactional property side row; legacy rows without that side row load
+as empty and materialize on their first update. Property mutation has
+its own <code>namespace.update</code> capability. Its audit/outbox
+payload records authorization and namespace scope but omits property
+keys and values before Grust and OpenLineage projection.</p>
+<p>The catalog-neutral C1-04 run exercised the same workflow from one
+optimized Docker runner against LakeCat, Gravitino, Lakekeeper, Polaris,
+and Nessie. LakeCat passed all 12 required assertions and the optional
+property assertion. The acceptance ledger preserves exact executable,
+image, profile, scenario, and transcript hashes; these are behavioral
+smoke artifacts, not a performance ranking or a publishable result
+bundle.</p>
+<p>One internal migration remains explicit. The older
+<code>Namespace::path()</code> helper dot-joins components for several
+durable and derived keys, so the literal component <code>[&quot;a.b&quot;]</code>
+can alias multipart <code>[&quot;a&quot;, &quot;b&quot;]</code> even though the REST codec
+keeps them distinct. A safe repair must migrate every namespace-,
+table-, view-, and policy-derived key to one versioned unambiguous
+encoding. Until then, operators should avoid those colliding identities,
+and LakeCat does not claim arbitrary-punctuation namespace coverage.</p>
+<h2 data-number="10.3" id="registering-the-warehouse-shape"><span class="header-section-number">10.3</span> Registering The Warehouse
 Shape</h2>
 <p>An operator usually starts with management objects. A server groups
 projects. A project groups warehouses. A warehouse owns namespaces,
@@ -1486,7 +1529,7 @@ content hash, namespace/table/view lifecycle replay carries the matching
 action receipt, and raw endpoint or storage-root material is replaced by
 full hash evidence before graph, OpenLineage, QGLake, or QueryGraph sees
 it.</p>
-<h2 data-number="10.3" id="storage-profiles-and-credential-roots"><span class="header-section-number">10.3</span> Storage Profiles And
+<h2 data-number="10.4" id="storage-profiles-and-credential-roots"><span class="header-section-number">10.4</span> Storage Profiles And
 Credential Roots</h2>
 <p>Storage profiles bind a warehouse to physical storage roots and
 credential issuance policy. A local profile can return scoped local file
@@ -1543,7 +1586,7 @@ Returned credentials must stay inside the selected storage profile
 prefix, carry the policy-derived TTL cap, and preserve LakeCat-owned
 profile/provider/mode/principal evidence. Replay records redacted prefix
 and issuer hashes, not credential material.</p>
-<h2 data-number="10.4" id="a-pyspark-user-reads-iceberg"><span class="header-section-number">10.4</span> A PySpark User Reads
+<h2 data-number="10.5" id="a-pyspark-user-reads-iceberg"><span class="header-section-number">10.5</span> A PySpark User Reads
 Iceberg</h2>
 <p>A PySpark user should not need to know about QueryGraph. They
 configure Spark’s Iceberg REST catalog and point it at LakeCat:</p>
@@ -1583,7 +1626,7 @@ and effective stats fields. QGLake handoff proof compares planned and
 fetched evidence so a saved artifact cannot widen the server-derived
 purpose, TTL cap, allowed columns, row predicate, stats fields, or
 policy hashes.</p>
-<h2 data-number="10.5" id="a-notebook-requests-credentials"><span class="header-section-number">10.5</span> A Notebook Requests
+<h2 data-number="10.6" id="a-notebook-requests-credentials"><span class="header-section-number">10.6</span> A Notebook Requests
 Credentials</h2>
 <p>Credential vending is deliberately different from scan planning.
 Returning storage credentials gives the client broader power than
@@ -1605,7 +1648,7 @@ principal, policy can allow an audited raw credential exception, but the
 audit and replay evidence still carry the principal, table, decision,
 reason, TTL cap, storage-profile anchor, and redacted returned-prefix
 hashes.</p>
-<h2 data-number="10.6" id="a-view-becomes-part-of-the-catalog-story"><span class="header-section-number">10.6</span> A View Becomes Part Of The
+<h2 data-number="10.7" id="a-view-becomes-part-of-the-catalog-story"><span class="header-section-number">10.7</span> A View Becomes Part Of The
 Catalog Story</h2>
 <p>Views are catalog objects too. LakeCat stores durable view records
 with SQL, dialect, schema version, typed columns, properties, creator,
@@ -1667,7 +1710,7 @@ QueryGraph verify the version chain, including tombstones after the
 current view row is gone, while keeping the richer view history model
 available for a future Sail-owned implementation. Appendix C captures
 the exact receipt-chain rules.</p>
-<h2 data-number="10.7" id="querygraph-bootstrap"><span class="header-section-number">10.7</span> QueryGraph Bootstrap</h2>
+<h2 data-number="10.8" id="querygraph-bootstrap"><span class="header-section-number">10.8</span> QueryGraph Bootstrap</h2>
 <p>QueryGraph should import LakeCat facts through a verified handoff,
 not by scraping service internals. The bootstrap endpoint publishes a
 bundle with catalog tables, views, policy bindings, graph artifacts,
@@ -1720,7 +1763,7 @@ runs QueryGraph’s <code>lakecat-verify</code> and
 table scope, LakeCat replay status, QueryGraph-verified table/view
 counts, and semantic bundle/graph/OpenLineage/import hashes plus
 accepted standards. Appendix D is the detailed handoff proof map.</p>
-<h2 data-number="10.8" id="draining-the-outbox"><span class="header-section-number">10.8</span> Draining The Outbox</h2>
+<h2 data-number="10.9" id="draining-the-outbox"><span class="header-section-number">10.9</span> Draining The Outbox</h2>
 <p>LakeCat records side effects as durable outbox events. Draining the
 outbox is what turns committed catalog facts into graph and lineage
 receipts:</p>
@@ -1749,7 +1792,7 @@ LakeCat selects undelivered outbox events by
 durable Turso store, and duplicate or malformed pending records fail
 with hash-only evidence before graph emission, lineage emission, or
 acknowledgement.</p>
-<h2 data-number="10.9" id="an-agentic-qglake-flow"><span class="header-section-number">10.9</span> An Agentic QGLake Flow</h2>
+<h2 data-number="10.10" id="an-agentic-qglake-flow"><span class="header-section-number">10.10</span> An Agentic QGLake Flow</h2>
 <p>The agentic path is the reason LakeCat has to be more than a passive
 catalog. Imagine a resilience supervisor agent investigating
 incidents:</p>

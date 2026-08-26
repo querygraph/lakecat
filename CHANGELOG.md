@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Book artifacts: rebuilt and revalidated the PDF, EPUB, MOBI, HTML, and
+  chapter-reader editions from the committed C1-04 acceptance manuscript at
+  `27fc145f`; the 60-page PDF, metadata, version marker, Kindle naming, and
+  library artifact contracts all pass.
+
 - Catalog community C1-04 acceptance: documented the component-correct
   namespace wire contract, pagination, properties, errors, memory/Turso
   persistence and migration, governed redacted replay, optimized same-Docker
