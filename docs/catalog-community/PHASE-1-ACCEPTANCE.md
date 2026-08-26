@@ -135,3 +135,86 @@ cargo run -p catalog-bench-contract --locked -- matrix check \
 This closes C1-01 only. Adapter capability declarations and endpoint validation
 begin at C1-02; no optional catalog is considered conformant merely because its
 container starts.
+
+## C1-02 — typed catalog adapters and capability coverage
+
+Accepted catalog-bench revision:
+
+- [`7269f8853bf1afe0902c663f0ef9bd9a0902f920`](https://github.com/querygraph/catalog-bench/commit/7269f8853bf1afe0902c663f0ef9bd9a0902f920)
+  adds the adapter contract, current bindings, schema, tests, and documentation.
+
+The profile contract now models adapters as closed Rust algebraic data types
+rather than launcher conditionals. Each binding identifies its catalog component,
+Iceberg REST protocol, Docker-network base URL, `/v1/config` request, static,
+unprefixed, or negotiated route prefix, authentication mode, optional standard
+`createTable.location`, request-handling mode, and capability disposition.
+
+The current candidate contains exact bindings for LakeCat, Apache Polaris,
+Apache Gravitino, Lakekeeper, and Apache Nessie. Every catalog component has
+exactly one matching `iceberg-rest-catalog` service endpoint and every adapter is
+`protocol-native`. Lakekeeper selects `warehouse=bench` and resolves the returned
+`/defaults/prefix`; Polaris uses the static `bench` prefix and its OAuth2
+client-credentials route; Nessie uses `main`; LakeCat and Gravitino use the
+unprefixed route. Only LakeCat supplies the standard optional create-table
+location needed to target its shared MinIO prefix.
+
+### Capability and shim semantics
+
+The profile defines 27 Phase 1 capabilities once. `exercise-all` is the compact
+exhaustive disposition used by all five adapters. It means the harness must send
+the standard request and let scenario assertions decide pass or fail; it is not a
+claim that the catalog supports or will pass the operation. When evidence proves
+an optional capability absent before execution, a new profile can use the
+`explicit` variant to partition exercised and unsupported operations with
+catalog-or-adapter attribution, explanation, and an optional upstream reference.
+An attempted failure cannot be relabeled as unsupported afterward.
+
+No current adapter rewrites a request, response, status, error, metadata document,
+or advertised endpoint. The contract can represent a behavior-changing shim only
+by naming a separately pinned connector component and explaining the mutation;
+that path cannot masquerade as no-shim compatibility evidence.
+
+### Validation evidence
+
+Semantic and integration tests reject missing or duplicate adapters, non-catalog
+targets, missing or duplicate service bindings, service/adapter endpoint drift,
+credential-bearing or malformed URLs, secret-shaped config keys, invalid static
+or negotiated prefixes, missing/undefined/overlapping capability declarations,
+and undisclosed or incorrectly typed shim components. The accepted revision
+passed:
+
+```sh
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo test --workspace --all-features --locked
+RUSTDOCFLAGS='-D warnings' cargo doc --workspace --all-features --no-deps --locked
+
+cargo run -p catalog-bench-contract --locked -- schemas check
+cargo run -p catalog-bench-contract --locked -- validate \
+  profiles/v1 scenarios/v1 results/v1
+cargo run -p catalog-bench-contract --locked -- historical-import check --root .
+cargo run -p catalog-bench-contract --locked -- bundle validate \
+  --manifest results/v1/2026-08-08/manifest.json
+cargo run -p catalog-bench-contract --locked -- matrix check \
+  --manifest results/v1/2026-08-08/manifest.json \
+  --output results/v1/2026-08-08/MATRIX.md
+
+(cd docker/minio/tools && \
+  test -z "$(gofmt -l .)" && \
+  go mod tidy -diff && \
+  go vet ./... && \
+  go test ./...)
+
+docker compose \
+  --profile lakekeeper \
+  --profile nessie \
+  --profile polaris \
+  --profile gravitino \
+  --profile bench \
+  config --quiet
+```
+
+The historical reproduction profile and its result bundle remained byte-for-byte
+unchanged. C1-02 is static adapter acceptance, not live behavioral evidence. C1-03
+owns config negotiation, endpoint-advertisement assertions, and sanitized HTTP
+transcripts; the candidate profile remains `draft` and contains no new timings.

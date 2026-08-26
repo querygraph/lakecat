@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Catalog community Phase 1: accepted `catalog-bench@7269f885` for C1-02 after
+  typed adapter routing, exhaustive capability coverage, no-shim disclosure,
+  complete LakeCat/Polaris/Gravitino/Lakekeeper/Nessie bindings, generated-schema
+  parity, strict workspace gates, and unchanged historical evidence were proven;
+  recorded the exact semantics and non-claims in the Phase 1 ledger.
+
 - Catalog community Phase 1: accepted `catalog-bench@dea3c575` for C1-01 after
   exact source-built MinIO, isolated Lakekeeper 0.13.3/PostgreSQL 17.11 state,
   typed drift-rejecting initialization, fresh/repeat live Docker proofs, and all

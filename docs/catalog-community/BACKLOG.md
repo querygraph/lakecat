@@ -29,7 +29,7 @@ acceptance gates; they cannot be declared from this checklist alone.
 | ID | Status | Owner | Unit and acceptance evidence |
 | --- | --- | --- | --- |
 | C1-01 | done | catalog-bench | `catalog-bench@dea3c575` adds the owned network, exact source-built MinIO, dedicated PostgreSQL 17.11 state, Lakekeeper 0.13.3 migration/bootstrap/warehouse/config gates, and typed drift-rejecting setup helpers. Fresh and repeat Docker proofs are recorded in `PHASE-1-ACCEPTANCE.md`. |
-| C1-02 | pending | catalog-bench | Model catalog capabilities and adapter endpoints without behavior-changing shims; validate every adapter profile. |
+| C1-02 | done | catalog-bench | `catalog-bench@7269f885` adds schema-backed adapter ADTs, a 27-capability vocabulary, exact config/prefix/auth bindings for all five current catalogs, protocol-native versus disclosed-shim semantics, exhaustive coverage and endpoint/secret/drift validation, and comprehensive adapter documentation. All strict gates passed without changing historical profile or result bytes. |
 | C1-03 | pending | catalog-bench | Implement config negotiation and endpoint-advertisement scenarios with sanitized request/response evidence. |
 | C1-04 | pending | catalog-bench | Implement namespace CRUD, hierarchy, pagination, duplicate, and missing-parent scenarios. |
 | C1-05 | pending | catalog-bench | Implement table create/list/load/register/rename/update/drop and spec-shaped error scenarios. |
