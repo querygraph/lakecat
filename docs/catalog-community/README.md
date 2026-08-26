@@ -71,6 +71,9 @@ the same pinned MinIO instance. A smoke run is not publishable evidence.
 - [Phase 1 acceptance](PHASE-1-ACCEPTANCE.md) accumulates exact implementation
   revisions and operation-level evidence for the Lakekeeper and behavioral
   conformance phase; a completed unit does not imply that the phase is closed.
+- [Iceberg table lifecycle](../ICEBERG-TABLES.md) records LakeCat's durable
+  create/load/update/drop/register/rename, storage, governance, error, and
+  no-current-snapshot contract accepted by C1-05.
 - [Backlog](BACKLOG.md) decomposes every phase into independently reviewable and
   verifiable units.
 - `DESIGN.md` is authoritative for ownership. It must change before an

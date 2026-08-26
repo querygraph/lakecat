@@ -12,34 +12,29 @@ Updated: 2026-08-26
   as `docs/completed/GOAL1.md`. The new `GOAL.md` is the concise live
   release-and-next-stage charter and defers detailed execution guidance to the
   current design, status, release, book, and agent documents.
-- Latest catalog-community acceptance: C1-04 namespace behavior is complete at
-  `catalog-bench@1f4e640`/`2c3ef82`/`b149ee74` and
-  `lakecat@42b2f34b`. The stable Rust 1.97.1 optimized same-Docker run passed all
-  required and optional LakeCat assertions; Gravitino and Lakekeeper passed;
-  Polaris passed required behavior with an optional property-update HTTP 409;
-  and Nessie failed only the required missing-parent 404 assertion by returning
-  an empty HTTP 200 page. Exact artifacts, transcript hashes, tests, and
-  non-claims are in `docs/catalog-community/PHASE-1-ACCEPTANCE.md`.
-- Current C1-05 remediation: table collection reads now return a 404
-  `NoSuchNamespaceException` for a missing parent, duplicate create returns a
-  409 `AlreadyExistsException`, and memory/Turso namespace drop retires only
-  validated soft-deleted table registrations while active tables remain a 409
-  blocker. Namespace retirement also removes mutable table pointer-log and
-  idempotency state but preserves audit/outbox history, preventing a recreated
-  namespace from inheriting a stale table registration. This is an
-  implementation slice, not C1-05 acceptance. Standard schema-based table create
-  now also writes its generated initial metadata document create-only before
-  pointer admission and removes that object if catalog admission fails, making
-  the returned metadata location durable enough for standard registration. The
-  standard false-overwrite register route now reads that document through the
-  bounded object-store seam, preserves its UUID and metadata pointer exactly,
-  authorizes `table.register`, and drains distinct `table.registered` evidence;
-  `overwrite=true` remains explicitly rejected. Standard same-warehouse rename
-  now preserves multipart source/destination identities, authorizes both scopes,
-  atomically moves table, commit-history, and table-policy state in memory and
-  Turso, retires old name-bound idempotency replays, and drains a first-class
-  `table.renamed` Grust/OpenLineage transformation. The optimized same-Docker
-  rerun remains pending.
+- Latest catalog-community acceptance: C1-05 table behavior is complete at
+  `catalog-bench@621cc4b`/`75c95cf`/`99971e8`/`6bc668b` and
+  `lakecat@335f94ef`/`762527c7`. Stable Rust 1.97.1 production builds ran from
+  one Docker network against one local MinIO. LakeCat, Gravitino, Lakekeeper,
+  and Polaris passed all 15 required and both optional rename/register
+  assertions; Nessie passed 14 required assertions and both optional operations,
+  failing only because missing-namespace table listing returned an empty HTTP
+  200 page instead of the required 404. All five catalogs' three distinct
+  transcript-referenced metadata objects were found directly in shared MinIO,
+  and every fixture cleanup and secret-sanitization assertion passed. Exact
+  artifacts, transcript hashes, rejected-run analysis, tests, and non-claims are
+  in `docs/catalog-community/PHASE-1-ACCEPTANCE.md` and
+  `docs/ICEBERG-TABLES.md`.
+- Table lifecycle compatibility: missing-parent list is a spec-shaped 404,
+  duplicate create is 409, standard create durably writes initial metadata,
+  false-overwrite registration preserves the source UUID and metadata pointer,
+  and same-warehouse rename atomically retargets table, commit-history, policy,
+  graph, and lineage identity. Iceberg's valid no-current-snapshot `-1` sentinel
+  normalizes to LakeCat's zero-valued commit evidence so a property-only update
+  cannot poison later rename validation. Memory and Turso stage and validate
+  transitions before mutation. `overwrite=true` registration remains explicitly
+  unsupported; commit requirements, stale pointers, exact retries, and
+  idempotency drift are the next C1-06 unit.
 - Latest namespace compatibility correction: REST paths now decode multipart
   U+001F identifiers, list only top-level or immediate-child namespaces, reject
   a missing parent with 404, paginate deterministically with bounded opaque

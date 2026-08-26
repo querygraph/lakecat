@@ -12,6 +12,7 @@ upstream Sail task until Apache Iceberg formally adopts the specification.
 [release checklist](RELEASE.md), [current status](STATUS.md),
 [contributor guidance](AGENTS.md),
 [Iceberg namespace behavior](docs/ICEBERG-NAMESPACES.md),
+[Iceberg table lifecycle](docs/ICEBERG-TABLES.md),
 [release map](docs/RELEASES.md), and the [LakeCat book](docs/book/lakecat.md).
 
 ## Run Locally With Sail

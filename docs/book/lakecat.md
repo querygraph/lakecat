@@ -1158,6 +1158,81 @@ and policy-derived key to one versioned unambiguous encoding. Until then,
 operators should avoid those colliding identities, and LakeCat does not claim
 arbitrary-punctuation namespace coverage.
 
+## Table Lifecycle Is A Storage And Governance Contract
+
+The table lifecycle begins before a catalog pointer becomes visible. A standard
+schema-based create writes its generated initial metadata document create-only
+through the selected storage profile, then admits the catalog state. A successful
+response therefore names an object that already exists. If pointer admission
+fails, bounded cleanup removes only that uncommitted object and preserves the
+original error. Duplicate identity remains a 409; LakeCat never overwrites an
+object to make the create appear successful.
+
+That durable object makes the standard false-overwrite registration workflow
+real rather than decorative. LakeCat authorizes `table.register`, proves the
+namespace exists, scope-checks and reads at most 64 MiB from the client-supplied
+metadata location, validates ordinary Iceberg metadata, and admits a new catalog
+name without changing UUID, body, table location, or metadata pointer. Rename is
+the complementary identity operation: one memory/Turso transaction preserves
+the metadata while moving current table, commit-history, and table-policy scope,
+retiring old name-bound replay state, and emitting one source-to-destination
+graph/OpenLineage transformation.
+
+A subtle no-snapshot boundary matters to both operations. Iceberg's
+`current-snapshot-id: -1` is valid wire metadata for a table with no current
+snapshot. LakeCat's internal commit evidence represents that state as zero. A
+property-only update once copied `-1` into durable history; a later rename
+revalidated the record and returned HTTP 500. The accepted implementation
+normalizes exactly that sentinel, reads legacy `-1` compatibly, rejects other
+negative values, and validates/stages complete memory and Turso transitions
+before mutation.
+
+The catalog-neutral C1-05 proof ran one optimized stable-Rust executable against
+all five catalogs from one Docker network and one local MinIO bucket:
+
+| Catalog | Required table behavior | Rename | Register |
+| --- | ---: | --- | --- |
+| LakeCat | **pass, 15/15** | pass | pass |
+| Apache Gravitino | **pass, 15/15** | pass | pass |
+| Lakekeeper | **pass, 15/15** | pass | pass |
+| Apache Polaris | **pass, 15/15** | pass | pass |
+| Apache Nessie | **fail, 14/15** | pass | pass |
+
+The required checks cover authentication/config routing, collision-safe fixture
+ownership, two-table create/list/load, immutable property update, bounded
+pagination or a complete permitted fallback, duplicate and missing-resource
+errors, non-purging drop, complete candidate reconciliation, and transcript
+sanitization. Rename and registration are optional in classification but were
+attempted and passed for every catalog.
+
+Storage topology was an acceptance condition, not a Compose assumption. One
+diagnostic LakeCat pass was rejected because the old runner omitted the declared
+S3 location and accepted `file:///tmp`. A later whole matrix was rejected because
+Gravitino's shorter environment names were ignored by its pinned image, leaving
+memory and `/tmp` defaults. The final deployment uses the image's exact
+`GRAVITINO_ICEBERG_REST_*` contract, file-backed SQLite, an idempotent
+least-privilege volume initializer, and S3FileIO.
+
+Every final response named `s3://warehouse/...`. An independent pinned MinIO
+client found original primary, updated primary, and sibling metadata for every
+catalog: 15 referenced objects out of 15. Every fixture name and namespace was
+then proved absent after `purgeRequested=false` cleanup, and every transcript
+reported no persisted secret or raw response body.
+
+Nessie's one table mismatch is narrow: listing under an absent namespace returns
+an empty HTTP 200 page where the pinned Iceberg contract requires 404. That is
+not its separate historical concurrent-commit result, which remains unranked
+because measured rounds contained request HTTP 500s. Behavioral conformance does
+not imply timing or concurrency performance.
+
+The exact production binaries, image digests, profile/scenario hashes,
+transcript hashes, rejected diagnostics, object ETags, and repository gates are
+in the [Phase 1 acceptance ledger](../catalog-community/PHASE-1-ACCEPTANCE.md#c1-05--table-behavior)
+and [table lifecycle guide](../ICEBERG-TABLES.md). These runs remain reviewed
+smoke evidence. C1-09 owns immutable bundle generation and public publication;
+C1-06 first proves commit requirements, stale pointers, exact retry, and
+idempotency drift.
+
 ## Registering The Warehouse Shape
 
 An operator usually starts with management objects. A server groups projects. A

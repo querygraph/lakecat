@@ -604,6 +604,204 @@ component-unambiguous key migration across every affected object class.
 
 This closes C1-04 only. It is a behavioral conformance result, not a latency or
 throughput ranking. The transcripts remain ignored smoke evidence rather than
-checked-in `catalog-bench/v1` result records. C1-05 next owns table lifecycle
-behavior; C1-09 retains immutable bundle/site/report publication, and C1-10
-retains remaining LakeCat conformance corrections.
+checked-in `catalog-bench/v1` result records. C1-05 is recorded below; C1-09
+retains immutable bundle/site/report publication, and C1-10 retains remaining
+LakeCat conformance corrections.
+
+## C1-05 — table behavior
+
+Accepted revisions:
+
+- [`catalog-bench@621cc4bbc80169547c497b6829a4982e20f24e58`](https://github.com/querygraph/catalog-bench/commit/621cc4bbc80169547c497b6829a4982e20f24e58)
+  makes the table runner consume and verify a profile-declared standard create
+  location while preserving catalog-managed defaults for adapters that omit it;
+- [`catalog-bench@b3b5e6799aaf0b68c97f983c363b3160ed915227`](https://github.com/querygraph/catalog-bench/commit/b3b5e6799aaf0b68c97f983c363b3160ed915227)
+  pins that runner in the candidate profile;
+- [`catalog-bench@75c95cf`](https://github.com/querygraph/catalog-bench/commit/75c95cf)
+  corrects Gravitino 1.3.0's exact `GRAVITINO_ICEBERG_REST_*` environment
+  contract and adds a deployment regression;
+- [`catalog-bench@99971e8a84f116646bd05eb48728b4982b5a4444`](https://github.com/querygraph/catalog-bench/commit/99971e8a84f116646bd05eb48728b4982b5a4444)
+  adds the least-privilege one-shot that prepares Gravitino's private SQLite
+  volume for its unprivileged UID 1000 process;
+- [`catalog-bench@6bc668b`](https://github.com/querygraph/catalog-bench/commit/6bc668b)
+  records the final matrix, exact artifacts, direct shared-MinIO audit, rejected
+  evidence, reproduction workflow, and publication boundary;
+- [`lakecat@c1abd976`](https://github.com/querygraph/lakecat/commit/c1abd976)
+  completes standard table lifecycle behavior, including governed registration
+  and atomic same-warehouse rename; and
+- [`lakecat@335f94ef`](https://github.com/querygraph/lakecat/commit/335f94ef)
+  normalizes valid Iceberg no-snapshot state at the durable commit-evidence
+  boundary, with [`lakecat@762527c7`](https://github.com/querygraph/lakecat/commit/762527c7)
+  carrying the exact regenerated reader artifacts used by the accepted runtime.
+
+The neutral source of detail is catalog-bench's
+[`TABLE-CONFORMANCE.md`](https://github.com/querygraph/catalog-bench/blob/6bc668b/docs/TABLE-CONFORMANCE.md).
+LakeCat's durable protocol and governance contract is
+[`docs/ICEBERG-TABLES.md`](../ICEBERG-TABLES.md).
+
+### Exact optimized inputs
+
+| Input | Identity |
+| --- | --- |
+| Acceptance execution checkout | `catalog-bench@99971e8a84f116646bd05eb48728b4982b5a4444` |
+| Candidate profile | `catalog-community-current-2026-08-26-linux-arm64`, SHA-256 `a8d86ab535ac84780ad3694775deec7ae74556ccdf4ed9bf65f97335a18edf52` |
+| Scenario | `iceberg-rest.table.behavior` version 1, SHA-256 `50237ef4dfefb2e3f58f0cca3d6a0550c6b7d08a3cceccf4ecc68d5a606fe6e9` |
+| Runner executable | SHA-256 `e2f1d622640a3dc987322c185a2ff369f6612780ed62ae57651f2c57bbcfb3a7`; 3,609,344 bytes |
+| LakeCat source | `762527c7d27730dd789cf41b1cdee021ab712aef`, version `0.3.0-31-g762527c7` |
+| LakeCat executable | SHA-256 `70bc7d84b5c08a9addf52848edec4c0746f65a2680074d1c606dd2889ae60abd`; 19,560,096 bytes |
+| LakeCat local image | Linux ARM64 image ID `sha256:3936e3576bfee378e2fde0227a4a1f9f2eb6b75322291feb3b67b4fd87ae23f6`; 60,017,816 bytes |
+| Rust builder | `rust:1.97.1-bookworm@sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97`, ARM64 `sha256:6e957ef098dcc77d33e310261e4ed5843bb108d5c3b5dc2b476cbc8b6caf53fa` |
+| Rust toolchain | `rustc 1.97.1 (8bab26f4f 2026-07-14)`; Cargo 1.97.1; LLVM 22.1.6 |
+| Production build | opt-level 3, fat LTO, one codegen unit, stripped symbols, `panic=abort`, no debug or incremental compilation, `-Dwarnings`, `-Ctarget-cpu=native`, `--locked`, `-j1` |
+| LakeCat features | `turso-local,sail-local`; Sail `bddb1706ba2308e5029d47f04f03121236edbfa6`; Turso `0.7.0-pre.10` |
+| Shared MinIO | `RELEASE.2025-10-15T17-29-55Z`, source `9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a`, local image `sha256:28c9405d4591b7803c8cf79afcef6a32f8fe9964982e5075babcb6a1c7ddecdb` |
+
+The final runner build was repeated from the clean execution checkout after the
+Gravitino deployment corrections and remained byte-identical. LakeCat used its
+full production feature shape rather than a reduced benchmark-only binary.
+
+The comparison catalogs remained the exact candidate-profile images:
+
+| Catalog | Version | Index digest | ARM64 digest |
+| --- | --- | --- | --- |
+| Apache Polaris | 1.7.0 | `sha256:3495f67f38cca33892a045f7dd3f46eb52387f0fd52d4145538a772fd8aedad7` | `sha256:53022013a54121d6f81a130b80df85e2c3c1961c592c39e7e3e2353db2ab7acf` |
+| Apache Gravitino | 1.3.0 | `sha256:80136ae753ee77735153fc1482a389018f8c2638a54f453cb96967c7194584c7` | `sha256:01cf367b77f91652da6c545ad5253d94c11f4e3dd71c5442863eaa330d8a1088` |
+| Lakekeeper | 0.13.3 | `sha256:db2ba6168eb107f22242fb7f2edc4016fa35e57bdcc606894e809c418e32e8dc` | `sha256:ba9424131ff088e8eb5263dbdf66e63c2aec0e71687971673ca37a97389394f2` |
+| Apache Nessie | 0.108.4 | `sha256:c0f42874c810f28ac30fc991e979c1b8cf5a2cbfa94212086cdddeae49629517` | `sha256:10d751690c54c837d687437e1cb269f61b8d2ca541277639d623f495b408fe9c` |
+
+### Scenario semantics
+
+One preflighted run-owned namespace contains primary and sibling committed
+tables plus distinct rename, registration, and missing candidates. Any
+pre-existing namespace aborts before mutation, so cleanup cannot delete someone
+else's state.
+
+The workflow proves 15 required assertions:
+
+- authentication and config/prefix/separator negotiation without retaining a
+  credential;
+- absent fixture preflight and exact namespace creation;
+- two committed creates with distinct UUIDs, requested schema/properties,
+  immutable metadata locations, and requested table location when declared;
+- exact list/load round trips and bounded, complete, duplicate-free pagination
+  or the OpenAPI-permitted complete unpaginated fallback;
+- one property set/removal commit that preserves identity and schema while
+  advancing the metadata location;
+- spec-shaped duplicate-table 409, missing-table 404, and missing-namespace 404;
+- non-purging table drop followed by spec-shaped absence;
+- reconciliation and post-drop absence for all source/destination candidates
+  plus the fixture namespace; and
+- recursively sanitized evidence with no raw response body, OAuth credential,
+  bearer token, storage credential, cookie, or opaque page token.
+
+Two optional operations are attempted honestly. Same-namespace rename must
+return 204, remove the source, and preserve destination UUID and metadata
+location. False-overwrite registration must return 200 and load the dropped
+sibling metadata under a new name with its exact UUID and metadata location.
+Optional failures remain visible but do not change required classification.
+
+Cleanup runs after an earlier assertion failure and uses
+`purgeRequested=false`. Retained metadata therefore remains available for
+direct object-store inspection after all catalog names and the fixture namespace
+are proved absent.
+
+### LakeCat defects and correction
+
+The first optimized LakeCat transcript,
+`6bdf4237bede510da22b718d880048fe9bb36b5b7df83a5dc15821a336429b90`,
+passed all required assertions and registration but returned HTTP 500 from
+optional rename:
+
+```text
+internal error: table commit record snapshot id must be non-negative
+```
+
+Iceberg uses `current-snapshot-id: -1` for a valid table with no current
+snapshot. A property-only update copied that wire sentinel into LakeCat's
+durable commit record. Rename later revalidated history and found the invalid
+internal negative value. The accepted implementation normalizes exactly `-1`
+to LakeCat's established zero-valued no-snapshot evidence, decodes legacy
+serialized `-1` compatibly, rejects every other negative value, validates before
+memory/Turso persistence, and stages memory state before mutation. Shared tests
+prove create, property commit, history, failure atomicity, and rename semantics
+on both stores.
+
+A repaired behavior transcript,
+`ae757976fdce33564c233cd7139b944e1cdd8e405df5d750a9158074ce4ef28b`,
+then passed all 17 assertions but was rejected because the old runner had
+silently omitted LakeCat's declared create location and accepted
+`file:///tmp/lakecat/...`. The corrected runner derives unique
+`s3://warehouse/lakecat/<namespace>/<table>` children and requires that location
+to remain stable across create, load, update, rename, and registration.
+
+### Shared object-store and deployment proof
+
+All requests originated from one production conformance container on
+`catalog-bench-net`; no host route participated. LakeCat started from a fresh
+Turso volume and received one scoped governed S3 profile rooted at
+`s3://warehouse/lakecat`. Its accepted primary object was:
+
+```text
+s3://warehouse/lakecat/cb_c105_lakecat_c105s_lakecat_826/primary/metadata/00000-7c643e01-d092-4605-bfd4-17bcd14c7aa2.metadata.json
+```
+
+An earlier shared matrix was rejected as a whole because Gravitino still
+returned `/tmp/...`. The pinned image's own rewrite script recognizes only the
+`GRAVITINO_ICEBERG_REST_*` environment namespace; the prior shorter names had
+silently retained memory and `/tmp` defaults. After correcting those bindings,
+a fresh named volume exposed its root ownership while the image runs as UID
+1000. The accepted one-shot adjusts only that private directory and exits as
+root; the long-running catalog remains UID 1000. Its effective file-backed
+SQLite/S3 config negotiated HTTP 200 before the final probe.
+
+The final transcripts returned only `s3://warehouse/...` metadata locations.
+A pinned local `mc` container on the same network statted every distinct
+metadata object referenced by every transcript: original primary, updated
+primary, and sibling metadata for each catalog, 15 of 15 total. Representative
+primary objects were 955 bytes for LakeCat, 782 for Gravitino, 341 compressed
+bytes for Lakekeeper, 830 for Polaris, and 829 for Nessie.
+
+### Live table outcomes
+
+| Catalog | Required | Rename | Register | Pagination | Sanitized transcript SHA-256 |
+| --- | ---: | --- | --- | --- | --- |
+| LakeCat | **pass, 15/15** | pass | pass | complete unpaginated fallback, 2 tables | `202b6fcffcb1cb832f0eb818b34454c956d777b6eee7d44445c8126ca365a0b9` |
+| Apache Gravitino | **pass, 15/15** | pass | pass | 2 pages, 2 tables | `941deab4facf307b50c5e6bf3edcf2311dd4b644762441d4a546edc35117f379` |
+| Lakekeeper | **pass, 15/15** | pass | pass | 3 pages, 2 tables | `c336b88e0aa6382f0d6c13818567554684ae868f98a1d297d4c3d9a6548aa004` |
+| Apache Polaris | **pass, 15/15** | pass | pass | complete unpaginated fallback, 2 tables | `79e0fbead68feb142de7c3ce3d145560c831bcba937a9a15e43f352f32f63ac0` |
+| Apache Nessie | **fail, 14/15** | pass | pass | 2 pages, 2 tables | `8019de1556f3bcedd7de2471c74acf8b518dd10c0ecd5888b31d1a69c163fda1` |
+
+Every catalog passed fixture isolation, candidate reconciliation, cleanup, and
+transcript sanitization. All final transcripts report
+`raw_secrets_persisted: false` and `raw_response_body_persisted: false`; a
+separate literal secret scan also passed.
+
+Nessie's sole required mismatch is deterministic: listing tables under the
+run-owned absent namespace returns HTTP 200 with an empty page, while the pinned
+Iceberg OpenAPI requires 404. It still passes rename, registration, shared-MinIO
+storage, and cleanup. This is not Nessie's historical concurrent result. That
+separate workload remains unranked because 97 HTTP 500 request errors occurred
+across five measured rounds; no table-conformance result is interpreted as a
+throughput or concurrency claim.
+
+### Repository gates and next boundary
+
+Catalog-bench passed stable formatting, full workspace/all-target tests,
+checked-in schema equality, semantic validation of every profile/scenario/result,
+strict workspace/all-target Clippy, the full multi-profile Compose render, and
+diff checks. Named suites included 21 contract, two deployment, 14 config, 13
+namespace, 17 table, and four bundle/matrix tests.
+
+LakeCat passed 209 store tests, the full all-feature workspace tests, strict
+all-feature Clippy, and book contracts while implementing the lifecycle and
+no-snapshot corrections. Memory/Turso tests exercise transition staging,
+atomicity, commit history, registration, rename, policy retargeting,
+idempotency retirement, outbox evidence, and cleanup.
+
+This closes C1-05 only. It is behavioral evidence, not a performance ranking.
+The exact transcripts remain ignored smoke files rather than immutable
+`catalog-bench/v1` result records. C1-06 next owns commit requirements, stale
+metadata pointers, exact retry, and idempotency-content drift. C1-09 still owns
+final optimized artifact materialization, immutable bundle generation, manual
+redaction review, public matrix/report generation, adversari.al publication, and
+site verification.

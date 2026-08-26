@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Catalog community C1-05 acceptance: closed the catalog-neutral Iceberg REST
+  table-lifecycle unit with exact stable-Rust production artifact identities,
+  15 required and two optional assertions, the optimized five-catalog matrix,
+  direct shared-MinIO proof for all 15 referenced metadata objects, complete
+  cleanup/sanitization evidence, LakeCat's no-snapshot repair, Gravitino's
+  deployment corrections, Nessie's narrow missing-namespace mismatch, and the
+  explicit C1-09 publication boundary. Added a durable LakeCat table protocol
+  guide and synchronized the status, backlog, acceptance ledger, and book
+  manuscript.
+
 - Book artifacts: rebuilt the checked-in PDF, EPUB, MOBI, browser HTML, and
   chapter bundle from `335f94ef`, incorporating the completed table lifecycle
   documentation and no-snapshot commit-history semantics into the versioned
