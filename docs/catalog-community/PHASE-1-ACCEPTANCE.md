@@ -3,7 +3,7 @@
 This ledger accumulates evidence for Phase 1, **Lakekeeper and behavioral
 conformance**. It is deliberately incremental. A completed row proves only its
 named backlog unit; Phase 1 remains open until C1-01 through C1-10 and the phase
-exit criteria in `CATALOG-COMMUNITY-PLAN.md` are satisfied.
+exit criteria and global acceptance gates are satisfied.
 
 No timing in this ledger is public benchmark evidence. The current candidate
 profile remains `draft`, and C1-09 still owns optimized production builds,

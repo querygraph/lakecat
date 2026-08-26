@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Public acceptance hygiene: make the Phase 1 ledger self-contained and remove
+  its final reference to a non-public planning artifact.
+
 - Book artifacts: rebuild the checked-in PDF, EPUB, MOBI, browser HTML, and
   chapter bundle from `164a7eba`, incorporating the accepted C1-05 table
   lifecycle, shared-MinIO proof, catalog matrix, and publication boundary into
