@@ -369,6 +369,41 @@ pub(crate) fn audit_outbox_payload(event_id: &str, event: &CatalogAuditEvent) ->
     Value::Object(payload)
 }
 
+pub(crate) fn table_rename_events(
+    source: &TableIdent,
+    table: &TableRecord,
+    principal: &Principal,
+    authorization_receipt: Option<&Value>,
+    renamed_at: DateTime<Utc>,
+) -> LakeCatResult<(CatalogAuditEvent, OutboxEvent)> {
+    let mut payload = serde_json::json!({
+        "event-type": "table.renamed",
+        "table": &table.ident,
+        "source": source,
+        "destination": &table.ident,
+        "metadata-location": &table.metadata_location,
+        "format-version": table_commit_format_version(table),
+        "version": table.version,
+    });
+    if let Some(receipt) = authorization_receipt {
+        payload["authorization-receipt"] = receipt.clone();
+    }
+    let request_hash = content_hash_json(&payload)?;
+    let audit_event = CatalogAuditEvent {
+        event_type: "table.renamed".to_string(),
+        table: Some(table.ident.clone()),
+        principal: principal.clone(),
+        request_hash: Some(request_hash),
+        payload,
+        created_at: renamed_at,
+    };
+    audit_event.validate_recordable()?;
+    let event_id = audit_event_id(&audit_event)?;
+    let outbox_payload = audit_outbox_payload(&event_id, &audit_event);
+    let outbox_event = outbox_event_from_payload(&outbox_payload, renamed_at)?;
+    Ok((audit_event, outbox_event))
+}
+
 pub(crate) fn validate_audit_payload_authorization_principal(
     payload: &Value,
     principal: &Principal,

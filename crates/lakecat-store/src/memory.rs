@@ -299,6 +299,150 @@ impl CatalogStore for MemoryCatalogStore {
             })
     }
 
+    async fn rename_table(
+        &self,
+        source: &TableIdent,
+        destination: &TableIdent,
+        principal: Principal,
+        authorization_receipt: Option<Value>,
+    ) -> LakeCatResult<TableRecord> {
+        if source.warehouse != destination.warehouse {
+            return Err(LakeCatError::InvalidArgument(
+                "table rename cannot cross warehouses".to_string(),
+            ));
+        }
+
+        let mut state = self.state.write().await;
+        if !state
+            .namespaces
+            .get(destination.warehouse.as_str())
+            .is_some_and(|namespaces| namespaces.contains_key(&destination.namespace))
+        {
+            return Err(namespace_not_found(&destination.namespace));
+        }
+
+        let source_key = table_key(source);
+        let destination_key = table_key(destination);
+        if state.soft_deletes.contains_key(&source_key) {
+            return Err(LakeCatError::NotFound {
+                object: "table",
+                name: source.stable_id(),
+            });
+        }
+        let source_table =
+            state
+                .tables
+                .get(&source_key)
+                .cloned()
+                .ok_or_else(|| LakeCatError::NotFound {
+                    object: "table",
+                    name: source.stable_id(),
+                })?;
+        validate_table_record_map_scope(&source_table, &source_key)?;
+        validate_table_record_identity(&source_table, source)?;
+        if state.tables.contains_key(&destination_key)
+            || state.soft_deletes.contains_key(&destination_key)
+        {
+            return Err(LakeCatError::AlreadyExists {
+                object: "table",
+                name: destination.stable_id(),
+            });
+        }
+        if state
+            .commits
+            .iter()
+            .any(|commit| commit.table_key == destination_key)
+        {
+            return Err(LakeCatError::Internal(
+                "table rename destination has orphaned commit history".to_string(),
+            ));
+        }
+
+        let renamed_at = Utc::now();
+        let mut renamed_table = source_table;
+        renamed_table.ident = destination.clone();
+        renamed_table.updated_at = renamed_at;
+        renamed_table.validate()?;
+
+        let mut renamed_commits = Vec::new();
+        for (index, commit) in state.commits.iter().enumerate() {
+            if commit.table_key != source_key {
+                continue;
+            }
+            validate_table_commit_record_memory_scope(commit, source)?;
+            let mut renamed = commit.clone();
+            renamed.table_key = destination_key.clone();
+            renamed.record.table = destination.clone();
+            validate_table_commit_record_memory_scope(&renamed, destination)?;
+            renamed_commits.push((index, renamed));
+        }
+
+        let source_idempotency_prefix = format!("{}:", source.stable_id());
+        let destination_idempotency_prefix = format!("{}:", destination.stable_id());
+        let mut retired_idempotency_keys = Vec::new();
+        for (key, replay) in &state.idempotency {
+            let keyed_to_source = key.starts_with(&source_idempotency_prefix);
+            let scoped_to_source = replay.table_key == source_key;
+            if keyed_to_source != scoped_to_source {
+                return Err(LakeCatError::Internal(
+                    "table rename found inconsistent source idempotency scope".to_string(),
+                ));
+            }
+            if keyed_to_source {
+                validate_idempotency_record_table_key(&replay.table_key, source)?;
+                validate_idempotency_record_request_hash(&replay.request_hash)?;
+                validate_table_record_identity(&replay.response, source)?;
+                retired_idempotency_keys.push(key.clone());
+            }
+            if key.starts_with(&destination_idempotency_prefix)
+                || replay.table_key == destination_key
+            {
+                return Err(LakeCatError::Internal(
+                    "table rename destination has orphaned idempotency state".to_string(),
+                ));
+            }
+        }
+
+        let mut renamed_bindings = Vec::new();
+        for (key, binding) in &state.policy_bindings {
+            validate_policy_binding_map_scope(binding, key)?;
+            if binding.warehouse == source.warehouse
+                && binding.namespace.as_ref() == Some(&source.namespace)
+                && binding.table.as_ref() == Some(&source.name)
+            {
+                let mut renamed = binding.clone();
+                renamed.namespace = Some(destination.namespace.clone());
+                renamed.table = Some(destination.name.clone());
+                renamed.updated_at = renamed_at;
+                renamed.validate()?;
+                renamed_bindings.push((key.clone(), renamed));
+            }
+        }
+
+        let (audit_event, outbox_event) = table_rename_events(
+            source,
+            &renamed_table,
+            &principal,
+            authorization_receipt.as_ref(),
+            renamed_at,
+        )?;
+
+        state.tables.remove(&source_key);
+        state.tables.insert(destination_key, renamed_table.clone());
+        for (index, commit) in renamed_commits {
+            state.commits[index] = commit;
+        }
+        for key in retired_idempotency_keys {
+            state.idempotency.remove(&key);
+        }
+        for (key, binding) in renamed_bindings {
+            state.policy_bindings.insert(key, binding);
+        }
+        state.audit_events.push(audit_event);
+        state.outbox_events.push(outbox_event);
+        Ok(renamed_table)
+    }
+
     async fn commit_table(
         &self,
         ident: &TableIdent,

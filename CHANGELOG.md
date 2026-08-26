@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Atomic table rename storage: memory and Turso now move an active table to a
+  destination namespace/name as one governed transaction, preserving metadata
+  and version state, retargeting commit-history and table-scoped policy rows,
+  retiring name-bound idempotency replays, and recording immutable
+  `table.renamed` audit/outbox evidence. Rename rejects missing source or
+  destination namespaces, hidden sources, occupied destinations, and
+  cross-warehouse moves without partial mutation. Added one shared backend
+  contract plus Turso concurrency coverage.
+
 - Iceberg REST table registration: implemented the canonical default and
   warehouse-prefixed `registerTable` routes with typed request models,
   `table.register` authorization, namespace-first validation, size-bounded

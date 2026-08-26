@@ -85,6 +85,17 @@ pub trait CatalogStore: Send + Sync + 'static {
     async fn list_tables(&self, warehouse: &WarehouseName) -> LakeCatResult<Vec<TableRecord>>;
     async fn create_table(&self, table: TableRecord) -> LakeCatResult<TableRecord>;
     async fn load_table(&self, ident: &TableIdent) -> LakeCatResult<TableRecord>;
+    async fn rename_table(
+        &self,
+        _source: &TableIdent,
+        _destination: &TableIdent,
+        _principal: Principal,
+        _authorization_receipt: Option<Value>,
+    ) -> LakeCatResult<TableRecord> {
+        Err(LakeCatError::NotSupported(
+            "catalog store does not support table rename".to_string(),
+        ))
+    }
     async fn commit_table(
         &self,
         ident: &TableIdent,
@@ -314,6 +325,8 @@ pub use records::*;
 mod memory_tests;
 #[cfg(test)]
 mod namespace_tests;
+#[cfg(test)]
+mod table_rename_tests;
 
 #[cfg(feature = "turso-local")]
 pub mod turso_store;

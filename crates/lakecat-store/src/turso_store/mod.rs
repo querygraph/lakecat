@@ -651,6 +651,392 @@ impl CatalogStore for TursoCatalogStore {
             })
     }
 
+    async fn rename_table(
+        &self,
+        source: &TableIdent,
+        destination: &TableIdent,
+        principal: Principal,
+        authorization_receipt: Option<JsonValue>,
+    ) -> LakeCatResult<TableRecord> {
+        if source.warehouse != destination.warehouse {
+            return Err(LakeCatError::InvalidArgument(
+                "table rename cannot cross warehouses".to_string(),
+            ));
+        }
+        let source = source.clone();
+        let destination = destination.clone();
+        self.write_txn(move |conn| {
+            let source = source.clone();
+            let destination = destination.clone();
+            let principal = principal.clone();
+            let authorization_receipt = authorization_receipt.clone();
+            Box::pin(async move {
+                let source = &source;
+                let destination = &destination;
+                let source_key = table_key(source);
+                let destination_key = table_key(destination);
+
+                let mut namespace_rows = conn
+                    .query(
+                        "select 1 from namespaces where warehouse = ?1 and namespace_path = ?2",
+                        (destination.warehouse.as_str(), destination.namespace.path()),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                if namespace_rows.next().await.map_err(turso_error)?.is_none() {
+                    return Err(namespace_not_found(&destination.namespace));
+                }
+
+                let mut source_rows = conn
+                    .query(
+                        "select record_json, table_key, warehouse, namespace_path, table_name
+                         from tables t
+                         where t.table_key = ?1
+                           and not exists (
+                             select 1 from soft_deletes d where d.table_key = t.table_key
+                           )",
+                        (source_key.as_str(),),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                let Some(source_row) = source_rows.next().await.map_err(turso_error)? else {
+                    return Err(LakeCatError::NotFound {
+                        object: "table",
+                        name: source.stable_id(),
+                    });
+                };
+                let mut table: TableRecord = decode_json(row_string(&source_row, 0)?)?;
+                crate::validate_table_record_scope(
+                    &table,
+                    source,
+                    &row_string(&source_row, 1)?,
+                    &row_string(&source_row, 2)?,
+                    &row_string(&source_row, 3)?,
+                    &row_string(&source_row, 4)?,
+                )?;
+
+                let mut destination_rows = conn
+                    .query(
+                        "select 1 from tables where table_key = ?1
+                         union all
+                         select 1 from soft_deletes where table_key = ?1
+                         limit 1",
+                        (destination_key.as_str(),),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                if destination_rows
+                    .next()
+                    .await
+                    .map_err(turso_error)?
+                    .is_some()
+                {
+                    return Err(LakeCatError::AlreadyExists {
+                        object: "table",
+                        name: destination.stable_id(),
+                    });
+                }
+
+                let mut destination_commit_rows = conn
+                    .query(
+                        "select 1 from metadata_pointer_log where table_key = ?1 limit 1",
+                        (destination_key.as_str(),),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                if destination_commit_rows
+                    .next()
+                    .await
+                    .map_err(turso_error)?
+                    .is_some()
+                {
+                    return Err(LakeCatError::Internal(
+                        "table rename destination has orphaned commit history".to_string(),
+                    ));
+                }
+
+                let mut commit_rows = conn
+                    .query(
+                        "select table_key, sequence_number, previous_metadata_location,
+                                new_metadata_location, request_hash, principal_json,
+                                committed_at, record_json
+                         from metadata_pointer_log
+                         where table_key = ?1
+                         order by sequence_number",
+                        (source_key.as_str(),),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                let mut renamed_commits = Vec::new();
+                while let Some(row) = commit_rows.next().await.map_err(turso_error)? {
+                    let mut record: TableCommitRecord = decode_json(row_string(&row, 7)?)?;
+                    record.validate_for_table(source)?;
+                    validate_turso_commit_record_row(&record, source, &row)?;
+                    record.table = destination.clone();
+                    record.validate_for_table(destination)?;
+                    renamed_commits.push(record);
+                }
+
+                let source_idempotency_prefix = format!("{}:", source.stable_id());
+                let destination_idempotency_prefix = format!("{}:", destination.stable_id());
+                let mut destination_idempotency_rows = conn
+                    .query(
+                        "select 1 from idempotency_records
+                         where table_key = ?1
+                            or substr(idem_key, 1, ?2) = ?3
+                         limit 1",
+                        (
+                            destination_key.as_str(),
+                            checked_i64(
+                                destination_idempotency_prefix.len() as u64,
+                                "idempotency prefix length",
+                            )?,
+                            destination_idempotency_prefix.as_str(),
+                        ),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                if destination_idempotency_rows
+                    .next()
+                    .await
+                    .map_err(turso_error)?
+                    .is_some()
+                {
+                    return Err(LakeCatError::Internal(
+                        "table rename destination has orphaned idempotency state".to_string(),
+                    ));
+                }
+                let mut idempotency_rows = conn
+                    .query(
+                        "select idem_key, table_key, request_hash, response_json
+                         from idempotency_records
+                         where table_key = ?1
+                            or substr(idem_key, 1, ?2) = ?3",
+                        (
+                            source_key.as_str(),
+                            checked_i64(
+                                source_idempotency_prefix.len() as u64,
+                                "idempotency prefix length",
+                            )?,
+                            source_idempotency_prefix.as_str(),
+                        ),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                let mut retired_idempotency_count = 0_u64;
+                while let Some(row) = idempotency_rows.next().await.map_err(turso_error)? {
+                    let idem_key = row_string(&row, 0)?;
+                    let row_table_key = row_string(&row, 1)?;
+                    if !idem_key.starts_with(&source_idempotency_prefix)
+                        || row_table_key != source_key
+                    {
+                        return Err(LakeCatError::Internal(
+                            "table rename found inconsistent source idempotency scope".to_string(),
+                        ));
+                    }
+                    crate::validate_idempotency_record_table_key(&row_table_key, source)?;
+                    crate::validate_idempotency_record_request_hash(&row_string(&row, 2)?)?;
+                    let response: TableRecord = decode_json(row_string(&row, 3)?)?;
+                    crate::validate_table_record_identity(&response, source)?;
+                    retired_idempotency_count += 1;
+                }
+
+                let mut binding_rows = conn
+                    .query(
+                        "select policy_key, binding_json, policy_id, namespace_path,
+                                table_name, enforced
+                         from policy_bindings
+                         where warehouse = ?1
+                           and namespace_path = ?2
+                           and table_name = ?3",
+                        (
+                            source.warehouse.as_str(),
+                            source.namespace.path(),
+                            source.name.as_str(),
+                        ),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                let mut renamed_bindings = Vec::new();
+                while let Some(row) = binding_rows.next().await.map_err(turso_error)? {
+                    let policy_key = row_string(&row, 0)?;
+                    let mut binding: PolicyBinding = decode_json(row_string(&row, 1)?)?;
+                    crate::validate_policy_binding_scope(
+                        &binding,
+                        &source.warehouse,
+                        row_string(&row, 2)?.as_str(),
+                        row_optional_string(&row, 3)?.as_deref(),
+                        row_optional_string(&row, 4)?.as_deref(),
+                        row_i64(&row, 5)? != 0,
+                    )?;
+                    if policy_key != policy_binding_key(&binding.warehouse, &binding.policy_id) {
+                        return Err(LakeCatError::Internal(
+                            "policy binding row scope does not match binding identity".to_string(),
+                        ));
+                    }
+                    binding.namespace = Some(destination.namespace.clone());
+                    binding.table = Some(destination.name.clone());
+                    renamed_bindings.push((policy_key, binding));
+                }
+
+                let renamed_at = Utc::now();
+                table.ident = destination.clone();
+                table.updated_at = renamed_at;
+                table.validate()?;
+                for (_, binding) in &mut renamed_bindings {
+                    binding.updated_at = renamed_at;
+                    binding.validate()?;
+                }
+                let (audit_event, outbox_event) = crate::table_rename_events(
+                    source,
+                    &table,
+                    &principal,
+                    authorization_receipt.as_ref(),
+                    renamed_at,
+                )?;
+
+                let updated_rows = conn
+                    .execute(
+                        "update tables
+                         set table_key = ?2, warehouse = ?3, namespace_path = ?4,
+                             table_name = ?5, record_json = ?6, updated_at = ?7
+                         where table_key = ?1",
+                        (
+                            source_key.as_str(),
+                            destination_key.as_str(),
+                            destination.warehouse.as_str(),
+                            destination.namespace.path(),
+                            destination.name.as_str(),
+                            encode_json(&table)?,
+                            renamed_at.to_rfc3339(),
+                        ),
+                    )
+                    .await;
+                match updated_rows {
+                    Ok(1) => {}
+                    Ok(_) => {
+                        return Err(LakeCatError::NotFound {
+                            object: "table",
+                            name: source.stable_id(),
+                        });
+                    }
+                    Err(err) if is_unique_violation(&err) => {
+                        return Err(LakeCatError::AlreadyExists {
+                            object: "table",
+                            name: destination.stable_id(),
+                        });
+                    }
+                    Err(err) => return Err(turso_error(err)),
+                }
+
+                for record in &renamed_commits {
+                    let changed = conn
+                        .execute(
+                            "update metadata_pointer_log
+                             set table_key = ?3, record_json = ?4
+                             where table_key = ?1 and sequence_number = ?2",
+                            (
+                                source_key.as_str(),
+                                checked_i64(record.sequence_number, "sequence number")?,
+                                destination_key.as_str(),
+                                encode_json(record)?,
+                            ),
+                        )
+                        .await
+                        .map_err(turso_error)?;
+                    if changed != 1 {
+                        return Err(LakeCatError::Internal(
+                            "table rename did not move exactly one commit-history row".to_string(),
+                        ));
+                    }
+                }
+
+                let retired_idempotency = conn
+                    .execute(
+                        "delete from idempotency_records
+                         where table_key = ?1
+                            or substr(idem_key, 1, ?2) = ?3",
+                        (
+                            source_key.as_str(),
+                            checked_i64(
+                                source_idempotency_prefix.len() as u64,
+                                "idempotency prefix length",
+                            )?,
+                            source_idempotency_prefix.as_str(),
+                        ),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                if retired_idempotency != retired_idempotency_count {
+                    return Err(LakeCatError::Internal(
+                        "table rename idempotency retirement count drifted".to_string(),
+                    ));
+                }
+
+                for (policy_key, binding) in &renamed_bindings {
+                    let changed = conn
+                        .execute(
+                            "update policy_bindings
+                             set namespace_path = ?2, table_name = ?3,
+                                 binding_json = ?4, updated_at = ?5
+                             where policy_key = ?1",
+                            (
+                                policy_key.as_str(),
+                                destination.namespace.path(),
+                                destination.name.as_str(),
+                                encode_json(binding)?,
+                                renamed_at.to_rfc3339(),
+                            ),
+                        )
+                        .await
+                        .map_err(turso_error)?;
+                    if changed != 1 {
+                        return Err(LakeCatError::Internal(
+                            "table rename did not move exactly one policy-binding row".to_string(),
+                        ));
+                    }
+                }
+
+                let audit_event_id = crate::audit_event_id(&audit_event)?;
+                conn.execute(
+                    "insert into audit_events (
+                        event_id, event_type, table_key, principal_json,
+                        request_hash, event_json, created_at
+                     )
+                     values (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                    (
+                        audit_event_id.as_str(),
+                        audit_event.event_type.as_str(),
+                        destination_key.as_str(),
+                        encode_json(&audit_event.principal)?,
+                        audit_event.request_hash.as_deref(),
+                        encode_json(&audit_event.payload)?,
+                        renamed_at.to_rfc3339(),
+                    ),
+                )
+                .await
+                .map_err(turso_error)?;
+                conn.execute(
+                    "insert into outbox_events (
+                        event_id, sink, event_type, payload_json, created_at
+                     )
+                     values (?1, ?2, ?3, ?4, ?5)",
+                    (
+                        outbox_event.event_id.as_str(),
+                        outbox_event.sink.as_str(),
+                        outbox_event.event_type.as_str(),
+                        encode_json(&outbox_event.payload)?,
+                        renamed_at.to_rfc3339(),
+                    ),
+                )
+                .await
+                .map_err(turso_error)?;
+                Ok(table)
+            })
+        })
+        .await
+    }
+
     async fn commit_table(
         &self,
         ident: &TableIdent,
