@@ -33,6 +33,7 @@ pub enum CatalogAction {
     NamespaceDrop,
     TableCreate,
     TableRegister,
+    TableRename,
     TableLoad,
     TablePlanScan,
     TableCommit,
@@ -571,6 +572,9 @@ pub struct CanCreateTable;
 pub struct CanRegisterTable;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanRenameTable;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanLoadTable;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -636,8 +640,37 @@ pub struct CanUpdateNamespace;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanDropNamespace;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TableRenameTarget {
+    source: TableIdent,
+    destination: TableIdent,
+}
+
+impl TableRenameTarget {
+    pub fn new(source: TableIdent, destination: TableIdent) -> LakeCatResult<Self> {
+        if source.warehouse != destination.warehouse {
+            return Err(LakeCatError::InvalidArgument(
+                "table rename target cannot cross warehouses".to_string(),
+            ));
+        }
+        Ok(Self {
+            source,
+            destination,
+        })
+    }
+
+    pub fn source(&self) -> &TableIdent {
+        &self.source
+    }
+
+    pub fn destination(&self) -> &TableIdent {
+        &self.destination
+    }
+}
+
 pub type TableCreateCapability = Capability<CanCreateTable, TableIdent>;
 pub type TableRegisterCapability = Capability<CanRegisterTable, TableIdent>;
+pub type TableRenameCapability = Capability<CanRenameTable, TableRenameTarget>;
 pub type TableLoadCapability = Capability<CanLoadTable, TableIdent>;
 pub type TableCommitCapability = Capability<CanCommitTable, TableIdent>;
 pub type TableDropCapability = Capability<CanDropTable, TableIdent>;
@@ -683,6 +716,53 @@ impl TableRegisterCapability {
 
     pub fn table(&self) -> &TableIdent {
         self.resource()
+    }
+}
+
+impl TableRenameCapability {
+    pub fn from_receipt(
+        receipt: AuthorizationReceipt,
+        target: TableRenameTarget,
+    ) -> LakeCatResult<Self> {
+        validate_table_authorization_receipt(
+            &receipt,
+            target.source(),
+            CatalogAction::TableRename,
+            "rename table",
+        )?;
+        let receipt_destination = receipt
+            .context
+            .get("destination-table")
+            .cloned()
+            .ok_or_else(|| {
+                LakeCatError::InvalidArgument(
+                    "table rename authorization receipt is missing destination table".to_string(),
+                )
+            })?;
+        let receipt_destination: TableIdent =
+            serde_json::from_value(receipt_destination).map_err(|_| {
+                LakeCatError::InvalidArgument(
+                    "table rename authorization receipt destination table is malformed".to_string(),
+                )
+            })?;
+        if &receipt_destination != target.destination() {
+            return Err(LakeCatError::InvalidArgument(
+                "table rename authorization receipt destination does not match target".to_string(),
+            ));
+        }
+        Ok(Capability {
+            receipt,
+            resource: target,
+            _action: std::marker::PhantomData,
+        })
+    }
+
+    pub fn source(&self) -> &TableIdent {
+        self.resource().source()
+    }
+
+    pub fn destination(&self) -> &TableIdent {
+        self.resource().destination()
     }
 }
 
@@ -928,6 +1008,20 @@ fn table_capability_from_receipt<Action>(
     expected_action: CatalogAction,
     action_description: &str,
 ) -> LakeCatResult<Capability<Action, TableIdent>> {
+    validate_table_authorization_receipt(&receipt, &table, expected_action, action_description)?;
+    Ok(Capability {
+        receipt,
+        resource: table,
+        _action: std::marker::PhantomData,
+    })
+}
+
+fn validate_table_authorization_receipt(
+    receipt: &AuthorizationReceipt,
+    table: &TableIdent,
+    expected_action: CatalogAction,
+    action_description: &str,
+) -> LakeCatResult<()> {
     if !receipt.allowed {
         return Err(LakeCatError::Conflict(
             "authorization receipt is not allowed".to_string(),
@@ -939,16 +1033,12 @@ fn table_capability_from_receipt<Action>(
             receipt.action,
         )));
     }
-    if receipt.table.as_ref() != Some(&table) {
+    if receipt.table.as_ref() != Some(table) {
         return Err(LakeCatError::InvalidArgument(
-            "authorization receipt table does not match scan table".to_string(),
+            "authorization receipt table does not match authorized table".to_string(),
         ));
     }
-    Ok(Capability {
-        receipt,
-        resource: table,
-        _action: std::marker::PhantomData,
-    })
+    Ok(())
 }
 
 #[cfg(test)]
@@ -995,6 +1085,7 @@ pub fn action_name(action: &CatalogAction) -> &'static str {
         CatalogAction::NamespaceDrop => "namespace.drop",
         CatalogAction::TableCreate => "table.create",
         CatalogAction::TableRegister => "table.register",
+        CatalogAction::TableRename => "table.rename",
         CatalogAction::TableLoad => "table.load",
         CatalogAction::TablePlanScan => "table.plan_scan",
         CatalogAction::TableCommit => "table.commit",

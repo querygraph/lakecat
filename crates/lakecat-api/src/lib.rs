@@ -29,6 +29,7 @@ pub const LAKECAT_ICEBERG_REST_ENDPOINTS: &[&str] = &[
     "GET /v1/{prefix}/namespaces/{namespace}/tables",
     "POST /v1/{prefix}/namespaces/{namespace}/tables",
     "POST /v1/{prefix}/namespaces/{namespace}/register",
+    "POST /v1/{prefix}/tables/rename",
     "GET /v1/{prefix}/namespaces/{namespace}/tables/{table}",
     "POST /v1/{prefix}/namespaces/{namespace}/tables/{table}",
     "DELETE /v1/{prefix}/namespaces/{namespace}/tables/{table}",
@@ -241,6 +242,12 @@ pub struct RegisterTableRequest {
     pub metadata_location: String,
     #[serde(default)]
     pub overwrite: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RenameTableRequest {
+    pub source: TableIdentifier,
+    pub destination: TableIdentifier,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

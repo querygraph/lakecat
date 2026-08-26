@@ -59,6 +59,7 @@ pub enum LineageEventType {
     TableCommitRecordsListed,
     TableScanPlanned,
     TableCommitted,
+    TableRenamed,
     TableDeleted,
     TableRestored,
     ViewDropped,
@@ -150,6 +151,13 @@ fn lineage_inputs(event: &LineageEvent) -> Vec<Value> {
             .as_ref()
             .map(|table| vec![open_lineage_dataset(table, &event.payload)])
             .unwrap_or_default(),
+        LineageEventType::TableRenamed => event
+            .payload
+            .get("source")
+            .cloned()
+            .and_then(|source| serde_json::from_value::<TableIdent>(source).ok())
+            .map(|source| vec![open_lineage_dataset(&source, &event.payload)])
+            .unwrap_or_default(),
         _ => Vec::new(),
     }
 }
@@ -158,6 +166,7 @@ fn lineage_outputs(event: &LineageEvent) -> Vec<Value> {
     match event.event_type {
         LineageEventType::TableCreated
         | LineageEventType::TableCommitted
+        | LineageEventType::TableRenamed
         | LineageEventType::TableRestored => event
             .table
             .as_ref()
@@ -481,6 +490,7 @@ fn lineage_event_type_name(event_type: &LineageEventType) -> &'static str {
         LineageEventType::TableCommitRecordsListed => "table-commit-records-listed",
         LineageEventType::TableScanPlanned => "table-scan-planned",
         LineageEventType::TableCommitted => "table-committed",
+        LineageEventType::TableRenamed => "table-renamed",
         LineageEventType::TableDeleted => "table-deleted",
         LineageEventType::TableRestored => "table-restored",
         LineageEventType::ViewDropped => "view-dropped",

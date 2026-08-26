@@ -15,4 +15,5 @@ mod namespace;
 mod outbox;
 mod scan;
 mod table;
+mod table_rename;
 mod view;

@@ -575,22 +575,29 @@ pub(crate) fn validate_authorization_receipt_context_policy_bindings(
     context: &Value,
     label: &str,
 ) -> Result<(), LakeCatError> {
-    let Some(policy_bindings) = context.get("policy-bindings") else {
-        return Ok(());
-    };
-    let Some(policy_bindings) = policy_bindings.as_array() else {
-        return Err(outbox_evidence_error(
-            event,
-            &format!("{label} must be an array"),
-        ));
-    };
-    for policy_binding in policy_bindings {
-        validate_object_evidence_schema(
-            event,
-            policy_binding,
-            label,
-            AUTHORIZATION_RECEIPT_CONTEXT_POLICY_BINDING_FIELDS,
-        )?;
+    for field in ["policy-bindings", "destination-policy-bindings"] {
+        let Some(policy_bindings) = context.get(field) else {
+            continue;
+        };
+        let binding_label = if field == "policy-bindings" {
+            label.to_string()
+        } else {
+            format!("{label} {field}")
+        };
+        let Some(policy_bindings) = policy_bindings.as_array() else {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{binding_label} must be an array"),
+            ));
+        };
+        for policy_binding in policy_bindings {
+            validate_object_evidence_schema(
+                event,
+                policy_binding,
+                &binding_label,
+                AUTHORIZATION_RECEIPT_CONTEXT_POLICY_BINDING_FIELDS,
+            )?;
+        }
     }
     Ok(())
 }
@@ -686,6 +693,7 @@ pub(crate) fn authorization_receipt_action_matches_event(
         "table.commits-listed" | "table.loaded" => matches!(action, CatalogAction::TableLoad),
         "table.created" => matches!(action, CatalogAction::TableCreate),
         "table.registered" => matches!(action, CatalogAction::TableRegister),
+        "table.renamed" => matches!(action, CatalogAction::TableRename),
         "table.deleted" => matches!(action, CatalogAction::TableDrop),
         "table.restored" => matches!(action, CatalogAction::TableRestore),
         "table.scan-planned" | "table.scan-tasks-fetched" => {

@@ -21,6 +21,8 @@ pub(crate) const AUTHORIZATION_RECEIPT_EVIDENCE_FIELDS: &[&str] = &[
 pub(crate) const AUTHORIZATION_RECEIPT_CONTEXT_EVIDENCE_FIELDS: &[&str] = &[
     "warehouse",
     "policy-bindings",
+    "destination-table",
+    "destination-policy-bindings",
     "read-restriction",
     "lakecat:raw-credential-exception",
     "request-identity",
@@ -404,6 +406,18 @@ pub(crate) const TABLE_LIFECYCLE_SOFT_DELETE_EVIDENCE_FIELDS: &[&str] = &[
     "authorization-receipt",
     "deleted-at",
 ];
+pub(crate) const TABLE_RENAME_EVIDENCE_FIELDS: &[&str] = &[
+    "event-type",
+    "table",
+    "source",
+    "destination",
+    "authorization-receipt",
+    "metadata-location",
+    "format-version",
+    "version",
+];
+pub(crate) const TABLE_RENAME_OUTBOX_PAYLOAD_FIELDS: &[&str] =
+    &["audit-event-id", "event-type", "table", "payload"];
 pub(crate) const NAMESPACE_LIST_EVIDENCE_FIELDS: &[&str] = &[
     "event-type",
     "authorization-receipt",

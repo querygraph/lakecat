@@ -172,6 +172,24 @@ fn register_table_request_uses_the_iceberg_wire_shape() {
 }
 
 #[test]
+fn rename_table_request_preserves_multipart_iceberg_identifiers() {
+    let request: RenameTableRequest = serde_json::from_value(serde_json::json!({
+        "source": {"namespace": ["a.b", "source"], "name": "events"},
+        "destination": {"namespace": ["a.b", "destination"], "name": "renamed_events"}
+    }))
+    .unwrap();
+    assert_eq!(request.source.namespace, ["a.b", "source"]);
+    assert_eq!(request.destination.namespace, ["a.b", "destination"]);
+    assert_eq!(
+        serde_json::to_value(request).unwrap(),
+        serde_json::json!({
+            "source": {"namespace": ["a.b", "source"], "name": "events"},
+            "destination": {"namespace": ["a.b", "destination"], "name": "renamed_events"}
+        })
+    );
+}
+
+#[test]
 fn catalog_config_endpoints_exclude_mount_and_control_plane_routes() {
     let endpoints = CatalogConfigResponse::default()
         .endpoints
@@ -223,7 +241,7 @@ fn list_tables_response_serializes_as_identifier_objects() {
 }
 
 #[test]
-fn catalog_config_endpoints_advertise_table_collection_and_registration_routes() {
+fn catalog_config_endpoints_advertise_table_collection_registration_and_rename_routes() {
     let endpoints = CatalogConfigResponse::default()
         .endpoints
         .into_iter()
@@ -233,6 +251,7 @@ fn catalog_config_endpoints_advertise_table_collection_and_registration_routes()
     // deployment mount aliases do not belong in protocol capability data.
     assert!(endpoints.contains("GET /v1/{prefix}/namespaces/{namespace}/tables"));
     assert!(endpoints.contains("POST /v1/{prefix}/namespaces/{namespace}/register"));
+    assert!(endpoints.contains("POST /v1/{prefix}/tables/rename"));
 }
 
 #[test]

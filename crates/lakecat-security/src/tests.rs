@@ -693,6 +693,38 @@ fn table_capabilities_require_matching_allowed_receipts() {
             .expect("matching register receipt should mint capability");
     assert_eq!(register_capability.table(), capability.table());
 
+    let rename_destination = TableIdent::new(
+        capability.table().warehouse.clone(),
+        "archive".parse().unwrap(),
+        TableName::new("events_renamed").unwrap(),
+    );
+    let rename_target =
+        TableRenameTarget::new(capability.table().clone(), rename_destination.clone()).unwrap();
+    let rename_receipt = AuthorizationReceipt {
+        principal: Principal {
+            subject: "agent:writer".to_string(),
+            kind: PrincipalKind::Agent,
+        },
+        action: CatalogAction::TableRename,
+        table: Some(capability.table().clone()),
+        allowed: true,
+        engine: "test".to_string(),
+        policy_hash: None,
+        context: serde_json::json!({"destination-table": &rename_destination}),
+        checked_at: Utc::now(),
+    };
+    let rename_capability =
+        TableRenameCapability::from_receipt(rename_receipt.clone(), rename_target.clone())
+            .expect("matching source and destination receipt should mint rename capability");
+    assert_eq!(rename_capability.source(), capability.table());
+    assert_eq!(rename_capability.destination(), &rename_destination);
+    let mut drifted_destination_receipt = rename_receipt;
+    drifted_destination_receipt.context["destination-table"] =
+        serde_json::json!(capability.table());
+    assert!(
+        TableRenameCapability::from_receipt(drifted_destination_receipt, rename_target).is_err()
+    );
+
     let credentials_receipt = AuthorizationReceipt {
         principal: Principal {
             subject: "agent:reader".to_string(),

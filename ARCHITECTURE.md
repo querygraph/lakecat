@@ -331,6 +331,13 @@ snapshot-id, and policy-hash summary evidence, and expose a service-level drain
 that projects committed events to graph and lineage sinks. Registration emits a
 distinct governed `table.registered` event which projects as creation of the
 catalog object without relabeling the client operation as `createTable`.
+Standard rename is a same-warehouse catalog transaction: the store changes the
+current table identity, retargets pointer-log and exact table-policy scope,
+retires idempotency records whose key space belonged to the old REST identity,
+and appends immutable `table.renamed` audit/outbox evidence atomically. Existing
+audit/outbox history is never rewritten. Replay uses a dedicated `Renamed`
+graph action and an OpenLineage input/output transform so neither the source nor
+destination is disguised as an unrelated create or delete.
 Outbox draining is all-or-retry across each selected batch. Embedded and Turso
 stores expose the same pending prefix by ordering on `created_at,event_id`
 before applying the caller's batch limit; if a later graph or lineage
@@ -475,7 +482,8 @@ audited `catalog.config-read`, `namespace.listed`, `namespace.loaded`, and
 `namespace.dropped` events enter the outbox projection stream.
 Governed table lifecycle now records soft-delete rows, hides deleted tables from
 normal catalog reads, restores soft-deleted tables through a governed management
-endpoint, and emits `table.deleted` / `table.restored` audit/outbox events.
+endpoint, atomically renames active tables within a warehouse, and emits
+`table.deleted`, `table.restored`, and `table.renamed` audit/outbox events.
 Restore replay now produces catalog-facing table graph evidence plus a LakeCat
 OpenLineage restore receipt, with richer restore-specific graph semantics left
 to Grust.
@@ -580,6 +588,7 @@ Every externally meaningful operation should pass through TypeSec:
 - `table.plan_scan`
 - `table.commit`
 - `table.register`
+- `table.rename`
 - `table.drop`
 - `credentials.vend`
 - `graph.read`

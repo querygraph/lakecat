@@ -47,7 +47,13 @@ Standard table metadata can be registered through
 `POST /catalog/v1[/<warehouse>]/namespaces/<namespace>/register`; LakeCat reads
 and validates the referenced metadata object, preserves its identity and
 pointer, and records governed registration evidence. Registration is currently
-false-overwrite only.
+false-overwrite only. Tables can be renamed within the served warehouse through
+`POST /catalog/v1[/<warehouse>]/tables/rename` using the standard Iceberg
+`source`/`destination` identifier body. Rename preserves the metadata pointer,
+UUID, version, and creation stamp; atomically retargets commit history and
+table-scoped policy bindings; and emits source-to-destination graph and
+OpenLineage evidence. Name-bound commit idempotency records are intentionally
+retired so an old request cannot replay under a new REST identity.
 The full local release-readiness gate is green as of July 4, 2026 (see the
 recorded proof ref below); keep that local proof green before making release
 or cloud-automation claims. Use [RELEASE.md](RELEASE.md) for the release

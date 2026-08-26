@@ -164,6 +164,9 @@ pub(crate) fn validate_outbox_event_evidence(event: &OutboxEvent) -> Result<(), 
     ) {
         validate_table_lifecycle_event_evidence(event, payload)?;
     }
+    if event.event_type == "table.renamed" {
+        validate_table_rename_event_evidence(event, payload)?;
+    }
     if event.event_type == "credentials.vend-attempted" {
         validate_credential_vend_event_evidence(event, payload)?;
     }
@@ -285,6 +288,7 @@ pub(crate) fn is_known_outbox_event_type(event_type: &str) -> bool {
             | "table.commits-listed"
             | "table.created"
             | "table.registered"
+            | "table.renamed"
             | "table.deleted"
             | "table.loaded"
             | "table.restored"

@@ -71,6 +71,44 @@ fn projects_table_restore_to_openlineage_output() {
 }
 
 #[test]
+fn projects_table_rename_as_source_to_destination_openlineage_transform() {
+    let source = TableIdent::new(
+        WarehouseName::new("local").unwrap(),
+        "source".parse::<Namespace>().unwrap(),
+        TableName::new("events").unwrap(),
+    );
+    let destination = TableIdent::new(
+        WarehouseName::new("local").unwrap(),
+        "destination".parse::<Namespace>().unwrap(),
+        TableName::new("renamed_events").unwrap(),
+    );
+    let event = LineageEvent::new(
+        LineageEventType::TableRenamed,
+        Principal::anonymous(),
+        Some(destination.clone()),
+        json!({
+            "source": source,
+            "destination": destination,
+            "metadata-location": "file:///tmp/events/metadata/00000.json",
+            "version": 0,
+        }),
+    );
+    let projected = open_lineage_event(&event);
+
+    assert_eq!(projected["job"]["name"], json!("table-renamed"));
+    assert_eq!(
+        projected["inputs"][0]["namespace"],
+        json!("lakecat.local.source")
+    );
+    assert_eq!(projected["inputs"][0]["name"], json!("events"));
+    assert_eq!(
+        projected["outputs"][0]["namespace"],
+        json!("lakecat.local.destination")
+    );
+    assert_eq!(projected["outputs"][0]["name"], json!("renamed_events"));
+}
+
+#[test]
 fn projects_querygraph_bootstrap_to_openlineage_output() {
     let event = LineageEvent::new(
         LineageEventType::QueryGraphBootstrap,

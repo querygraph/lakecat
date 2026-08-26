@@ -18,6 +18,7 @@ mod router;
 mod scan;
 mod state;
 mod table_registration;
+mod table_rename;
 
 pub(crate) use commit::*;
 pub use error::*;
@@ -32,6 +33,7 @@ pub use router::*;
 pub(crate) use scan::*;
 pub use state::*;
 pub(crate) use table_registration::*;
+pub(crate) use table_rename::*;
 
 pub(crate) use evidence::*;
 

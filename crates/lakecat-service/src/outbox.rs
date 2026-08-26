@@ -1097,6 +1097,7 @@ pub(crate) fn outbox_table_projection(event_type: &str) -> Option<(GraphAction, 
             Some((GraphAction::PlannedScan, LineageEventType::TableScanPlanned))
         }
         "table.commit" => Some((GraphAction::Committed, LineageEventType::TableCommitted)),
+        "table.renamed" => Some((GraphAction::Renamed, LineageEventType::TableRenamed)),
         "table.deleted" => Some((GraphAction::Deleted, LineageEventType::TableDeleted)),
         _ => None,
     }

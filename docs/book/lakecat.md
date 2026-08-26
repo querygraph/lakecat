@@ -1115,6 +1115,24 @@ canonical kebab-case evidence while retaining read aliases for older persisted
 snake_case rows; version zero is valid evidence when a newly registered table is
 dropped before its first commit.
 
+The optional standard `renameTable` operation is also available on default and
+warehouse-prefixed routes. Its Iceberg body carries complete `source` and
+`destination` identifiers, so LakeCat constructs namespaces directly from the
+component arrays instead of dot-joining them. TypeSec receives the source table,
+destination table, and effective policy bindings for both scopes before any
+mutation. Cross-namespace rename is supported inside one
+served warehouse; missing source or destination namespace returns 404, and an
+occupied destination returns the standard 409 `AlreadyExistsException`.
+
+Rename is one memory/Turso transaction. It preserves the Iceberg metadata body,
+metadata pointer, UUID, version, and original creation stamp; retargets current
+table state, commit-history scope, and exact table-scoped policies; and retires
+old name-bound idempotency rows. Historical audit/outbox envelopes remain
+immutable. The transaction appends one `table.renamed` event whose validated
+receipt binds both identities. Grust sees a dedicated `Renamed` action and
+OpenLineage sees the source dataset as input and destination dataset as output,
+rather than two misleading lifecycle events.
+
 The memory store keeps namespace identity and properties in one atomic map.
 Turso keeps the original namespace identity row plus a transactional property
 side row; legacy rows without that side row load as empty and materialize on
@@ -1896,7 +1914,8 @@ the evidence needed to check that statement.
 The `0.3.0` catalog spine includes:
 
 - standard Iceberg REST config, namespace, table-load, table-create,
-  false-overwrite table-register, `listTables`, and table-commit paths,
+  false-overwrite table-register, same-warehouse table-rename, `listTables`, and
+  table-commit paths,
   including warehouse-prefixed routing;
 - the Rust service and `CatalogStore` seam with Turso-backed durable state and
   memory-store parity for embedded tests;

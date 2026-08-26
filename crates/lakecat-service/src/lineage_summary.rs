@@ -121,6 +121,10 @@ pub(crate) fn lineage_drain_event_summary(
         let payload = event.payload.get("payload").unwrap_or(&event.payload);
         validate_table_lifecycle_event_evidence(event, payload)?;
     }
+    if event.event_type == "table.renamed" {
+        let payload = event.payload.get("payload").unwrap_or(&event.payload);
+        validate_table_rename_event_evidence(event, payload)?;
+    }
     if event.event_type == "view.listed" {
         let payload = event.payload.get("payload").unwrap_or(&event.payload);
         validate_view_list_event_evidence(event, payload)?;

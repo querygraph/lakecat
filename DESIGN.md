@@ -248,6 +248,13 @@ The current working plan is:
    back to durable `metadata_pointer_log` table-key and principal row evidence
    before returning pointer-history proof; memory pointer-log records must carry
    the same private table-key anchor before returning commit-history records.
+   Rename must move the current table row, pointer-log scope, and exact
+   table-policy scope in one transaction while leaving historical audit/outbox
+   envelopes immutable. Because commit idempotency keys are scoped by the REST
+   table identity, rename retires old replay rows rather than silently making an
+   old source request replayable at the destination. The authorization receipt
+   binds both source and destination and includes the effective policy context
+   for each before mutation.
    Memory/Turso restore must also carry the soft-delete map key or durable
    `soft_deletes.table_key` row column through tombstone validation so a
    remapped soft-delete row cannot restore the wrong table.

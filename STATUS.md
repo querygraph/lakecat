@@ -34,8 +34,12 @@ Updated: 2026-08-26
   standard false-overwrite register route now reads that document through the
   bounded object-store seam, preserves its UUID and metadata pointer exactly,
   authorizes `table.register`, and drains distinct `table.registered` evidence;
-  `overwrite=true` remains explicitly rejected. The optimized same-Docker rerun
-  and rename coverage remain pending.
+  `overwrite=true` remains explicitly rejected. Standard same-warehouse rename
+  now preserves multipart source/destination identities, authorizes both scopes,
+  atomically moves table, commit-history, and table-policy state in memory and
+  Turso, retires old name-bound idempotency replays, and drains a first-class
+  `table.renamed` Grust/OpenLineage transformation. The optimized same-Docker
+  rerun remains pending.
 - Latest namespace compatibility correction: REST paths now decode multipart
   U+001F identifiers, list only top-level or immediate-child namespaces, reject
   a missing parent with 404, paginate deterministically with bounded opaque

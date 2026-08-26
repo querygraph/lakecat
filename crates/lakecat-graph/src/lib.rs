@@ -388,6 +388,7 @@ pub enum GraphAction {
     Loaded,
     PlannedScan,
     Committed,
+    Renamed,
     Deleted,
 }
 

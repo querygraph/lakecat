@@ -7,9 +7,9 @@ use lakecat_security::{
     NamespaceLoadCapability, NamespaceUpdateCapability, PolicyManageCapability,
     ProjectManageCapability, ReadRestriction, ServerManageCapability,
     StorageProfileManageCapability, TableCommitCapability, TableCreateCapability,
-    TableDropCapability, TableLoadCapability, TableRegisterCapability, TableRestoreCapability,
-    TableScanCapability, ViewDropCapability, ViewLoadCapability, ViewManageCapability,
-    WarehouseManageCapability,
+    TableDropCapability, TableLoadCapability, TableRegisterCapability, TableRenameCapability,
+    TableRenameTarget, TableRestoreCapability, TableScanCapability, ViewDropCapability,
+    ViewLoadCapability, ViewManageCapability, WarehouseManageCapability,
 };
 use serde_json::{Value, json};
 
@@ -297,6 +297,16 @@ pub(crate) async fn authorize(
     action: CatalogAction,
     table: Option<TableIdent>,
 ) -> Result<AuthorizationReceipt, LakeCatHttpError> {
+    authorize_with_operation_context(state, identity, action, table, serde_json::Map::new()).await
+}
+
+pub(crate) async fn authorize_with_operation_context(
+    state: &LakeCatState,
+    identity: RequestIdentity,
+    action: CatalogAction,
+    table: Option<TableIdent>,
+    operation_context: serde_json::Map<String, Value>,
+) -> Result<AuthorizationReceipt, LakeCatHttpError> {
     let identity = verify_typedid_identity(state, identity).await?;
     let policy_bindings = if let Some(table) = table.as_ref() {
         state.store.policy_bindings_for_table(table).await?
@@ -312,8 +322,12 @@ pub(crate) async fn authorize(
     } else {
         None
     };
+    let authorization_warehouse = table
+        .as_ref()
+        .map(|table| table.warehouse.as_str())
+        .unwrap_or_else(|| state.warehouse.as_str());
     let mut context = json!({
-        "warehouse": state.warehouse.as_str(),
+        "warehouse": authorization_warehouse,
         "request-identity": identity.envelope,
         "policy-bindings": policy_bindings
             .iter()
@@ -328,6 +342,17 @@ pub(crate) async fn authorize(
         })?;
         if let Some(raw_exception) = raw_exception {
             context["lakecat:raw-credential-exception"] = raw_exception;
+        }
+    }
+    let context_object = context.as_object_mut().ok_or_else(|| {
+        LakeCatError::Internal("authorization context must be a JSON object".to_string())
+    })?;
+    for (key, value) in operation_context {
+        if context_object.insert(key, value).is_some() {
+            return Err(LakeCatError::Internal(
+                "operation authorization context must not replace base context".to_string(),
+            )
+            .into());
         }
     }
     let receipt = state
@@ -394,6 +419,36 @@ pub(crate) async fn authorize_table_register(
     )
     .await?;
     Ok(TableRegisterCapability::from_receipt(receipt, table)?)
+}
+
+pub(crate) async fn authorize_table_rename(
+    state: &LakeCatState,
+    identity: RequestIdentity,
+    source: TableIdent,
+    destination: TableIdent,
+) -> Result<TableRenameCapability, LakeCatHttpError> {
+    let target = TableRenameTarget::new(source.clone(), destination.clone())?;
+    let destination_policy_bindings = state.store.policy_bindings_for_table(&destination).await?;
+    let mut operation_context = serde_json::Map::new();
+    operation_context.insert("destination-table".to_string(), json!(&destination));
+    operation_context.insert(
+        "destination-policy-bindings".to_string(),
+        json!(
+            destination_policy_bindings
+                .iter()
+                .map(policy_binding_response)
+                .collect::<Vec<_>>()
+        ),
+    );
+    let receipt = authorize_with_operation_context(
+        state,
+        identity,
+        CatalogAction::TableRename,
+        Some(source),
+        operation_context,
+    )
+    .await?;
+    Ok(TableRenameCapability::from_receipt(receipt, target)?)
 }
 
 pub(crate) async fn authorize_catalog_config(

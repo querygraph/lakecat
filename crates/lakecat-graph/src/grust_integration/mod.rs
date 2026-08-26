@@ -64,6 +64,7 @@ fn graph_action_name(action: &GraphAction) -> &'static str {
         GraphAction::Loaded => "loaded",
         GraphAction::PlannedScan => "planned-scan",
         GraphAction::Committed => "committed",
+        GraphAction::Renamed => "renamed",
         GraphAction::Deleted => "deleted",
     }
 }

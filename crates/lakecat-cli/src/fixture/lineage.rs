@@ -461,6 +461,7 @@ pub(crate) fn qglake_expected_authorization_receipt_action(
         "table.commits-listed" | "table.loaded" => Some("table-load"),
         "table.created" => Some("table-create"),
         "table.registered" => Some("table-register"),
+        "table.renamed" => Some("table-rename"),
         "table.deleted" => Some("table-drop"),
         "table.restored" => Some("table-restore"),
         "table.scan-planned" | "table.scan-tasks-fetched" => Some("table-plan-scan"),
