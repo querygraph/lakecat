@@ -264,11 +264,13 @@ as arrays of <code>{key, value}</code> pairs, which a stock client
 cannot parse. A <code>config_map</code> serde adapter now emits them as
 JSON objects, so a plain <code>RestCatalog</code> reads
 <code>/config</code> and proceeds.</li>
-<li><strong><code>/config</code> advertises canonical routes.</strong>
-The endpoint now lists spec-canonical
-<code>&lt;METHOD&gt; /v1/{prefix}/...</code> forms — keeping the legacy
-strings alongside — so a stock client routes its calls where the spec
-says they live.</li>
+<li><strong><code>/config</code> advertises the implemented protocol
+surface.</strong> The endpoint lists one duplicate-free, spec-canonical
+<code>&lt;METHOD&gt; /v1/{prefix}/...</code> entry for each supported
+Iceberg operation. Deployment mounts such as <code>/catalog</code>,
+unprefixed aliases, and LakeCat’s management and QueryGraph routes
+remain reachable, but they are not misreported as Iceberg
+capabilities.</li>
 <li><strong><code>listTables</code> exists.</strong> A
 <code>GET …/namespaces/{namespace}/tables</code> endpoint was added,
 which stock clients call as a matter of course.</li>

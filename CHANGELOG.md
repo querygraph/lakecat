@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Catalog community Phase 1: accepted C1-03 at
+  `catalog-bench@feb803f8`/`ec3e40d6` and `lakecat@09dd7ee3` after strict
+  config negotiation, endpoint validation, sanitized evidence, optimized
+  same-Docker production builds, complete readiness replay, and all repository
+  gates passed. Recorded four conformant config probes, Apache Polaris 1.7.0's
+  precise proprietary-route advertisement failure, and why Apache Nessie's
+  config pass does not supersede its historical concurrent-commit failure;
+  retained C1-09's ownership of publishable immutable result bundles.
+
 - Iceberg REST config conformance: replaced LakeCat's mixed protocol, mount,
   compatibility-alias, management, and QueryGraph `endpoints` advertisement
   with one shared duplicate-free list of the Apache Iceberg 1.11 operations

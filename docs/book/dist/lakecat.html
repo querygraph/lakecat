@@ -1052,11 +1052,13 @@ as arrays of <code>{key, value}</code> pairs, which a stock client
 cannot parse. A <code>config_map</code> serde adapter now emits them as
 JSON objects, so a plain <code>RestCatalog</code> reads
 <code>/config</code> and proceeds.</li>
-<li><strong><code>/config</code> advertises canonical routes.</strong>
-The endpoint now lists spec-canonical
-<code>&lt;METHOD&gt; /v1/{prefix}/...</code> forms — keeping the legacy
-strings alongside — so a stock client routes its calls where the spec
-says they live.</li>
+<li><strong><code>/config</code> advertises the implemented protocol
+surface.</strong> The endpoint lists one duplicate-free, spec-canonical
+<code>&lt;METHOD&gt; /v1/{prefix}/...</code> entry for each supported
+Iceberg operation. Deployment mounts such as <code>/catalog</code>,
+unprefixed aliases, and LakeCat’s management and QueryGraph routes
+remain reachable, but they are not misreported as Iceberg
+capabilities.</li>
 <li><strong><code>listTables</code> exists.</strong> A
 <code>GET …/namespaces/{namespace}/tables</code> endpoint was added,
 which stock clients call as a matter of course.</li>
@@ -1427,16 +1429,20 @@ capability:</p>
 <code>overrides</code>, table/credential <code>config</code>, and
 namespace <code>properties</code>) are JSON objects on the wire so that
 stock clients (pyiceberg/Spark/Trino) parse them directly; the
-advertised <code>endpoints</code> include the spec-canonical
-<code>&lt;METHOD&gt; /v1/{prefix}/...</code> forms alongside LakeCat’s
-legacy strings.</p>
+advertised <code>endpoints</code> contain only the exact, duplicate-free
+set of supported Apache Iceberg REST operations in spec-canonical
+<code>&lt;METHOD&gt; /v1/{prefix}/...</code> form. <code>/catalog</code>
+is a deployment mount, unprefixed routes are compatibility aliases, and
+management and QueryGraph are separate control-plane APIs; none belongs
+in the Iceberg capability field.</p>
 <p>That means LakeCat can preserve and replay emerging v4 metadata
 through the Sail JSON bridge, but it is not claiming typed Sail v4
 semantics yet. The same posture is captured in replay evidence: config
 defaults and overrides stay ordinary duplicate-free key/value entries,
-advertised endpoints prove that the standard REST and additive governed
-surfaces were present, and QueryGraph sees compact config proof only
-after service replay accepts it.</p>
+advertised endpoints prove that the supported standard REST surface was
+present, and QueryGraph sees compact config proof only after service
+replay accepts it. Dedicated management and QueryGraph responses and
+outbox events prove those control-plane surfaces independently.</p>
 <h2 data-number="10.2" id="registering-the-warehouse-shape"><span class="header-section-number">10.2</span> Registering The Warehouse
 Shape</h2>
 <p>An operator usually starts with management objects. A server groups
@@ -2510,14 +2516,16 @@ place.</p>
 <tbody>
 <tr>
 <td><code>catalog.config-read</code></td>
-<td>Warehouse scope, v4 bridge defaults, overrides, advertised standard
-REST endpoints, governed plan/fetch/credential endpoints, bootstrap and
-lineage-drain endpoints, authorization receipt</td>
+<td>Warehouse scope, v4 bridge defaults, overrides, the exact supported
+canonical Apache Iceberg REST endpoint set, and authorization
+receipt</td>
 <td>Duplicate config keys, unsupported <code>lakecat.format.v4*</code>
-claims, missing standard or governed endpoints, extra unverified config
-fields</td>
+claims, missing Iceberg operations, deployment mounts or aliases,
+management/QueryGraph routes, unsupported extra endpoints, extra
+unverified config fields</td>
 <td>QueryGraph imports the same compatibility contract LakeCat
-advertised, without turning config into a free-form claims bag</td>
+advertised, without confusing transport topology or control-plane
+discovery with protocol capability</td>
 </tr>
 <tr>
 <td>Namespace lifecycle</td>

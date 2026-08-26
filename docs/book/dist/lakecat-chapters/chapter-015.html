@@ -81,14 +81,16 @@ place.</p>
 <tbody>
 <tr>
 <td><code>catalog.config-read</code></td>
-<td>Warehouse scope, v4 bridge defaults, overrides, advertised standard
-REST endpoints, governed plan/fetch/credential endpoints, bootstrap and
-lineage-drain endpoints, authorization receipt</td>
+<td>Warehouse scope, v4 bridge defaults, overrides, the exact supported
+canonical Apache Iceberg REST endpoint set, and authorization
+receipt</td>
 <td>Duplicate config keys, unsupported <code>lakecat.format.v4*</code>
-claims, missing standard or governed endpoints, extra unverified config
-fields</td>
+claims, missing Iceberg operations, deployment mounts or aliases,
+management/QueryGraph routes, unsupported extra endpoints, extra
+unverified config fields</td>
 <td>QueryGraph imports the same compatibility contract LakeCat
-advertised, without turning config into a free-form claims bag</td>
+advertised, without confusing transport topology or control-plane
+discovery with protocol capability</td>
 </tr>
 <tr>
 <td>Namespace lifecycle</td>
