@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Book reader links: replace source-tree Markdown targets in the C1-05 chapter
+  with immutable GitHub links so the acceptance ledger and table guide remain
+  usable from PDF, EPUB, MOBI, single-file HTML, and split HTML readers.
+
 - Catalog community C1-05 acceptance: closed the catalog-neutral Iceberg REST
   table-lifecycle unit with exact stable-Rust production artifact identities,
   15 required and two optional assertions, the optimized five-catalog matrix,

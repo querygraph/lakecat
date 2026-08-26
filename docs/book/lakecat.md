@@ -1227,8 +1227,9 @@ not imply timing or concurrency performance.
 
 The exact production binaries, image digests, profile/scenario hashes,
 transcript hashes, rejected diagnostics, object ETags, and repository gates are
-in the [Phase 1 acceptance ledger](../catalog-community/PHASE-1-ACCEPTANCE.md#c1-05--table-behavior)
-and [table lifecycle guide](../ICEBERG-TABLES.md). These runs remain reviewed
+in the [Phase 1 acceptance ledger](https://github.com/querygraph/lakecat/blob/9ff8dc76777f3dce2389dbb8e4da6bb030000d77/docs/catalog-community/PHASE-1-ACCEPTANCE.md#c1-05--table-behavior)
+and [table lifecycle guide](https://github.com/querygraph/lakecat/blob/9ff8dc76777f3dce2389dbb8e4da6bb030000d77/docs/ICEBERG-TABLES.md).
+These runs remain reviewed
 smoke evidence. C1-09 owns immutable bundle generation and public publication;
 C1-06 first proves commit requirements, stale pointers, exact retry, and
 idempotency drift.
