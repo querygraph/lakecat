@@ -67,6 +67,8 @@ the same pinned MinIO instance. A smoke run is not publishable evidence.
 
 - [Phase 0 baseline](PHASE-0-BASELINE.md) records the exact inventory, upstream
   audit, reproduction findings, version selection, and known claim drift.
+- [Phase 0 acceptance](PHASE-0-ACCEPTANCE.md) records the clean-worktree gates,
+  accepted revisions, explained Docker discrepancy, and exit-criteria mapping.
 - [Backlog](BACKLOG.md) decomposes every phase into independently reviewable and
   verifiable units.
 - `DESIGN.md` is authoritative for ownership. It must change before an

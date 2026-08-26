@@ -22,7 +22,7 @@ this checklist alone.
 | C0-10 | done | catalog-bench | `7af1fb7` hash-verifies and recomputes all preserved TSV evidence into four aggregate records, an immutable manifest, and the generated pass-only concurrent matrix. |
 | C0-11 | done | catalog-bench | `7af1fb7` adds document/bundle/import/matrix commands, separate integration and tamper tests, result/profile docs, and report migration; all strict workspace gates pass. |
 | C0-12 | done | LakeCat | The book and program entry point now consume exact `catalog-bench@c0637076` evidence, remove the obsolete copied table/nonexistent repository, state the historical/live-rerun scope, and pass the unified full-book build. |
-| C0-13 | pending | both | Run Phase 0 gates from clean worktrees, record exact commands, commit and push each repository independently, and close the phase only if all exit criteria hold. |
+| C0-13 | done | both | Detached clean worktrees at `catalog-bench@c0637076` and `lakecat@1b0b9501` passed their full Phase 0 gates. Exact commands, counts, discrepancy treatment, and exit-criteria mapping are in `PHASE-0-ACCEPTANCE.md`; both branches are committed and pushed independently. |
 
 ## Phase 1 — Lakekeeper and behavioral conformance
 

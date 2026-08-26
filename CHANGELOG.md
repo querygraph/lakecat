@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Catalog community Phase 0 closure: recorded the accepted LakeCat and
+  catalog-bench revisions, historical hash/arithmetic verdict, detached
+  clean-worktree commands and test counts, full book gate, Docker discrepancy,
+  exit-criteria mapping, and explicit draft-profile inputs carried into Phase 1.
+
 - Book artifacts: regenerated and revalidated the PDF, EPUB, MOBI, HTML, and
   chapter-reader editions from catalog-ranking source commit `0b7f1fe5`; the
   tracked version marker and artifact links now identify that exact manuscript.
