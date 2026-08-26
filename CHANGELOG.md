@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Catalog community Phase 1: accepted `catalog-bench@dea3c575` for C1-01 after
+  exact source-built MinIO, isolated Lakekeeper 0.13.3/PostgreSQL 17.11 state,
+  typed drift-rejecting initialization, fresh/repeat live Docker proofs, and all
+  strict repository gates passed; added the incremental Phase 1 acceptance
+  ledger without claiming behavioral conformance or publishable timings.
+
 - Book artifacts: rebuilt and revalidated PDF, EPUB, MOBI, HTML, and chapter
   editions at `fac78867` so the QueryGraph root-manifest operator command and
   source stamp match the accepted manuscript.

@@ -68,6 +68,9 @@ the same pinned MinIO instance. A smoke run is not publishable evidence.
   audit, reproduction findings, version selection, and known claim drift.
 - [Phase 0 acceptance](PHASE-0-ACCEPTANCE.md) records the clean-worktree gates,
   accepted revisions, explained Docker discrepancy, and exit-criteria mapping.
+- [Phase 1 acceptance](PHASE-1-ACCEPTANCE.md) accumulates exact implementation
+  revisions and operation-level evidence for the Lakekeeper and behavioral
+  conformance phase; a completed unit does not imply that the phase is closed.
 - [Backlog](BACKLOG.md) decomposes every phase into independently reviewable and
   verifiable units.
 - `DESIGN.md` is authoritative for ownership. It must change before an

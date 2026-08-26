@@ -28,7 +28,7 @@ acceptance gates; they cannot be declared from this checklist alone.
 
 | ID | Status | Owner | Unit and acceptance evidence |
 | --- | --- | --- | --- |
-| C1-01 | pending | catalog-bench | Add the pinned PostgreSQL and Lakekeeper services to the same catalog-bench-owned Docker network and MinIO, with health/readiness and isolated state. |
+| C1-01 | done | catalog-bench | `catalog-bench@dea3c575` adds the owned network, exact source-built MinIO, dedicated PostgreSQL 17.11 state, Lakekeeper 0.13.3 migration/bootstrap/warehouse/config gates, and typed drift-rejecting setup helpers. Fresh and repeat Docker proofs are recorded in `PHASE-1-ACCEPTANCE.md`. |
 | C1-02 | pending | catalog-bench | Model catalog capabilities and adapter endpoints without behavior-changing shims; validate every adapter profile. |
 | C1-03 | pending | catalog-bench | Implement config negotiation and endpoint-advertisement scenarios with sanitized request/response evidence. |
 | C1-04 | pending | catalog-bench | Implement namespace CRUD, hierarchy, pagination, duplicate, and missing-parent scenarios. |
