@@ -170,18 +170,29 @@ impl CatalogStore for MemoryCatalogStore {
         {
             return Err(namespace_not_empty(namespace, "child namespaces"));
         }
-        if state
-            .tables
-            .iter()
-            .map(|(table_key, table)| {
-                validate_table_record_map_scope(table, table_key)?;
-                Ok(table)
-            })
-            .collect::<LakeCatResult<Vec<_>>>()?
-            .into_iter()
-            .any(|table| table.ident.warehouse == *warehouse && table.ident.namespace == *namespace)
-        {
-            return Err(namespace_not_empty(namespace, "tables"));
+        let mut retired_table_keys = BTreeSet::new();
+        for (key, table) in &state.tables {
+            validate_table_record_map_scope(table, key)?;
+            if table.ident.warehouse != *warehouse || table.ident.namespace != *namespace {
+                continue;
+            }
+            let Some(soft_delete) = state.soft_deletes.get(key) else {
+                return Err(namespace_not_empty(namespace, "tables"));
+            };
+            validate_soft_delete_record_map_scope(soft_delete, key)?;
+            soft_delete.validate_for_table(&table.ident, table)?;
+            retired_table_keys.insert(key.clone());
+        }
+        for (key, soft_delete) in &state.soft_deletes {
+            validate_soft_delete_record_map_scope(soft_delete, key)?;
+            if soft_delete.table.warehouse == *warehouse
+                && soft_delete.table.namespace == *namespace
+                && !retired_table_keys.contains(key)
+            {
+                return Err(LakeCatError::Internal(
+                    "soft-delete row has no matching table registration".to_string(),
+                ));
+            }
         }
         if state
             .views
@@ -216,6 +227,18 @@ impl CatalogStore for MemoryCatalogStore {
             .get_mut(warehouse.as_str())
             .and_then(|namespaces| namespaces.remove(namespace))
             .ok_or_else(|| namespace_not_found(namespace))?;
+        state
+            .tables
+            .retain(|key, _| !retired_table_keys.contains(key));
+        state
+            .soft_deletes
+            .retain(|key, _| !retired_table_keys.contains(key));
+        state
+            .commits
+            .retain(|commit| !retired_table_keys.contains(&commit.table_key));
+        state
+            .idempotency
+            .retain(|_, replay| !retired_table_keys.contains(&replay.table_key));
         Ok(namespace.clone())
     }
 
@@ -249,10 +272,10 @@ impl CatalogStore for MemoryCatalogStore {
 
         let key = table_key(&table.ident);
         if state.tables.contains_key(&key) {
-            return Err(LakeCatError::Conflict(format!(
-                "table already exists: {}",
-                table.ident.stable_id()
-            )));
+            return Err(LakeCatError::AlreadyExists {
+                object: "table",
+                name: table.ident.stable_id(),
+            });
         }
         state.tables.insert(key, table.clone());
         Ok(table)
@@ -612,6 +635,13 @@ impl CatalogStore for MemoryCatalogStore {
         authorization_receipt: Option<Value>,
     ) -> LakeCatResult<TableRecord> {
         let mut state = self.state.write().await;
+        if !state
+            .namespaces
+            .get(ident.warehouse.as_str())
+            .is_some_and(|namespaces| namespaces.contains_key(&ident.namespace))
+        {
+            return Err(namespace_not_found(&ident.namespace));
+        }
         let key = table_key(ident);
         if state.soft_deletes.contains_key(&key) {
             return Err(LakeCatError::NotFound {
@@ -675,6 +705,13 @@ impl CatalogStore for MemoryCatalogStore {
         authorization_receipt: Option<Value>,
     ) -> LakeCatResult<TableRecord> {
         let mut state = self.state.write().await;
+        if !state
+            .namespaces
+            .get(ident.warehouse.as_str())
+            .is_some_and(|namespaces| namespaces.contains_key(&ident.namespace))
+        {
+            return Err(namespace_not_found(&ident.namespace));
+        }
         let key = table_key(ident);
         let Some(record) = state.soft_deletes.get(&key) else {
             return Err(LakeCatError::NotFound {

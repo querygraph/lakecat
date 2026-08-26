@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Iceberg REST table lifecycle conformance: table listing now proves the parent
+  namespace exists, duplicate table creation returns the spec-shaped
+  `AlreadyExistsException`, and namespace cleanup distinguishes active tables
+  from governed soft-delete tombstones. Dropping an otherwise-empty namespace
+  transactionally retires hidden table registrations plus mutable pointer-log
+  and idempotency state while preserving immutable audit/outbox history, so a
+  recreated namespace cannot collide with or restore an earlier lifecycle.
+  Added memory, Turso, and HTTP regressions for every repaired invariant.
+
 - Book artifacts: rebuilt and revalidated the PDF, EPUB, MOBI, HTML, and
   chapter-reader editions from the committed C1-04 acceptance manuscript at
   `27fc145f`; the 60-page PDF, metadata, version marker, Kindle naming, and

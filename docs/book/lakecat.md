@@ -1080,6 +1080,19 @@ an unchanged-state 422 `UnprocessableEntityException`. Duplicate create is 409,
 and parent drop is rejected while child namespaces, tables, views, or policy
 bindings remain.
 
+Table collections establish that parent scope before listing: asking for
+`GET .../namespaces/{namespace}/tables` under an absent namespace returns 404
+`NoSuchNamespaceException`, not an empty successful inventory. Duplicate table
+creation returns 409 `AlreadyExistsException`, keeping an identity collision
+distinct from a stale metadata-pointer commit conflict. LakeCat's standard
+table drop remains a governed soft delete while the namespace exists, so an
+operator can restore it through the management surface. Once the otherwise-empty
+namespace itself is dropped, memory and Turso retire those hidden table
+registrations and their mutable pointer-log/idempotency state transactionally;
+immutable audit and outbox evidence remains. Recreating the same namespace
+therefore starts a clean catalog lifecycle instead of exposing or colliding with
+an old tombstone.
+
 The memory store keeps namespace identity and properties in one atomic map.
 Turso keeps the original namespace identity row plus a transactional property
 side row; legacy rows without that side row load as empty and materialize on

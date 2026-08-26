@@ -558,3 +558,81 @@ async fn list_tables_excludes_other_namespaces() {
     assert_eq!(names, vec!["events".to_string()]);
     assert!(!names.contains(&"secrets".to_string()));
 }
+
+#[tokio::test]
+async fn list_tables_in_missing_namespace_returns_no_such_namespace() {
+    let response = test_app()
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri("/catalog/v1/namespaces/absent/tables")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(payload["error"]["type"], "NoSuchNamespaceException");
+    assert_eq!(payload["error"]["code"], 404);
+}
+
+#[tokio::test]
+async fn duplicate_table_create_returns_already_exists_error_model() {
+    let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
+    create_named_table(&app, "default", "events").await;
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/catalog/v1/namespaces/default/tables")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    r#"{"name":"events","schema":{"type":"struct","schema-id":0,"fields":[{"id":1,"name":"id","required":true,"type":"long"}]}}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(payload["error"]["type"], "AlreadyExistsException");
+    assert_eq!(payload["error"]["code"], 409);
+}
+
+#[tokio::test]
+async fn namespace_drop_after_table_drop_allows_clean_recreation() {
+    let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
+    create_named_table(&app, "default", "events").await;
+
+    let drop_table = Request::builder()
+        .method(Method::DELETE)
+        .uri("/catalog/v1/namespaces/default/tables/events")
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(drop_table).await.unwrap().status(),
+        StatusCode::NO_CONTENT
+    );
+    let drop_namespace = Request::builder()
+        .method(Method::DELETE)
+        .uri("/catalog/v1/namespaces/default")
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(drop_namespace).await.unwrap().status(),
+        StatusCode::NO_CONTENT
+    );
+
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
+    create_named_table(&app, "default", "events").await;
+}

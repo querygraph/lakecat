@@ -6959,3 +6959,90 @@ async fn turso_store_rejects_create_table_in_missing_namespace() {
             if object == "namespace" && name == "absent"
     ));
 }
+
+#[tokio::test]
+async fn turso_store_reports_duplicate_table_create_as_already_exists() {
+    let store = TursoCatalogStore::in_memory().await.unwrap();
+    let warehouse = WarehouseName::new("local").unwrap();
+    let namespace = "default".parse::<Namespace>().unwrap();
+    let ident = table_ident("local", "default", "events").unwrap();
+    let table = TableRecord::new(
+        ident.clone(),
+        "file:///tmp/events".to_string(),
+        Some("file:///tmp/events/metadata/00000.json".to_string()),
+        serde_json::json!({"format-version": 3}),
+        Principal::anonymous(),
+    );
+    store.create_namespace(&warehouse, namespace).await.unwrap();
+    store.create_table(table.clone()).await.unwrap();
+
+    let err = store.create_table(table).await.unwrap_err();
+    assert!(matches!(
+        err,
+        LakeCatError::AlreadyExists { object, name }
+            if object == "table" && name == ident.stable_id()
+    ));
+}
+
+#[tokio::test]
+async fn turso_store_namespace_drop_retires_soft_deleted_table_registration() {
+    let store = TursoCatalogStore::in_memory().await.unwrap();
+    let warehouse = WarehouseName::new("local").unwrap();
+    let namespace = "default".parse::<Namespace>().unwrap();
+    let ident = table_ident("local", "default", "events").unwrap();
+    let table = TableRecord::new(
+        ident.clone(),
+        "file:///tmp/events".to_string(),
+        Some("file:///tmp/events/metadata/00000.json".to_string()),
+        serde_json::json!({"format-version": 3}),
+        Principal::anonymous(),
+    );
+    store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
+    store.create_table(table.clone()).await.unwrap();
+    store
+        .commit_table(
+            &ident,
+            TableCommit {
+                requirements: vec![],
+                updates: vec![serde_json::json!({"action": "noop"})],
+                expected_previous_metadata_location: Some(
+                    "file:///tmp/events/metadata/00000.json".to_string(),
+                ),
+                new_metadata_location: Some("file:///tmp/events/metadata/00001.json".to_string()),
+                new_metadata: None,
+                idempotency_key: Some("retire-table".to_string()),
+                idempotency_request_hash: None,
+                principal: Principal::anonymous(),
+                authorization_receipt: None,
+            },
+        )
+        .await
+        .unwrap();
+    store
+        .soft_delete_table(&ident, Principal::anonymous(), None)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        store.drop_namespace(&warehouse, &namespace).await.unwrap(),
+        namespace
+    );
+    assert_eq!(store.count_rows("tables").await.unwrap(), 0);
+    assert_eq!(store.count_rows("soft_deletes").await.unwrap(), 0);
+    assert_eq!(store.count_rows("metadata_pointer_log").await.unwrap(), 0);
+    assert_eq!(store.count_rows("idempotency_records").await.unwrap(), 0);
+    assert_eq!(store.count_rows("audit_events").await.unwrap(), 2);
+    assert_eq!(store.count_rows("outbox_events").await.unwrap(), 2);
+    assert!(matches!(
+        store
+            .restore_table(&ident, Principal::anonymous(), None)
+            .await,
+        Err(LakeCatError::NotFound { .. })
+    ));
+
+    store.create_namespace(&warehouse, namespace).await.unwrap();
+    store.create_table(table).await.unwrap();
+}

@@ -205,7 +205,8 @@ pub(crate) async fn list_tables_in_warehouse(
     // listTables is scoped to a namespace; reuse the namespace-list authz
     // (no distinct `TableList` policy action exists).
     let capability = authorize_namespace_list(&state, request_identity(&headers)?).await?;
-    let namespace = namespace.parse::<Namespace>()?;
+    let namespace = parse_rest_namespace(&namespace)?;
+    state.store.load_namespace(&warehouse, &namespace).await?;
     let tables = state.store.list_tables(&warehouse).await?;
     let identifiers: Vec<TableIdentifier> = tables
         .iter()

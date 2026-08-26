@@ -461,12 +461,16 @@ impl CatalogStore for TursoCatalogStore {
                         return Err(namespace_not_empty(&namespace, "child namespaces"));
                     }
                 }
-                if count_matching_rows(conn, "tables", warehouse.as_str(), namespace_path.as_str())
-                    .await?
-                    > 0
-                {
-                    return Err(namespace_not_empty(&namespace, "tables"));
-                }
+                ensure_namespace_has_no_active_tables(
+                    conn,
+                    &warehouse,
+                    &namespace,
+                    namespace_path.as_str(),
+                )
+                .await?;
+                let retired_table_keys =
+                    soft_deleted_table_keys_in_namespace(conn, &warehouse, namespace_path.as_str())
+                        .await?;
                 if count_matching_rows(conn, "views", warehouse.as_str(), namespace_path.as_str())
                     .await?
                     > 0
@@ -483,6 +487,29 @@ impl CatalogStore for TursoCatalogStore {
                     > 0
                 {
                     return Err(namespace_not_empty(&namespace, "policy bindings"));
+                }
+                for key in retired_table_keys {
+                    conn.execute(
+                        "delete from idempotency_records where table_key = ?1",
+                        (key.as_str(),),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                    conn.execute(
+                        "delete from metadata_pointer_log where table_key = ?1",
+                        (key.as_str(),),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                    conn.execute(
+                        "delete from soft_deletes where table_key = ?1",
+                        (key.as_str(),),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                    conn.execute("delete from tables where table_key = ?1", (key.as_str(),))
+                        .await
+                        .map_err(turso_error)?;
                 }
                 conn.execute(
                     "delete from namespace_properties
@@ -577,10 +604,10 @@ impl CatalogStore for TursoCatalogStore {
 
                 match result {
                     Ok(_) => Ok(table),
-                    Err(err) if is_unique_violation(&err) => Err(LakeCatError::Conflict(format!(
-                        "table already exists: {}",
-                        table.ident.stable_id()
-                    ))),
+                    Err(err) if is_unique_violation(&err) => Err(LakeCatError::AlreadyExists {
+                        object: "table",
+                        name: table.ident.stable_id(),
+                    }),
                     Err(err) => Err(turso_error(err)),
                 }
             })
@@ -906,6 +933,16 @@ impl CatalogStore for TursoCatalogStore {
             let authorization_receipt = authorization_receipt.clone();
             Box::pin(async move {
                 let ident = &ident;
+                let mut namespace_rows = conn
+                    .query(
+                        "select 1 from namespaces where warehouse = ?1 and namespace_path = ?2",
+                        (ident.warehouse.as_str(), ident.namespace.path()),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                if namespace_rows.next().await.map_err(turso_error)?.is_none() {
+                    return Err(namespace_not_found(&ident.namespace));
+                }
                 let mut rows = conn
                     .query(
                         "select record_json, table_key, warehouse, namespace_path, table_name
@@ -1037,6 +1074,16 @@ impl CatalogStore for TursoCatalogStore {
             let authorization_receipt = authorization_receipt.clone();
             Box::pin(async move {
                 let ident = &ident;
+                let mut namespace_rows = conn
+                    .query(
+                        "select 1 from namespaces where warehouse = ?1 and namespace_path = ?2",
+                        (ident.warehouse.as_str(), ident.namespace.path()),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                if namespace_rows.next().await.map_err(turso_error)?.is_none() {
+                    return Err(namespace_not_found(&ident.namespace));
+                }
                 let mut rows = conn
                     .query(
                         "select t.record_json, t.table_key, t.warehouse, t.namespace_path,
@@ -2439,6 +2486,106 @@ async fn count_matching_rows(
         LakeCatError::Internal(format!("Turso catalog store returned no count for {table}"))
     })?;
     row_i64(&row, 0)
+}
+
+async fn ensure_namespace_has_no_active_tables(
+    conn: &Connection,
+    warehouse: &WarehouseName,
+    namespace: &Namespace,
+    namespace_path: &str,
+) -> LakeCatResult<()> {
+    let mut rows = conn
+        .query(
+            "select t.record_json, t.table_key, t.warehouse, t.namespace_path, t.table_name
+               from tables t
+              where t.warehouse = ?1 and t.namespace_path = ?2
+                and not exists (
+                    select 1 from soft_deletes d where d.table_key = t.table_key
+                )",
+            (warehouse.as_str(), namespace_path),
+        )
+        .await
+        .map_err(turso_error)?;
+    let mut has_active_table = false;
+    while let Some(row) = rows.next().await.map_err(turso_error)? {
+        let table: TableRecord = decode_json(row_string(&row, 0)?)?;
+        let ident = TableIdent::new(
+            WarehouseName::new(row_string(&row, 2)?)?,
+            row_string(&row, 3)?.parse()?,
+            TableName::new(row_string(&row, 4)?)?,
+        );
+        crate::validate_table_record_scope(
+            &table,
+            &ident,
+            &row_string(&row, 1)?,
+            &row_string(&row, 2)?,
+            &row_string(&row, 3)?,
+            &row_string(&row, 4)?,
+        )?;
+        has_active_table = true;
+    }
+    if has_active_table {
+        return Err(namespace_not_empty(namespace, "tables"));
+    }
+    Ok(())
+}
+
+async fn soft_deleted_table_keys_in_namespace(
+    conn: &Connection,
+    warehouse: &WarehouseName,
+    namespace_path: &str,
+) -> LakeCatResult<Vec<String>> {
+    let mut orphan_rows = conn
+        .query(
+            "select d.table_key
+               from soft_deletes d
+               left join tables t on t.table_key = d.table_key
+              where d.warehouse = ?1 and d.namespace_path = ?2
+                and t.table_key is null",
+            (warehouse.as_str(), namespace_path),
+        )
+        .await
+        .map_err(turso_error)?;
+    if orphan_rows.next().await.map_err(turso_error)?.is_some() {
+        return Err(LakeCatError::Internal(
+            "soft-delete row has no matching table registration".to_string(),
+        ));
+    }
+
+    let mut rows = conn
+        .query(
+            "select t.record_json, t.table_key, t.warehouse, t.namespace_path, t.table_name,
+                    d.record_json, d.table_key, d.warehouse, d.namespace_path, d.table_name,
+                    d.metadata_location, d.version, d.deleted_at
+               from tables t
+               join soft_deletes d on d.table_key = t.table_key
+              where t.warehouse = ?1 and t.namespace_path = ?2",
+            (warehouse.as_str(), namespace_path),
+        )
+        .await
+        .map_err(turso_error)?;
+    let mut keys = Vec::new();
+    while let Some(row) = rows.next().await.map_err(turso_error)? {
+        let table: TableRecord = decode_json(row_string(&row, 0)?)?;
+        let ident = TableIdent::new(
+            WarehouseName::new(row_string(&row, 2)?)?,
+            row_string(&row, 3)?.parse()?,
+            TableName::new(row_string(&row, 4)?)?,
+        );
+        crate::validate_table_record_scope(
+            &table,
+            &ident,
+            &row_string(&row, 1)?,
+            &row_string(&row, 2)?,
+            &row_string(&row, 3)?,
+            &row_string(&row, 4)?,
+        )?;
+        let soft_delete: SoftDeleteRecord = decode_json(row_string(&row, 5)?)?;
+        soft_delete.validate_for_table(&ident, &table)?;
+        validate_turso_soft_delete_row(&soft_delete, &ident, &row, 6)?;
+        keys.push(row_string(&row, 1)?);
+    }
+    Ok(keys)
 }
 
 fn outbox_event_from_row(row: &Row) -> LakeCatResult<OutboxEvent> {

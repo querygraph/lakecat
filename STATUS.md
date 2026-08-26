@@ -20,6 +20,15 @@ Updated: 2026-08-26
   and Nessie failed only the required missing-parent 404 assertion by returning
   an empty HTTP 200 page. Exact artifacts, transcript hashes, tests, and
   non-claims are in `docs/catalog-community/PHASE-1-ACCEPTANCE.md`.
+- Current C1-05 remediation: table collection reads now return a 404
+  `NoSuchNamespaceException` for a missing parent, duplicate create returns a
+  409 `AlreadyExistsException`, and memory/Turso namespace drop retires only
+  validated soft-deleted table registrations while active tables remain a 409
+  blocker. Namespace retirement also removes mutable table pointer-log and
+  idempotency state but preserves audit/outbox history, preventing a recreated
+  namespace from inheriting a stale table registration. This is an
+  implementation slice, not C1-05 acceptance; the optimized same-Docker rerun
+  and register/rename coverage remain pending.
 - Latest namespace compatibility correction: REST paths now decode multipart
   U+001F identifiers, list only top-level or immediate-child namespaces, reject
   a missing parent with 404, paginate deterministically with bounded opaque
