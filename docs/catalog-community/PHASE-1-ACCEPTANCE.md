@@ -426,6 +426,184 @@ artifacts identify source `09dd7ee3`.
 
 This closes C1-03 only. No latency or throughput was measured, the transcripts
 are not checked in as result records, and the candidate profile remains `draft`.
-C1-04 next owns namespace behavior. C1-09 still owns the optimized final
-materialization, immutable sanitized bundles, generated site/report output, and
-public secret scan.
+C1-09 still owns the optimized final materialization, immutable sanitized
+bundles, generated site/report output, and public secret scan.
+
+## C1-04 — namespace behavior
+
+Accepted revisions:
+
+- [`catalog-bench@1f4e640566906ded6aa0589d52351eb1c32788f0`](https://github.com/querygraph/catalog-bench/commit/1f4e640566906ded6aa0589d52351eb1c32788f0)
+  implements the typed namespace scenario, fixture isolation, bounded
+  pagination, cleanup, sanitization, production CLI, and tests;
+- [`catalog-bench@2c3ef824a8c49af516eecec5f62a594c2dced274`](https://github.com/querygraph/catalog-bench/commit/2c3ef824a8c49af516eecec5f62a594c2dced274)
+  pins the independently accepted runner and LakeCat revisions in the draft
+  candidate profile;
+- [`catalog-bench@b149ee74d574d13c51a894d9f440606be2b5a0c1`](https://github.com/querygraph/catalog-bench/commit/b149ee74d574d13c51a894d9f440606be2b5a0c1)
+  records the exact five-catalog acceptance matrix, artifact identities,
+  findings, and reproduction boundary; and
+- [`lakecat@42b2f34b85d7cbcce1b36d4008211075b6c51593`](https://github.com/querygraph/lakecat/commit/42b2f34b85d7cbcce1b36d4008211075b6c51593)
+  corrects LakeCat's namespace protocol, properties, storage, governance, and
+  replay behavior.
+
+The exact contract and optimized executable inputs are:
+
+| Input | Identity |
+| --- | --- |
+| Candidate profile | `catalog-community-current-2026-08-26-linux-arm64`, SHA-256 `db90aba01066ab2bcfc4843915c70020c53ffbe29f86ae25cb5fb553f531f286` |
+| Scenario | `iceberg-rest.namespace.behavior` version 1, SHA-256 `0cd6262c9bda87ac217e8fc618cf3138ddabe6ca89aac94ee05628a67729b7ac` |
+| Runner executable | SHA-256 `6a81806f955924dd2961bc6bfe68fab97cd24d302a50532d6410bccbf9c0f78e` |
+| LakeCat executable | SHA-256 `5a6a867c0e3923505f107d418f2a3cc327fd7fa73566b9ac89af77dc588ab839` |
+| LakeCat local runtime image | tag `lakecat-service:c104-42b2f34b`; image ID `sha256:33dfed34779cd601cf8b98b30dde49d0f363020b0daac8f27baa35756e118691` |
+| Rust toolchain | stable Rust 1.97.1; Cargo 1.97.1 |
+| Production build | opt-level 3, fat LTO, one codegen unit, stripped symbols, `panic=abort`, disabled incremental compilation, `-Dwarnings`, `-Ctarget-cpu=native`, `-j1` |
+| LakeCat features | `turso-local,sail-local` |
+
+The local image ID identifies the accepted runtime payload; it is not presented
+as a registry-pullable digest. The candidate profile remains `draft` because
+C1-09 still owns final artifact materialization.
+
+### Strict scenario semantics
+
+The runner derives two top-level namespaces and one multipart child from a
+portable, run-owned fixture ID. It first loads all three and requires
+spec-shaped 404 responses. Any pre-existing fixture aborts mutation, preventing
+the runner from deleting another user's state.
+
+The attempted workflow then covers:
+
+- create, top-level list, load, and exact namespace/property round trips;
+- U+001F multipart encoding and immediate-child `parent` listing;
+- optional property update with preservation, removal, and missing-key proof;
+- duplicate create as HTTP 409 with an Iceberg error envelope;
+- absent-parent list as HTTP 404 with an Iceberg error envelope;
+- one-item pagination from an explicit empty token, including bounded pages,
+  unique tokens, no duplicate/lost namespaces, and the spec-permitted
+  unpaginated fallback; and
+- child-first cleanup plus post-drop 404 verification even after an earlier
+  assertion fails.
+
+The scenario has 13 assertions: 12 required and one optional
+`namespace-properties-updated` assertion. An optional failure remains in the
+transcript but does not invalidate an otherwise conformant required workflow.
+Raw response bodies, OAuth credentials, bearer tokens, and opaque page tokens
+are not persisted. Every accepted transcript reports
+`raw_secrets_persisted: false` and `raw_response_body_persisted: false`.
+
+### LakeCat correction
+
+The exploratory LakeCat transcript
+`b520f308debbdfc80b3ecb17053de47113c7923b9a5a3eff38f144e2e5db9506`
+exposed two required defects. LakeCat treated the decoded U+001F separator as an
+unsupported character inside one component, and its list handler ignored
+`parent`. Multipart load, hierarchy, and absent-parent semantics therefore
+could not pass through a stock REST client.
+
+The accepted revision adds a dedicated REST namespace codec and list policy:
+
+- U+001F separates ordered namespace components while a literal dot remains a
+  wire component character;
+- unscoped lists return only top-level namespaces and scoped lists return only
+  immediate children after proving the parent exists;
+- sorted pagination uses bounded `lakecat-v1:<offset>` tokens, validates empty,
+  malformed, zero-size, and out-of-range requests, and caps page size;
+- create/load/update round-trip durable string properties;
+- duplicate create returns 409, missing namespaces/parents return 404, and a
+  removal/update overlap returns an exact 422
+  `UnprocessableEntityException` without changing state; and
+- parent drop is rejected while any descendant namespace, table, view, or
+  policy binding remains.
+
+`MemoryCatalogStore` now keeps namespace identity and properties in one map.
+Turso writes the namespace identity row and its new
+`namespace_properties` side row transactionally. A legacy identity row without
+a side row loads as an empty map and is lazily materialized on first update.
+Turso updates and drops validate durable scope, and each resulting mutation is
+transactional.
+
+Property update has its own `namespace.update` authorization action and typed
+capability. The accepted audit payload records receipt, warehouse, and namespace
+but omits property keys and values. Its paired outbox event is admitted as
+`namespace.properties-updated`, then projects a Grust namespace upsert and an
+OpenLineage namespace-properties-updated event. A service regression proves the
+event contains neither fixture property value and that the normal drain empties
+the pending outbox.
+
+The complete operator and contributor contract is
+[`docs/ICEBERG-NAMESPACES.md`](../ICEBERG-NAMESPACES.md).
+
+### Optimized same-Docker proof
+
+The runner and LakeCat were compiled from read-only committed checkouts inside
+Docker with the production settings above. LakeCat linked in 25 minutes 42
+seconds. The Docker daemon's registry-metadata resolver was unresponsive, so the
+exact already-local Rust 1.97.1 layer and Cargo caches were reused in an isolated
+builder rather than restarting or pruning Docker. Package resolution,
+compilation, linking, packaging, and probes still ran inside Docker.
+
+The runtime replaced the prior LakeCat container on the same
+`catalog-bench-net` service alias and persisted test volume. The comparison
+catalogs used these profile-pinned local images:
+
+| Catalog | Version | Image digest |
+| --- | --- | --- |
+| Apache Gravitino | 1.3.0 | `sha256:80136ae753ee77735153fc1482a389018f8c2638a54f453cb96967c7194584c7` |
+| Lakekeeper | 0.13.3 | `sha256:db2ba6168eb107f22242fb7f2edc4016fa35e57bdcc606894e809c418e32e8dc` |
+| Apache Nessie | 0.108.4 | `sha256:c0f42874c810f28ac30fc991e979c1b8cf5a2cbfa94212086cdddeae49629517` |
+| Apache Polaris | 1.7.0 | `sha256:3495f67f38cca33892a045f7dd3f46eb52387f0fd52d4145538a772fd8aedad7` |
+
+Every catalog request originated from the same optimized conformance container
+on that Docker network. No host route participated.
+
+### Live namespace outcomes
+
+| Catalog | Required result | Optional property update | Pagination | Sanitized transcript SHA-256 |
+| --- | --- | --- | --- | --- |
+| LakeCat | **pass** | pass | 13 pages, 13 unique top-level namespaces | `f344244b1b0a586728e37126725b0fa0be9729a01a3af832018bcb8403a4b854` |
+| Apache Gravitino | **pass** | pass | 2 pages, 2 unique namespaces | `80ac2d1ffd244fa7546516c19324c34ddf2a6e01b113b5ba1d014dcb00f2956c` |
+| Lakekeeper | **pass** | pass | 3 pages, 2 unique namespaces including terminal traversal | `2eb9bdd1d704a981b0cde73fdaf7154f2cc5f3d414e3bde8eee795f312c75ada` |
+| Apache Polaris | **pass** | fail: update returned HTTP 409 | unpaginated fallback, 2 unique namespaces | `4d77732a6dbc801ea70c7c486ced8e03aed24e27226ba929e6317c171c93e88a` |
+| Apache Nessie | **fail** | pass | 2 pages, 2 unique namespaces | `f5813af7285ead3ea5947a62d8d99dea79e83fb97974ccd9985114cd35c45eab` |
+
+All five runs passed fixture isolation, cleanup, and transcript sanitization.
+LakeCat's 13 pages reflect pre-existing unrelated top-level namespaces in its
+durable test database, not leaked fixtures or a timing result. The runner proved
+complete no-loss/no-duplication traversal and removed only its own three names.
+
+Nessie's one required failure is narrow: listing under the run-owned absent
+parent returns HTTP 200 with an empty page, while Apache Iceberg 1.11 requires
+HTTP 404. Its other required behavior, optional update, pagination, and cleanup
+pass. This does not restate or explain Nessie's separate historical concurrent
+commit HTTP 500 result.
+
+Polaris returns HTTP 409 for namespace property update. Iceberg permits servers
+not to support namespace properties, so the scenario preserves that optional
+failure while retaining Polaris's required pass. Its unpaginated list response
+is also permitted by the OpenAPI contract and was checked for completeness.
+
+### Repository gates and remaining debt
+
+catalog-bench passed strict full-workspace tests and Clippy under
+`RUSTFLAGS=-Dwarnings`, including 14 config and 13 namespace runner tests.
+Generated schemas, all profiles/scenarios/results, the capability matrix, and
+the 21 common contract integration tests passed after the documentation update.
+
+LakeCat passed warning-denied focused API, lineage, security, service, and store
+tests; 193 Turso-store tests; 457 production-feature service tests with
+`turso-local,sail-local`; and production-feature Clippy. The focused coverage
+includes legacy Turso migration, unchanged state after 422, descendant drop
+protection, value-redacted evidence, and successful outbox drain.
+
+One broader pre-existing identity ambiguity remains. `Namespace::path()` joins
+components with `.`, and Turso plus multiple table/view/policy-derived keys use
+that string. A literal component `["a.b"]` can therefore alias multipart
+`["a", "b"]` internally even though the corrected REST codec distinguishes
+them. Fixing one key family would leave cross-object corruption risk, so C1-04
+does not claim arbitrary-punctuation coverage. C1-10 now tracks a versioned,
+component-unambiguous key migration across every affected object class.
+
+This closes C1-04 only. It is a behavioral conformance result, not a latency or
+throughput ranking. The transcripts remain ignored smoke evidence rather than
+checked-in `catalog-bench/v1` result records. C1-05 next owns table lifecycle
+behavior; C1-09 retains immutable bundle/site/report publication, and C1-10
+retains remaining LakeCat conformance corrections.

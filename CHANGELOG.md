@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Catalog community C1-04 acceptance: documented the component-correct
+  namespace wire contract, pagination, properties, errors, memory/Turso
+  persistence and migration, governed redacted replay, optimized same-Docker
+  artifact identities, and the five-catalog required/optional matrix. Closed
+  C1-04 in the delivery ledger while retaining C1-09's publication boundary and
+  explicitly tracking the pre-existing dot-joined internal key ambiguity for a
+  complete C1-10 migration.
+
 - Iceberg REST namespace conformance: implemented immediate-child hierarchy,
   deterministic pagination with opaque tokens, missing-parent semantics,
   unit-separator multipart decoding, durable create/load/update properties, and

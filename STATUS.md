@@ -1,6 +1,6 @@
 # LakeCat Status
 
-Updated: 2026-06-24
+Updated: 2026-08-26
 
 ## Current State
 
@@ -12,6 +12,27 @@ Updated: 2026-06-24
   as `docs/completed/GOAL1.md`. The new `GOAL.md` is the concise live
   release-and-next-stage charter and defers detailed execution guidance to the
   current design, status, release, book, and agent documents.
+- Latest catalog-community acceptance: C1-04 namespace behavior is complete at
+  `catalog-bench@1f4e640`/`2c3ef82`/`b149ee74` and
+  `lakecat@42b2f34b`. The stable Rust 1.97.1 optimized same-Docker run passed all
+  required and optional LakeCat assertions; Gravitino and Lakekeeper passed;
+  Polaris passed required behavior with an optional property-update HTTP 409;
+  and Nessie failed only the required missing-parent 404 assertion by returning
+  an empty HTTP 200 page. Exact artifacts, transcript hashes, tests, and
+  non-claims are in `docs/catalog-community/PHASE-1-ACCEPTANCE.md`.
+- Latest namespace compatibility correction: REST paths now decode multipart
+  U+001F identifiers, list only top-level or immediate-child namespaces, reject
+  a missing parent with 404, paginate deterministically with bounded opaque
+  tokens, round-trip durable properties, and return exact 409/404/422 Iceberg
+  error envelopes. Memory state is atomic across namespace identity/properties;
+  Turso uses a transactional side table with lazy legacy-row migration; and
+  property updates have dedicated governed, value-redacted audit/outbox/graph/
+  OpenLineage evidence. See `docs/ICEBERG-NAMESPACES.md`.
+- Open namespace identity debt: the wire codec preserves component boundaries,
+  but the pre-existing dot-joined `Namespace::path()` key can alias a literal
+  dotted component with a multipart identity in Turso and derived table/view/
+  policy keys. C1-10 owns one versioned component-safe migration across all
+  affected key families; C1-04 does not claim arbitrary-punctuation coverage.
 - Latest v4 boundary review: Apache Iceberg still lists format version 4 as
   under active development and not formally adopted. LakeCat continues to
   advertise only its extension-ready JSON bridge; typed model, planner, and

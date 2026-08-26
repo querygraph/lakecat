@@ -326,6 +326,17 @@ The current working plan is:
    commit, keep cloud CI manual/disabled until it is known green, use published
    Grust/TypeSec crates when available, and keep the querygraph/sail `lakecat`
    git dependency explicit until reusable Sail helpers are landed or published.
+7. Keep namespace identity component-safe at every boundary. Iceberg REST uses
+   ordered component arrays and U+001F path encoding; hierarchy, pagination,
+   properties, errors, governance, and replay now follow that model. The older
+   `Namespace::path()` helper still dot-joins components for Turso and several
+   table/view/policy-derived keys, so a literal dotted component can alias a
+   multipart namespace internally. Do not claim arbitrary-punctuation support
+   or patch one key family in isolation. The follow-up must introduce a
+   versioned unambiguous component encoding, detect collisions, migrate every
+   affected key and compatibility read together, and prove cross-object parity.
+   The accepted behavior and migration boundary are specified in
+   `docs/ICEBERG-NAMESPACES.md`.
 
 ### Done-State Expectations
 

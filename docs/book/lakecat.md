@@ -1062,6 +1062,46 @@ supported standard REST surface was present, and QueryGraph sees compact config
 proof only after service replay accepts it. Dedicated management and QueryGraph
 responses and outbox events prove those control-plane surfaces independently.
 
+## Namespace Behavior Is A Component Contract
+
+Iceberg namespaces are ordered component arrays, not dot-split strings. On the
+REST path LakeCat follows Iceberg's default U+001F separator, encoded as `%1F`:
+`["accounting", "tax"]` loads through
+`/catalog/v1/namespaces/accounting%1Ftax`. An unscoped list returns top-level
+namespaces; `parent=accounting` first proves that parent exists and then returns
+only its immediate children. A missing parent is a 404
+`NoSuchNamespaceException`, not an empty successful page.
+
+Namespace listing is component-sorted and supports bounded opaque
+`pageToken`/`pageSize` traversal. Namespace create and load round-trip string
+properties. Property updates preserve unmentioned keys and distinguish updated,
+removed, and already-missing keys; naming one key in both removal and update is
+an unchanged-state 422 `UnprocessableEntityException`. Duplicate create is 409,
+and parent drop is rejected while child namespaces, tables, views, or policy
+bindings remain.
+
+The memory store keeps namespace identity and properties in one atomic map.
+Turso keeps the original namespace identity row plus a transactional property
+side row; legacy rows without that side row load as empty and materialize on
+their first update. Property mutation has its own `namespace.update` capability.
+Its audit/outbox payload records authorization and namespace scope but omits
+property keys and values before Grust and OpenLineage projection.
+
+The catalog-neutral C1-04 run exercised the same workflow from one optimized
+Docker runner against LakeCat, Gravitino, Lakekeeper, Polaris, and Nessie.
+LakeCat passed all 12 required assertions and the optional property assertion.
+The acceptance ledger preserves exact executable, image, profile, scenario, and
+transcript hashes; these are behavioral smoke artifacts, not a performance
+ranking or a publishable result bundle.
+
+One internal migration remains explicit. The older `Namespace::path()` helper
+dot-joins components for several durable and derived keys, so the literal
+component `["a.b"]` can alias multipart `["a", "b"]` even though the REST codec
+keeps them distinct. A safe repair must migrate every namespace-, table-, view-,
+and policy-derived key to one versioned unambiguous encoding. Until then,
+operators should avoid those colliding identities, and LakeCat does not claim
+arbitrary-punctuation namespace coverage.
+
 ## Registering The Warehouse Shape
 
 An operator usually starts with management objects. A server groups projects. A
