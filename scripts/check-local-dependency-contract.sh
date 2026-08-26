@@ -311,8 +311,8 @@ require_pattern 'typed-sail=unavailable' docs/book/lakecat.md \
   "LakeCat book must preserve the honest typed Sail v4 posture"
 require_pattern 'docs/book/check_pdf_layout\.sh docs/book/dist/lakecat\.pdf' docs/book/PUBLISH.md \
   "LakeCat book publishing runbook must include the PDF layout validator"
-require_pattern 'docs/book/check_pdf_layout\.sh "\$dist_dir/lakecat\.pdf"' docs/book/build.sh \
-  "LakeCat book build must run the PDF layout validator"
+require_pattern 'docs/book/check_pdf_layout\.sh.*\$\{distDir\}/\$\{stem\}\.pdf' book.build.json \
+  "LakeCat book configuration must run the PDF layout validator"
 
 require_pattern 'grust-graph = \{ package = "grust-graph", version = "0\.12\.0"' Cargo.toml \
   "grust-graph must use the published Grust 0.12 crate from crates.io"

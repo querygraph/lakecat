@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Book build contract: restored the LakeCat wrapper's explicit
+  `LAKECAT_BOOK_DIST_DIR` forwarding and isolated Calibre state after the shared
+  FirstPair-builder migration, and aligned the dependency preflight with the
+  canonical PDF validator in `book.build.json`.
+
 - Public documentation hygiene: make the catalog-community architecture and
   delivery records self-contained and remove references to non-public planning
   artifacts from the public repository.
