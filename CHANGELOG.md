@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Book artifacts: rebuilt the checked-in PDF, EPUB, MOBI, browser HTML, and
+  chapter bundle from `335f94ef`, incorporating the completed table lifecycle
+  documentation and no-snapshot commit-history semantics into the versioned
+  reader artifacts.
+
 - No-snapshot commit history: Iceberg's valid `current-snapshot-id: -1`
   sentinel now normalizes to LakeCat's established zero-valued no-snapshot
   commit evidence instead of persisting an internally invalid negative snapshot

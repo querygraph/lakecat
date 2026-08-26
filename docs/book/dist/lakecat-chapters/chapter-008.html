@@ -207,13 +207,16 @@ transaction, Sail owns Iceberg validation and metadata assembly.</p>
 </figure>
 <p>Three invariant groups make this safe, each enforced once:</p>
 <ul>
-<li><strong>Metadata-write safety.</strong> The new object must be a
-concrete child of the table’s matched storage-profile prefix — never the
-current pointer, never the profile root, never a path with literal or
-percent-encoded dot segments, query strings, fragments, userinfo, or
-credential markers. Writes are create-only; if the store CAS loses after
-a write, LakeCat makes a bounded retry to delete the orphaned object and
-otherwise preserves the original conflict.</li>
+<li><strong>Metadata-write safety.</strong> Schema-based table creation
+writes the generated initial metadata object before admitting its first
+catalog pointer; subsequent commits follow the same create-only rule.
+Every new object must be a concrete child of the table’s matched
+storage-profile prefix — never the current pointer, never the profile
+root, never a path with literal or percent-encoded dot segments, query
+strings, fragments, userinfo, or credential markers. If initial catalog
+admission or a later pointer CAS loses after a write, LakeCat makes a
+bounded retry to delete the orphaned object and otherwise preserves the
+original catalog error.</li>
 <li><strong>Idempotency.</strong> Keys are 1–128 ASCII chars
 (<code>Idempotency-Key</code> / <code>x-lakecat-idempotency-key</code>,
 matching if both present). The same key + same body replays the stored
@@ -231,8 +234,11 @@ client.</li>
 <p>Commit records carry compact evidence — Iceberg format version,
 current snapshot id, request/response/idempotency/policy hashes,
 principal — so operators and QueryGraph can answer audit questions from
-the pointer log without parsing full metadata. Operators read it through
-a governed endpoint:</p>
+the pointer log without parsing full metadata. Iceberg’s
+<code>current-snapshot-id: -1</code> sentinel for a table with no
+current snapshot is represented as LakeCat’s established zero-valued
+no-snapshot evidence; other negative snapshot ids remain invalid.
+Operators read the log through a governed endpoint:</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> <span class="at">-H</span> <span class="st">&#39;x-lakecat-principal: operator@example.com&#39;</span> <span class="dt">\</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  http://127.0.0.1:8181/management/v1/warehouses/local/namespaces/default/tables/events/commits</span></code></pre></div>
 <p>That read itself enters the outbox as
