@@ -81,12 +81,31 @@ async fn create_table_generates_metadata_from_standard_schema() {
     // location); the catalog generates the initial metadata and a location.
     let app = test_app();
     create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
+    let root = std::env::temp_dir().join(format!(
+        "lakecat-create-round-trip-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let table_location = Url::from_directory_path(root.join("events"))
+        .expect("temporary table location must be a file URL")
+        .to_string();
     let create = Request::builder()
         .method(Method::POST)
         .uri("/catalog/v1/namespaces/default/tables")
         .header("content-type", "application/json")
         .body(Body::from(
-            r#"{"name":"events","schema":{"type":"struct","schema-id":0,"fields":[{"id":1,"name":"id","required":true,"type":"long"},{"id":2,"name":"name","required":false,"type":"string"}]}}"#,
+            json!({
+                "name": "events",
+                "location": table_location,
+                "schema": {
+                    "type": "struct",
+                    "schema-id": 0,
+                    "fields": [
+                        {"id": 1, "name": "id", "required": true, "type": "long"},
+                        {"id": 2, "name": "name", "required": false, "type": "string"}
+                    ]
+                }
+            })
+            .to_string(),
         ))
         .unwrap();
     let response = app.clone().oneshot(create).await.unwrap();
@@ -122,6 +141,105 @@ async fn create_table_generates_metadata_from_standard_schema() {
         app.clone().oneshot(commit).await.unwrap().status(),
         StatusCode::OK
     );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
+async fn standard_create_persists_the_returned_metadata_object() {
+    let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
+    let root =
+        std::env::temp_dir().join(format!("lakecat-create-metadata-{}", uuid::Uuid::new_v4()));
+    let table_location = Url::from_directory_path(root.join("events"))
+        .expect("temporary table location must be a file URL")
+        .to_string();
+    let create = Request::builder()
+        .method(Method::POST)
+        .uri("/catalog/v1/namespaces/default/tables")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "name": "events",
+                "location": table_location,
+                "schema": {
+                    "type": "struct",
+                    "schema-id": 0,
+                    "fields": [{
+                        "id": 1,
+                        "name": "id",
+                        "required": true,
+                        "type": "long"
+                    }]
+                }
+            })
+            .to_string(),
+        ))
+        .unwrap();
+
+    let response = app.oneshot(create).await.unwrap();
+    let status = response.status();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "unexpected create response: {}",
+        String::from_utf8_lossy(&body)
+    );
+    let payload: Value = serde_json::from_slice(&body).unwrap();
+    let metadata_location = payload["metadata-location"]
+        .as_str()
+        .expect("create response must include a metadata location");
+    let metadata_path = Url::parse(metadata_location)
+        .unwrap()
+        .to_file_path()
+        .expect("generated metadata location must be a file URL");
+    let persisted: Value = serde_json::from_slice(&std::fs::read(metadata_path).unwrap()).unwrap();
+    assert_eq!(persisted, payload["metadata"]);
+
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
+async fn failed_standard_create_removes_its_uncommitted_metadata_object() {
+    let app = test_app();
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
+    create_named_table(&app, "default", "events").await;
+    let root =
+        std::env::temp_dir().join(format!("lakecat-create-rollback-{}", uuid::Uuid::new_v4()));
+    let table_location = Url::from_directory_path(root.join("events"))
+        .expect("temporary table location must be a file URL")
+        .to_string();
+    let duplicate = Request::builder()
+        .method(Method::POST)
+        .uri("/catalog/v1/namespaces/default/tables")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "name": "events",
+                "location": table_location,
+                "schema": {
+                    "type": "struct",
+                    "schema-id": 0,
+                    "fields": []
+                }
+            })
+            .to_string(),
+        ))
+        .unwrap();
+
+    let response = app.oneshot(duplicate).await.unwrap();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let metadata_dir = root.join("events/metadata");
+    assert!(
+        !metadata_dir.exists() || std::fs::read_dir(&metadata_dir).unwrap().next().is_none(),
+        "a rejected catalog mutation must not leave an uncommitted metadata object"
+    );
+
+    if root.exists() {
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }
 
 #[test]

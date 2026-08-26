@@ -430,47 +430,49 @@ pub(crate) async fn create_table_in_warehouse(
     //  - standard Iceberg REST `createTable`: client sends a `schema`, the
     //    catalog derives a location and generates the initial metadata;
     //  - register-style: client supplies its own `metadata` (+ location).
-    let (location, metadata_location, metadata) = if request.metadata.is_object() {
-        // Register-style path: keep the existing behavior, location required.
-        let location = request.location.clone().ok_or_else(|| {
-            LakeCatError::InvalidArgument(
-                "create table requires a location when metadata is supplied".to_string(),
-            )
-        })?;
-        (location, request.metadata_location, request.metadata)
-    } else if let Some(schema) = request.schema.as_ref() {
-        // Standard path: synthesize initial metadata from the schema.
-        let location = request.location.clone().unwrap_or_else(|| {
-            format!(
-                "file:///tmp/lakecat/{}/{}/{}",
-                ident.warehouse.as_str(),
-                ident.namespace,
-                ident.name.as_str()
-            )
-        });
-        let table_uuid = uuid::Uuid::new_v4().to_string();
-        let metadata = lakecat_core::sail::initial_table_metadata(
-            &table_uuid,
-            &location,
-            schema,
-            request.partition_spec.as_ref(),
-            request.write_order.as_ref(),
-            request
-                .properties
-                .as_ref()
-                .unwrap_or(&serde_json::Value::Null),
-        );
-        let metadata_location = Some(format!(
-            "{location}/metadata/00000-{table_uuid}.metadata.json"
-        ));
-        (location, metadata_location, metadata)
-    } else {
-        return Err(LakeCatError::InvalidArgument(
+    let (location, metadata_location, metadata, persist_initial_metadata) =
+        if request.metadata.is_object() {
+            // Register-style path: keep the existing behavior, location required.
+            let location = request.location.clone().ok_or_else(|| {
+                LakeCatError::InvalidArgument(
+                    "create table requires a location when metadata is supplied".to_string(),
+                )
+            })?;
+            (location, request.metadata_location, request.metadata, false)
+        } else if let Some(schema) = request.schema.as_ref() {
+            // Standard path: synthesize initial metadata from the schema.
+            let location = request.location.clone().unwrap_or_else(|| {
+                format!(
+                    "file:///tmp/lakecat/{}/{}/{}",
+                    ident.warehouse.as_str(),
+                    ident.namespace,
+                    ident.name.as_str()
+                )
+            });
+            let table_uuid = uuid::Uuid::new_v4().to_string();
+            let metadata = lakecat_core::sail::initial_table_metadata(
+                &table_uuid,
+                &location,
+                schema,
+                request.partition_spec.as_ref(),
+                request.write_order.as_ref(),
+                request
+                    .properties
+                    .as_ref()
+                    .unwrap_or(&serde_json::Value::Null),
+            );
+            let metadata_location = Some(format!(
+                "{}/metadata/00000-{table_uuid}.metadata.json",
+                location.trim_end_matches('/')
+            ));
+            (location, metadata_location, metadata, true)
+        } else {
+            return Err(LakeCatError::InvalidArgument(
             "create table requires either a schema (standard createTable) or a metadata document"
                 .to_string(),
         )
         .into());
-    };
+        };
 
     let table = TableRecord::new(
         ident.clone(),
@@ -479,7 +481,25 @@ pub(crate) async fn create_table_in_warehouse(
         metadata,
         principal.clone(),
     );
-    let table = state.store.create_table(table).await?;
+    let metadata_write = if persist_initial_metadata {
+        let storage_profile = state.store.storage_profile_for_table(&table).await?;
+        let metadata_location = table.metadata_location.as_deref().ok_or_else(|| {
+            LakeCatError::Internal(
+                "generated table metadata must have a metadata location".to_string(),
+            )
+        })?;
+        validate_metadata_object_location(metadata_location, None, &storage_profile)?;
+        Some(write_metadata_object(metadata_location, &table.metadata).await?)
+    } else {
+        None
+    };
+    let table = match state.store.create_table(table).await {
+        Ok(table) => table,
+        Err(err) => {
+            let err = cleanup_planned_metadata_after_commit_error(metadata_write, None, err).await;
+            return Err(err.into());
+        }
+    };
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(

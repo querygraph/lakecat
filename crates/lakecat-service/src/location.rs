@@ -72,8 +72,17 @@ pub(crate) async fn write_planned_metadata(
     let Some(location) = commit_plan.new_metadata_location.as_deref() else {
         return Ok(None);
     };
+    Ok(Some(
+        write_metadata_object(location, &commit_plan.new_metadata).await?,
+    ))
+}
+
+pub(crate) async fn write_metadata_object(
+    location: &str,
+    metadata: &serde_json::Value,
+) -> Result<PlannedMetadataWrite, LakeCatError> {
     let (store, object_path) = metadata_object_store(location)?;
-    let payload = serde_json::to_vec_pretty(&commit_plan.new_metadata)
+    let payload = serde_json::to_vec_pretty(metadata)
         .map_err(|err| LakeCatError::Internal(format!("failed to encode metadata JSON: {err}")))?;
     store
         .put_opts(
@@ -89,9 +98,9 @@ pub(crate) async fn write_planned_metadata(
             )),
             err => metadata_object_write_error(location, err),
         })?;
-    Ok(Some(PlannedMetadataWrite {
+    Ok(PlannedMetadataWrite {
         location: location.to_string(),
-    }))
+    })
 }
 
 pub(crate) fn validate_planned_metadata_location(
@@ -107,6 +116,18 @@ pub(crate) fn validate_planned_metadata_location(
             "metadata object commit requires a new metadata location".to_string(),
         ));
     };
+    validate_metadata_object_location(
+        new_metadata_location,
+        current_metadata_location,
+        storage_profile,
+    )
+}
+
+pub(crate) fn validate_metadata_object_location(
+    new_metadata_location: &str,
+    current_metadata_location: Option<&str>,
+    storage_profile: &StorageProfile,
+) -> Result<(), LakeCatError> {
     if current_metadata_location == Some(new_metadata_location) {
         return Err(LakeCatError::InvalidArgument(format!(
             "metadata object commit must not overwrite the current metadata location; {}",

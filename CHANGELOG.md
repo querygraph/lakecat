@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Iceberg table metadata durability: standard schema-based `createTable` now
+  performs a create-only write of the generated initial metadata document before
+  admitting the catalog pointer. The same storage-profile containment and
+  credential-safe location rules used by commits protect the initial write, and
+  a failed catalog mutation removes the uncommitted object with bounded cleanup
+  while preserving the original error. Added protocol regressions proving exact
+  response/object equality and duplicate-create orphan cleanup.
+
 - Iceberg REST table lifecycle conformance: table listing now proves the parent
   namespace exists, duplicate table creation returns the spec-shaped
   `AlreadyExistsException`, and namespace cleanup distinguishes active tables

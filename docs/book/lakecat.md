@@ -484,12 +484,15 @@ sequenceDiagram
 
 Three invariant groups make this safe, each enforced once:
 
-- **Metadata-write safety.** The new object must be a concrete child of the
-  table's matched storage-profile prefix — never the current pointer, never the
-  profile root, never a path with literal or percent-encoded dot segments, query
-  strings, fragments, userinfo, or credential markers. Writes are create-only;
-  if the store CAS loses after a write, LakeCat makes a bounded retry to delete
-  the orphaned object and otherwise preserves the original conflict.
+- **Metadata-write safety.** Schema-based table creation writes the generated
+  initial metadata object before admitting its first catalog pointer; subsequent
+  commits follow the same create-only rule. Every new object must be a concrete
+  child of the table's matched storage-profile prefix — never the current
+  pointer, never the profile root, never a path with literal or percent-encoded
+  dot segments, query strings, fragments, userinfo, or credential markers. If
+  initial catalog admission or a later pointer CAS loses after a write, LakeCat
+  makes a bounded retry to delete the orphaned object and otherwise preserves
+  the original catalog error.
 - **Idempotency.** Keys are 1–128 ASCII chars (`Idempotency-Key` /
   `x-lakecat-idempotency-key`, matching if both present). The same key + same
   body replays the stored response before any Sail call or write; the same key +
