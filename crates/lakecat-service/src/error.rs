@@ -17,6 +17,7 @@ impl IntoResponse for LakeCatHttpError {
     fn into_response(self) -> Response {
         let status = match &self.0 {
             LakeCatError::InvalidArgument(_) => StatusCode::BAD_REQUEST,
+            LakeCatError::UnprocessableEntity(_) => StatusCode::UNPROCESSABLE_ENTITY,
             LakeCatError::NotFound { .. } => StatusCode::NOT_FOUND,
             LakeCatError::AlreadyExists { .. } | LakeCatError::Conflict(_) => StatusCode::CONFLICT,
             LakeCatError::Forbidden(_) => StatusCode::FORBIDDEN,
@@ -27,6 +28,7 @@ impl IntoResponse for LakeCatHttpError {
         // Spark, Trino) can map errors to their catalog exception types.
         let error_type = match &self.0 {
             LakeCatError::InvalidArgument(_) => "BadRequestException",
+            LakeCatError::UnprocessableEntity(_) => "UnprocessableEntityException",
             LakeCatError::NotFound { object, .. } => match *object {
                 "table" | "soft-deleted table" => "NoSuchTableException",
                 "namespace" => "NoSuchNamespaceException",

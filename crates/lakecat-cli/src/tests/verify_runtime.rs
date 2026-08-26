@@ -4,6 +4,7 @@ use crate::*;
 #[test]
 fn qglake_namespace_validator_accepts_matching_namespace() {
     let response = ListNamespacesResponse {
+        next_page_token: None,
         namespaces: vec![
             vec!["default".to_string()],
             vec!["demo".to_string(), "ops".to_string()],

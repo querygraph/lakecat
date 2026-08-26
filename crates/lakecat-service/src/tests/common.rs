@@ -114,6 +114,9 @@ impl TypeDidVerifier for LeakingTypeDidVerifier {
             LakeCatError::InvalidArgument(message) => {
                 LakeCatError::InvalidArgument(message.clone())
             }
+            LakeCatError::UnprocessableEntity(message) => {
+                LakeCatError::UnprocessableEntity(message.clone())
+            }
             LakeCatError::Conflict(message) => LakeCatError::Conflict(message.clone()),
             LakeCatError::Forbidden(message) => LakeCatError::Forbidden(message.clone()),
             LakeCatError::NotSupported(message) => LakeCatError::NotSupported(message.clone()),

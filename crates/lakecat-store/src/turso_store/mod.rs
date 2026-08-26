@@ -1,7 +1,7 @@
 use std::future::Future;
 use std::pin::Pin;
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     sync::{Arc, Mutex},
 };
 
@@ -16,10 +16,11 @@ use serde_json::Value as JsonValue;
 use turso::{Connection, Database, Row, Value as TursoValue};
 
 use crate::{
-    CatalogAuditEvent, CatalogStore, OutboxEvent, PolicyBinding, ProjectRecord, ServerRecord,
+    CatalogAuditEvent, CatalogStore, NamespaceProperties, NamespacePropertyUpdate,
+    NamespacePropertyUpdateResult, OutboxEvent, PolicyBinding, ProjectRecord, ServerRecord,
     SoftDeleteRecord, StorageProfile, TableCommit, TableCommitRecord, TableRecord, ViewRecord,
-    ViewVersionReceipt, WarehouseRecord, metadata_pointer_conflict, namespace_not_empty,
-    namespace_not_found, policy_binding_key, policy_bindings_for_table,
+    ViewVersionReceipt, WarehouseRecord, metadata_pointer_conflict, namespace_is_descendant,
+    namespace_not_empty, namespace_not_found, policy_binding_key, policy_bindings_for_table,
     require_expected_view_version, storage_profile_key, storage_profile_match, table_key,
     validate_expected_view_version, validate_project_id, validate_view_receipt_chains, view_key,
     view_key_parts, view_receipt_hash,
@@ -192,10 +193,21 @@ impl CatalogStore for TursoCatalogStore {
         warehouse: &WarehouseName,
         namespace: Namespace,
     ) -> LakeCatResult<()> {
+        self.create_namespace_with_properties(warehouse, namespace, NamespaceProperties::default())
+            .await
+    }
+
+    async fn create_namespace_with_properties(
+        &self,
+        warehouse: &WarehouseName,
+        namespace: Namespace,
+        properties: NamespaceProperties,
+    ) -> LakeCatResult<()> {
         let warehouse = warehouse.clone();
         self.write_txn(move |conn| {
             let warehouse = warehouse.clone();
             let namespace = namespace.clone();
+            let properties = properties.clone();
             Box::pin(async move {
                 let result = conn
                     .execute(
@@ -209,13 +221,26 @@ impl CatalogStore for TursoCatalogStore {
                     )
                     .await;
                 match result {
-                    Ok(_) => Ok(()),
+                    Ok(_) => {}
                     Err(err) if is_unique_violation(&err) => Err(LakeCatError::AlreadyExists {
                         object: "namespace",
                         name: namespace.path(),
-                    }),
-                    Err(err) => Err(turso_error(err)),
+                    })?,
+                    Err(err) => return Err(turso_error(err)),
                 }
+                conn.execute(
+                    "insert into namespace_properties (
+                        warehouse, namespace_path, properties_json
+                     ) values (?1, ?2, ?3)",
+                    (
+                        warehouse.as_str(),
+                        namespace.path(),
+                        encode_json(properties.as_map())?,
+                    ),
+                )
+                .await
+                .map_err(turso_error)?;
+                Ok(())
             })
         })
         .await
@@ -277,6 +302,131 @@ impl CatalogStore for TursoCatalogStore {
         Ok(decoded)
     }
 
+    async fn load_namespace_properties(
+        &self,
+        warehouse: &WarehouseName,
+        namespace: &Namespace,
+    ) -> LakeCatResult<NamespaceProperties> {
+        let conn = self.connect()?;
+        let mut rows = conn
+            .query(
+                "select n.namespace_json, n.warehouse, n.namespace_path,
+                        p.properties_json, p.warehouse, p.namespace_path
+                   from namespaces n
+                   left join namespace_properties p
+                     on p.warehouse = n.warehouse
+                    and p.namespace_path = n.namespace_path
+                  where n.warehouse = ?1 and n.namespace_path = ?2",
+                (warehouse.as_str(), namespace.path()),
+            )
+            .await
+            .map_err(turso_error)?;
+        let Some(row) = rows.next().await.map_err(turso_error)? else {
+            return Err(namespace_not_found(namespace));
+        };
+        let decoded = decode_namespace(row_string(&row, 0)?)?;
+        let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
+        let row_namespace_path = row_string(&row, 2)?;
+        crate::validate_namespace_scope(
+            &decoded,
+            warehouse,
+            &row_warehouse,
+            row_namespace_path.as_str(),
+        )?;
+        let Some(properties_json) = row_optional_string(&row, 3)? else {
+            return Ok(NamespaceProperties::default());
+        };
+        if row_optional_string(&row, 4)?.as_deref() != Some(warehouse.as_str())
+            || row_optional_string(&row, 5)?.as_deref() != Some(namespace.path().as_str())
+        {
+            return Err(LakeCatError::Internal(
+                "namespace properties row scope does not match namespace identity".to_string(),
+            ));
+        }
+        NamespaceProperties::new(decode_json::<BTreeMap<String, String>>(properties_json)?)
+    }
+
+    async fn update_namespace_properties(
+        &self,
+        warehouse: &WarehouseName,
+        namespace: &Namespace,
+        update: NamespacePropertyUpdate,
+    ) -> LakeCatResult<NamespacePropertyUpdateResult> {
+        let warehouse = warehouse.clone();
+        let namespace = namespace.clone();
+        self.write_txn(move |conn| {
+            let warehouse = warehouse.clone();
+            let namespace = namespace.clone();
+            let update = update.clone();
+            Box::pin(async move {
+                let namespace_path = namespace.path();
+                let mut namespace_rows = conn
+                    .query(
+                        "select namespace_json, warehouse, namespace_path from namespaces
+                          where warehouse = ?1 and namespace_path = ?2",
+                        (warehouse.as_str(), namespace_path.as_str()),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                let Some(namespace_row) = namespace_rows.next().await.map_err(turso_error)? else {
+                    return Err(namespace_not_found(&namespace));
+                };
+                let decoded = decode_namespace(row_string(&namespace_row, 0)?)?;
+                let row_warehouse = WarehouseName::new(row_string(&namespace_row, 1)?)?;
+                let row_namespace_path = row_string(&namespace_row, 2)?;
+                crate::validate_namespace_scope(
+                    &decoded,
+                    &warehouse,
+                    &row_warehouse,
+                    row_namespace_path.as_str(),
+                )?;
+
+                let mut property_rows = conn
+                    .query(
+                        "select properties_json, warehouse, namespace_path
+                           from namespace_properties
+                          where warehouse = ?1 and namespace_path = ?2",
+                        (warehouse.as_str(), namespace_path.as_str()),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                let properties = match property_rows.next().await.map_err(turso_error)? {
+                    Some(row) => {
+                        if row_string(&row, 1)? != warehouse.as_str()
+                            || row_string(&row, 2)? != namespace_path
+                        {
+                            return Err(LakeCatError::Internal(
+                                "namespace properties row scope does not match namespace identity"
+                                    .to_string(),
+                            ));
+                        }
+                        NamespaceProperties::new(decode_json::<BTreeMap<String, String>>(
+                            row_string(&row, 0)?,
+                        )?)?
+                    }
+                    None => NamespaceProperties::default(),
+                };
+                let (properties, result) = properties.apply(&update);
+                conn.execute(
+                    "insert into namespace_properties (
+                        warehouse, namespace_path, properties_json
+                     ) values (?1, ?2, ?3)
+                     on conflict(warehouse, namespace_path) do update set
+                        properties_json = excluded.properties_json",
+                    (
+                        warehouse.as_str(),
+                        namespace_path,
+                        encode_json(properties.as_map())?,
+                    ),
+                )
+                .await
+                .map_err(turso_error)?;
+                Ok(result)
+            })
+        })
+        .await
+    }
+
     async fn drop_namespace(
         &self,
         warehouse: &WarehouseName,
@@ -289,6 +439,28 @@ impl CatalogStore for TursoCatalogStore {
             let namespace = namespace.clone();
             Box::pin(async move {
                 let namespace_path = namespace.path();
+                let mut child_rows = conn
+                    .query(
+                        "select namespace_json, warehouse, namespace_path from namespaces
+                          where warehouse = ?1 and namespace_path <> ?2",
+                        (warehouse.as_str(), namespace_path.as_str()),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                while let Some(row) = child_rows.next().await.map_err(turso_error)? {
+                    let candidate = decode_namespace(row_string(&row, 0)?)?;
+                    let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
+                    let row_namespace_path = row_string(&row, 2)?;
+                    crate::validate_namespace_scope(
+                        &candidate,
+                        &warehouse,
+                        &row_warehouse,
+                        row_namespace_path.as_str(),
+                    )?;
+                    if namespace_is_descendant(&candidate, &namespace) {
+                        return Err(namespace_not_empty(&namespace, "child namespaces"));
+                    }
+                }
                 if count_matching_rows(conn, "tables", warehouse.as_str(), namespace_path.as_str())
                     .await?
                     > 0
@@ -312,6 +484,13 @@ impl CatalogStore for TursoCatalogStore {
                 {
                     return Err(namespace_not_empty(&namespace, "policy bindings"));
                 }
+                conn.execute(
+                    "delete from namespace_properties
+                      where warehouse = ?1 and namespace_path = ?2",
+                    (warehouse.as_str(), namespace_path.as_str()),
+                )
+                .await
+                .map_err(turso_error)?;
                 conn.execute(
                     "delete from namespaces where warehouse = ?1 and namespace_path = ?2",
                     (warehouse.as_str(), namespace_path),
@@ -2015,6 +2194,12 @@ const TURSO_MIGRATION: &[&str] = &[
             warehouse text not null,
             namespace_path text not null,
             namespace_json text not null,
+            primary key (warehouse, namespace_path)
+        )",
+    "create table if not exists namespace_properties (
+            warehouse text not null,
+            namespace_path text not null,
+            properties_json text not null,
             primary key (warehouse, namespace_path)
         )",
     "create table if not exists tables (

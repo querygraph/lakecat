@@ -209,7 +209,10 @@ pub(crate) fn validate_outbox_event_evidence(event: &OutboxEvent) -> Result<(), 
     }
     if matches!(
         event.event_type.as_str(),
-        "namespace.created" | "namespace.dropped" | "namespace.loaded"
+        "namespace.created"
+            | "namespace.dropped"
+            | "namespace.loaded"
+            | "namespace.properties-updated"
     ) {
         validate_namespace_lifecycle_event_evidence(event, payload)?;
     }
@@ -268,6 +271,7 @@ pub(crate) fn is_known_outbox_event_type(event_type: &str) -> bool {
             | "namespace.dropped"
             | "namespace.listed"
             | "namespace.loaded"
+            | "namespace.properties-updated"
             | "policy-binding.listed"
             | "policy-binding.upserted"
             | "project.listed"

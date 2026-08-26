@@ -3,15 +3,16 @@ use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use lakecat_api::{
     CatalogConfigResponse, CommitTableRequest, CommitTableResponse, ConfigEntry,
-    CreateNamespaceRequest, CreateTableRequest, ListNamespacesResponse, ListPolicyBindingsResponse,
-    ListProjectsResponse, ListServersResponse, ListStorageProfilesResponse,
-    ListTableCommitRecordsResponse, ListTablesResponse, ListViewVersionReceiptChainsResponse,
-    ListViewVersionReceiptsResponse, ListViewsResponse, ListWarehousesResponse,
-    LoadCredentialsResponse, LoadTableResponse, NamespaceResponse, PolicyBindingResponse,
-    ProjectResponse, ServerResponse, StorageCredential, StorageProfileResponse, TableIdentifier,
-    UpsertPolicyBindingRequest, UpsertProjectRequest, UpsertServerRequest,
-    UpsertStorageProfileRequest, UpsertViewRequest, UpsertWarehouseRequest, ViewResponse,
-    WarehouseResponse,
+    CreateNamespaceRequest, CreateTableRequest, ListNamespacesQuery, ListNamespacesResponse,
+    ListPolicyBindingsResponse, ListProjectsResponse, ListServersResponse,
+    ListStorageProfilesResponse, ListTableCommitRecordsResponse, ListTablesResponse,
+    ListViewVersionReceiptChainsResponse, ListViewVersionReceiptsResponse, ListViewsResponse,
+    ListWarehousesResponse, LoadCredentialsResponse, LoadTableResponse, NamespaceResponse,
+    PolicyBindingResponse, ProjectResponse, ServerResponse, StorageCredential,
+    StorageProfileResponse, TableIdentifier, UpdateNamespacePropertiesRequest,
+    UpdateNamespacePropertiesResponse, UpsertPolicyBindingRequest, UpsertProjectRequest,
+    UpsertServerRequest, UpsertStorageProfileRequest, UpsertViewRequest, UpsertWarehouseRequest,
+    ViewResponse, WarehouseResponse,
 };
 use lakecat_core::{
     LakeCatError, LakeCatResult, Namespace, TableIdent, TableName, WarehouseName,
@@ -19,8 +20,9 @@ use lakecat_core::{
 };
 use lakecat_security::{AuthorizationReceipt, ReadRestriction, ViewDropCapability};
 use lakecat_store::{
-    CatalogAuditEvent, CredentialIssuanceMode, PolicyBinding, ProjectRecord, ServerRecord,
-    StorageProfile, StorageProvider, TableRecord, ViewRecord, WarehouseRecord, table_ident,
+    CatalogAuditEvent, CredentialIssuanceMode, NamespaceProperties, NamespacePropertyUpdate,
+    PolicyBinding, ProjectRecord, ServerRecord, StorageProfile, StorageProvider, TableRecord,
+    ViewRecord, WarehouseRecord, table_ident,
 };
 use serde_json::{Value, json};
 
@@ -95,9 +97,10 @@ pub(crate) async fn create_namespace_in_warehouse(
     let identity = request_identity(&headers)?;
     let capability = authorize_namespace_create(&state, identity).await?;
     let namespace = Namespace::new(request.namespace)?;
+    let properties = NamespaceProperties::new(request.properties)?;
     state
         .store
-        .create_namespace(&warehouse, namespace.clone())
+        .create_namespace_with_properties(&warehouse, namespace.clone(), properties.clone())
         .await?;
     state
         .store
@@ -113,33 +116,44 @@ pub(crate) async fn create_namespace_in_warehouse(
             }),
         )?)
         .await?;
-    Ok(Json(NamespaceResponse::from_namespace(&namespace)))
+    Ok(Json(NamespaceResponse::from_namespace(
+        &namespace,
+        properties.into_map(),
+    )))
 }
 
 pub(crate) async fn list_namespaces(
     State(state): State<LakeCatState>,
     headers: HeaderMap,
+    Query(query): Query<ListNamespacesQuery>,
 ) -> Result<Json<ListNamespacesResponse>, LakeCatHttpError> {
-    list_namespaces_in_warehouse(state.warehouse.clone(), state, headers).await
+    list_namespaces_in_warehouse(state.warehouse.clone(), state, headers, query).await
 }
 
 pub(crate) async fn list_namespaces_for_warehouse(
     State(state): State<LakeCatState>,
     headers: HeaderMap,
     Path(warehouse): Path<String>,
+    Query(query): Query<ListNamespacesQuery>,
 ) -> Result<Json<ListNamespacesResponse>, LakeCatHttpError> {
     let warehouse = prefixed_catalog_warehouse(&state, warehouse).await?;
-    list_namespaces_in_warehouse(warehouse, state, headers).await
+    list_namespaces_in_warehouse(warehouse, state, headers, query).await
 }
 
 pub(crate) async fn list_namespaces_in_warehouse(
     warehouse: WarehouseName,
     state: LakeCatState,
     headers: HeaderMap,
+    query: ListNamespacesQuery,
 ) -> Result<Json<ListNamespacesResponse>, LakeCatHttpError> {
     let capability = authorize_namespace_list(&state, request_identity(&headers)?).await?;
+    let parent = namespace_parent(&query)?;
+    if let Some(parent) = &parent {
+        state.store.load_namespace(&warehouse, parent).await?;
+    }
     let namespaces = state.store.list_namespaces(&warehouse).await?;
-    let namespace_paths: Vec<String> = namespaces.iter().map(Namespace::path).collect();
+    let page = namespace_page(namespaces, parent.as_ref(), &query)?;
+    let namespace_paths: Vec<String> = page.namespaces.iter().map(Namespace::path).collect();
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
@@ -150,13 +164,15 @@ pub(crate) async fn list_namespaces_in_warehouse(
                 "event-type": "namespace.listed",
                 "authorization-receipt": capability.receipt(),
                 "warehouse": warehouse.as_str(),
-                "namespace-count": namespaces.len(),
+                "namespace-count": page.namespaces.len(),
                 "namespace-paths": namespace_paths,
             }),
         )?)
         .await?;
     Ok(Json(ListNamespacesResponse {
-        namespaces: namespaces
+        next_page_token: page.next_page_token,
+        namespaces: page
+            .namespaces
             .into_iter()
             .map(|namespace| namespace.parts().to_vec())
             .collect(),
@@ -243,8 +259,12 @@ pub(crate) async fn load_namespace_in_warehouse(
     namespace: String,
 ) -> Result<Json<NamespaceResponse>, LakeCatHttpError> {
     let capability = authorize_namespace_load(&state, request_identity(&headers)?).await?;
-    let namespace = namespace.parse::<Namespace>()?;
+    let namespace = parse_rest_namespace(&namespace)?;
     let namespace = state.store.load_namespace(&warehouse, &namespace).await?;
+    let properties = state
+        .store
+        .load_namespace_properties(&warehouse, &namespace)
+        .await?;
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
@@ -259,7 +279,71 @@ pub(crate) async fn load_namespace_in_warehouse(
             }),
         )?)
         .await?;
-    Ok(Json(NamespaceResponse::from_namespace(&namespace)))
+    Ok(Json(NamespaceResponse::from_namespace(
+        &namespace,
+        properties.into_map(),
+    )))
+}
+
+pub(crate) async fn update_namespace_properties(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path(namespace): Path<String>,
+    Json(request): Json<UpdateNamespacePropertiesRequest>,
+) -> Result<Json<UpdateNamespacePropertiesResponse>, LakeCatHttpError> {
+    update_namespace_properties_in_warehouse(
+        state.warehouse.clone(),
+        state,
+        headers,
+        namespace,
+        request,
+    )
+    .await
+}
+
+pub(crate) async fn update_namespace_properties_for_warehouse(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, namespace)): Path<(String, String)>,
+    Json(request): Json<UpdateNamespacePropertiesRequest>,
+) -> Result<Json<UpdateNamespacePropertiesResponse>, LakeCatHttpError> {
+    let warehouse = prefixed_catalog_warehouse(&state, warehouse).await?;
+    update_namespace_properties_in_warehouse(warehouse, state, headers, namespace, request).await
+}
+
+pub(crate) async fn update_namespace_properties_in_warehouse(
+    warehouse: WarehouseName,
+    state: LakeCatState,
+    headers: HeaderMap,
+    namespace: String,
+    request: UpdateNamespacePropertiesRequest,
+) -> Result<Json<UpdateNamespacePropertiesResponse>, LakeCatHttpError> {
+    let capability = authorize_namespace_update(&state, request_identity(&headers)?).await?;
+    let namespace = parse_rest_namespace(&namespace)?;
+    let update = NamespacePropertyUpdate::new(request.removals, request.updates)?;
+    let result = state
+        .store
+        .update_namespace_properties(&warehouse, &namespace, update)
+        .await?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "namespace.properties-updated",
+            None,
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "namespace.properties-updated",
+                "authorization-receipt": capability.receipt(),
+                "warehouse": warehouse.as_str(),
+                "namespace": namespace.parts(),
+            }),
+        )?)
+        .await?;
+    Ok(Json(UpdateNamespacePropertiesResponse {
+        updated: result.updated,
+        removed: result.removed,
+        missing: result.missing,
+    }))
 }
 
 pub(crate) async fn drop_namespace(
@@ -286,7 +370,7 @@ pub(crate) async fn drop_namespace_in_warehouse(
     namespace: String,
 ) -> Result<StatusCode, LakeCatHttpError> {
     let capability = authorize_namespace_drop(&state, request_identity(&headers)?).await?;
-    let namespace = namespace.parse::<Namespace>()?;
+    let namespace = parse_rest_namespace(&namespace)?;
     let namespace = state.store.drop_namespace(&warehouse, &namespace).await?;
     state
         .store

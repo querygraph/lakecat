@@ -14,6 +14,8 @@ pub type LakeCatResult<T> = Result<T, LakeCatError>;
 pub enum LakeCatError {
     #[error("invalid argument: {0}")]
     InvalidArgument(String),
+    #[error("unprocessable entity: {0}")]
+    UnprocessableEntity(String),
     #[error("{object} not found: {name}")]
     NotFound { object: &'static str, name: String },
     #[error("{object} already exists: {name}")]

@@ -19,6 +19,10 @@ pub fn app(state: LakeCatState) -> Router {
             get(load_namespace_for_warehouse).delete(drop_namespace_for_warehouse),
         )
         .route(
+            "/catalog/v1/{warehouse}/namespaces/{namespace}/properties",
+            post(update_namespace_properties_for_warehouse),
+        )
+        .route(
             "/catalog/v1/{warehouse}/namespaces/{namespace}/tables",
             get(list_tables_for_warehouse).post(create_table_for_warehouse),
         )
@@ -68,6 +72,10 @@ pub fn app(state: LakeCatState) -> Router {
         .route(
             "/catalog/v1/namespaces/{namespace}",
             get(load_namespace).delete(drop_namespace),
+        )
+        .route(
+            "/catalog/v1/namespaces/{namespace}/properties",
+            post(update_namespace_properties),
         )
         .route(
             "/catalog/v1/namespaces/{namespace}/tables",

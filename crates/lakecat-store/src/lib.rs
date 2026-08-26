@@ -11,6 +11,19 @@ pub trait CatalogStore: Send + Sync + 'static {
         warehouse: &WarehouseName,
         namespace: Namespace,
     ) -> LakeCatResult<()>;
+    async fn create_namespace_with_properties(
+        &self,
+        warehouse: &WarehouseName,
+        namespace: Namespace,
+        properties: NamespaceProperties,
+    ) -> LakeCatResult<()> {
+        if !properties.is_empty() {
+            return Err(LakeCatError::NotSupported(
+                "catalog store does not support namespace properties".to_string(),
+            ));
+        }
+        self.create_namespace(warehouse, namespace).await
+    }
     async fn list_namespaces(&self, warehouse: &WarehouseName) -> LakeCatResult<Vec<Namespace>>;
     async fn load_namespace(
         &self,
@@ -22,6 +35,25 @@ pub trait CatalogStore: Send + Sync + 'static {
             .into_iter()
             .find(|candidate| candidate == namespace)
             .ok_or_else(|| namespace_not_found(namespace))
+    }
+    async fn load_namespace_properties(
+        &self,
+        warehouse: &WarehouseName,
+        namespace: &Namespace,
+    ) -> LakeCatResult<NamespaceProperties> {
+        self.load_namespace(warehouse, namespace).await?;
+        Ok(NamespaceProperties::default())
+    }
+    async fn update_namespace_properties(
+        &self,
+        warehouse: &WarehouseName,
+        namespace: &Namespace,
+        _update: NamespacePropertyUpdate,
+    ) -> LakeCatResult<NamespacePropertyUpdateResult> {
+        self.load_namespace(warehouse, namespace).await?;
+        Err(LakeCatError::NotSupported(
+            "catalog store does not support namespace properties".to_string(),
+        ))
     }
     async fn drop_namespace(
         &self,
@@ -280,6 +312,8 @@ pub use records::*;
 
 #[cfg(test)]
 mod memory_tests;
+#[cfg(test)]
+mod namespace_tests;
 
 #[cfg(feature = "turso-local")]
 pub mod turso_store;

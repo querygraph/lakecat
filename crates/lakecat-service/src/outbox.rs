@@ -217,12 +217,19 @@ pub(crate) async fn project_outbox_event(
         receipt.record_lineage(lineage_receipt);
     } else if matches!(
         event.event_type.as_str(),
-        "namespace.created" | "namespace.dropped" | "namespace.loaded"
+        "namespace.created"
+            | "namespace.dropped"
+            | "namespace.loaded"
+            | "namespace.properties-updated"
     ) {
         let (warehouse, namespace) = outbox_namespace(event, &state.warehouse)?;
         let (graph_action, lineage_type) = match event.event_type.as_str() {
             "namespace.dropped" => (GraphAction::Deleted, LineageEventType::NamespaceDropped),
             "namespace.loaded" => (GraphAction::Loaded, LineageEventType::NamespaceLoaded),
+            "namespace.properties-updated" => (
+                GraphAction::Upserted,
+                LineageEventType::NamespacePropertiesUpdated,
+            ),
             _ => (GraphAction::Created, LineageEventType::NamespaceCreated),
         };
         state

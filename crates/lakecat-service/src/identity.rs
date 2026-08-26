@@ -4,11 +4,11 @@ use lakecat_security::{
     AuthorizationReceipt, AuthorizationRequest, CatalogAction, CatalogConfigCapability,
     CredentialsVendCapability, GraphReadCapability, LineageReadCapability,
     NamespaceCreateCapability, NamespaceDropCapability, NamespaceListCapability,
-    NamespaceLoadCapability, PolicyManageCapability, ProjectManageCapability, ReadRestriction,
-    ServerManageCapability, StorageProfileManageCapability, TableCommitCapability,
-    TableCreateCapability, TableDropCapability, TableLoadCapability, TableRestoreCapability,
-    TableScanCapability, ViewDropCapability, ViewLoadCapability, ViewManageCapability,
-    WarehouseManageCapability,
+    NamespaceLoadCapability, NamespaceUpdateCapability, PolicyManageCapability,
+    ProjectManageCapability, ReadRestriction, ServerManageCapability,
+    StorageProfileManageCapability, TableCommitCapability, TableCreateCapability,
+    TableDropCapability, TableLoadCapability, TableRestoreCapability, TableScanCapability,
+    ViewDropCapability, ViewLoadCapability, ViewManageCapability, WarehouseManageCapability,
 };
 use serde_json::{Value, json};
 
@@ -274,6 +274,7 @@ pub(crate) fn redact_typedid_verifier_error(
     );
     match err {
         LakeCatError::InvalidArgument(_) => LakeCatError::InvalidArgument(message),
+        LakeCatError::UnprocessableEntity(_) => LakeCatError::UnprocessableEntity(message),
         LakeCatError::Conflict(_) => LakeCatError::Conflict(message),
         LakeCatError::Forbidden(_) => LakeCatError::Forbidden(message),
         LakeCatError::NotSupported(_) => LakeCatError::NotSupported(message),
@@ -409,6 +410,14 @@ pub(crate) async fn authorize_namespace_load(
 ) -> Result<NamespaceLoadCapability, LakeCatHttpError> {
     let receipt = authorize(state, identity, CatalogAction::NamespaceLoad, None).await?;
     Ok(NamespaceLoadCapability::from_receipt(receipt)?)
+}
+
+pub(crate) async fn authorize_namespace_update(
+    state: &LakeCatState,
+    identity: RequestIdentity,
+) -> Result<NamespaceUpdateCapability, LakeCatHttpError> {
+    let receipt = authorize(state, identity, CatalogAction::NamespaceUpdate, None).await?;
+    Ok(NamespaceUpdateCapability::from_receipt(receipt)?)
 }
 
 pub(crate) async fn authorize_namespace_drop(

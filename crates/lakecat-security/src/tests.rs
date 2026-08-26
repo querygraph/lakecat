@@ -774,6 +774,21 @@ fn table_capabilities_require_matching_allowed_receipts() {
     };
     assert!(NamespaceLoadCapability::from_receipt(namespace_load_receipt).is_ok());
 
+    let namespace_update_receipt = AuthorizationReceipt {
+        principal: Principal {
+            subject: "agent:catalog".to_string(),
+            kind: PrincipalKind::Agent,
+        },
+        action: CatalogAction::NamespaceUpdate,
+        table: None,
+        allowed: true,
+        engine: "test".to_string(),
+        policy_hash: None,
+        context: serde_json::json!({}),
+        checked_at: Utc::now(),
+    };
+    assert!(NamespaceUpdateCapability::from_receipt(namespace_update_receipt).is_ok());
+
     let namespace_drop_receipt = AuthorizationReceipt {
         principal: Principal {
             subject: "agent:catalog".to_string(),

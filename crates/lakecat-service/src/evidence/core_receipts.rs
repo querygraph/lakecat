@@ -672,6 +672,7 @@ pub(crate) fn authorization_receipt_action_matches_event(
         "namespace.dropped" => matches!(action, CatalogAction::NamespaceDrop),
         "namespace.listed" => matches!(action, CatalogAction::NamespaceList),
         "namespace.loaded" => matches!(action, CatalogAction::NamespaceLoad),
+        "namespace.properties-updated" => matches!(action, CatalogAction::NamespaceUpdate),
         "policy-binding.listed" | "policy-binding.upserted" => {
             matches!(action, CatalogAction::PolicyManage)
         }

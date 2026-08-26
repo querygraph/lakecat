@@ -29,6 +29,7 @@ pub enum CatalogAction {
     NamespaceCreate,
     NamespaceList,
     NamespaceLoad,
+    NamespaceUpdate,
     NamespaceDrop,
     TableCreate,
     TableRegister,
@@ -627,6 +628,9 @@ pub struct CanListNamespaces;
 pub struct CanLoadNamespace;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanUpdateNamespace;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanDropNamespace;
 
 pub type TableCreateCapability = Capability<CanCreateTable, TableIdent>;
@@ -650,6 +654,7 @@ pub type CatalogConfigCapability = Capability<CanReadCatalogConfig, ()>;
 pub type NamespaceCreateCapability = Capability<CanCreateNamespace, ()>;
 pub type NamespaceListCapability = Capability<CanListNamespaces, ()>;
 pub type NamespaceLoadCapability = Capability<CanLoadNamespace, ()>;
+pub type NamespaceUpdateCapability = Capability<CanUpdateNamespace, ()>;
 pub type NamespaceDropCapability = Capability<CanDropNamespace, ()>;
 
 impl TableCreateCapability {
@@ -854,6 +859,16 @@ impl NamespaceLoadCapability {
     }
 }
 
+impl NamespaceUpdateCapability {
+    pub fn from_receipt(receipt: AuthorizationReceipt) -> LakeCatResult<Self> {
+        catalog_capability_from_receipt(
+            receipt,
+            CatalogAction::NamespaceUpdate,
+            "update namespace properties",
+        )
+    }
+}
+
 impl NamespaceDropCapability {
     pub fn from_receipt(receipt: AuthorizationReceipt) -> LakeCatResult<Self> {
         catalog_capability_from_receipt(receipt, CatalogAction::NamespaceDrop, "drop namespaces")
@@ -957,6 +972,7 @@ pub fn action_name(action: &CatalogAction) -> &'static str {
         CatalogAction::NamespaceCreate => "namespace.create",
         CatalogAction::NamespaceList => "namespace.list",
         CatalogAction::NamespaceLoad => "namespace.load",
+        CatalogAction::NamespaceUpdate => "namespace.update",
         CatalogAction::NamespaceDrop => "namespace.drop",
         CatalogAction::TableCreate => "table.create",
         CatalogAction::TableRegister => "table.register",

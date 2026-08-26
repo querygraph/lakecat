@@ -210,6 +210,7 @@ async fn ensure_qglake_namespace(
         "namespace create",
         &CreateNamespaceRequest {
             namespace: namespace.to_vec(),
+            properties: Default::default(),
         },
     )
     .await?

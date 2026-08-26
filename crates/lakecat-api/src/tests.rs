@@ -65,7 +65,7 @@ fn catalog_config_maps_serialize_as_json_objects() {
 fn empty_config_map_serializes_as_empty_object() {
     let response = NamespaceResponse {
         namespace: vec!["default".to_string()],
-        properties: Vec::new(),
+        properties: BTreeMap::new(),
     };
     let value = serde_json::to_value(&response).unwrap();
     assert_eq!(value["properties"], serde_json::json!({}));
@@ -214,4 +214,40 @@ fn catalog_config_endpoints_advertise_table_list_routes() {
     // listTables is represented once with the OpenAPI `{prefix}` placeholder;
     // deployment mount aliases do not belong in protocol capability data.
     assert!(endpoints.contains("GET /v1/{prefix}/namespaces/{namespace}/tables"));
+}
+
+#[test]
+fn namespace_protocol_types_match_iceberg_json_shapes() {
+    let create: CreateNamespaceRequest = serde_json::from_value(serde_json::json!({
+        "namespace": ["accounting", "tax"],
+        "properties": {"owner": "finance"}
+    }))
+    .unwrap();
+    assert_eq!(
+        create.properties.get("owner").map(String::as_str),
+        Some("finance")
+    );
+
+    let list = ListNamespacesResponse {
+        next_page_token: Some("opaque".to_string()),
+        namespaces: vec![vec!["accounting".to_string()]],
+    };
+    assert_eq!(
+        serde_json::to_value(list).unwrap(),
+        serde_json::json!({
+            "next-page-token": "opaque",
+            "namespaces": [["accounting"]]
+        })
+    );
+
+    let update: UpdateNamespacePropertiesRequest = serde_json::from_value(serde_json::json!({
+        "removals": ["legacy"],
+        "updates": {"owner": "finance"}
+    }))
+    .unwrap();
+    assert_eq!(update.removals, vec!["legacy"]);
+    assert_eq!(
+        update.updates.get("owner").map(String::as_str),
+        Some("finance")
+    );
 }

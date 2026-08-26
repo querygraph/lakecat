@@ -523,6 +523,10 @@ pub(crate) fn namespace_not_empty(namespace: &Namespace, reason: &str) -> LakeCa
     ))
 }
 
+pub(crate) fn namespace_is_descendant(candidate: &Namespace, parent: &Namespace) -> bool {
+    candidate.parts().len() > parent.parts().len() && candidate.parts().starts_with(parent.parts())
+}
+
 pub(crate) fn storage_profile_match<'a>(
     profiles: impl IntoIterator<Item = &'a StorageProfile>,
     table: &TableRecord,

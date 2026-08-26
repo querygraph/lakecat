@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Iceberg REST namespace conformance: implemented immediate-child hierarchy,
+  deterministic pagination with opaque tokens, missing-parent semantics,
+  unit-separator multipart decoding, durable create/load/update properties, and
+  exact 409/404/422 error models. Namespace identity and properties now share
+  one atomic memory-store map; Turso persists them transactionally in a
+  backward-compatible side table and lazily upgrades legacy rows. Added a
+  governed `namespace.update` capability, value-redacted audit evidence,
+  graph/OpenLineage replay support, separate protocol/store tests, and strict
+  production-feature coverage for the optimized catalog benchmark path.
+
 - Catalog community Phase 1: accepted C1-03 at
   `catalog-bench@feb803f8`/`ec3e40d6` and `lakecat@09dd7ee3` after strict
   config negotiation, endpoint validation, sanitized evidence, optimized

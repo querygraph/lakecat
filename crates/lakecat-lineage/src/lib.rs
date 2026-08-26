@@ -45,6 +45,7 @@ pub enum LineageEventType {
     NamespaceDropped,
     NamespaceListed,
     NamespaceLoaded,
+    NamespacePropertiesUpdated,
     PolicyBindingListed,
     PolicyBindingUpserted,
     ProjectListed,
@@ -179,7 +180,8 @@ fn lineage_outputs(event: &LineageEvent) -> Vec<Value> {
         })],
         LineageEventType::NamespaceCreated
         | LineageEventType::NamespaceDropped
-        | LineageEventType::NamespaceLoaded => vec![json!({
+        | LineageEventType::NamespaceLoaded
+        | LineageEventType::NamespacePropertiesUpdated => vec![json!({
             "namespace": "lakecat.namespace",
             "name": namespace_lineage_output_name(event),
             "facets": {
@@ -465,6 +467,7 @@ fn lineage_event_type_name(event_type: &LineageEventType) -> &'static str {
         LineageEventType::NamespaceDropped => "namespace-dropped",
         LineageEventType::NamespaceListed => "namespace-listed",
         LineageEventType::NamespaceLoaded => "namespace-loaded",
+        LineageEventType::NamespacePropertiesUpdated => "namespace-properties-updated",
         LineageEventType::PolicyBindingListed => "policy-binding-listed",
         LineageEventType::PolicyBindingUpserted => "policy-binding-upserted",
         LineageEventType::ProjectListed => "project-listed",

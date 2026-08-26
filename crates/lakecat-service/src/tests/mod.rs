@@ -11,6 +11,7 @@ mod evidence_view;
 mod handlers_misc;
 mod identity;
 mod management;
+mod namespace;
 mod outbox;
 mod scan;
 mod table;

@@ -352,6 +352,9 @@ pub(crate) fn commit_error_with_cleanup_failure(
         LakeCatError::InvalidArgument(message) => {
             LakeCatError::InvalidArgument(format!("{message}; {cleanup_context}"))
         }
+        LakeCatError::UnprocessableEntity(message) => {
+            LakeCatError::UnprocessableEntity(format!("{message}; {cleanup_context}"))
+        }
         LakeCatError::NotFound { object, name } => LakeCatError::NotFound {
             object,
             name: format!("{name}; {cleanup_context}"),

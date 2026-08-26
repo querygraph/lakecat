@@ -28,7 +28,7 @@ pub(crate) struct MemoryState {
     pub(crate) servers: BTreeMap<String, ServerRecord>,
     pub(crate) projects: BTreeMap<String, ProjectRecord>,
     pub(crate) warehouses: BTreeMap<String, WarehouseRecord>,
-    pub(crate) namespaces: BTreeMap<String, BTreeSet<Namespace>>,
+    pub(crate) namespaces: BTreeMap<String, BTreeMap<Namespace, NamespaceProperties>>,
     pub(crate) tables: BTreeMap<String, TableRecord>,
     pub(crate) commits: Vec<MemoryCommitRecord>,
     pub(crate) audit_events: Vec<CatalogAuditEvent>,
@@ -67,18 +67,28 @@ impl CatalogStore for MemoryCatalogStore {
         warehouse: &WarehouseName,
         namespace: Namespace,
     ) -> LakeCatResult<()> {
+        self.create_namespace_with_properties(warehouse, namespace, NamespaceProperties::default())
+            .await
+    }
+
+    async fn create_namespace_with_properties(
+        &self,
+        warehouse: &WarehouseName,
+        namespace: Namespace,
+        properties: NamespaceProperties,
+    ) -> LakeCatResult<()> {
         let mut state = self.state.write().await;
-        let created = state
+        let namespaces = state
             .namespaces
             .entry(warehouse.as_str().to_string())
-            .or_default()
-            .insert(namespace.clone());
-        if !created {
+            .or_default();
+        if namespaces.contains_key(&namespace) {
             return Err(LakeCatError::AlreadyExists {
                 object: "namespace",
                 name: namespace.path(),
             });
         }
+        namespaces.insert(namespace, properties);
         Ok(())
     }
 
@@ -87,7 +97,7 @@ impl CatalogStore for MemoryCatalogStore {
         Ok(state
             .namespaces
             .get(warehouse.as_str())
-            .map(|set| set.iter().cloned().collect())
+            .map(|namespaces| namespaces.keys().cloned().collect())
             .unwrap_or_default())
     }
 
@@ -100,9 +110,40 @@ impl CatalogStore for MemoryCatalogStore {
         state
             .namespaces
             .get(warehouse.as_str())
-            .and_then(|set| set.get(namespace))
+            .and_then(|namespaces| namespaces.get_key_value(namespace))
+            .map(|(namespace, _)| namespace.clone())
+            .ok_or_else(|| namespace_not_found(namespace))
+    }
+
+    async fn load_namespace_properties(
+        &self,
+        warehouse: &WarehouseName,
+        namespace: &Namespace,
+    ) -> LakeCatResult<NamespaceProperties> {
+        let state = self.state.read().await;
+        state
+            .namespaces
+            .get(warehouse.as_str())
+            .and_then(|namespaces| namespaces.get(namespace))
             .cloned()
             .ok_or_else(|| namespace_not_found(namespace))
+    }
+
+    async fn update_namespace_properties(
+        &self,
+        warehouse: &WarehouseName,
+        namespace: &Namespace,
+        update: NamespacePropertyUpdate,
+    ) -> LakeCatResult<NamespacePropertyUpdateResult> {
+        let mut state = self.state.write().await;
+        let properties = state
+            .namespaces
+            .get_mut(warehouse.as_str())
+            .and_then(|namespaces| namespaces.get_mut(namespace))
+            .ok_or_else(|| namespace_not_found(namespace))?;
+        let (updated_properties, result) = properties.apply(&update);
+        *properties = updated_properties;
+        Ok(result)
     }
 
     async fn drop_namespace(
@@ -114,9 +155,20 @@ impl CatalogStore for MemoryCatalogStore {
         if !state
             .namespaces
             .get(warehouse.as_str())
-            .is_some_and(|set| set.contains(namespace))
+            .is_some_and(|namespaces| namespaces.contains_key(namespace))
         {
             return Err(namespace_not_found(namespace));
+        }
+        if state
+            .namespaces
+            .get(warehouse.as_str())
+            .is_some_and(|namespaces| {
+                namespaces
+                    .keys()
+                    .any(|candidate| namespace_is_descendant(candidate, namespace))
+            })
+        {
+            return Err(namespace_not_empty(namespace, "child namespaces"));
         }
         if state
             .tables
@@ -159,11 +211,11 @@ impl CatalogStore for MemoryCatalogStore {
         {
             return Err(namespace_not_empty(namespace, "policy bindings"));
         }
-        let namespaces = state
+        state
             .namespaces
             .get_mut(warehouse.as_str())
+            .and_then(|namespaces| namespaces.remove(namespace))
             .ok_or_else(|| namespace_not_found(namespace))?;
-        namespaces.remove(namespace);
         Ok(namespace.clone())
     }
 
@@ -190,7 +242,7 @@ impl CatalogStore for MemoryCatalogStore {
         let namespace_exists = state
             .namespaces
             .get(table.ident.warehouse.as_str())
-            .is_some_and(|set| set.contains(&table.ident.namespace));
+            .is_some_and(|namespaces| namespaces.contains_key(&table.ident.namespace));
         if !namespace_exists {
             return Err(namespace_not_found(&table.ident.namespace));
         }

@@ -25,6 +25,7 @@ pub const LAKECAT_ICEBERG_REST_ENDPOINTS: &[&str] = &[
     "POST /v1/{prefix}/namespaces",
     "GET /v1/{prefix}/namespaces/{namespace}",
     "DELETE /v1/{prefix}/namespaces/{namespace}",
+    "POST /v1/{prefix}/namespaces/{namespace}/properties",
     "GET /v1/{prefix}/namespaces/{namespace}/tables",
     "POST /v1/{prefix}/namespaces/{namespace}/tables",
     "GET /v1/{prefix}/namespaces/{namespace}/tables/{table}",
@@ -144,27 +145,59 @@ mod tests;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CreateNamespaceRequest {
     pub namespace: Vec<String>,
+    #[serde(default)]
+    pub properties: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct NamespaceResponse {
     pub namespace: Vec<String>,
-    #[serde(default, with = "config_map")]
-    pub properties: Vec<ConfigEntry>,
+    #[serde(default)]
+    pub properties: BTreeMap<String, String>,
 }
 
 impl NamespaceResponse {
-    pub fn from_namespace(namespace: &Namespace) -> Self {
+    pub fn from_namespace(namespace: &Namespace, properties: BTreeMap<String, String>) -> Self {
         Self {
             namespace: namespace.parts().to_vec(),
-            properties: Vec::new(),
+            properties,
         }
     }
 }
 
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ListNamespacesQuery {
+    #[serde(default)]
+    pub parent: Option<String>,
+    #[serde(default)]
+    pub page_token: Option<String>,
+    #[serde(default)]
+    pub page_size: Option<usize>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
 pub struct ListNamespacesResponse {
+    #[serde(default)]
+    pub next_page_token: Option<String>,
     pub namespaces: Vec<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UpdateNamespacePropertiesRequest {
+    #[serde(default)]
+    pub removals: Vec<String>,
+    #[serde(default)]
+    pub updates: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UpdateNamespacePropertiesResponse {
+    pub updated: Vec<String>,
+    pub removed: Vec<String>,
+    #[serde(default)]
+    pub missing: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

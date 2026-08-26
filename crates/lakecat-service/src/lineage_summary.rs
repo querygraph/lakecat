@@ -106,7 +106,10 @@ pub(crate) fn lineage_drain_event_summary(
     }
     if matches!(
         event.event_type.as_str(),
-        "namespace.created" | "namespace.dropped" | "namespace.loaded"
+        "namespace.created"
+            | "namespace.dropped"
+            | "namespace.loaded"
+            | "namespace.properties-updated"
     ) {
         let payload = event.payload.get("payload").unwrap_or(&event.payload);
         validate_namespace_lifecycle_event_evidence(event, payload)?;

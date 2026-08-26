@@ -11,6 +11,109 @@ use serde_json::Value;
 
 use crate::*;
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(transparent)]
+pub struct NamespaceProperties(BTreeMap<String, String>);
+
+impl NamespaceProperties {
+    pub fn new(properties: BTreeMap<String, String>) -> LakeCatResult<Self> {
+        validate_namespace_property_keys(properties.keys().map(String::as_str))?;
+        Ok(Self(properties))
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn as_map(&self) -> &BTreeMap<String, String> {
+        &self.0
+    }
+
+    pub fn into_map(self) -> BTreeMap<String, String> {
+        self.0
+    }
+
+    pub fn apply(&self, update: &NamespacePropertyUpdate) -> (Self, NamespacePropertyUpdateResult) {
+        let mut properties = self.0.clone();
+        let mut removed = Vec::new();
+        let mut missing = Vec::new();
+        for key in &update.removals {
+            if properties.remove(key).is_some() {
+                removed.push(key.clone());
+            } else {
+                missing.push(key.clone());
+            }
+        }
+        let updated = update.updates.keys().cloned().collect();
+        properties.extend(update.updates.clone());
+        (
+            Self(properties),
+            NamespacePropertyUpdateResult {
+                updated,
+                removed,
+                missing,
+            },
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NamespacePropertyUpdate {
+    removals: BTreeSet<String>,
+    updates: BTreeMap<String, String>,
+}
+
+impl NamespacePropertyUpdate {
+    pub fn new(removals: Vec<String>, updates: BTreeMap<String, String>) -> LakeCatResult<Self> {
+        validate_namespace_property_keys(removals.iter().map(String::as_str))?;
+        validate_namespace_property_keys(updates.keys().map(String::as_str))?;
+        let unique_removals = removals.iter().cloned().collect::<BTreeSet<_>>();
+        if unique_removals.len() != removals.len() {
+            return Err(LakeCatError::InvalidArgument(
+                "namespace property removals must contain unique keys".to_string(),
+            ));
+        }
+        if let Some(overlap) = unique_removals
+            .iter()
+            .find(|key| updates.contains_key(*key))
+        {
+            return Err(LakeCatError::UnprocessableEntity(format!(
+                "namespace property key `{overlap}` cannot be both removed and updated"
+            )));
+        }
+        Ok(Self {
+            removals: unique_removals,
+            updates,
+        })
+    }
+
+    pub fn removals(&self) -> &BTreeSet<String> {
+        &self.removals
+    }
+
+    pub fn updates(&self) -> &BTreeMap<String, String> {
+        &self.updates
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NamespacePropertyUpdateResult {
+    pub updated: Vec<String>,
+    pub removed: Vec<String>,
+    pub missing: Vec<String>,
+}
+
+fn validate_namespace_property_keys<'a>(
+    keys: impl IntoIterator<Item = &'a str>,
+) -> LakeCatResult<()> {
+    if keys.into_iter().any(str::is_empty) {
+        return Err(LakeCatError::InvalidArgument(
+            "namespace property keys must not be empty".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TableRecord {
     pub ident: TableIdent,
