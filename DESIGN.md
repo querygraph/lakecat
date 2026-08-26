@@ -550,6 +550,52 @@ LakeCat must not import QueryGraph. QueryGraph may consume LakeCat's standard
 REST surface, management/bootstrap exports, outbox replay, and QGLake handoff
 evidence.
 
+### Catalog interoperability and Apache Ossie boundary
+
+Status: **accepted 2026-08-26** for the catalog-community program in
+`CATALOG-COMMUNITY-PLAN.md`.
+
+The neutral interoperability lab belongs in
+[`querygraph/catalog-bench`](https://github.com/querygraph/catalog-bench), not in
+LakeCat. A benchmark repository that compares several catalogs must not be owned
+by one of the implementations under test. `catalog-bench` owns executable
+scenarios, adapters, version profiles, machine-readable results, raw sanitized
+evidence, and generated comparison matrices. LakeCat owns only the architectural
+contract, invocation and handoff documentation, its own adapter behavior, and
+corrections to LakeCat claims that the neutral evidence disproves.
+
+Historical evidence and current-version experiments are separate profiles. A
+published result keeps the exact source revisions, image/index and platform
+digests, lockfile hashes, runtime configuration, and result validity rules from
+the original run. Updating a tag creates a new profile and a new result bundle;
+it never rewrites the identity of old evidence. Human-readable matrices are
+generated from the result bundle and are not an independent source of truth.
+
+Apache Ossie is an evolving semantic interchange boundary, not a LakeCat-owned
+semantic model. Until Ossie publishes a stable release and the QueryGraph model
+contract demonstrates a need for a separately reusable crate, the ownership is:
+
+| Artifact or behavior | Owner | LakeCat boundary |
+| --- | --- | --- |
+| Upstream Ossie schema, examples, validator, and converters | Apache Ossie, pinned by immutable commit | Record the accepted schema commit and artifact hash; do not fork the schema. |
+| Ossie document types, import/export, reconciliation, converter loss reports, and semantic query composition | QueryGraph | Consume a versioned, validated model-artifact contract; do not copy the document model into LakeCat. |
+| Physical Iceberg schema/type checks and executable semantic expressions | Sail | Ask Sail to validate or plan reusable format/execution behavior. |
+| Publication, consumption, field/metric exposure, and AI-access policy | TypeSec | Persist the decision/receipt identity, never reimplement policy composition. |
+| Semantic graph taxonomy, projection, traversal, and persistence | Grust | Emit bounded, admitted catalog facts through the existing sink boundary. |
+| Catalog identifiers, immutable model pointer/hash, publication version/CAS, publisher, policy bindings, audit, and outbox admission | LakeCat | Own only this thin control-plane record and its standard catalog bindings. |
+
+There is therefore no `lakecat-ossie` crate in Phase 0. A future LakeCat type is a
+small model-artifact reference and publication-state contract, not a mirror of
+Ossie's datasets, fields, metrics, relationships, expressions, AI context, or
+`custom_extensions`. Ossie content remains outside required Iceberg metadata.
+Unknown extensions are preserved as untrusted content by the semantic owner and
+cannot become authorization claims.
+
+The versioned neutral scenario/result schemas are owned and reviewed in
+`catalog-bench`. LakeCat documentation links to an exact schema version and
+result bundle rather than keeping a second copy. The full audit, pin policy, and
+incremental delivery ledger live under `docs/catalog-community/`.
+
 ## Compatibility Rules
 
 - Do not fork Iceberg semantics or make normal table access depend on

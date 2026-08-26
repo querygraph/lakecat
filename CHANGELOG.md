@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Catalog community Phase 0: tracked the neutral interoperability and Apache
+  Ossie program, accepted explicit repository/type ownership in `DESIGN.md`, and
+  added a version- and digest-pinned baseline audit plus an independently
+  verifiable delivery backlog. The audit preserves the 2026-08-08 evidence,
+  records the clean-checkout Sail path dependency and Docker VM storage
+  reproduction discrepancies, and distinguishes historical results from the
+  next current-version profile. Rebuilt and verified all tracked book formats
+  at the current source revision as the public-architecture documentation gate.
+
 - Book: moved the LakeCat cover title and subtitle upward and tightened the
   subtitle typography, then regenerated the PDF, EPUB, MOBI, HTML, and
   chapter-reader artifacts.
