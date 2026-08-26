@@ -196,7 +196,7 @@ pub(crate) fn verify_qglake_table_commit_record_evidence(
         || record
             .idempotency_key_sha256
             .as_deref()
-            .map_or(true, str::is_empty)
+            .is_none_or(str::is_empty)
         || record.principal_subject.is_empty()
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(

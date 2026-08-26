@@ -186,18 +186,15 @@ pub(crate) fn verify_qglake_policy_binding_upsert_replay(
     if event
         .policy_odrl_hash
         .as_deref()
-        .map_or(true, |hash| !is_full_sha256_hash(hash))
+        .is_none_or(|hash| !is_full_sha256_hash(hash))
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain policy binding upsert replay is missing ODRL hash evidence"
                 .to_string(),
         ));
     }
-    if event
-        .principal_subject
-        .as_deref()
-        .map_or(true, str::is_empty)
-        || event.principal_kind.as_deref().map_or(true, str::is_empty)
+    if event.principal_subject.as_deref().is_none_or(str::is_empty)
+        || event.principal_kind.as_deref().is_none_or(str::is_empty)
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain policy binding upsert replay is missing principal evidence"
@@ -207,7 +204,7 @@ pub(crate) fn verify_qglake_policy_binding_upsert_replay(
     if event
         .authorization_receipt_hash
         .as_deref()
-        .map_or(true, |hash| !is_full_sha256_hash(hash))
+        .is_none_or(|hash| !is_full_sha256_hash(hash))
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain policy binding upsert replay is missing authorization receipt hash evidence"
@@ -329,7 +326,7 @@ pub(crate) fn verify_qglake_table_commit_history_replay(
     if !commit_history
         .authorization_receipt_hash
         .as_deref()
-        .is_some_and(|hash| is_full_sha256_hash(hash))
+        .is_some_and(is_full_sha256_hash)
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain table commit history replay is missing authorization receipt hash evidence"
@@ -409,7 +406,7 @@ pub(crate) fn verify_qglake_storage_profile_upsert_replay(
         || event
             .storage_profile_location_prefix_hash
             .as_deref()
-            .map_or(true, |hash| !is_full_sha256_hash(hash))
+            .is_none_or(|hash| !is_full_sha256_hash(hash))
         || event.storage_profile_secret_ref_present.is_none()
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
@@ -432,7 +429,7 @@ pub(crate) fn verify_qglake_storage_profile_upsert_replay(
         && event
             .storage_profile_secret_ref_provider
             .as_deref()
-            .map_or(true, |provider| provider.trim().is_empty())
+            .is_none_or(|provider| provider.trim().is_empty())
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain storage profile upsert replay is missing secret-ref provider evidence"
@@ -443,7 +440,7 @@ pub(crate) fn verify_qglake_storage_profile_upsert_replay(
         && event
             .storage_profile_secret_ref_hash
             .as_deref()
-            .map_or(true, |hash| !is_full_sha256_hash(hash))
+            .is_none_or(|hash| !is_full_sha256_hash(hash))
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain storage profile upsert replay is missing full SHA-256 secret-ref hash evidence"
@@ -459,11 +456,8 @@ pub(crate) fn verify_qglake_storage_profile_upsert_replay(
                 .to_string(),
         ));
     }
-    if event
-        .principal_subject
-        .as_deref()
-        .map_or(true, str::is_empty)
-        || event.principal_kind.as_deref().map_or(true, str::is_empty)
+    if event.principal_subject.as_deref().is_none_or(str::is_empty)
+        || event.principal_kind.as_deref().is_none_or(str::is_empty)
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain storage profile upsert replay is missing principal evidence"
@@ -473,7 +467,7 @@ pub(crate) fn verify_qglake_storage_profile_upsert_replay(
     if event
         .authorization_receipt_hash
         .as_deref()
-        .map_or(true, |hash| !is_full_sha256_hash(hash))
+        .is_none_or(|hash| !is_full_sha256_hash(hash))
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain storage profile upsert replay is missing authorization receipt hash evidence"
@@ -531,17 +525,14 @@ pub(crate) fn verify_qglake_management_list_receipts(
         && event
             .management_scope_warehouse
             .as_deref()
-            .map_or(true, str::is_empty)
+            .is_none_or(str::is_empty)
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "qglake lineage drain {label} replay is missing compact management scope"
         )));
     }
-    if event
-        .principal_subject
-        .as_deref()
-        .map_or(true, str::is_empty)
-        || event.principal_kind.as_deref().map_or(true, str::is_empty)
+    if event.principal_subject.as_deref().is_none_or(str::is_empty)
+        || event.principal_kind.as_deref().is_none_or(str::is_empty)
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "qglake lineage drain {label} replay is missing principal evidence"
@@ -550,7 +541,7 @@ pub(crate) fn verify_qglake_management_list_receipts(
     if event
         .authorization_receipt_hash
         .as_deref()
-        .map_or(true, |hash| !is_full_sha256_hash(hash))
+        .is_none_or(|hash| !is_full_sha256_hash(hash))
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "qglake lineage drain {label} replay is missing full SHA-256 authorization receipt hash evidence"

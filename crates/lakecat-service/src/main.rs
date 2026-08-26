@@ -115,8 +115,8 @@ fn configured_governance_engine_from_policy_path(
 
 #[cfg(feature = "typesec-local")]
 fn configured_credential_issuer() -> Arc<dyn CredentialIssuer> {
-    let issuer = lakecat_service::typesec_credential_issuer::TypeSecCredentialIssuer::allow_all_with_secret_ref_resolver();
-    issuer
+    lakecat_service::typesec_credential_issuer::TypeSecCredentialIssuer::allow_all_with_secret_ref_resolver()
+        as Arc<dyn CredentialIssuer>
 }
 
 #[cfg(not(feature = "typesec-local"))]

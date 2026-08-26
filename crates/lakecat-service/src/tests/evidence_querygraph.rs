@@ -46,10 +46,6 @@ use lakecat_lineage::{
 use lakecat_querygraph::{
     QueryGraphBootstrap, QueryGraphTenantProjection, QueryGraphViewReceiptEvidence,
 };
-#[cfg(feature = "sail-local")]
-use lakecat_sail::catalog_provider::{
-    LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
-};
 use lakecat_security::{
     AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
     CatalogConfigCapability, CredentialsVendCapability, GovernanceEngine, GraphReadCapability,
@@ -79,13 +75,10 @@ use super::common::*;
 use crate::*;
 
 #[tokio::test]
-async fn outbox_drain_rejects_catalog_config_missing_querygraph_integration_endpoints() {
+async fn outbox_drain_rejects_querygraph_route_in_iceberg_endpoint_advertisement() {
     let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
-    let endpoints = CatalogConfigResponse::default()
-        .endpoints
-        .into_iter()
-        .filter(|endpoint| endpoint != "GET /querygraph/v1/bootstrap")
-        .collect::<Vec<_>>();
+    let mut endpoints = CatalogConfigResponse::default().endpoints;
+    endpoints.push("GET /querygraph/v1/bootstrap".to_string());
     let store = Arc::new(RecordingOutboxStore {
         events: Mutex::new(vec![OutboxEvent {
             event_id: "evt-config-missing-querygraph-endpoint".to_string(),
@@ -125,12 +118,14 @@ async fn outbox_drain_rejects_catalog_config_missing_querygraph_integration_endp
 
     let err = drain_outbox_once(&state, 10)
         .await
-        .expect_err("catalog config replay must preserve QueryGraph integration endpoints");
+        .expect_err("Iceberg endpoint advertisement must exclude QueryGraph routes");
 
     let message = err.to_string();
     assert!(message.contains("catalog.config-read"));
     assert!(
-        message.contains("catalog config-read endpoints must include GET /querygraph/v1/bootstrap"),
+        message.contains(
+            "catalog config-read endpoints contain non-Iceberg or unsupported entry GET /querygraph/v1/bootstrap"
+        ),
         "{message}"
     );
     assert!(message.contains("event-id-hash=sha256:"));

@@ -1,8 +1,3 @@
-#[cfg(feature = "sail-local")]
-use lakecat_sail::catalog_provider::{
-    LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
-};
-
 pub(crate) const READ_RESTRICTION_EVIDENCE_FIELDS: &[&str] = &[
     "allowed-columns",
     "row-predicate",

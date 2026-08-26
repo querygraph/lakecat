@@ -1,8 +1,4 @@
 use lakecat_core::{LakeCatError, Principal, content_hash_bytes};
-#[cfg(feature = "sail-local")]
-use lakecat_sail::catalog_provider::{
-    LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
-};
 use lakecat_security::CatalogAction;
 use lakecat_store::OutboxEvent;
 use serde_json::Value;

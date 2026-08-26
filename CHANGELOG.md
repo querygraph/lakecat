@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Iceberg REST config conformance: replaced LakeCat's mixed protocol, mount,
+  compatibility-alias, management, and QueryGraph `endpoints` advertisement
+  with one shared duplicate-free list of the Apache Iceberg 1.11 operations
+  implemented by the production service. Config-read replay, QGLake handoff,
+  and CLI verification now require exactly that list and reject proprietary or
+  unsupported additions; design and book guidance now prove control-plane
+  availability through its owning responses/events instead. Resolved the Rust
+  1.97 warning-denying production-gate debt by removing stale feature-gated
+  Sail imports, replacing long CLI helper signatures with typed fixture and
+  receipt-proof contexts, naming the TypeSec environment-reader boundary, and
+  folding equivalent nested conditions without changing behavior.
+
 - Catalog community Phase 1: accepted `catalog-bench@7269f885` for C1-02 after
   typed adapter routing, exhaustive capability coverage, no-shim disclosure,
   complete LakeCat/Polaris/Gravitino/Lakekeeper/Nessie bindings, generated-schema

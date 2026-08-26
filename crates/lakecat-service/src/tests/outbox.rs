@@ -46,10 +46,6 @@ use lakecat_lineage::{
 use lakecat_querygraph::{
     QueryGraphBootstrap, QueryGraphTenantProjection, QueryGraphViewReceiptEvidence,
 };
-#[cfg(feature = "sail-local")]
-use lakecat_sail::catalog_provider::{
-    LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
-};
 use lakecat_security::{
     AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
     CatalogConfigCapability, CredentialsVendCapability, GovernanceEngine, GraphReadCapability,
@@ -3558,20 +3554,16 @@ fn lineage_drain_summary_rejects_malformed_catalog_config_fields() {
 
     let mut non_array_endpoints =
         valid_lineage_summary_catalog_config_event("evt-bad-summary-config-endpoints");
-    non_array_endpoints.payload["payload"]["endpoints"] =
-        json!({ "route": "GET /catalog/v1/config" });
+    non_array_endpoints.payload["payload"]["endpoints"] = json!({ "route": "GET /v1/config" });
     let err = lineage_drain_event_summary(&non_array_endpoints, &receipt)
         .unwrap_err()
         .to_string();
     assert!(err.contains("catalog config-read endpoints must be an array"));
 
     for missing_endpoint in [
-        "POST /catalog/v1/namespaces/{namespace}/tables/{table}/plan",
-        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/plan",
-        "POST /catalog/v1/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
-        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
-        "GET /catalog/v1/namespaces/{namespace}/tables/{table}/credentials",
-        "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/credentials",
+        "POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/plan",
+        "POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/tasks",
+        "GET /v1/{prefix}/namespaces/{namespace}/tables/{table}/credentials",
     ] {
         let mut missing_required_endpoint =
             valid_lineage_summary_catalog_config_event("evt-missing-summary-config-endpoint");
@@ -3595,7 +3587,7 @@ fn lineage_drain_summary_rejects_malformed_catalog_config_fields() {
     let mut duplicate_endpoints =
         valid_lineage_summary_catalog_config_event("evt-duplicate-summary-config-endpoint");
     duplicate_endpoints.payload["payload"]["endpoints"] =
-        json!(["GET /catalog/v1/config", "GET /catalog/v1/config"]);
+        json!(["GET /v1/config", "GET /v1/config"]);
     let err = lineage_drain_event_summary(&duplicate_endpoints, &receipt)
         .unwrap_err()
         .to_string();

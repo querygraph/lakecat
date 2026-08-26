@@ -109,7 +109,7 @@ pub(crate) fn verify_qglake_querygraph_import_contract(
         if import_contract
             .view_receipt_evidence_hash
             .as_deref()
-            .map_or(true, str::is_empty)
+            .is_none_or(str::is_empty)
         {
             return Err(lakecat_core::LakeCatError::InvalidArgument(
                 "QGLake bootstrap QueryGraph import contract did not include a view receipt evidence hash"

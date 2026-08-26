@@ -2,10 +2,6 @@ use lakecat_api::{
     ConfigEntry, LineageDrainEventSummary, LineageDrainResponse, ViewVersionReceiptChainResponse,
 };
 use lakecat_core::{LakeCatError, content_hash_json};
-#[cfg(feature = "sail-local")]
-use lakecat_sail::catalog_provider::{
-    LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
-};
 use lakecat_security::AuthorizationReceipt;
 use lakecat_store::OutboxEvent;
 use serde_json::Value;
@@ -705,13 +701,13 @@ pub(crate) fn validate_lineage_summary_commit_history_counts(
                 "sequence-numbers must be positive in lineage drain summary",
             ));
         }
-        if let Some(previous_sequence) = previous_sequence {
-            if *sequence_number <= previous_sequence {
-                return Err(outbox_evidence_error(
-                    event,
-                    "sequence-numbers must be strictly increasing in lineage drain summary",
-                ));
-            }
+        if let Some(previous_sequence) = previous_sequence
+            && *sequence_number <= previous_sequence
+        {
+            return Err(outbox_evidence_error(
+                event,
+                "sequence-numbers must be strictly increasing in lineage drain summary",
+            ));
         }
         previous_sequence = Some(*sequence_number);
     }
@@ -884,13 +880,13 @@ pub(crate) fn validate_lineage_summary_credential_counts(
     credential_count: Option<usize>,
     credential_prefix_hashes: &[String],
 ) -> Result<(), LakeCatError> {
-    if let Some(credential_count) = credential_count {
-        if credential_count != credential_prefix_hashes.len() {
-            return Err(outbox_evidence_error(
-                event,
-                "credential-count must match credential-response prefix-hashes in lineage drain summary",
-            ));
-        }
+    if let Some(credential_count) = credential_count
+        && credential_count != credential_prefix_hashes.len()
+    {
+        return Err(outbox_evidence_error(
+            event,
+            "credential-count must match credential-response prefix-hashes in lineage drain summary",
+        ));
     }
     Ok(())
 }

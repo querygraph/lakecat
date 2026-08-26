@@ -734,9 +734,11 @@ Five fixes, four in LakeCat and one in Sail, turned impossible into routine:
   `{key, value}` pairs, which a stock client cannot parse. A `config_map` serde
   adapter now emits them as JSON objects, so a plain `RestCatalog` reads `/config`
   and proceeds.
-- **`/config` advertises canonical routes.** The endpoint now lists spec-canonical
-  `<METHOD> /v1/{prefix}/...` forms — keeping the legacy strings alongside — so a
-  stock client routes its calls where the spec says they live.
+- **`/config` advertises the implemented protocol surface.** The endpoint lists
+  one duplicate-free, spec-canonical `<METHOD> /v1/{prefix}/...` entry for each
+  supported Iceberg operation. Deployment mounts such as `/catalog`, unprefixed
+  aliases, and LakeCat's management and QueryGraph routes remain reachable, but
+  they are not misreported as Iceberg capabilities.
 - **`listTables` exists.** A `GET …/namespaces/{namespace}/tables` endpoint was
   added, which stock clients call as a matter of course.
 - **The default build refuses what it cannot keep.** Without `sail-local`, a commit
@@ -1046,15 +1048,19 @@ The defaults intentionally separate compatibility from future capability:
 The Iceberg REST map-typed fields (`defaults`, `overrides`, table/credential
 `config`, and namespace `properties`) are JSON objects on the wire so that stock
 clients (pyiceberg/Spark/Trino) parse them directly; the advertised `endpoints`
-include the spec-canonical `<METHOD> /v1/{prefix}/...` forms alongside LakeCat's
-legacy strings.
+contain only the exact, duplicate-free set of supported Apache Iceberg REST
+operations in spec-canonical `<METHOD> /v1/{prefix}/...` form. `/catalog` is a
+deployment mount, unprefixed routes are compatibility aliases, and management
+and QueryGraph are separate control-plane APIs; none belongs in the Iceberg
+capability field.
 
 That means LakeCat can preserve and replay emerging v4 metadata through the Sail
 JSON bridge, but it is not claiming typed Sail v4 semantics yet. The same
 posture is captured in replay evidence: config defaults and overrides stay
 ordinary duplicate-free key/value entries, advertised endpoints prove that the
-standard REST and additive governed surfaces were present, and QueryGraph sees
-compact config proof only after service replay accepts it.
+supported standard REST surface was present, and QueryGraph sees compact config
+proof only after service replay accepts it. Dedicated management and QueryGraph
+responses and outbox events prove those control-plane surfaces independently.
 
 ## Registering The Warehouse Shape
 
@@ -2101,7 +2107,7 @@ of those checks in one place.
 
 | Event family | Must prove | Rejects | Why it matters |
 | --- | --- | --- | --- |
-| `catalog.config-read` | Warehouse scope, v4 bridge defaults, overrides, advertised standard REST endpoints, governed plan/fetch/credential endpoints, bootstrap and lineage-drain endpoints, authorization receipt | Duplicate config keys, unsupported `lakecat.format.v4*` claims, missing standard or governed endpoints, extra unverified config fields | QueryGraph imports the same compatibility contract LakeCat advertised, without turning config into a free-form claims bag |
+| `catalog.config-read` | Warehouse scope, v4 bridge defaults, overrides, the exact supported canonical Apache Iceberg REST endpoint set, and authorization receipt | Duplicate config keys, unsupported `lakecat.format.v4*` claims, missing Iceberg operations, deployment mounts or aliases, management/QueryGraph routes, unsupported extra endpoints, extra unverified config fields | QueryGraph imports the same compatibility contract LakeCat advertised, without confusing transport topology or control-plane discovery with protocol capability |
 | Namespace lifecycle | Warehouse, namespace path or components, matching lifecycle action, valid principal | Malformed namespace paths, count drift, action drift, unclosed wrapper fields | Standard catalog discovery stays attributable and replayable |
 | Table lifecycle | Root table identity, warehouse/namespace/table hints matching that identity, action receipt, soft-delete format evidence when present | Scope drift, action drift, conflicting `format-version`/`format_version` aliases, undecorated-location violations | Table proof follows the Iceberg object it claims to describe |
 | Table commit | Table scope, authorization receipt, pointer transition, principal, idempotency/request/response/policy hashes, format, snapshot, timestamp | Credential-bearing or decorated metadata-location evidence, unclosed nested commit fields, forged event type | Commit proof stays tied to the accepted pointer movement without leaking object paths |

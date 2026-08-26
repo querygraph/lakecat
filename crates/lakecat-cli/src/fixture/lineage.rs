@@ -49,7 +49,7 @@ pub(crate) fn verify_qglake_lineage_drain(
     if drain
         .authorization_receipt_hash
         .as_deref()
-        .map_or(true, |hash| !is_full_sha256_hash(hash))
+        .is_none_or(|hash| !is_full_sha256_hash(hash))
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain read is missing full SHA-256 authorization receipt hash"
@@ -65,7 +65,7 @@ pub(crate) fn verify_qglake_lineage_drain(
     if drain
         .request_identity_source
         .as_deref()
-        .map_or(true, str::is_empty)
+        .is_none_or(str::is_empty)
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain read is missing request identity source".to_string(),
@@ -74,7 +74,7 @@ pub(crate) fn verify_qglake_lineage_drain(
     if drain
         .request_identity_state
         .as_deref()
-        .map_or(true, str::is_empty)
+        .is_none_or(str::is_empty)
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain read is missing request identity attestation state".to_string(),
@@ -97,19 +97,19 @@ pub(crate) fn verify_qglake_lineage_drain(
     if bootstrap
         .bundle_hash
         .as_deref()
-        .map_or(true, |hash| !is_full_sha256_hash(hash))
+        .is_none_or(|hash| !is_full_sha256_hash(hash))
         || bootstrap
             .graph_hash
             .as_deref()
-            .map_or(true, |hash| !is_full_sha256_hash(hash))
+            .is_none_or(|hash| !is_full_sha256_hash(hash))
         || bootstrap
             .open_lineage_hash
             .as_deref()
-            .map_or(true, |hash| !is_full_sha256_hash(hash))
+            .is_none_or(|hash| !is_full_sha256_hash(hash))
         || bootstrap
             .querygraph_import_hash
             .as_deref()
-            .map_or(true, |hash| !is_full_sha256_hash(hash))
+            .is_none_or(|hash| !is_full_sha256_hash(hash))
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain replay evidence is missing full SHA-256 QueryGraph hashes"
@@ -129,7 +129,7 @@ pub(crate) fn verify_qglake_lineage_drain(
     if bootstrap
         .authorization_receipt_hash
         .as_deref()
-        .map_or(true, |hash| !is_full_sha256_hash(hash))
+        .is_none_or(|hash| !is_full_sha256_hash(hash))
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain replay evidence is missing full SHA-256 authorization receipt hash".to_string(),
@@ -138,7 +138,7 @@ pub(crate) fn verify_qglake_lineage_drain(
     if bootstrap
         .request_identity_source
         .as_deref()
-        .map_or(true, str::is_empty)
+        .is_none_or(str::is_empty)
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain replay evidence is missing request identity source".to_string(),
@@ -147,7 +147,7 @@ pub(crate) fn verify_qglake_lineage_drain(
     if bootstrap
         .request_identity_state
         .as_deref()
-        .map_or(true, str::is_empty)
+        .is_none_or(str::is_empty)
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain replay evidence is missing request identity attestation state"
@@ -158,7 +158,7 @@ pub(crate) fn verify_qglake_lineage_drain(
         if bootstrap
             .agent_delegation_hash
             .as_deref()
-            .map_or(true, |hash| !is_full_sha256_hash(hash))
+            .is_none_or(|hash| !is_full_sha256_hash(hash))
         {
             return Err(lakecat_core::LakeCatError::InvalidArgument(
                 "qglake lineage drain replay evidence is missing full SHA-256 agent delegation hash".to_string(),
@@ -167,7 +167,7 @@ pub(crate) fn verify_qglake_lineage_drain(
         if bootstrap
             .agent_summary_signature_hash
             .as_deref()
-            .map_or(true, |hash| !is_full_sha256_hash(hash))
+            .is_none_or(|hash| !is_full_sha256_hash(hash))
         {
             return Err(lakecat_core::LakeCatError::InvalidArgument(
                 "qglake lineage drain replay evidence is missing full SHA-256 agent summary signature hash".to_string(),
@@ -392,7 +392,15 @@ pub(crate) fn verify_qglake_catalog_config_endpoints(
             ));
         }
     }
-    for required in required_qglake_catalog_config_endpoints() {
+    if let Some(endpoint) = endpoints
+        .iter()
+        .find(|endpoint| !LAKECAT_ICEBERG_REST_ENDPOINTS.contains(endpoint))
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain catalog config replay endpoints contain non-Iceberg or unsupported entry {endpoint}"
+        )));
+    }
+    for &required in LAKECAT_ICEBERG_REST_ENDPOINTS {
         if !endpoints.contains(required) {
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
                 "qglake lineage drain catalog config replay endpoints must include {required}"
@@ -400,31 +408,6 @@ pub(crate) fn verify_qglake_catalog_config_endpoints(
         }
     }
     Ok(())
-}
-
-pub(crate) fn required_qglake_catalog_config_endpoints() -> [&'static str; 20] {
-    [
-        "GET /catalog/v1/config",
-        "GET /catalog/v1/namespaces",
-        "POST /catalog/v1/namespaces",
-        "POST /catalog/v1/namespaces/{namespace}/tables",
-        "GET /catalog/v1/namespaces/{namespace}/tables/{table}",
-        "POST /catalog/v1/namespaces/{namespace}/tables/{table}/commit",
-        "POST /catalog/v1/namespaces/{namespace}/tables/{table}/plan",
-        "POST /catalog/v1/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
-        "GET /catalog/v1/namespaces/{namespace}/tables/{table}/credentials",
-        "GET /catalog/v1/{warehouse}/config",
-        "GET /catalog/v1/{warehouse}/namespaces",
-        "POST /catalog/v1/{warehouse}/namespaces",
-        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables",
-        "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}",
-        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/commit",
-        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/plan",
-        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
-        "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/credentials",
-        "POST /management/v1/lineage/drain",
-        "GET /querygraph/v1/bootstrap",
-    ]
 }
 
 pub(crate) fn require_qglake_lineage_authorization_actions_match_events(

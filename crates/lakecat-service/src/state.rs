@@ -8,10 +8,6 @@ use lakecat_core::sail::SailCatalogEngine;
 use lakecat_core::{LakeCatError, Principal, WarehouseName};
 use lakecat_graph::{CatalogGraphSink, NoopCatalogGraphSink};
 use lakecat_lineage::{HashOnlyLineageSink, LineageSink};
-#[cfg(feature = "sail-local")]
-use lakecat_sail::catalog_provider::{
-    LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
-};
 use lakecat_security::{AllowAllGovernanceEngine, AuthorizationReceipt, GovernanceEngine};
 use lakecat_store::{CatalogStore, StorageProfile, TableRecord};
 use serde::Deserialize;

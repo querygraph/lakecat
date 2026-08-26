@@ -46,10 +46,6 @@ use lakecat_lineage::{
 use lakecat_querygraph::{
     QueryGraphBootstrap, QueryGraphTenantProjection, QueryGraphViewReceiptEvidence,
 };
-#[cfg(feature = "sail-local")]
-use lakecat_sail::catalog_provider::{
-    LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
-};
 use lakecat_security::{
     AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
     CatalogConfigCapability, CredentialsVendCapability, GovernanceEngine, GraphReadCapability,
@@ -1282,7 +1278,7 @@ async fn outbox_drain_rejects_catalog_config_missing_standard_endpoints() {
     let endpoints = CatalogConfigResponse::default()
         .endpoints
         .into_iter()
-        .filter(|endpoint| endpoint != "POST /catalog/v1/namespaces/{namespace}/tables")
+        .filter(|endpoint| endpoint != "POST /v1/{prefix}/namespaces/{namespace}/tables")
         .collect::<Vec<_>>();
     let store = Arc::new(RecordingOutboxStore {
         events: Mutex::new(vec![OutboxEvent {
@@ -1329,7 +1325,7 @@ async fn outbox_drain_rejects_catalog_config_missing_standard_endpoints() {
     assert!(message.contains("catalog.config-read"));
     assert!(
         message.contains(
-            "catalog config-read endpoints must include POST /catalog/v1/namespaces/{namespace}/tables"
+            "catalog config-read endpoints must include POST /v1/{prefix}/namespaces/{namespace}/tables"
         ),
         "{message}"
     );
@@ -1347,7 +1343,7 @@ async fn outbox_drain_rejects_catalog_config_missing_governed_access_endpoints()
         .endpoints
         .into_iter()
         .filter(|endpoint| {
-            endpoint != "POST /catalog/v1/namespaces/{namespace}/tables/{table}/plan"
+            endpoint != "POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/plan"
         })
         .collect::<Vec<_>>();
     let store = Arc::new(RecordingOutboxStore {
@@ -1395,7 +1391,7 @@ async fn outbox_drain_rejects_catalog_config_missing_governed_access_endpoints()
     assert!(message.contains("catalog.config-read"));
     assert!(
         message.contains(
-            "catalog config-read endpoints must include POST /catalog/v1/namespaces/{namespace}/tables/{table}/plan"
+            "catalog config-read endpoints must include POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/plan"
         ),
         "{message}"
     );
@@ -1410,7 +1406,7 @@ async fn outbox_drain_rejects_catalog_config_missing_governed_access_endpoints()
 async fn outbox_drain_rejects_duplicate_catalog_config_endpoints() {
     let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
     let mut endpoints = CatalogConfigResponse::default().endpoints;
-    endpoints.push("GET /querygraph/v1/bootstrap".to_string());
+    endpoints.push("GET /v1/config".to_string());
     let store = Arc::new(RecordingOutboxStore {
         events: Mutex::new(vec![OutboxEvent {
             event_id: "evt-config-duplicate-endpoint".to_string(),

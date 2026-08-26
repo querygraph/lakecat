@@ -1157,13 +1157,9 @@ fn qglake_handoff_summary_verifier_rejects_unsupported_config_v4_default() {
 #[test]
 fn qglake_handoff_summary_verifier_rejects_missing_config_endpoint() {
     for missing_endpoint in [
-        "GET /querygraph/v1/bootstrap",
-        "POST /catalog/v1/namespaces/{namespace}/tables/{table}/plan",
-        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/plan",
-        "POST /catalog/v1/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
-        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
-        "GET /catalog/v1/namespaces/{namespace}/tables/{table}/credentials",
-        "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/credentials",
+        "POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/plan",
+        "POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/tasks",
+        "GET /v1/{prefix}/namespaces/{namespace}/tables/{table}/credentials",
     ] {
         let mut summary = qglake_handoff_summary_json();
         let endpoints = summary["lakecatReplayVerification"]["catalogConfigProof"]["endpoints"]
@@ -1177,6 +1173,20 @@ fn qglake_handoff_summary_verifier_rejects_missing_config_endpoint() {
         assert!(err.to_string().contains("catalogConfigProof"));
         assert!(err.to_string().contains(missing_endpoint));
     }
+}
+
+#[test]
+fn qglake_handoff_summary_verifier_rejects_non_iceberg_config_endpoint() {
+    let mut summary = qglake_handoff_summary_json();
+    summary["lakecatReplayVerification"]["catalogConfigProof"]["endpoints"]
+        .as_array_mut()
+        .expect("config endpoints")
+        .push(json!("GET /querygraph/v1/bootstrap"));
+
+    let err = verify_qglake_handoff_summary_value(&summary)
+        .expect_err("handoff summary should reject non-Iceberg config endpoint");
+
+    assert!(err.to_string().contains("non-Iceberg or unsupported"));
 }
 
 #[test]

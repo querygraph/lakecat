@@ -488,7 +488,6 @@ pub(crate) fn qglake_view_replay_evidence_json(
                 }
             }
             let chains = qglake_compact_view_receipt_chains(event, verification);
-            let mut chain_hashes = chain_hashes;
             for chain in &chains {
                 if let Some(chain_hash) = chain.get("chainHash").and_then(Value::as_str) {
                     chain_hashes.insert(chain_hash.to_string());

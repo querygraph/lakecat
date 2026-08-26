@@ -374,8 +374,10 @@ impl VaultSecretClient for ReqwestVaultSecretClient {
     }
 }
 
+type EnvironmentVariableReader = dyn Fn(&str) -> Result<String, std::env::VarError> + Send + Sync;
+
 pub struct EnvironmentSecretRefCredentialResolver {
-    reader: Arc<dyn Fn(&str) -> Result<String, std::env::VarError> + Send + Sync>,
+    reader: Arc<EnvironmentVariableReader>,
 }
 
 impl EnvironmentSecretRefCredentialResolver {

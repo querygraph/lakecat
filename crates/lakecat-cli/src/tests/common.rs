@@ -399,7 +399,7 @@ pub(crate) fn qglake_add_view_receipt_chain_structures(view_receipts: &mut Value
         1,
         "upsert",
         false,
-        &[view_receipt_hash.clone()],
+        std::slice::from_ref(&view_receipt_hash),
     );
     let tombstone_chain_hash = qglake_fixture_view_chain_hash(
         "active_customers_view",

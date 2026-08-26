@@ -457,6 +457,36 @@ pub(crate) fn namespace_components_path(
     Ok(components.join("."))
 }
 
+struct ViewReceiptChainGroup<'group, 'value> {
+    declared_chain_hashes: &'group BTreeSet<&'value str>,
+    warehouse: &'value str,
+    namespace: &'value [Value],
+}
+
+struct ViewReceiptVerificationState<'a> {
+    verified_chain_hashes_by_view: &'a mut BTreeMap<String, BTreeSet<String>>,
+    chain_receipt_hashes_by_view: &'a mut BTreeMap<String, BTreeSet<String>>,
+    structural_chain_hashes: &'a mut BTreeSet<String>,
+    structural_receipt_hashes: &'a mut BTreeSet<String>,
+}
+
+#[derive(Clone, Copy)]
+struct ViewReceiptChainPosition {
+    group_index: usize,
+    chain_index: usize,
+}
+
+struct CompactViewReceiptChain<'a> {
+    stable_id: &'a str,
+    warehouse: &'a str,
+    namespace: &'a [Value],
+    name: &'a str,
+    latest_view_version: u64,
+    latest_operation: &'a str,
+    tombstoned: bool,
+    receipts: &'a [Value],
+}
+
 pub(crate) fn require_verified_view_receipt_chain_structures(
     chain_group: &serde_json::Map<String, Value>,
     group_index: usize,
@@ -531,6 +561,17 @@ pub(crate) fn require_verified_view_receipt_chain_structures(
 
     let mut structural_receipt_hashes = BTreeSet::new();
     let mut structural_chain_hashes = BTreeSet::new();
+    let group = ViewReceiptChainGroup {
+        declared_chain_hashes: &chain_hashes,
+        warehouse: group_warehouse,
+        namespace: group_namespace,
+    };
+    let mut state = ViewReceiptVerificationState {
+        verified_chain_hashes_by_view,
+        chain_receipt_hashes_by_view,
+        structural_chain_hashes: &mut structural_chain_hashes,
+        structural_receipt_hashes: &mut structural_receipt_hashes,
+    };
     for (chain_index, chain) in chains.iter().enumerate() {
         let chain = chain.as_object().ok_or_else(|| {
             lakecat_core::LakeCatError::InvalidArgument(format!(
@@ -539,15 +580,12 @@ pub(crate) fn require_verified_view_receipt_chain_structures(
         })?;
         require_verified_view_receipt_chain_structure(
             chain,
-            group_index,
-            chain_index,
-            &chain_hashes,
-            group_warehouse,
-            group_namespace,
-            verified_chain_hashes_by_view,
-            chain_receipt_hashes_by_view,
-            &mut structural_chain_hashes,
-            &mut structural_receipt_hashes,
+            ViewReceiptChainPosition {
+                group_index,
+                chain_index,
+            },
+            &group,
+            &mut state,
         )?;
     }
     if structural_receipt_hashes != receipt_hashes {
@@ -558,22 +596,20 @@ pub(crate) fn require_verified_view_receipt_chain_structures(
     Ok(())
 }
 
-pub(crate) fn require_verified_view_receipt_chain_structure(
+fn require_verified_view_receipt_chain_structure(
     chain: &serde_json::Map<String, Value>,
-    group_index: usize,
-    chain_index: usize,
-    chain_hashes: &BTreeSet<&str>,
-    group_warehouse: &str,
-    group_namespace: &[Value],
-    verified_chain_hashes_by_view: &mut BTreeMap<String, BTreeSet<String>>,
-    chain_receipt_hashes_by_view: &mut BTreeMap<String, BTreeSet<String>>,
-    structural_chain_hashes: &mut BTreeSet<String>,
-    structural_receipt_hashes: &mut BTreeSet<String>,
+    position: ViewReceiptChainPosition,
+    group: &ViewReceiptChainGroup<'_, '_>,
+    state: &mut ViewReceiptVerificationState<'_>,
 ) -> lakecat_core::LakeCatResult<()> {
+    let ViewReceiptChainPosition {
+        group_index,
+        chain_index,
+    } = position;
     let label = "viewReceiptChainProof.receiptChains[].chains[]";
     let stable_id = require_non_empty_str(chain, "stableId", label)?;
     let warehouse = require_non_empty_str(chain, "warehouse", label)?;
-    if warehouse != group_warehouse {
+    if warehouse != group.warehouse {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].warehouse must match receipt-chain group warehouse"
         )));
@@ -588,7 +624,7 @@ pub(crate) fn require_verified_view_receipt_chain_structure(
             "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].namespace must contain namespace components"
         )));
     }
-    if namespace != group_namespace {
+    if namespace != group.namespace {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].namespace must match receipt-chain group namespace"
         )));
@@ -596,17 +632,18 @@ pub(crate) fn require_verified_view_receipt_chain_structure(
     let name = require_non_empty_str(chain, "name", label)?;
     require_view_stable_id_matches_components(stable_id, warehouse, namespace, name, label)?;
     let chain_hash = require_full_hash_str(chain, "chainHash", label)?;
-    if !chain_hashes.contains(chain_hash) {
+    if !group.declared_chain_hashes.contains(chain_hash) {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].chainHash is not covered by chainHashes"
         )));
     }
-    if !structural_chain_hashes.insert(chain_hash.to_string()) {
+    if !state.structural_chain_hashes.insert(chain_hash.to_string()) {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "viewReceiptChainProof.receiptChains[{group_index}].chains[] must not contain duplicate chainHash values"
         )));
     }
-    verified_chain_hashes_by_view
+    state
+        .verified_chain_hashes_by_view
         .entry(stable_id.to_string())
         .or_default()
         .insert(chain_hash.to_string());
@@ -636,29 +673,18 @@ pub(crate) fn require_verified_view_receipt_chain_structure(
             receipts.len()
         )));
     }
-    require_verified_view_receipts(
-        receipts,
-        group_index,
-        chain_index,
-        latest_view_version,
-        latest_operation,
+    let compact_chain = CompactViewReceiptChain {
         stable_id,
         warehouse,
         namespace,
-        name,
-        chain_receipt_hashes_by_view,
-        structural_receipt_hashes,
-    )?;
-    let computed_chain_hash = view_receipt_chain_hash_from_compact_structure(
-        stable_id,
-        warehouse,
-        namespace,
-        name,
         latest_view_version,
         latest_operation,
+        name,
         tombstoned,
         receipts,
-    )?;
+    };
+    require_verified_view_receipts(&compact_chain, position, state)?;
+    let computed_chain_hash = view_receipt_chain_hash_from_compact_structure(&compact_chain)?;
     if chain_hash != computed_chain_hash {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].chainHash must match the structural receipt-chain digest"
@@ -667,37 +693,33 @@ pub(crate) fn require_verified_view_receipt_chain_structure(
     Ok(())
 }
 
-pub(crate) fn require_verified_view_receipts(
-    receipts: &[Value],
-    group_index: usize,
-    chain_index: usize,
-    latest_view_version: u64,
-    latest_operation: &str,
-    expected_stable_id: &str,
-    expected_warehouse: &str,
-    expected_namespace: &[Value],
-    expected_name: &str,
-    chain_receipt_hashes_by_view: &mut BTreeMap<String, BTreeSet<String>>,
-    structural_receipt_hashes: &mut BTreeSet<String>,
+fn require_verified_view_receipts(
+    chain: &CompactViewReceiptChain<'_>,
+    position: ViewReceiptChainPosition,
+    state: &mut ViewReceiptVerificationState<'_>,
 ) -> lakecat_core::LakeCatResult<()> {
+    let ViewReceiptChainPosition {
+        group_index,
+        chain_index,
+    } = position;
     let mut previous_view_version: Option<u64> = None;
     let mut previous_receipt_hash: Option<String> = None;
     let mut latest_receipt_operation = None;
     let mut latest_receipt_version = None;
 
-    for (receipt_index, receipt) in receipts.iter().enumerate() {
+    for (receipt_index, receipt) in chain.receipts.iter().enumerate() {
         let receipt = receipt.as_object().ok_or_else(|| {
             lakecat_core::LakeCatError::InvalidArgument(format!(
                 "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].receipts[{receipt_index}] must be an object"
             ))
         })?;
         let label = "viewReceiptChainProof.receiptChains[].chains[].receipts[]";
-        if require_non_empty_str(receipt, "stableId", label)? != expected_stable_id {
+        if require_non_empty_str(receipt, "stableId", label)? != chain.stable_id {
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
                 "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].receipts[{receipt_index}].stableId must match chain stableId"
             )));
         }
-        if require_non_empty_str(receipt, "warehouse", label)? != expected_warehouse {
+        if require_non_empty_str(receipt, "warehouse", label)? != chain.warehouse {
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
                 "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].receipts[{receipt_index}].warehouse must match chain warehouse"
             )));
@@ -712,12 +734,12 @@ pub(crate) fn require_verified_view_receipts(
                 "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].receipts[{receipt_index}].namespace must contain namespace components"
             )));
         }
-        if namespace != expected_namespace {
+        if namespace != chain.namespace {
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
                 "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].receipts[{receipt_index}].namespace must match chain namespace"
             )));
         }
-        if require_non_empty_str(receipt, "name", label)? != expected_name {
+        if require_non_empty_str(receipt, "name", label)? != chain.name {
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
                 "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].receipts[{receipt_index}].name must match chain name"
             )));
@@ -762,19 +784,22 @@ pub(crate) fn require_verified_view_receipts(
                 "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].receipts[{receipt_index}].receiptHash must match the structural view receipt digest"
             )));
         }
-        chain_receipt_hashes_by_view
-            .entry(expected_stable_id.to_string())
+        state
+            .chain_receipt_hashes_by_view
+            .entry(chain.stable_id.to_string())
             .or_default()
             .insert(receipt_hash.to_string());
-        structural_receipt_hashes.insert(receipt_hash.to_string());
+        state
+            .structural_receipt_hashes
+            .insert(receipt_hash.to_string());
         latest_receipt_operation = Some(operation.to_string());
         latest_receipt_version = Some(view_version);
         previous_view_version = Some(view_version);
         previous_receipt_hash = Some(receipt_hash.to_string());
     }
 
-    if latest_receipt_version != Some(latest_view_version)
-        || latest_receipt_operation.as_deref() != Some(latest_operation)
+    if latest_receipt_version != Some(chain.latest_view_version)
+        || latest_receipt_operation.as_deref() != Some(chain.latest_operation)
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}] latest receipt does not match chain head"
@@ -861,17 +886,11 @@ pub(crate) fn normalized_utc_recorded_at(
         .to_rfc3339_opts(SecondsFormat::AutoSi, true))
 }
 
-pub(crate) fn view_receipt_chain_hash_from_compact_structure(
-    stable_id: &str,
-    warehouse: &str,
-    namespace: &[Value],
-    name: &str,
-    latest_view_version: u64,
-    latest_operation: &str,
-    tombstoned: bool,
-    receipts: &[Value],
+fn view_receipt_chain_hash_from_compact_structure(
+    chain: &CompactViewReceiptChain<'_>,
 ) -> lakecat_core::LakeCatResult<String> {
-    let receipt_hashes = receipts
+    let receipt_hashes = chain
+        .receipts
         .iter()
         .map(|receipt| {
             let receipt = receipt.as_object().ok_or_else(|| {
@@ -889,13 +908,13 @@ pub(crate) fn view_receipt_chain_hash_from_compact_structure(
         })
         .collect::<lakecat_core::LakeCatResult<Vec<_>>>()?;
     content_hash_json(&json!({
-        "stable-id": stable_id,
-        "warehouse": warehouse,
-        "namespace": namespace,
-        "name": name,
-        "latest-view-version": latest_view_version,
-        "latest-operation": latest_operation,
-        "tombstoned": tombstoned,
+        "stable-id": chain.stable_id,
+        "warehouse": chain.warehouse,
+        "namespace": chain.namespace,
+        "name": chain.name,
+        "latest-view-version": chain.latest_view_version,
+        "latest-operation": chain.latest_operation,
+        "tombstoned": chain.tombstoned,
         "receipt-hashes": receipt_hashes,
     }))
 }

@@ -3,10 +3,6 @@ use axum::http::HeaderMap;
 use lakecat_api::{CommitTableRequest, CommitTableResponse};
 use lakecat_core::sail::CommitPreparationRequest;
 use lakecat_core::{LakeCatError, WarehouseName, content_hash_json};
-#[cfg(feature = "sail-local")]
-use lakecat_sail::catalog_provider::{
-    LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
-};
 use lakecat_store::{TableCommit, table_ident};
 use serde_json::json;
 

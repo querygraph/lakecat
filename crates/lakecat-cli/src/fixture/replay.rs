@@ -13,11 +13,11 @@ pub(crate) fn verify_qglake_scan_replay(
         || planned
             .authorization_receipt_hash
             .as_deref()
-            .map_or(true, |hash| !is_full_sha256_hash(hash))
+            .is_none_or(|hash| !is_full_sha256_hash(hash))
         || planned
             .request_identity_state
             .as_deref()
-            .map_or(true, str::is_empty)
+            .is_none_or(str::is_empty)
         || !qglake_has_full_sha256_hashes(&planned.replay_event_hashes)
         || !qglake_has_full_sha256_hashes(&planned.replay_open_lineage_hashes)
         || planned.scan_task_count.unwrap_or_default() == 0
@@ -37,11 +37,11 @@ pub(crate) fn verify_qglake_scan_replay(
         || fetched
             .authorization_receipt_hash
             .as_deref()
-            .map_or(true, |hash| !is_full_sha256_hash(hash))
+            .is_none_or(|hash| !is_full_sha256_hash(hash))
         || fetched
             .request_identity_state
             .as_deref()
-            .map_or(true, str::is_empty)
+            .is_none_or(str::is_empty)
         || !qglake_has_full_sha256_hashes(&fetched.replay_event_hashes)
         || !qglake_has_full_sha256_hashes(&fetched.replay_open_lineage_hashes)
         || fetched.file_scan_task_count.unwrap_or_default() == 0
@@ -292,19 +292,19 @@ pub(crate) fn verify_qglake_view_replay(
                 "qglake lineage drain view replay for {view_stable_id} did not emit graph and lineage projections"
             )));
         }
-        if let Some(expected_version) = verification.verified_view_versions.get(view_stable_id) {
-            if view_replay.view_version != Some(*expected_version) {
-                return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-                    "qglake lineage drain view replay for {view_stable_id} did not preserve accepted view version {expected_version}"
-                )));
-            }
+        if let Some(expected_version) = verification.verified_view_versions.get(view_stable_id)
+            && view_replay.view_version != Some(*expected_version)
+        {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "qglake lineage drain view replay for {view_stable_id} did not preserve accepted view version {expected_version}"
+            )));
         }
         if view_replay
             .view_warehouse
             .as_deref()
-            .map_or(true, str::is_empty)
+            .is_none_or(str::is_empty)
             || view_replay.view_namespace.is_empty()
-            || view_replay.view_name.as_deref().map_or(true, str::is_empty)
+            || view_replay.view_name.as_deref().is_none_or(str::is_empty)
             || !qglake_has_full_sha256_hashes(&view_replay.replay_event_hashes)
             || !qglake_has_full_sha256_hashes(&view_replay.replay_open_lineage_hashes)
         {
@@ -323,12 +323,11 @@ pub(crate) fn verify_qglake_view_replay(
             if let (Some(drop_replay), Some(expected_version)) = (
                 drop_replay,
                 verification.verified_view_versions.get(view_stable_id),
-            ) {
-                if drop_replay.expected_view_version != Some(*expected_version) {
-                    return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-                        "qglake lineage drain view drop replay for {view_stable_id} did not preserve expected view version {expected_version}"
-                    )));
-                }
+            ) && drop_replay.expected_view_version != Some(*expected_version)
+            {
+                return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                    "qglake lineage drain view drop replay for {view_stable_id} did not preserve expected view version {expected_version}"
+                )));
             }
             let Some(tombstone_receipts) = drain.events.iter().find(|event| {
                 event.event_type == "view.version-receipts-listed"
@@ -584,19 +583,19 @@ pub(crate) fn verify_qglake_credential_storage_profile_projection(
     if event
         .storage_profile_id
         .as_deref()
-        .map_or(true, str::is_empty)
+        .is_none_or(str::is_empty)
         || event
             .storage_profile_provider
             .as_deref()
-            .map_or(true, str::is_empty)
+            .is_none_or(str::is_empty)
         || event
             .storage_profile_issuance_mode
             .as_deref()
-            .map_or(true, str::is_empty)
+            .is_none_or(str::is_empty)
         || event
             .storage_profile_location_prefix_hash
             .as_deref()
-            .map_or(true, |hash| !is_full_sha256_hash(hash))
+            .is_none_or(|hash| !is_full_sha256_hash(hash))
         || event.storage_profile_secret_ref_present.is_none()
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
@@ -632,7 +631,7 @@ pub(crate) fn verify_qglake_credential_storage_profile_projection(
         && event
             .storage_profile_secret_ref_provider
             .as_deref()
-            .map_or(true, |provider| provider.trim().is_empty())
+            .is_none_or(|provider| provider.trim().is_empty())
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "qglake lineage drain {label} credential replay is missing secret-ref provider evidence"
@@ -642,7 +641,7 @@ pub(crate) fn verify_qglake_credential_storage_profile_projection(
         && event
             .storage_profile_secret_ref_hash
             .as_deref()
-            .map_or(true, |hash| !is_full_sha256_hash(hash))
+            .is_none_or(|hash| !is_full_sha256_hash(hash))
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "qglake lineage drain {label} credential replay is missing full SHA-256 secret-ref hash evidence"

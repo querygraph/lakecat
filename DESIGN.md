@@ -1018,25 +1018,26 @@ Compact catalog-config proof must also preserve the same advertised defaults,
 overrides, endpoints, `catalog-config` authorization action, graph count,
 replay hashes, and OpenLineage hashes as raw `catalog.config-read` replay, so
 archived QGLake summaries and captured replay sidecars cannot drop the v4 bridge
-posture or integration discovery contract after source replay accepted it.
+posture or Iceberg REST capability contract after source replay accepted it.
 Raw lineage-drain catalog-config summary construction must fail closed over
 the same config entry and endpoint shapes: defaults/overrides must remain
 `ConfigEntry` arrays with nonblank duplicate-free keys and string values, and
-endpoints must remain nonblank duplicate-free string arrays that include the
-required Iceberg REST, governed access, bootstrap, and lineage-drain routes.
+endpoints must remain nonblank duplicate-free string arrays containing exactly
+LakeCat's supported Apache Iceberg OpenAPI method/path entries. The Iceberg
+`endpoints` field is not a generic service-discovery registry: mount aliases,
+management routes, and QueryGraph routes remain available but must be proven by
+their own request and event evidence.
 Compact `catalogConfigProof` and captured LakeCat replay `catalogConfig` proof
 objects must also stay closed over those compared fields, so a summary,
 captured replay output, or saved self-verifier sidecar cannot attach unverified
 v4 bridge, endpoint, authorization, graph, replay, or OpenLineage compatibility
 claims beside checked config-read proof. The compact handoff verifier and the
-saved lineage-drain verifier must reject missing required endpoints from that
-proof, including the standard Iceberg REST plan endpoint as well as QueryGraph
-bootstrap. Default and warehouse-prefixed route forms are both part of this
-proof because warehouse routing is a standard LakeCat compatibility surface for
-Iceberg clients. The same endpoint-set proof applies to `fetch-scan-tasks`,
-because governed task fetch is the second half of the Sail-planned read loop,
-and to credential endpoints because raw credential vending remains an audited
-exception that must stay explicit in the advertised catalog contract.
+saved lineage-drain verifier must reject missing, duplicate, or nonstandard
+entries from that proof. Canonical `{prefix}` forms describe both default and
+warehouse-prefixed mounts without leaking deployment paths into the protocol
+response. The standard plan, task-fetch, and credential entries remain explicit
+because they are Apache Iceberg REST operations implemented by LakeCat; their
+governed semantics are proved separately by authorization receipts.
 Raw `catalog.config-read` and `querygraph.bootstrap` replay payloads must also
 stay closed over their checked service schemas before graph, OpenLineage,
 QGLake, or QueryGraph import proof can inherit them. A durable outbox row cannot
@@ -1652,24 +1653,19 @@ rather than letting future-looking typed-Sail claims coexist with
 `typed-sail=unavailable`. Config overrides cannot carry v4 bridge keys either;
 until Sail exposes stable typed v4 support, an override is not allowed to
 rewrite the catalog's advertised v4 posture.
-Catalog config-read replay must also bind the advertised endpoint list to the
-standard Iceberg REST surface: config, namespace list/create, table create,
-table load, and table commit endpoints must be present for both default and
-warehouse-prefixed routes before graph or OpenLineage projection can treat the
-config read as compatibility evidence. The same replay evidence must preserve
-LakeCat's governed access surfaces for both route forms: plan, fetch-scan-tasks,
-and credential endpoints are additive proof-carrying catalog APIs over standard
-tables, not required custom Iceberg metadata or QueryGraph-only routes.
-Config replay must also preserve LakeCat's integration discovery surfaces:
-`POST /management/v1/lineage/drain` and `GET /querygraph/v1/bootstrap`. These
-are not standard Iceberg REST table-access requirements; they are additive
-LakeCat/QueryGraph/OpenLineage control-plane surfaces that let QGLake imports
-and lineage drains prove which integration contract was advertised when the
-config read entered graph or lineage projection.
+Catalog config-read replay must bind the advertised endpoint list exactly to
+LakeCat's supported standard Iceberg REST surface: config, namespace operations,
+table operations, scan planning/task fetch, and credential loading use only the
+OpenAPI's canonical `<METHOD> /v1/{prefix}/...` representation. A server mount
+such as `/catalog`, an unprefixed compatibility alias, or a management path is
+transport topology rather than an advertised Iceberg capability and must never
+appear in this field. QueryGraph bootstrap and lineage-drain availability are
+proved by their dedicated control-plane responses and outbox events instead of
+being inferred from an unrelated protocol field.
 Compact QGLake handoff proof must carry that config-read contract forward as
 `catalogConfigProof`, and captured LakeCat replay sidecars must match it
-exactly, so saved handoffs cannot accept weaker v4, endpoint, or
-integration-discovery evidence than the raw lineage drain proved.
+exactly, so saved handoffs cannot accept weaker v4 or Iceberg endpoint evidence
+than the raw lineage drain proved.
 Saved handoff verifier output must also repeat that same proof under
 `lineageDrainArtifactSemantics.catalogConfigProof`, binding the verifier's
 claim about the raw drain artifact to the config-read evidence it actually

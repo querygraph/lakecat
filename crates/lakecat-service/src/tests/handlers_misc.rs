@@ -46,10 +46,6 @@ use lakecat_lineage::{
 use lakecat_querygraph::{
     QueryGraphBootstrap, QueryGraphTenantProjection, QueryGraphViewReceiptEvidence,
 };
-#[cfg(feature = "sail-local")]
-use lakecat_sail::catalog_provider::{
-    LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
-};
 use lakecat_security::{
     AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
     CatalogConfigCapability, CredentialsVendCapability, GovernanceEngine, GraphReadCapability,
@@ -116,36 +112,14 @@ async fn config_endpoint_reports_lakecat_capabilities() {
         "lakecat.format.v4.typed-sail",
         "unavailable",
     );
-    assert_config_endpoints_include(
-        &payload["endpoints"],
-        "POST /catalog/v1/namespaces/{namespace}/tables/{table}/commit",
-    );
-    assert_config_endpoints_include(
-        &payload["endpoints"],
-        "POST /catalog/v1/namespaces/{namespace}/tables",
-    );
-    assert_config_endpoints_include(
-        &payload["endpoints"],
-        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables",
-    );
-    assert_config_endpoints_include(
-        &payload["endpoints"],
-        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/commit",
-    );
-    assert_config_endpoints_include(
-        &payload["endpoints"],
-        "POST /catalog/v1/namespaces/{namespace}/tables/{table}/plan",
-    );
-    assert_config_endpoints_include(
-        &payload["endpoints"],
-        "POST /catalog/v1/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
-    );
-    assert_config_endpoints_include(
-        &payload["endpoints"],
-        "GET /catalog/v1/namespaces/{namespace}/tables/{table}/credentials",
-    );
-    assert_config_endpoints_include(&payload["endpoints"], "POST /management/v1/lineage/drain");
-    assert_config_endpoints_include(&payload["endpoints"], "GET /querygraph/v1/bootstrap");
+    let endpoints = payload["endpoints"]
+        .as_array()
+        .expect("config endpoints should be an array");
+    assert!(endpoints.iter().all(|endpoint| {
+        endpoint
+            .as_str()
+            .is_some_and(|endpoint| endpoint.contains(" /v1/"))
+    }));
     // Spec-canonical `<METHOD> /v1/{prefix}/...` forms that stock clients match.
     assert_config_endpoints_include(&payload["endpoints"], "GET /v1/config");
     assert_config_endpoints_include(
@@ -159,6 +133,10 @@ async fn config_endpoint_reports_lakecat_capabilities() {
     assert_config_endpoints_include(
         &payload["endpoints"],
         "POST /v1/{prefix}/namespaces/{namespace}/tables/{table}",
+    );
+    assert_config_endpoints_include(
+        &payload["endpoints"],
+        "POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/tasks",
     );
 }
 

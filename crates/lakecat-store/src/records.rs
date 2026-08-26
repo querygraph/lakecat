@@ -539,6 +539,10 @@ pub struct ViewColumnRecord {
 }
 
 impl ViewRecord {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "atomic view construction keeps every independently validated persisted field explicit; a partial builder would admit invalid intermediate states"
+    )]
     pub fn new(
         warehouse: WarehouseName,
         namespace: Namespace,

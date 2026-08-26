@@ -46,10 +46,6 @@ use lakecat_lineage::{
 use lakecat_querygraph::{
     QueryGraphBootstrap, QueryGraphTenantProjection, QueryGraphViewReceiptEvidence,
 };
-#[cfg(feature = "sail-local")]
-use lakecat_sail::catalog_provider::{
-    LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
-};
 use lakecat_security::{
     AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
     CatalogConfigCapability, CredentialsVendCapability, GovernanceEngine, GraphReadCapability,
@@ -5528,7 +5524,7 @@ async fn outbox_drain_projects_catalog_config_reads_to_graph_and_lineage() {
     );
     assert_config_endpoints_include(
         &serde_json::to_value(&drain.events[0].catalog_config_endpoints).unwrap(),
-        "GET /querygraph/v1/bootstrap",
+        "GET /v1/config",
     );
 
     let graph_events = graph.events.lock().await;

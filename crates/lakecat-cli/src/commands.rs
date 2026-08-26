@@ -63,7 +63,7 @@ pub(crate) fn write_bootstrap_bundle(
             ))
         })?;
     }
-    fs::write(&output, pretty).map_err(|err| {
+    fs::write(output, pretty).map_err(|err| {
         lakecat_core::LakeCatError::Internal(format!(
             "failed to write bootstrap bundle {}: {err}",
             output.display()

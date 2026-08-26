@@ -3441,7 +3441,7 @@ async fn turso_store_validates_pending_outbox_before_delivery() {
         "update outbox_events set payload_json = ?2 where event_id = ?1",
         (
             event_id.as_str(),
-            encode_json(&serde_json::json!({
+            encode_json(serde_json::json!({
                 "event-type": "querygraph.bootstrap.drifted",
                 "manifest-hash": "lakecat:test"
             }))
@@ -3512,7 +3512,7 @@ async fn turso_store_rejects_partial_outbox_delivery_on_batch_drift() {
         "update outbox_events set payload_json = ?2 where event_id = ?1",
         (
             event_ids[1].as_str(),
-            encode_json(&serde_json::json!({
+            encode_json(serde_json::json!({
                 "event-type": "querygraph.bootstrap.drifted",
                 "manifest-hash": "lakecat:test"
             }))

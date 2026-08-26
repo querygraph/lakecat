@@ -105,13 +105,19 @@ pub(crate) fn qglake_table_metadata(
 
     write_qglake_manifest_files(
         &metadata,
-        &manifest_path,
-        &manifest,
-        &delete_manifest_path,
-        &delete_manifest,
-        &manifest_list_path,
-        &data_file,
-        &delete_file,
+        QglakeManifestFiles {
+            data_manifest: QglakeManifestArtifact {
+                path: &manifest_path,
+                location: &manifest,
+            },
+            delete_manifest: QglakeManifestArtifact {
+                path: &delete_manifest_path,
+                location: &delete_manifest,
+            },
+            manifest_list_path: &manifest_list_path,
+            data_file: &data_file,
+            delete_file: &delete_file,
+        },
     )?;
     write_qglake_metadata_file(&metadata_file, &metadata)?;
     Ok(metadata)
@@ -135,16 +141,32 @@ pub(crate) fn write_qglake_metadata_file(
 }
 
 #[cfg(feature = "qglake-fixture")]
-pub(crate) fn write_qglake_manifest_files(
+struct QglakeManifestArtifact<'a> {
+    path: &'a Path,
+    location: &'a str,
+}
+
+#[cfg(feature = "qglake-fixture")]
+struct QglakeManifestFiles<'a> {
+    data_manifest: QglakeManifestArtifact<'a>,
+    delete_manifest: QglakeManifestArtifact<'a>,
+    manifest_list_path: &'a Path,
+    data_file: &'a str,
+    delete_file: &'a str,
+}
+
+#[cfg(feature = "qglake-fixture")]
+fn write_qglake_manifest_files(
     metadata: &Value,
-    manifest_path: &std::path::Path,
-    manifest: &str,
-    delete_manifest_path: &std::path::Path,
-    delete_manifest: &str,
-    manifest_list_path: &std::path::Path,
-    data_file: &str,
-    delete_file: &str,
+    files: QglakeManifestFiles<'_>,
 ) -> lakecat_core::LakeCatResult<()> {
+    let QglakeManifestFiles {
+        data_manifest,
+        delete_manifest,
+        manifest_list_path,
+        data_file,
+        delete_file,
+    } = files;
     let table_metadata =
         TableMetadata::from_json(&serde_json::to_vec(metadata).map_err(|err| {
             lakecat_core::LakeCatError::Internal(format!(
@@ -205,7 +227,7 @@ pub(crate) fn write_qglake_manifest_files(
         content_size_in_bytes: None,
     });
     fs::write(
-        manifest_path,
+        data_manifest.path,
         manifest_writer.to_avro_bytes_v2().map_err(|err| {
             lakecat_core::LakeCatError::Internal(format!(
                 "failed to encode QGLake data manifest: {err}"
@@ -214,7 +236,8 @@ pub(crate) fn write_qglake_manifest_files(
     )
     .map_err(|err| {
         lakecat_core::LakeCatError::Internal(format!(
-            "failed to write QGLake data manifest {manifest_path:?}: {err}"
+            "failed to write QGLake data manifest {:?}: {err}",
+            data_manifest.path
         ))
     })?;
 
@@ -268,7 +291,7 @@ pub(crate) fn write_qglake_manifest_files(
         content_size_in_bytes: None,
     });
     fs::write(
-        delete_manifest_path,
+        delete_manifest.path,
         delete_writer.to_avro_bytes_v2().map_err(|err| {
             lakecat_core::LakeCatError::Internal(format!(
                 "failed to encode QGLake delete manifest: {err}"
@@ -277,14 +300,15 @@ pub(crate) fn write_qglake_manifest_files(
     )
     .map_err(|err| {
         lakecat_core::LakeCatError::Internal(format!(
-            "failed to write QGLake delete manifest {delete_manifest_path:?}: {err}"
+            "failed to write QGLake delete manifest {:?}: {err}",
+            delete_manifest.path
         ))
     })?;
 
     let mut list_writer = ManifestListWriter::new();
     list_writer.append(
         ManifestFile::builder()
-            .with_manifest_path(manifest)
+            .with_manifest_path(data_manifest.location)
             .with_manifest_length(10)
             .with_partition_spec_id(0)
             .with_content(ManifestContentType::Data)
@@ -302,7 +326,7 @@ pub(crate) fn write_qglake_manifest_files(
     );
     list_writer.append(
         ManifestFile::builder()
-            .with_manifest_path(delete_manifest)
+            .with_manifest_path(delete_manifest.location)
             .with_manifest_length(10)
             .with_partition_spec_id(0)
             .with_content(ManifestContentType::Deletes)

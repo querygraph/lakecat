@@ -251,10 +251,10 @@ pub fn initial_table_metadata(
     // schema-id and field ids come from the client schema; derive last-column-id
     // as the max field id so later column additions keep increasing it.
     let mut schema = schema.clone();
-    if schema.get("schema-id").is_none() {
-        if let Some(obj) = schema.as_object_mut() {
-            obj.insert("schema-id".into(), Value::from(0));
-        }
+    if schema.get("schema-id").is_none()
+        && let Some(obj) = schema.as_object_mut()
+    {
+        obj.insert("schema-id".into(), Value::from(0));
     }
     let current_schema_id = schema.get("schema-id").and_then(Value::as_i64).unwrap_or(0);
     let last_column_id = max_field_id(&schema);
@@ -301,10 +301,10 @@ fn max_field_id(schema: &Value) -> i64 {
     fn walk(v: &Value, max: &mut i64) {
         match v {
             Value::Object(map) => {
-                if let Some(id) = map.get("id").and_then(Value::as_i64) {
-                    if id > *max {
-                        *max = id;
-                    }
+                if let Some(id) = map.get("id").and_then(Value::as_i64)
+                    && id > *max
+                {
+                    *max = id;
                 }
                 for (_k, child) in map {
                     walk(child, max);

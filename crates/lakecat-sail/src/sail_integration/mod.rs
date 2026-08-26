@@ -1419,10 +1419,10 @@ fn string_prefix_may_overlap_bounds(
     if upper.is_some_and(|upper| upper.as_str() < prefix.as_str()) {
         return false;
     }
-    if let Some(next_prefix) = next_lexicographic_prefix(prefix) {
-        if lower.is_some_and(|lower| lower.as_str() >= next_prefix.as_str()) {
-            return false;
-        }
+    if let Some(next_prefix) = next_lexicographic_prefix(prefix)
+        && lower.is_some_and(|lower| lower.as_str() >= next_prefix.as_str())
+    {
+        return false;
     }
     true
 }

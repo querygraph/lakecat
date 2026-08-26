@@ -1,10 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use lakecat_core::{LakeCatError, content_hash_bytes, content_hash_json};
-#[cfg(feature = "sail-local")]
-use lakecat_sail::catalog_provider::{
-    LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
-};
 use lakecat_store::OutboxEvent;
 use serde_json::{Value, json};
 

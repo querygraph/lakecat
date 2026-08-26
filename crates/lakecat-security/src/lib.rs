@@ -204,7 +204,7 @@ impl ReadRestriction {
 }
 
 fn allowed_columns_from_odrl(odrl: &Value) -> LakeCatResult<Option<Vec<String>>> {
-    for value in [
+    if let Some(value) = [
         odrl.get("allowed-columns"),
         odrl.get("allowedColumns"),
         odrl.get("columns"),
@@ -219,6 +219,7 @@ fn allowed_columns_from_odrl(odrl: &Value) -> LakeCatResult<Option<Vec<String>>>
     ]
     .into_iter()
     .flatten()
+    .next()
     {
         return Ok(Some(string_list(value, "ODRL allowed columns")?));
     }
@@ -247,7 +248,7 @@ fn allowed_columns_from_odrl(odrl: &Value) -> LakeCatResult<Option<Vec<String>>>
 }
 
 fn row_predicate_from_odrl(odrl: &Value) -> LakeCatResult<Option<Value>> {
-    for value in [
+    if let Some(value) = [
         odrl.get("row-predicate"),
         odrl.get("rowPredicate"),
         odrl.get("lakecat:row-predicate"),
@@ -262,6 +263,7 @@ fn row_predicate_from_odrl(odrl: &Value) -> LakeCatResult<Option<Value>> {
     ]
     .into_iter()
     .flatten()
+    .next()
     {
         return Ok(Some(row_predicate_value(value)?));
     }

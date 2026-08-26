@@ -1,19 +1,46 @@
 use crate::*;
 
 #[cfg(feature = "qglake-fixture")]
-pub(crate) async fn qglake_fixture(
-    catalog: String,
-    warehouse: String,
-    namespace: Vec<String>,
-    table: String,
-    location: String,
-    metadata_location: String,
-    output: PathBuf,
-    drain_output: Option<PathBuf>,
-    principal: Option<String>,
-) -> lakecat_core::LakeCatResult<()> {
+pub(crate) struct QglakeFixtureConfig {
+    pub(crate) catalog: String,
+    pub(crate) warehouse: String,
+    pub(crate) namespace: Vec<String>,
+    pub(crate) table: String,
+    pub(crate) location: String,
+    pub(crate) metadata_location: String,
+    pub(crate) output: PathBuf,
+    pub(crate) drain_output: Option<PathBuf>,
+    pub(crate) principal: Option<String>,
+}
+
+#[cfg(feature = "qglake-fixture")]
+#[derive(Clone, Copy)]
+struct QglakeCatalogContext<'a> {
+    catalog: &'a str,
+    principal: Option<&'a str>,
+    identity_mode: RequestIdentityMode,
+}
+
+#[cfg(feature = "qglake-fixture")]
+pub(crate) async fn qglake_fixture(config: QglakeFixtureConfig) -> lakecat_core::LakeCatResult<()> {
+    let QglakeFixtureConfig {
+        catalog,
+        warehouse,
+        namespace,
+        table,
+        location,
+        metadata_location,
+        output,
+        drain_output,
+        principal,
+    } = config;
     let principal = principal.as_deref();
     let identity_mode = RequestIdentityMode::AgentDid;
+    let context = QglakeCatalogContext {
+        catalog: &catalog,
+        principal,
+        identity_mode,
+    };
     let namespace_path = namespace.join(".");
     let server = "lakecat-local";
     let project = "default";
@@ -65,16 +92,14 @@ pub(crate) async fn qglake_fixture(
     .await?;
     verify_qglake_warehouse_list(&catalog, &warehouse, principal, identity_mode).await?;
 
-    ensure_qglake_namespace(&catalog, &namespace, principal, identity_mode).await?;
+    ensure_qglake_namespace(context, &namespace).await?;
     ensure_qglake_table(
-        &catalog,
+        context,
         &namespace_path,
         &namespace,
         &table,
         &location,
         &metadata_location,
-        principal,
-        identity_mode,
     )
     .await?;
     verify_qglake_table_commit_history(
@@ -142,40 +167,21 @@ pub(crate) async fn qglake_fixture(
     verify_qglake_trusted_human_credentials(&catalog, &namespace_path, &table, &location).await?;
     let view = "active_customers_view";
     let view_version = ensure_qglake_transient_view(
-        &catalog,
+        context,
         &warehouse,
         &namespace_path,
         &namespace,
         view,
         &table,
-        principal,
-        identity_mode,
     )
     .await?;
     let (bundle, verification) =
         fetch_bootstrap_bundle_with_identity(&catalog, principal, identity_mode).await?;
     verify_qglake_bootstrap_bundle(&bundle, &namespace, &table)?;
     write_bootstrap_bundle(&output, &bundle, &verification)?;
-    drop_qglake_transient_view(
-        &catalog,
-        &warehouse,
-        &namespace_path,
-        view,
-        view_version,
-        principal,
-        identity_mode,
-    )
-    .await?;
-    verify_qglake_view_receipt_chains(
-        &catalog,
-        &warehouse,
-        &namespace_path,
-        &namespace,
-        view,
-        principal,
-        identity_mode,
-    )
-    .await?;
+    drop_qglake_transient_view(context, &warehouse, &namespace_path, view, view_version).await?;
+    verify_qglake_view_receipt_chains(context, &warehouse, &namespace_path, &namespace, view)
+        .await?;
     let drain = drain_lineage_outbox_with_identity(&catalog, principal, identity_mode).await?;
     if let Some(drain_output) = drain_output.as_ref() {
         write_json_file(drain_output, &drain, "lineage drain response")?;
@@ -192,17 +198,15 @@ pub(crate) async fn qglake_fixture(
 }
 
 #[cfg(feature = "qglake-fixture")]
-pub(crate) async fn ensure_qglake_namespace(
-    catalog: &str,
+async fn ensure_qglake_namespace(
+    context: QglakeCatalogContext<'_>,
     namespace: &[String],
-    principal: Option<&str>,
-    identity_mode: RequestIdentityMode,
 ) -> lakecat_core::LakeCatResult<()> {
     if post_json_or_conflict_with_identity::<_, NamespaceResponse>(
-        catalog,
+        context.catalog,
         "/catalog/v1/namespaces",
-        principal,
-        identity_mode,
+        context.principal,
+        context.identity_mode,
         "namespace create",
         &CreateNamespaceRequest {
             namespace: namespace.to_vec(),
@@ -215,10 +219,10 @@ pub(crate) async fn ensure_qglake_namespace(
     }
 
     let namespaces = get_json_with_identity::<ListNamespacesResponse>(
-        catalog,
+        context.catalog,
         "/catalog/v1/namespaces",
-        principal,
-        identity_mode,
+        context.principal,
+        context.identity_mode,
         "namespace list",
     )
     .await?;
@@ -232,21 +236,19 @@ pub(crate) async fn ensure_qglake_namespace(
 }
 
 #[cfg(feature = "qglake-fixture")]
-pub(crate) async fn ensure_qglake_table(
-    catalog: &str,
+async fn ensure_qglake_table(
+    context: QglakeCatalogContext<'_>,
     namespace_path: &str,
     namespace: &[String],
     table: &str,
     location: &str,
     metadata_location: &str,
-    principal: Option<&str>,
-    identity_mode: RequestIdentityMode,
 ) -> lakecat_core::LakeCatResult<()> {
     let response = post_json_or_conflict_with_identity::<_, LoadTableResponse>(
-        catalog,
+        context.catalog,
         &format!("/catalog/v1/namespaces/{namespace_path}/tables"),
-        principal,
-        identity_mode,
+        context.principal,
+        context.identity_mode,
         "table create",
         &CreateTableRequest {
             name: table.to_string(),
@@ -266,10 +268,10 @@ pub(crate) async fn ensure_qglake_table(
     }
 
     let response = get_json_with_identity::<LoadTableResponse>(
-        catalog,
+        context.catalog,
         &format!("/catalog/v1/namespaces/{namespace_path}/tables/{table}"),
-        principal,
-        identity_mode,
+        context.principal,
+        context.identity_mode,
         "table load",
     )
     .await?;
@@ -277,21 +279,19 @@ pub(crate) async fn ensure_qglake_table(
 }
 
 #[cfg(feature = "qglake-fixture")]
-pub(crate) async fn ensure_qglake_transient_view(
-    catalog: &str,
+async fn ensure_qglake_transient_view(
+    context: QglakeCatalogContext<'_>,
     warehouse: &str,
     namespace_path: &str,
     namespace: &[String],
     view: &str,
     table: &str,
-    principal: Option<&str>,
-    identity_mode: RequestIdentityMode,
 ) -> lakecat_core::LakeCatResult<u64> {
     let response = put_json_with_identity::<_, ViewResponse>(
-        catalog,
+        context.catalog,
         &format!("/management/v1/warehouses/{warehouse}/namespaces/{namespace_path}/views/{view}"),
-        principal,
-        identity_mode,
+        context.principal,
+        context.identity_mode,
         "transient view upsert",
         &UpsertViewRequest {
             sql: format!(
@@ -328,32 +328,30 @@ pub(crate) async fn ensure_qglake_transient_view(
 }
 
 #[cfg(feature = "qglake-fixture")]
-pub(crate) async fn drop_qglake_transient_view(
-    catalog: &str,
+async fn drop_qglake_transient_view(
+    context: QglakeCatalogContext<'_>,
     warehouse: &str,
     namespace_path: &str,
     view: &str,
     expected_view_version: u64,
-    principal: Option<&str>,
-    identity_mode: RequestIdentityMode,
 ) -> lakecat_core::LakeCatResult<()> {
     delete_with_identity(
-        catalog,
+        context.catalog,
         &format!(
             "/management/v1/warehouses/{warehouse}/namespaces/{namespace_path}/views/{view}?expected-view-version={expected_view_version}"
         ),
-        principal,
-        identity_mode,
+        context.principal,
+        context.identity_mode,
         "transient view drop",
     )
     .await?;
     let receipts = get_json_with_identity::<ListViewVersionReceiptsResponse>(
-        catalog,
+        context.catalog,
         &format!(
             "/management/v1/warehouses/{warehouse}/namespaces/{namespace_path}/views/{view}/version-receipts"
         ),
-        principal,
-        identity_mode,
+        context.principal,
+        context.identity_mode,
         "transient view receipt list",
     )
     .await?;
@@ -361,22 +359,20 @@ pub(crate) async fn drop_qglake_transient_view(
 }
 
 #[cfg(feature = "qglake-fixture")]
-pub(crate) async fn verify_qglake_view_receipt_chains(
-    catalog: &str,
+async fn verify_qglake_view_receipt_chains(
+    context: QglakeCatalogContext<'_>,
     warehouse: &str,
     namespace_path: &str,
     namespace: &[String],
     view: &str,
-    principal: Option<&str>,
-    identity_mode: RequestIdentityMode,
 ) -> lakecat_core::LakeCatResult<()> {
     let chains = get_json_with_identity::<ListViewVersionReceiptChainsResponse>(
-        catalog,
+        context.catalog,
         &format!(
             "/management/v1/warehouses/{warehouse}/namespaces/{namespace_path}/view-version-receipt-chains"
         ),
-        principal,
-        identity_mode,
+        context.principal,
+        context.identity_mode,
         "transient view receipt-chain list",
     )
     .await?;

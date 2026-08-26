@@ -1,9 +1,5 @@
 use axum::Router;
 use axum::routing::{get, post};
-#[cfg(feature = "sail-local")]
-use lakecat_sail::catalog_provider::{
-    LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
-};
 
 use crate::*;
 

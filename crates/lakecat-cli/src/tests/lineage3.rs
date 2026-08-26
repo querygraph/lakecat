@@ -227,13 +227,9 @@ fn qglake_lineage_drain_verifier_rejects_unsupported_config_v4_default() {
 #[test]
 fn qglake_lineage_drain_verifier_rejects_missing_config_endpoint() {
     for missing_endpoint in [
-        "GET /querygraph/v1/bootstrap",
-        "POST /catalog/v1/namespaces/{namespace}/tables/{table}/plan",
-        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/plan",
-        "POST /catalog/v1/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
-        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
-        "GET /catalog/v1/namespaces/{namespace}/tables/{table}/credentials",
-        "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/credentials",
+        "POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/plan",
+        "POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/tasks",
+        "GET /v1/{prefix}/namespaces/{namespace}/tables/{table}/credentials",
     ] {
         let verification = qglake_handoff_lineage_verification();
         let mut drain = qglake_handoff_lineage_drain_with_config();
@@ -255,6 +251,25 @@ fn qglake_lineage_drain_verifier_rejects_missing_config_endpoint() {
                 .contains(&format!("endpoints must include {missing_endpoint}"))
         );
     }
+}
+
+#[test]
+fn qglake_lineage_drain_verifier_rejects_non_iceberg_config_endpoint() {
+    let verification = qglake_handoff_lineage_verification();
+    let mut drain = qglake_handoff_lineage_drain_with_config();
+    let config = drain
+        .events
+        .iter_mut()
+        .find(|event| event.event_type == "catalog.config-read")
+        .expect("catalog config replay fixture");
+    config
+        .catalog_config_endpoints
+        .push("GET /querygraph/v1/bootstrap".to_string());
+
+    let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+        .expect_err("QGLake lineage drain should reject non-Iceberg config endpoints");
+
+    assert!(err.to_string().contains("non-Iceberg or unsupported"));
 }
 
 #[test]

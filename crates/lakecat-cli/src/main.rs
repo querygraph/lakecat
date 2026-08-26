@@ -11,10 +11,11 @@ pub(crate) use lakecat_api::{
     CatalogConfigResponse, ConfigEntry, LAKECAT_COMPATIBILITY_KEY, LAKECAT_COMPATIBILITY_VALUE,
     LAKECAT_FORMAT_BASELINE_KEY, LAKECAT_FORMAT_BASELINE_VALUE, LAKECAT_FORMAT_V4_BRIDGE_KEY,
     LAKECAT_FORMAT_V4_BRIDGE_VALUE, LAKECAT_FORMAT_V4_KEY, LAKECAT_FORMAT_V4_TYPED_SAIL_KEY,
-    LAKECAT_FORMAT_V4_TYPED_SAIL_VALUE, LAKECAT_FORMAT_V4_VALUE, LineageDrainEventSummary,
-    LineageDrainResponse, ListPolicyBindingsResponse, ListStorageProfilesResponse,
-    PolicyBindingResponse, StorageProfileResponse, UpsertPolicyBindingRequest,
-    UpsertStorageProfileRequest, ViewVersionReceiptChainResponse, ViewVersionReceiptResponse,
+    LAKECAT_FORMAT_V4_TYPED_SAIL_VALUE, LAKECAT_FORMAT_V4_VALUE, LAKECAT_ICEBERG_REST_ENDPOINTS,
+    LineageDrainEventSummary, LineageDrainResponse, ListPolicyBindingsResponse,
+    ListStorageProfilesResponse, PolicyBindingResponse, StorageProfileResponse,
+    UpsertPolicyBindingRequest, UpsertStorageProfileRequest, ViewVersionReceiptChainResponse,
+    ViewVersionReceiptResponse,
 };
 #[cfg(feature = "qglake-fixture")]
 pub(crate) use lakecat_api::{
@@ -181,7 +182,7 @@ async fn run() -> lakecat_core::LakeCatResult<()> {
             drain_output,
             principal,
         } => {
-            qglake_fixture(
+            qglake_fixture(QglakeFixtureConfig {
                 catalog,
                 warehouse,
                 namespace,
@@ -191,7 +192,7 @@ async fn run() -> lakecat_core::LakeCatResult<()> {
                 output,
                 drain_output,
                 principal,
-            )
+            })
             .await
         }
     }

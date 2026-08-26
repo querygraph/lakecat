@@ -134,33 +134,48 @@ fn load_table_and_credential_configs_serialize_as_objects() {
 
 #[test]
 fn catalog_config_endpoints_advertise_canonical_iceberg_routes() {
-    let endpoints = CatalogConfigResponse::default()
-        .endpoints
-        .into_iter()
-        .collect::<std::collections::BTreeSet<_>>();
+    let endpoints = CatalogConfigResponse::default().endpoints;
 
-    // Stock clients match against `<METHOD> /v1/{prefix}/...`.
-    assert!(endpoints.contains("GET /v1/config"));
-    assert!(endpoints.contains("POST /v1/{prefix}/namespaces"));
-    assert!(endpoints.contains("POST /v1/{prefix}/namespaces/{namespace}/tables"));
-    assert!(endpoints.contains("GET /v1/{prefix}/namespaces/{namespace}/tables/{table}"));
-    // updateTable: bare POST on the table path (no `/commit` suffix).
-    assert!(endpoints.contains("POST /v1/{prefix}/namespaces/{namespace}/tables/{table}"));
-    assert!(endpoints.contains("DELETE /v1/{prefix}/namespaces/{namespace}/tables/{table}"));
-    assert!(
-        endpoints.contains("GET /v1/{prefix}/namespaces/{namespace}/tables/{table}/credentials")
+    assert_eq!(
+        endpoints,
+        LAKECAT_ICEBERG_REST_ENDPOINTS
+            .iter()
+            .map(|endpoint| (*endpoint).to_owned())
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        endpoints
+            .iter()
+            .collect::<std::collections::BTreeSet<_>>()
+            .len(),
+        endpoints.len(),
+        "advertised endpoints must be unique"
     );
 }
 
 #[test]
-fn catalog_config_endpoints_advertise_table_create_routes() {
+fn catalog_config_endpoints_exclude_mount_and_control_plane_routes() {
     let endpoints = CatalogConfigResponse::default()
         .endpoints
         .into_iter()
         .collect::<std::collections::BTreeSet<_>>();
 
-    assert!(endpoints.contains("POST /catalog/v1/namespaces/{namespace}/tables"));
-    assert!(endpoints.contains("POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables"));
+    assert!(endpoints.iter().all(|endpoint| endpoint.contains(" /v1/")));
+    assert!(
+        !endpoints
+            .iter()
+            .any(|endpoint| endpoint.contains(" /catalog/"))
+    );
+    assert!(
+        !endpoints
+            .iter()
+            .any(|endpoint| endpoint.contains(" /management/"))
+    );
+    assert!(
+        !endpoints
+            .iter()
+            .any(|endpoint| endpoint.contains(" /querygraph/"))
+    );
 }
 
 #[test]
@@ -196,20 +211,7 @@ fn catalog_config_endpoints_advertise_table_list_routes() {
         .into_iter()
         .collect::<std::collections::BTreeSet<_>>();
 
-    // listTables: GET on the `/tables` collection, advertised in all three
-    // route families (canonical `/v1/{prefix}`, default, and `{warehouse}`).
+    // listTables is represented once with the OpenAPI `{prefix}` placeholder;
+    // deployment mount aliases do not belong in protocol capability data.
     assert!(endpoints.contains("GET /v1/{prefix}/namespaces/{namespace}/tables"));
-    assert!(endpoints.contains("GET /catalog/v1/namespaces/{namespace}/tables"));
-    assert!(endpoints.contains("GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables"));
-}
-
-#[test]
-fn catalog_config_endpoints_advertise_querygraph_integration_routes() {
-    let endpoints = CatalogConfigResponse::default()
-        .endpoints
-        .into_iter()
-        .collect::<std::collections::BTreeSet<_>>();
-
-    assert!(endpoints.contains("POST /management/v1/lineage/drain"));
-    assert!(endpoints.contains("GET /querygraph/v1/bootstrap"));
 }

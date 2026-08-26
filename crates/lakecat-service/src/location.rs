@@ -1,8 +1,4 @@
 use lakecat_core::{LakeCatError, content_hash_bytes};
-#[cfg(feature = "sail-local")]
-use lakecat_sail::catalog_provider::{
-    LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
-};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock, RwLock};
 

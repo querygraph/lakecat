@@ -264,7 +264,7 @@ pub(crate) fn verify_qglake_handoff_summary_value(
         QUERYGRAPH_IMPORT_VERIFICATION_FIELDS,
         "querygraphImportVerification",
     )?;
-    if required_bool(import, "matchesVerify", "querygraphImportVerification")? != true {
+    if !required_bool(import, "matchesVerify", "querygraphImportVerification")? {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "handoff summary querygraphImportVerification.matchesVerify must be true".to_string(),
         ));
@@ -297,7 +297,7 @@ pub(crate) fn verify_qglake_handoff_summary_value(
         "lakecatReplayVerification",
     )?;
     require_string_eq(lakecat, "status", "verified", "lakecatReplayVerification")?;
-    if required_bool(lakecat, "matchesQueryGraph", "lakecatReplayVerification")? != true {
+    if !required_bool(lakecat, "matchesQueryGraph", "lakecatReplayVerification")? {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "handoff summary lakecatReplayVerification.matchesQueryGraph must be true".to_string(),
         ));
@@ -895,10 +895,7 @@ pub(crate) fn require_querygraph_verified_scope(
         "lakecat:table:{}:{}:{}",
         scope.warehouse, scope.namespace, scope.table
     );
-    if !verified_tables
-        .iter()
-        .any(|table| *table == expected_table.as_str())
-    {
+    if !verified_tables.contains(&expected_table.as_str()) {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "querygraphVerification.verifiedTables must include {expected_table}"
         )));
@@ -921,7 +918,7 @@ pub(crate) fn require_querygraph_verified_scope(
             ))
         })?;
         let expected_view = required_str(view, "stableId", "viewReceiptChainProof.views[]")?;
-        if !verified_views.iter().any(|view| *view == expected_view) {
+        if !verified_views.contains(&expected_view) {
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
                 "querygraphVerification.verifiedViews must include {expected_view}"
             )));
@@ -1067,9 +1064,9 @@ pub(crate) fn require_handoff_scope<'a>(
     })
 }
 
-pub(crate) fn require_handoff_catalog_url<'a>(
-    summary: &'a serde_json::Map<String, Value>,
-) -> lakecat_core::LakeCatResult<&'a str> {
+pub(crate) fn require_handoff_catalog_url(
+    summary: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<&str> {
     let catalog_url = require_non_empty_str(summary, "catalogUrl", "handoff summary")?;
     let parsed = Url::parse(catalog_url).map_err(|err| {
         lakecat_core::LakeCatError::InvalidArgument(format!(
@@ -1204,15 +1201,13 @@ pub(crate) fn require_management_evidence(
     )?;
     if let Some(warehouse_project_id) =
         optional_compact_management_id(management, "warehouseProjectId", "managementProof")?
-    {
-        if !project_ids
+        && !project_ids
             .iter()
             .any(|project_id| project_id == warehouse_project_id)
-        {
-            return Err(lakecat_core::LakeCatError::InvalidArgument(
-                "managementProof.warehouseProjectId must match projectIds".to_string(),
-            ));
-        }
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "managementProof.warehouseProjectId must match projectIds".to_string(),
+        ));
     }
     require_positive_u64(management, "policyGraphEvents", "managementProof")?;
     require_unique_string_array_count(
@@ -1398,9 +1393,9 @@ pub(crate) fn require_table_commit_history_evidence(
             )));
         }
         if sequence_number <= previous {
-            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-                "tableCommitHistoryProof.sequenceNumbers must be strictly increasing"
-            )));
+            return Err(lakecat_core::LakeCatError::InvalidArgument(
+                "tableCommitHistoryProof.sequenceNumbers must be strictly increasing".to_string(),
+            ));
         }
         previous = sequence_number;
     }
@@ -1827,29 +1822,15 @@ pub(crate) fn require_config_endpoints(
 ) -> lakecat_core::LakeCatResult<()> {
     let endpoints = required_string_array(config, "endpoints", "catalogConfigProof")?;
     require_non_empty_unique_strings(&endpoints, "catalogConfigProof.endpoints")?;
-    let required = [
-        "GET /catalog/v1/config",
-        "GET /catalog/v1/{warehouse}/config",
-        "GET /catalog/v1/namespaces",
-        "GET /catalog/v1/{warehouse}/namespaces",
-        "POST /catalog/v1/namespaces",
-        "POST /catalog/v1/{warehouse}/namespaces",
-        "POST /catalog/v1/namespaces/{namespace}/tables",
-        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables",
-        "GET /catalog/v1/namespaces/{namespace}/tables/{table}",
-        "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}",
-        "POST /catalog/v1/namespaces/{namespace}/tables/{table}/commit",
-        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/commit",
-        "POST /catalog/v1/namespaces/{namespace}/tables/{table}/plan",
-        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/plan",
-        "POST /catalog/v1/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
-        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
-        "GET /catalog/v1/namespaces/{namespace}/tables/{table}/credentials",
-        "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/credentials",
-        "POST /management/v1/lineage/drain",
-        "GET /querygraph/v1/bootstrap",
-    ];
-    for endpoint in required {
+    if let Some(endpoint) = endpoints
+        .iter()
+        .find(|endpoint| !LAKECAT_ICEBERG_REST_ENDPOINTS.contains(&endpoint.as_str()))
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "catalogConfigProof.endpoints contain non-Iceberg or unsupported entry {endpoint}"
+        )));
+    }
+    for &endpoint in LAKECAT_ICEBERG_REST_ENDPOINTS {
         if !endpoints.iter().any(|candidate| candidate == endpoint) {
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
                 "catalogConfigProof.endpoints must include {endpoint}"
@@ -1909,8 +1890,7 @@ pub(crate) fn require_credential_vending_evidence(
         restricted,
         "rawCredentialExceptionAllowed",
         "credentialVendingProof.restricted",
-    )? != false
-    {
+    )? {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "credentialVendingProof.restricted.rawCredentialExceptionAllowed must not allow a raw credential exception"
                 .to_string(),
@@ -1922,13 +1902,13 @@ pub(crate) fn require_credential_vending_evidence(
         QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON,
         "credentialVendingProof.restricted",
     )?;
-    if let Some(reason) = restricted.get("rawCredentialExceptionReason") {
-        if !reason.is_null() {
-            return Err(lakecat_core::LakeCatError::InvalidArgument(
+    if let Some(reason) = restricted.get("rawCredentialExceptionReason")
+        && !reason.is_null()
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
                 "credentialVendingProof.restricted.rawCredentialExceptionReason must be null when raw credentials are blocked"
                     .to_string(),
             ));
-        }
     }
     require_full_hash_array(
         restricted,
@@ -1986,12 +1966,11 @@ pub(crate) fn require_credential_vending_evidence(
         "credentials-vend",
         "credentialVendingProof.trustedHuman",
     )?;
-    if required_bool(
+    if !required_bool(
         trusted,
         "rawCredentialExceptionAllowed",
         "credentialVendingProof.trustedHuman",
-    )? != true
-    {
+    )? {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "handoff summary trusted-human proof must allow the audited raw credential exception"
                 .to_string(),

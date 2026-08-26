@@ -14,6 +14,27 @@ pub const LAKECAT_FORMAT_V4_BRIDGE_VALUE: &str = "json-passthrough";
 pub const LAKECAT_FORMAT_V4_TYPED_SAIL_KEY: &str = "lakecat.format.v4.typed-sail";
 pub const LAKECAT_FORMAT_V4_TYPED_SAIL_VALUE: &str = "unavailable";
 
+/// Apache Iceberg 1.11 REST method/path entries implemented by LakeCat.
+///
+/// The config response's `endpoints` field uses OpenAPI resource paths. It does
+/// not contain the deployment mount (`/catalog`), compatibility aliases, or
+/// LakeCat/QueryGraph control-plane routes.
+pub const LAKECAT_ICEBERG_REST_ENDPOINTS: &[&str] = &[
+    "GET /v1/config",
+    "GET /v1/{prefix}/namespaces",
+    "POST /v1/{prefix}/namespaces",
+    "GET /v1/{prefix}/namespaces/{namespace}",
+    "DELETE /v1/{prefix}/namespaces/{namespace}",
+    "GET /v1/{prefix}/namespaces/{namespace}/tables",
+    "POST /v1/{prefix}/namespaces/{namespace}/tables",
+    "GET /v1/{prefix}/namespaces/{namespace}/tables/{table}",
+    "POST /v1/{prefix}/namespaces/{namespace}/tables/{table}",
+    "DELETE /v1/{prefix}/namespaces/{namespace}/tables/{table}",
+    "POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/plan",
+    "POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/tasks",
+    "GET /v1/{prefix}/namespaces/{namespace}/tables/{table}/credentials",
+];
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct CatalogConfigResponse {
@@ -38,95 +59,10 @@ impl Default for CatalogConfigResponse {
                 ),
             ],
             overrides: Vec::new(),
-            endpoints: vec![
-                // Spec-canonical Iceberg REST endpoints. Stock clients
-                // (pyiceberg/Spark/Trino) match advertised capabilities against
-                // the `<METHOD> /v1/{prefix}/<path>` form (no `/catalog` base,
-                // `{prefix}` = warehouse). Each maps to LakeCat's served
-                // `/catalog/v1/{warehouse}/<path>` route (client base ends in
-                // `/catalog`, prefix=warehouse). `updateTable` is the bare POST
-                // on the table path (no `/commit` suffix).
-                "GET /v1/config".to_string(),
-                "GET /v1/{prefix}/namespaces".to_string(),
-                "POST /v1/{prefix}/namespaces".to_string(),
-                "GET /v1/{prefix}/namespaces/{namespace}".to_string(),
-                "DELETE /v1/{prefix}/namespaces/{namespace}".to_string(),
-                "GET /v1/{prefix}/namespaces/{namespace}/tables".to_string(),
-                "POST /v1/{prefix}/namespaces/{namespace}/tables".to_string(),
-                "GET /v1/{prefix}/namespaces/{namespace}/tables/{table}".to_string(),
-                "POST /v1/{prefix}/namespaces/{namespace}/tables/{table}".to_string(),
-                "DELETE /v1/{prefix}/namespaces/{namespace}/tables/{table}".to_string(),
-                "POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/plan".to_string(),
-                "POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/tasks".to_string(),
-                "GET /v1/{prefix}/namespaces/{namespace}/tables/{table}/credentials".to_string(),
-                // LakeCat-specific / legacy advertised routes retained for the
-                // QueryGraph handoff contract and the bundled CLI client.
-                "GET /catalog/v1/config".to_string(),
-                "GET /catalog/v1/namespaces".to_string(),
-                "POST /catalog/v1/namespaces".to_string(),
-                "GET /catalog/v1/namespaces/{namespace}".to_string(),
-                "DELETE /catalog/v1/namespaces/{namespace}".to_string(),
-                "GET /catalog/v1/namespaces/{namespace}/tables".to_string(),
-                "POST /catalog/v1/namespaces/{namespace}/tables".to_string(),
-                "GET /catalog/v1/namespaces/{namespace}/tables/{table}".to_string(),
-                "DELETE /catalog/v1/namespaces/{namespace}/tables/{table}".to_string(),
-                "POST /catalog/v1/namespaces/{namespace}/tables/{table}/commit".to_string(),
-                "POST /catalog/v1/namespaces/{namespace}/tables/{table}/plan".to_string(),
-                "POST /catalog/v1/namespaces/{namespace}/tables/{table}/fetch-scan-tasks"
-                    .to_string(),
-                "GET /catalog/v1/namespaces/{namespace}/tables/{table}/credentials".to_string(),
-                "GET /catalog/v1/{warehouse}/config".to_string(),
-                "GET /catalog/v1/{warehouse}/namespaces".to_string(),
-                "POST /catalog/v1/{warehouse}/namespaces".to_string(),
-                "GET /catalog/v1/{warehouse}/namespaces/{namespace}".to_string(),
-                "DELETE /catalog/v1/{warehouse}/namespaces/{namespace}".to_string(),
-                "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables".to_string(),
-                "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables".to_string(),
-                "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}".to_string(),
-                "DELETE /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}"
-                    .to_string(),
-                "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/commit"
-                    .to_string(),
-                "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/plan"
-                    .to_string(),
-                "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/fetch-scan-tasks"
-                    .to_string(),
-                "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/credentials"
-                    .to_string(),
-                "GET /catalog/v1/{warehouse}/namespaces/{namespace}/views".to_string(),
-                "GET /catalog/v1/{warehouse}/namespaces/{namespace}/views/{view}".to_string(),
-                "DELETE /catalog/v1/{warehouse}/namespaces/{namespace}/views/{view}".to_string(),
-                "POST /catalog/v1/{warehouse}/namespaces/{namespace}/views/{view}".to_string(),
-                "PUT /catalog/v1/{warehouse}/namespaces/{namespace}/views/{view}".to_string(),
-                "GET /management/v1/servers".to_string(),
-                "PUT /management/v1/servers/{server}".to_string(),
-                "GET /management/v1/projects".to_string(),
-                "PUT /management/v1/projects/{project}".to_string(),
-                "GET /management/v1/projects/{project}/warehouses".to_string(),
-                "PUT /management/v1/projects/{project}/warehouses/{warehouse}".to_string(),
-                "GET /management/v1/warehouses".to_string(),
-                "PUT /management/v1/warehouses/{warehouse}".to_string(),
-                "POST /management/v1/warehouses/{warehouse}/namespaces/{namespace}/tables/{table}/restore"
-                    .to_string(),
-                "GET /management/v1/warehouses/{warehouse}/namespaces/{namespace}/tables/{table}/commits"
-                    .to_string(),
-                "GET /management/v1/warehouses/{warehouse}/storage-profiles".to_string(),
-                "PUT /management/v1/warehouses/{warehouse}/storage-profiles/{profile}".to_string(),
-                "GET /management/v1/warehouses/{warehouse}/namespaces/{namespace}/views"
-                    .to_string(),
-                "PUT /management/v1/warehouses/{warehouse}/namespaces/{namespace}/views/{view}"
-                    .to_string(),
-                "GET /management/v1/warehouses/{warehouse}/namespaces/{namespace}/views/{view}/version-receipts"
-                    .to_string(),
-                "GET /management/v1/warehouses/{warehouse}/namespaces/{namespace}/view-version-receipt-chains"
-                    .to_string(),
-                "DELETE /management/v1/warehouses/{warehouse}/namespaces/{namespace}/views/{view}"
-                    .to_string(),
-                "GET /management/v1/warehouses/{warehouse}/policies".to_string(),
-                "PUT /management/v1/warehouses/{warehouse}/policies/{policy}".to_string(),
-                "POST /management/v1/lineage/drain".to_string(),
-                "GET /querygraph/v1/bootstrap".to_string(),
-            ],
+            endpoints: LAKECAT_ICEBERG_REST_ENDPOINTS
+                .iter()
+                .map(|endpoint| (*endpoint).to_owned())
+                .collect(),
         }
     }
 }
