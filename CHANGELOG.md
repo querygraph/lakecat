@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Book artifacts: regenerated and revalidated the PDF, EPUB, MOBI, HTML, and
+  chapter-reader editions from catalog-ranking source commit `0b7f1fe5`; the
+  tracked version marker and artifact links now identify that exact manuscript.
+
 - Catalog community Phase 0 evidence integration: pinned LakeCat documentation
   to `catalog-bench@c0637076`, replaced the obsolete copied commit table and
   nonexistent repository with the generated v1 historical matrix/manifest,
