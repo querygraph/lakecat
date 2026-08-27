@@ -6921,6 +6921,131 @@ async fn turso_concurrent_commits_to_same_table_yield_one_winner() {
     let _ = std::fs::remove_file(&path);
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+async fn turso_sustained_same_table_contention_never_loses_the_table() {
+    let path = fw16_db_path("sustained-same");
+    let store = TursoCatalogStore::connect_local(&path).await.unwrap();
+    let warehouse = WarehouseName::new("local").unwrap();
+    let namespace = "default".parse::<Namespace>().unwrap();
+    store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
+    let ident = TableIdent::new(warehouse, namespace, TableName::new("events").unwrap());
+    let initial = "file:///tmp/fw16/events/metadata/00000.json";
+    store
+        .create_table(fw16_table(&ident, initial))
+        .await
+        .unwrap();
+
+    const WRITERS: usize = 8;
+    const ROUNDS: usize = 100;
+    for round in 1..=ROUNDS {
+        let previous = store
+            .load_table(&ident)
+            .await
+            .unwrap()
+            .metadata_location
+            .unwrap();
+        let barrier = Arc::new(tokio::sync::Barrier::new(WRITERS));
+        let mut handles = Vec::with_capacity(WRITERS);
+        for writer in 0..WRITERS {
+            let store = store.clone();
+            let ident = ident.clone();
+            let previous = previous.clone();
+            let barrier = barrier.clone();
+            handles.push(tokio::spawn(async move {
+                let next = format!("file:///tmp/fw16/events/metadata/{round:05}-{writer:02}.json");
+                barrier.wait().await;
+                store
+                    .commit_table(&ident, fw16_commit(&previous, &next))
+                    .await
+            }));
+        }
+
+        let mut winners = 0usize;
+        let mut conflicts = 0usize;
+        for handle in handles {
+            match handle.await.unwrap() {
+                Ok(_) => winners += 1,
+                Err(LakeCatError::Conflict(_)) => conflicts += 1,
+                Err(other) => panic!(
+                    "round {round} must return only a winner or metadata-pointer conflicts: {other}"
+                ),
+            }
+        }
+        assert_eq!(winners, 1, "round {round} must have exactly one winner");
+        assert_eq!(
+            conflicts,
+            WRITERS - 1,
+            "round {round} must classify every loser as a conflict"
+        );
+    }
+
+    assert_eq!(
+        store.load_table(&ident).await.unwrap().version,
+        ROUNDS as u64
+    );
+    let _ = std::fs::remove_file(&path);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+async fn turso_reads_never_lose_a_table_during_sustained_commits() {
+    let path = fw16_db_path("sustained-read-commit");
+    let store = TursoCatalogStore::connect_local(&path).await.unwrap();
+    let warehouse = WarehouseName::new("local").unwrap();
+    let namespace = "default".parse::<Namespace>().unwrap();
+    store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
+    let ident = TableIdent::new(warehouse, namespace, TableName::new("events").unwrap());
+    let initial = "file:///tmp/fw16/events/metadata/00000.json";
+    store
+        .create_table(fw16_table(&ident, initial))
+        .await
+        .unwrap();
+
+    const WRITERS: usize = 8;
+    const COMMITS_PER_WRITER: usize = 200;
+    let barrier = Arc::new(tokio::sync::Barrier::new(WRITERS));
+    let mut handles = Vec::with_capacity(WRITERS);
+    for writer in 0..WRITERS {
+        let store = store.clone();
+        let ident = ident.clone();
+        let barrier = barrier.clone();
+        handles.push(tokio::spawn(async move {
+            barrier.wait().await;
+            for sequence in 0..COMMITS_PER_WRITER {
+                let current = store.load_table(&ident).await.unwrap_or_else(|error| {
+                    panic!("writer {writer} load {sequence} lost the table: {error}")
+                });
+                let previous = current
+                    .metadata_location
+                    .expect("contention table always has a metadata pointer");
+                let next =
+                    format!("file:///tmp/fw16/events/metadata/{writer:02}-{sequence:05}.json");
+                match store
+                    .commit_table(&ident, fw16_commit(&previous, &next))
+                    .await
+                {
+                    Ok(_) | Err(LakeCatError::Conflict(_)) => {}
+                    Err(error) => panic!(
+                        "writer {writer} commit {sequence} returned an invalid outcome: {error}"
+                    ),
+                }
+            }
+        }));
+    }
+    for handle in handles {
+        handle.await.unwrap();
+    }
+
+    let table = store.load_table(&ident).await.unwrap();
+    assert!(table.version > 0);
+    let _ = std::fs::remove_file(&path);
+}
+
 #[tokio::test]
 async fn turso_store_rejects_duplicate_namespace_create() {
     let store = TursoCatalogStore::in_memory().await.unwrap();

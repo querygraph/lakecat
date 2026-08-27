@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Turso contention coverage: add sustained file-backed eight-writer regressions
+  that exercise 100 synchronized same-table CAS rounds and 1,600 concurrent
+  read-before-commit cycles. Every write must remain either the sole accepted
+  winner or an explicit metadata-pointer conflict; an active table may never
+  disappear or surface an internal storage error under contention.
+
 - Book reader links: pin the C1-06 commit-correctness guide to its immutable
   acceptance revision and rebuild every checked-in reader artifact from that
   committed manuscript.
