@@ -22,6 +22,7 @@ impl IntoResponse for LakeCatHttpError {
             LakeCatError::AlreadyExists { .. } | LakeCatError::Conflict(_) => StatusCode::CONFLICT,
             LakeCatError::Forbidden(_) => StatusCode::FORBIDDEN,
             LakeCatError::NotSupported(_) => StatusCode::NOT_IMPLEMENTED,
+            LakeCatError::Unavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
             LakeCatError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         // Iceberg REST ErrorModel `type` names, so stock clients (pyiceberg,
@@ -39,6 +40,7 @@ impl IntoResponse for LakeCatHttpError {
             LakeCatError::Conflict(_) => "CommitFailedException",
             LakeCatError::Forbidden(_) => "ForbiddenException",
             LakeCatError::NotSupported(_) => "UnsupportedOperationException",
+            LakeCatError::Unavailable(_) => "ServiceUnavailableException",
             LakeCatError::Internal(_) => "InternalServerError",
         };
         let body = Json(json!({

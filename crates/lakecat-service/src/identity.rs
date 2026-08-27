@@ -279,6 +279,7 @@ pub(crate) fn redact_typedid_verifier_error(
         LakeCatError::Conflict(_) => LakeCatError::Conflict(message),
         LakeCatError::Forbidden(_) => LakeCatError::Forbidden(message),
         LakeCatError::NotSupported(_) => LakeCatError::NotSupported(message),
+        LakeCatError::Unavailable(_) => LakeCatError::Unavailable(message),
         LakeCatError::Internal(_) => LakeCatError::Internal(message),
         LakeCatError::NotFound { .. } => LakeCatError::NotFound {
             object: "TypeDID verifier failure",

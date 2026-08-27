@@ -89,14 +89,21 @@ impl TursoCatalogStore {
         T: Send,
         F: for<'c> FnMut(&'c Connection) -> WriteTxnFuture<'c, T> + Send,
     {
-        let conn = self.checkout_write_conn().await?;
-        let mut attempt = 0u32;
-        loop {
-            attempt += 1;
-            // A failure to even begin the transaction means the connection is in
-            // an unknown state; drop it (do not return it to the pool).
-            if let Err(err) = conn.execute_batch("BEGIN CONCURRENT").await {
-                return Err(turso_error(err));
+        let mut conn = self.checkout_write_conn().await?;
+        for attempt in 1..=WRITE_TXN_MAX_ATTEMPTS {
+            match conn.execute_batch("BEGIN CONCURRENT").await {
+                Ok(()) => {}
+                Err(err) if is_retryable_turso(&err) && attempt < WRITE_TXN_MAX_ATTEMPTS => {
+                    // BEGIN did not establish a known-clean transaction state.
+                    // Discard this connection and retry from a fresh one.
+                    drop(conn);
+                    backoff(attempt).await;
+                    conn = self.checkout_write_conn().await?;
+                    continue;
+                }
+                // A terminal BEGIN failure leaves the connection in an unknown
+                // state, so dropping is safer than returning it to the pool.
+                Err(err) => return Err(turso_error(err)),
             }
             match body(&conn).await {
                 Ok(value) => match conn.execute_batch("COMMIT").await {
@@ -104,31 +111,42 @@ impl TursoCatalogStore {
                         self.return_write_conn(conn);
                         return Ok(value);
                     }
-                    Err(err) if is_retryable_conflict(&err) && attempt < WRITE_TXN_MAX_ATTEMPTS => {
-                        let _ = conn.execute_batch("ROLLBACK").await;
-                        backoff(attempt).await;
-                    }
                     Err(err) => {
-                        let _ = conn.execute_batch("ROLLBACK").await;
-                        self.return_write_conn(conn);
-                        return Err(turso_error(err));
+                        let retry = is_retryable_turso(&err) && attempt < WRITE_TXN_MAX_ATTEMPTS;
+                        let clean = rollback_write_conn(conn).await;
+                        if retry {
+                            conn = match clean {
+                                Some(conn) => conn,
+                                None => self.checkout_write_conn().await?,
+                            };
+                            backoff(attempt).await;
+                        } else {
+                            if let Some(conn) = clean {
+                                self.return_write_conn(conn);
+                            }
+                            return Err(turso_error(err));
+                        }
                     }
                 },
                 Err(err) => {
-                    let _ = conn.execute_batch("ROLLBACK").await;
-                    // This pre-release surfaces write-write conflicts at COMMIT,
-                    // but a conflict observed mid-body is still retryable;
-                    // everything else (including the unique-violation `Conflict`)
-                    // is terminal.
-                    if is_retryable_lakecat(&err) && attempt < WRITE_TXN_MAX_ATTEMPTS {
+                    let retry = is_retryable_lakecat(&err) && attempt < WRITE_TXN_MAX_ATTEMPTS;
+                    let clean = rollback_write_conn(conn).await;
+                    if retry {
+                        conn = match clean {
+                            Some(conn) => conn,
+                            None => self.checkout_write_conn().await?,
+                        };
                         backoff(attempt).await;
                     } else {
-                        self.return_write_conn(conn);
+                        if let Some(conn) = clean {
+                            self.return_write_conn(conn);
+                        }
                         return Err(err);
                     }
                 }
             }
         }
+        unreachable!("bounded transaction loop always returns on its final attempt")
     }
 
     /// Check out a pragma-warmed write connection from the pool, or create and
@@ -3110,7 +3128,13 @@ fn is_unique_violation(err: &turso::Error) -> bool {
 }
 
 fn turso_error(err: turso::Error) -> LakeCatError {
-    LakeCatError::Internal(format!("Turso catalog store error: {err}"))
+    if is_retryable_turso(&err) {
+        LakeCatError::Unavailable(
+            "catalog storage is temporarily busy; retry the request".to_string(),
+        )
+    } else {
+        LakeCatError::Internal(format!("Turso catalog store error: {err}"))
+    }
 }
 
 /// The future returned by a [`TursoCatalogStore::write_txn`] body for a given
@@ -3141,27 +3165,28 @@ async fn apply_write_pragmas(conn: &Connection) {
 /// True for the raw `turso::Error`s that a `BEGIN CONCURRENT` commit raises when
 /// it loses an MVCC write-write race or hits transient contention — all safe to
 /// retry on a fresh snapshot.
-fn is_retryable_conflict(err: &turso::Error) -> bool {
+fn is_retryable_turso(err: &turso::Error) -> bool {
     matches!(err, turso::Error::Busy(_) | turso::Error::BusySnapshot(_))
         || matches!(
             err,
             turso::Error::Error(message)
-                if message.contains("Write-write conflict")
+                if message.contains("database is locked")
+                    || message.contains("Write-write conflict")
                     || message.contains("Commit dependency aborted")
         )
 }
 
-/// True for a `LakeCatError` that wraps a retryable MVCC conflict surfaced mid-
-/// body (every error goes through `turso_error` -> `Internal`, so match on the
-/// preserved Display text). The unique-violation `Conflict` is deliberately NOT
-/// matched — it is a terminal logical conflict, not a retryable race.
+/// True for a typed transient storage outcome surfaced by a transaction body.
+/// Logical metadata-pointer and uniqueness conflicts remain terminal.
 fn is_retryable_lakecat(err: &LakeCatError) -> bool {
-    matches!(
-        err,
-        LakeCatError::Internal(message)
-            if message.contains("Write-write conflict")
-                || message.contains("Commit dependency aborted")
-    )
+    matches!(err, LakeCatError::Unavailable(_))
+}
+
+/// Consume a failed transaction's connection and return it only when ROLLBACK
+/// confirms a clean state. A failed rollback drops the connection by ownership,
+/// preventing an ambiguous transaction from entering the idle pool.
+async fn rollback_write_conn(conn: Connection) -> Option<Connection> {
+    conn.execute_batch("ROLLBACK").await.ok().map(|()| conn)
 }
 
 async fn backoff(attempt: u32) {

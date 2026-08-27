@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Turso contention recovery: preserve transient database-busy failures as a
+  typed, retryable catalog outcome; retry them at transaction begin, body, and
+  commit boundaries; and only return connections to the write pool after a
+  confirmed commit or rollback. Exhausted contention now produces an Iceberg
+  REST 503 instead of a misleading internal-error 500.
+
 - Turso contention coverage: add sustained file-backed eight-writer regressions
   that exercise 100 synchronized same-table CAS rounds and 1,600 concurrent
   read-before-commit cycles. Every write must remain either the sole accepted

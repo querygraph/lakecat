@@ -9,6 +9,57 @@ use crate::{
 
 use super::*;
 
+#[test]
+fn turso_busy_errors_preserve_retryable_domain_semantics() {
+    for error in [
+        turso::Error::Busy("database is locked".to_string()),
+        turso::Error::BusySnapshot("snapshot is busy".to_string()),
+        turso::Error::Error("database is locked".to_string()),
+        turso::Error::Error("Write-write conflict".to_string()),
+        turso::Error::Error("Commit dependency aborted".to_string()),
+    ] {
+        assert!(matches!(
+            turso_error(error),
+            LakeCatError::Unavailable(message)
+                if message == "catalog storage is temporarily busy; retry the request"
+        ));
+    }
+
+    assert!(matches!(
+        turso_error(turso::Error::Error("malformed query".to_string())),
+        LakeCatError::Internal(message) if message.contains("malformed query")
+    ));
+}
+
+#[tokio::test]
+async fn turso_write_transaction_retries_typed_transient_body_failures() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let store = TursoCatalogStore::in_memory().await.unwrap();
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let observed_attempts = attempts.clone();
+
+    let value = store
+        .write_txn(move |_conn| {
+            let attempt = observed_attempts.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async move {
+                if attempt < 2 {
+                    Err(LakeCatError::Unavailable(
+                        "synthetic transient contention".to_string(),
+                    ))
+                } else {
+                    Ok(42_u8)
+                }
+            })
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(value, 42);
+    assert_eq!(attempts.load(Ordering::SeqCst), 3);
+    assert_eq!(store.write_pool.lock().unwrap().len(), 1);
+}
+
 #[tokio::test]
 async fn turso_store_persists_server_records() {
     let store = TursoCatalogStore::in_memory().await.unwrap();

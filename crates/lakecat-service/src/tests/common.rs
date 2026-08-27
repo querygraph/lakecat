@@ -120,6 +120,7 @@ impl TypeDidVerifier for LeakingTypeDidVerifier {
             LakeCatError::Conflict(message) => LakeCatError::Conflict(message.clone()),
             LakeCatError::Forbidden(message) => LakeCatError::Forbidden(message.clone()),
             LakeCatError::NotSupported(message) => LakeCatError::NotSupported(message.clone()),
+            LakeCatError::Unavailable(message) => LakeCatError::Unavailable(message.clone()),
             LakeCatError::Internal(message) => LakeCatError::Internal(message.clone()),
             LakeCatError::NotFound { object, name } => LakeCatError::NotFound {
                 object,

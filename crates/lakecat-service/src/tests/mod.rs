@@ -1,6 +1,7 @@
 mod commit;
 mod common;
 mod credentials;
+mod error;
 mod evidence_credentials;
 mod evidence_management;
 mod evidence_outbox_misc;

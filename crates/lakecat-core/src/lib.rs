@@ -26,6 +26,8 @@ pub enum LakeCatError {
     Forbidden(String),
     #[error("operation is not supported yet: {0}")]
     NotSupported(String),
+    #[error("temporarily unavailable: {0}")]
+    Unavailable(String),
     #[error("internal error: {0}")]
     Internal(String),
 }

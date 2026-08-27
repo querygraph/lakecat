@@ -448,6 +448,9 @@ pub(crate) fn commit_error_with_cleanup_failure(
         LakeCatError::NotSupported(message) => {
             LakeCatError::NotSupported(format!("{message}; {cleanup_context}"))
         }
+        LakeCatError::Unavailable(message) => {
+            LakeCatError::Unavailable(format!("{message}; {cleanup_context}"))
+        }
         LakeCatError::Internal(message) => {
             LakeCatError::Internal(format!("{message}; {cleanup_context}"))
         }
