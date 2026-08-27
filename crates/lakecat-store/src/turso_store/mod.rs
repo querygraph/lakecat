@@ -3,6 +3,7 @@ use std::pin::Pin;
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use async_trait::async_trait;
@@ -36,6 +37,10 @@ pub struct TursoCatalogStore {
     /// unchanged — only the per-commit connection setup is amortized. `Arc` so a
     /// cloned store shares the pool (and the underlying database).
     write_pool: Arc<Mutex<Vec<Connection>>>,
+    /// Bounded pool for the short catalog reads surrounding a commit. Read
+    /// connections remain independent, but their setup and busy-handler
+    /// configuration are amortized across requests.
+    read_pool: Arc<Mutex<Vec<Connection>>>,
 }
 
 impl TursoCatalogStore {
@@ -59,6 +64,7 @@ impl TursoCatalogStore {
         let store = Arc::new(Self {
             db,
             write_pool: Arc::new(Mutex::new(Vec::new())),
+            read_pool: Arc::new(Mutex::new(Vec::new())),
         });
         store.migrate().await?;
         Ok(store)
@@ -90,10 +96,10 @@ impl TursoCatalogStore {
         F: for<'c> FnMut(&'c Connection) -> WriteTxnFuture<'c, T> + Send,
     {
         let mut conn = self.checkout_write_conn().await?;
-        for attempt in 1..=WRITE_TXN_MAX_ATTEMPTS {
+        for attempt in 1..=TURSO_CONTENTION_MAX_ATTEMPTS {
             match conn.execute_batch("BEGIN CONCURRENT").await {
                 Ok(()) => {}
-                Err(err) if is_retryable_turso(&err) && attempt < WRITE_TXN_MAX_ATTEMPTS => {
+                Err(err) if is_retryable_turso(&err) && attempt < TURSO_CONTENTION_MAX_ATTEMPTS => {
                     // BEGIN did not establish a known-clean transaction state.
                     // Discard this connection and retry from a fresh one.
                     drop(conn);
@@ -112,7 +118,8 @@ impl TursoCatalogStore {
                         return Ok(value);
                     }
                     Err(err) => {
-                        let retry = is_retryable_turso(&err) && attempt < WRITE_TXN_MAX_ATTEMPTS;
+                        let retry =
+                            is_retryable_turso(&err) && attempt < TURSO_CONTENTION_MAX_ATTEMPTS;
                         let clean = rollback_write_conn(conn).await;
                         if retry {
                             conn = match clean {
@@ -129,7 +136,8 @@ impl TursoCatalogStore {
                     }
                 },
                 Err(err) => {
-                    let retry = is_retryable_lakecat(&err) && attempt < WRITE_TXN_MAX_ATTEMPTS;
+                    let retry =
+                        is_retryable_lakecat(&err) && attempt < TURSO_CONTENTION_MAX_ATTEMPTS;
                     let clean = rollback_write_conn(conn).await;
                     if retry {
                         conn = match clean {
@@ -161,7 +169,7 @@ impl TursoCatalogStore {
             return Ok(conn);
         }
         let conn = self.connect()?;
-        apply_write_pragmas(&conn).await;
+        apply_write_pragmas(&conn).await?;
         Ok(conn)
     }
 
@@ -179,7 +187,7 @@ impl TursoCatalogStore {
 
     async fn migrate(&self) -> LakeCatResult<()> {
         let conn = self.connect()?;
-        apply_write_pragmas(&conn).await;
+        apply_write_pragmas(&conn).await?;
         conn.execute_batch(TURSO_MIGRATION.join(";\n"))
             .await
             .map_err(turso_error)?;
@@ -188,6 +196,55 @@ impl TursoCatalogStore {
 
     fn connect(&self) -> LakeCatResult<Connection> {
         self.db.connect().map_err(turso_error)
+    }
+
+    fn checkout_read_conn(&self) -> LakeCatResult<Connection> {
+        if let Some(conn) = self
+            .read_pool
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .pop()
+        {
+            return Ok(conn);
+        }
+        let conn = self.connect()?;
+        apply_busy_timeout(&conn)?;
+        Ok(conn)
+    }
+
+    fn return_read_conn(&self, conn: Connection) {
+        let mut pool = self
+            .read_pool
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        if pool.len() < READ_POOL_MAX_IDLE {
+            pool.push(conn);
+        }
+    }
+
+    /// Execute a side-effect-free read with bounded retries for transient Turso
+    /// contention. The closure must be safe to invoke again from a fresh read
+    /// snapshot; terminal domain and decoding failures are never retried.
+    async fn read_with_retry<T, F, Fut>(&self, mut body: F) -> LakeCatResult<T>
+    where
+        T: Send,
+        F: FnMut(Connection) -> Fut + Send,
+        Fut: Future<Output = LakeCatResult<T>> + Send,
+    {
+        let mut conn = self.checkout_read_conn()?;
+        for attempt in 1..=TURSO_CONTENTION_MAX_ATTEMPTS {
+            let result = body(conn.clone()).await;
+            let retry = result.as_ref().is_err_and(is_retryable_lakecat)
+                && attempt < TURSO_CONTENTION_MAX_ATTEMPTS;
+            self.return_read_conn(conn);
+            if retry {
+                backoff(attempt).await;
+                conn = self.checkout_read_conn()?;
+            } else {
+                return result;
+            }
+        }
+        unreachable!("bounded read loop always returns on its final attempt")
     }
 
     #[cfg(test)]
@@ -634,39 +691,45 @@ impl CatalogStore for TursoCatalogStore {
     }
 
     async fn load_table(&self, ident: &TableIdent) -> LakeCatResult<TableRecord> {
-        let conn = self.connect()?;
-        let mut rows = conn
-            .query(
-                "select record_json, table_key, warehouse, namespace_path, table_name
-                     from tables t
-                     where t.table_key = ?1
-                       and not exists (
-                         select 1 from soft_deletes d where d.table_key = t.table_key
-                       )",
-                (table_key(ident),),
-            )
-            .await
-            .map_err(turso_error)?;
-        rows.next()
-            .await
-            .map_err(turso_error)?
-            .map(|row| {
-                let table: TableRecord = decode_json(row_string(&row, 0)?)?;
-                crate::validate_table_record_scope(
-                    &table,
-                    ident,
-                    &row_string(&row, 1)?,
-                    &row_string(&row, 2)?,
-                    &row_string(&row, 3)?,
-                    &row_string(&row, 4)?,
-                )?;
-                Ok(table)
-            })
-            .transpose()?
-            .ok_or_else(|| LakeCatError::NotFound {
-                object: "table",
-                name: ident.stable_id(),
-            })
+        let ident = Arc::new(ident.clone());
+        self.read_with_retry(move |conn| {
+            let ident = ident.clone();
+            async move {
+                let mut rows = conn
+                    .query(
+                        "select record_json, table_key, warehouse, namespace_path, table_name
+                         from tables t
+                         where t.table_key = ?1
+                           and not exists (
+                             select 1 from soft_deletes d where d.table_key = t.table_key
+                           )",
+                        (table_key(&ident),),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                rows.next()
+                    .await
+                    .map_err(turso_error)?
+                    .map(|row| {
+                        let table: TableRecord = decode_json(row_string(&row, 0)?)?;
+                        crate::validate_table_record_scope(
+                            &table,
+                            &ident,
+                            &row_string(&row, 1)?,
+                            &row_string(&row, 2)?,
+                            &row_string(&row, 3)?,
+                            &row_string(&row, 4)?,
+                        )?;
+                        Ok(table)
+                    })
+                    .transpose()?
+                    .ok_or_else(|| LakeCatError::NotFound {
+                        object: "table",
+                        name: ident.stable_id(),
+                    })
+            }
+        })
+        .await
     }
 
     async fn rename_table(
@@ -1301,29 +1364,39 @@ impl CatalogStore for TursoCatalogStore {
     ) -> LakeCatResult<Option<TableRecord>> {
         crate::validate_idempotency_key_shape(idempotency_key)?;
         crate::validate_idempotency_request_hash_shape(idempotency_request_hash)?;
-        let conn = self.connect()?;
-        let mut rows = conn
-                .query(
-                    "select table_key, request_hash, response_json from idempotency_records where idem_key = ?1",
-                    (idempotency_record_key(ident, idempotency_key),),
-                )
-                .await
-                .map_err(turso_error)?;
-        let Some(row) = rows.next().await.map_err(turso_error)? else {
-            return Ok(None);
-        };
-        crate::validate_idempotency_record_table_key(&row_string(&row, 0)?, ident)?;
-        let replay_hash = row_string(&row, 1)?;
-        crate::validate_idempotency_record_request_hash(&replay_hash)?;
-        if replay_hash != idempotency_request_hash {
-            return Err(LakeCatError::Conflict(format!(
-                "idempotency key reused with different commit request for {}",
-                ident.stable_id()
-            )));
-        }
-        let table = decode_json(row_string(&row, 2)?)?;
-        crate::validate_table_record_identity(&table, ident)?;
-        Ok(Some(table))
+        let ident = Arc::new(ident.clone());
+        let idempotency_key: Arc<str> = Arc::from(idempotency_key);
+        let idempotency_request_hash: Arc<str> = Arc::from(idempotency_request_hash);
+        self.read_with_retry(move |conn| {
+            let ident = ident.clone();
+            let idempotency_key = idempotency_key.clone();
+            let idempotency_request_hash = idempotency_request_hash.clone();
+            async move {
+                let mut rows = conn
+                    .query(
+                        "select table_key, request_hash, response_json from idempotency_records where idem_key = ?1",
+                        (idempotency_record_key(&ident, &idempotency_key),),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                let Some(row) = rows.next().await.map_err(turso_error)? else {
+                    return Ok(None);
+                };
+                crate::validate_idempotency_record_table_key(&row_string(&row, 0)?, &ident)?;
+                let replay_hash = row_string(&row, 1)?;
+                crate::validate_idempotency_record_request_hash(&replay_hash)?;
+                if replay_hash != idempotency_request_hash.as_ref() {
+                    return Err(LakeCatError::Conflict(format!(
+                        "idempotency key reused with different commit request for {}",
+                        ident.stable_id()
+                    )));
+                }
+                let table = decode_json(row_string(&row, 2)?)?;
+                crate::validate_table_record_identity(&table, &ident)?;
+                Ok(Some(table))
+            }
+        })
+        .await
     }
 
     async fn soft_delete_table(
@@ -2488,32 +2561,38 @@ impl CatalogStore for TursoCatalogStore {
         &self,
         warehouse: &WarehouseName,
     ) -> LakeCatResult<Vec<StorageProfile>> {
-        let conn = self.connect()?;
-        let mut rows = conn
-                .query(
-                    "select profile_json, profile_key, profile_id, location_prefix, provider, issuance_mode
-                     from storage_profiles
-                     where warehouse = ?1
-                     order by profile_id",
-                    (warehouse.as_str(),),
-                )
-                .await
-                .map_err(turso_error)?;
-        let mut profiles = Vec::new();
-        while let Some(row) = rows.next().await.map_err(turso_error)? {
-            let profile: StorageProfile = decode_json(row_string(&row, 0)?)?;
-            crate::validate_storage_profile_scope(
-                &profile,
-                warehouse,
-                &row_string(&row, 1)?,
-                &row_string(&row, 2)?,
-                &row_string(&row, 3)?,
-                &row_string(&row, 4)?,
-                &row_string(&row, 5)?,
-            )?;
-            profiles.push(profile);
-        }
-        Ok(profiles)
+        let warehouse = Arc::new(warehouse.clone());
+        self.read_with_retry(move |conn| {
+            let warehouse = warehouse.clone();
+            async move {
+                let mut rows = conn
+                    .query(
+                        "select profile_json, profile_key, profile_id, location_prefix, provider, issuance_mode
+                         from storage_profiles
+                         where warehouse = ?1
+                         order by profile_id",
+                        (warehouse.as_str(),),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                let mut profiles = Vec::new();
+                while let Some(row) = rows.next().await.map_err(turso_error)? {
+                    let profile: StorageProfile = decode_json(row_string(&row, 0)?)?;
+                    crate::validate_storage_profile_scope(
+                        &profile,
+                        &warehouse,
+                        &row_string(&row, 1)?,
+                        &row_string(&row, 2)?,
+                        &row_string(&row, 3)?,
+                        &row_string(&row, 4)?,
+                        &row_string(&row, 5)?,
+                    )?;
+                    profiles.push(profile);
+                }
+                Ok(profiles)
+            }
+        })
+        .await
     }
 
     async fn storage_profile_for_table(
@@ -2586,31 +2665,37 @@ impl CatalogStore for TursoCatalogStore {
         &self,
         warehouse: &WarehouseName,
     ) -> LakeCatResult<Vec<PolicyBinding>> {
-        let conn = self.connect()?;
-        let mut rows = conn
-            .query(
-                "select binding_json, policy_id, namespace_path, table_name, enforced
-                     from policy_bindings
-                     where warehouse = ?1
-                     order by policy_id",
-                (warehouse.as_str(),),
-            )
-            .await
-            .map_err(turso_error)?;
-        let mut bindings = Vec::new();
-        while let Some(row) = rows.next().await.map_err(turso_error)? {
-            let binding: PolicyBinding = decode_json(row_string(&row, 0)?)?;
-            crate::validate_policy_binding_scope(
-                &binding,
-                warehouse,
-                row_string(&row, 1)?.as_str(),
-                row_optional_string(&row, 2)?.as_deref(),
-                row_optional_string(&row, 3)?.as_deref(),
-                row_i64(&row, 4)? != 0,
-            )?;
-            bindings.push(binding);
-        }
-        Ok(bindings)
+        let warehouse = Arc::new(warehouse.clone());
+        self.read_with_retry(move |conn| {
+            let warehouse = warehouse.clone();
+            async move {
+                let mut rows = conn
+                    .query(
+                        "select binding_json, policy_id, namespace_path, table_name, enforced
+                         from policy_bindings
+                         where warehouse = ?1
+                         order by policy_id",
+                        (warehouse.as_str(),),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                let mut bindings = Vec::new();
+                while let Some(row) = rows.next().await.map_err(turso_error)? {
+                    let binding: PolicyBinding = decode_json(row_string(&row, 0)?)?;
+                    crate::validate_policy_binding_scope(
+                        &binding,
+                        &warehouse,
+                        row_string(&row, 1)?.as_str(),
+                        row_optional_string(&row, 2)?.as_deref(),
+                        row_optional_string(&row, 3)?.as_deref(),
+                        row_i64(&row, 4)? != 0,
+                    )?;
+                    bindings.push(binding);
+                }
+                Ok(bindings)
+            }
+        })
+        .await
     }
 
     async fn policy_bindings_for_table(
@@ -3142,24 +3227,34 @@ fn turso_error(err: turso::Error) -> LakeCatError {
 /// body and the enclosing `#[async_trait]` method future stays `Send`.
 type WriteTxnFuture<'c, T> = Pin<Box<dyn Future<Output = LakeCatResult<T>> + Send + 'c>>;
 
-/// Bounded attempts for a write transaction that loses an MVCC write-write
-/// conflict (or hits a transient `Busy`) at commit. This only bounds livelock:
-/// a genuine same-row logical race converges to the metadata-pointer CAS
-/// `Conflict` within a couple of attempts.
-const WRITE_TXN_MAX_ATTEMPTS: u32 = 8;
+/// Shared attempt bound for transient Turso contention on reads and writes. It
+/// bounds livelock; a genuine same-row write race still converges to the
+/// metadata-pointer CAS `Conflict` within a couple of attempts.
+const TURSO_CONTENTION_MAX_ATTEMPTS: u32 = 8;
 
 /// Maximum idle write connections retained in the pool. Caps memory/file handles
 /// while comfortably covering the expected concurrent-writer count; connections
 /// beyond this are dropped on return rather than pooled.
 const WRITE_POOL_MAX_IDLE: usize = 16;
 
-/// Best-effort per-connection pragmas for write transactions. `journal_mode`
-/// returns a row, so `execute_batch` reports it as an error even though the mode
-/// is applied; ignore it (as the prior WAL path always did). `busy_timeout`
-/// bounds how long a connection waits on a contended page before erroring.
-async fn apply_write_pragmas(conn: &Connection) {
+/// Maximum idle read connections retained for commit-adjacent catalog lookups.
+const READ_POOL_MAX_IDLE: usize = 16;
+
+/// Per-connection driver wait bound for transient page contention. The outer
+/// retry policy remains bounded independently, preserving an eventual 503.
+const TURSO_BUSY_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Configure a write connection. `journal_mode` returns a row, so
+/// `execute_batch` reports it as an error even though the mode is applied; that
+/// known result remains best effort. Installing the driver busy handler is
+/// required and propagated as an initialization error.
+async fn apply_write_pragmas(conn: &Connection) -> LakeCatResult<()> {
     let _ = conn.execute_batch("PRAGMA journal_mode=mvcc;").await;
-    let _ = conn.execute_batch("PRAGMA busy_timeout=10000;").await;
+    apply_busy_timeout(conn)
+}
+
+fn apply_busy_timeout(conn: &Connection) -> LakeCatResult<()> {
+    conn.busy_timeout(TURSO_BUSY_TIMEOUT).map_err(turso_error)
 }
 
 /// True for the raw `turso::Error`s that a `BEGIN CONCURRENT` commit raises when

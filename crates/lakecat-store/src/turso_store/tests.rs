@@ -9,6 +9,69 @@ use crate::{
 
 use super::*;
 
+#[tokio::test]
+async fn turso_read_pool_reuses_connections_and_caps_idle_capacity() {
+    let store = TursoCatalogStore::in_memory().await.unwrap();
+    let ident = TableIdent::new(
+        WarehouseName::new("local").unwrap(),
+        "default".parse::<Namespace>().unwrap(),
+        TableName::new("missing").unwrap(),
+    );
+
+    assert!(matches!(
+        store.load_table(&ident).await,
+        Err(LakeCatError::NotFound { .. })
+    ));
+    assert_eq!(store.read_pool.lock().unwrap().len(), 1);
+
+    let checked_out = (0..=READ_POOL_MAX_IDLE)
+        .map(|_| store.checkout_read_conn())
+        .collect::<LakeCatResult<Vec<_>>>()
+        .unwrap();
+    assert!(store.read_pool.lock().unwrap().is_empty());
+
+    for conn in checked_out {
+        store.return_read_conn(conn);
+    }
+    assert_eq!(store.read_pool.lock().unwrap().len(), READ_POOL_MAX_IDLE);
+
+    let conn = store.checkout_read_conn().unwrap();
+    let mut rows = conn.query("PRAGMA busy_timeout", ()).await.unwrap();
+    let row = rows.next().await.unwrap().unwrap();
+    assert_eq!(row_i64(&row, 0).unwrap(), 10_000);
+    drop(rows);
+    store.return_read_conn(conn);
+}
+
+#[tokio::test]
+async fn turso_read_retry_recovers_from_typed_contention() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let store = TursoCatalogStore::in_memory().await.unwrap();
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let observed_attempts = attempts.clone();
+
+    let value = store
+        .read_with_retry(move |_conn| {
+            let attempt = observed_attempts.fetch_add(1, Ordering::SeqCst);
+            async move {
+                if attempt < 2 {
+                    Err(LakeCatError::Unavailable(
+                        "synthetic transient contention".to_string(),
+                    ))
+                } else {
+                    Ok(42_u8)
+                }
+            }
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(value, 42);
+    assert_eq!(attempts.load(Ordering::SeqCst), 3);
+    assert_eq!(store.read_pool.lock().unwrap().len(), 1);
+}
+
 #[test]
 fn turso_busy_errors_preserve_retryable_domain_semantics() {
     for error in [

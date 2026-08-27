@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Turso read-path acceleration: reuse a bounded pool of driver-timeout-configured
+  connections and apply the same typed, bounded contention retry policy to table
+  loads, idempotency replay, storage-profile lookup, and policy-binding lookup.
+  Commit requests now amortize the three to four connection setups surrounding
+  each write while preserving independent concurrent reads.
+
 - Turso contention recovery: preserve transient database-busy failures as a
   typed, retryable catalog outcome; retry them at transaction begin, body, and
   commit boundaries; and only return connections to the write pool after a
