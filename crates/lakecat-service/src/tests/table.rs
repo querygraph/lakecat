@@ -235,6 +235,74 @@ async fn standard_create_persists_the_returned_metadata_object() {
 }
 
 #[tokio::test]
+async fn standard_create_without_location_uses_the_configured_warehouse_root() {
+    let root =
+        std::env::temp_dir().join(format!("lakecat-warehouse-root-{}", uuid::Uuid::new_v4()));
+    let location_root = Url::from_directory_path(&root)
+        .expect("temporary warehouse root must be a file URL")
+        .to_string();
+    let state = LakeCatState::new(
+        WarehouseName::new("local").unwrap(),
+        MemoryCatalogStore::new(),
+    )
+    .with_table_location_root(location_root.clone())
+    .unwrap();
+    let app = app(state);
+    create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/catalog/v1/namespaces/default/tables")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "name": "events",
+                        "schema": {
+                            "type": "struct",
+                            "schema-id": 0,
+                            "fields": [{
+                                "id": 1,
+                                "name": "id",
+                                "required": true,
+                                "type": "long"
+                            }]
+                        }
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let (status, body) = collect_json_response(response).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        body["metadata"]["location"],
+        format!("{}/default/events", location_root.trim_end_matches('/'))
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn warehouse_root_rejects_credentials_queries_and_unsupported_schemes() {
+    for root in [
+        "https://warehouse/lakecat",
+        "s3://user@warehouse/lakecat",
+        "s3://warehouse/lakecat?token=secret",
+    ] {
+        assert!(
+            LakeCatState::new(
+                WarehouseName::new("local").unwrap(),
+                MemoryCatalogStore::new(),
+            )
+            .with_table_location_root(root.to_string())
+            .is_err()
+        );
+    }
+}
+
+#[tokio::test]
 async fn failed_standard_create_removes_its_uncommitted_metadata_object() {
     let app = test_app();
     create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;

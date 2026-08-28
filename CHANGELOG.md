@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add a validated `LAKECAT_WAREHOUSE_LOCATION` service boundary so standard
+  Iceberg REST creates without an explicit location derive durable table roots
+  from the configured warehouse instead of the embedded local fallback.
+
 - Reconcile the live goal to the published stock-Flink v2 result at
   `catalog-bench@c375892`: LakeCat `65f0a4c3`, Polaris, Gravitino, and
   Lakekeeper pass the complete fresh correctness workflow in run

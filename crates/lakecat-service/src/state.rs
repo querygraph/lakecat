@@ -18,6 +18,7 @@ use crate::*;
 #[derive(Clone)]
 pub struct LakeCatState {
     pub warehouse: WarehouseName,
+    pub table_location_root: Option<String>,
     pub store: Arc<dyn CatalogStore>,
     pub sail: Arc<dyn SailCatalogEngine>,
     pub governance: Arc<dyn GovernanceEngine>,
@@ -108,6 +109,7 @@ impl LakeCatState {
     pub fn new(warehouse: WarehouseName, store: Arc<dyn CatalogStore>) -> Self {
         Self {
             warehouse,
+            table_location_root: None,
             store,
             sail: default_sail_engine(),
             governance: AllowAllGovernanceEngine::new(),
@@ -116,6 +118,30 @@ impl LakeCatState {
             graph: NoopCatalogGraphSink::new(),
             lineage: HashOnlyLineageSink::new(),
         }
+    }
+
+    pub fn with_table_location_root(mut self, location_root: String) -> Result<Self, LakeCatError> {
+        let parsed = url::Url::parse(&location_root).map_err(|_| {
+            LakeCatError::InvalidArgument("invalid warehouse table location root".to_string())
+        })?;
+        if !matches!(parsed.scheme(), "file" | "s3")
+            || (parsed.scheme() == "s3" && parsed.host_str().is_none())
+            || !parsed.username().is_empty()
+            || parsed.password().is_some()
+            || parsed.query().is_some()
+            || parsed.fragment().is_some()
+            || parsed.path_segments().is_some_and(|segments| {
+                segments
+                    .into_iter()
+                    .any(|segment| matches!(segment, "." | ".."))
+            })
+        {
+            return Err(LakeCatError::InvalidArgument(
+                "invalid warehouse table location root".to_string(),
+            ));
+        }
+        self.table_location_root = Some(location_root.trim_end_matches('/').to_string());
+        Ok(self)
     }
 
     pub fn with_integrations(

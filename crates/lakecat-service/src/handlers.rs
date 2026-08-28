@@ -442,11 +442,16 @@ pub(crate) async fn create_table_in_warehouse(
         } else if let Some(schema) = request.schema.as_ref() {
             // Standard path: synthesize initial metadata from the schema.
             let location = request.location.clone().unwrap_or_else(|| {
-                format!(
-                    "file:///tmp/lakecat/{}/{}/{}",
-                    ident.warehouse.as_str(),
-                    ident.namespace,
-                    ident.name.as_str()
+                state.table_location_root.as_ref().map_or_else(
+                    || {
+                        format!(
+                            "file:///tmp/lakecat/{}/{}/{}",
+                            ident.warehouse.as_str(),
+                            ident.namespace,
+                            ident.name.as_str()
+                        )
+                    },
+                    |root| format!("{root}/{}/{}", ident.namespace, ident.name.as_str()),
                 )
             });
             let table_uuid = uuid::Uuid::new_v4().to_string();

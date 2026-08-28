@@ -16,7 +16,12 @@ use lakecat_store::{CatalogStore, MemoryCatalogStore};
 #[tokio::main]
 async fn main() {
     let config = ServiceConfig::from_env().expect("configure LakeCat service");
-    let state = LakeCatState::new(config.warehouse.clone(), configured_store().await);
+    let mut state = LakeCatState::new(config.warehouse.clone(), configured_store().await);
+    if let Some(location_root) = config.table_location_root {
+        state = state
+            .with_table_location_root(location_root)
+            .expect("configure LakeCat warehouse location");
+    }
     let state = {
         let sail = state.sail.clone();
         state
@@ -40,6 +45,7 @@ async fn main() {
 
 struct ServiceConfig {
     warehouse: WarehouseName,
+    table_location_root: Option<String>,
     bind_addr: SocketAddr,
 }
 
@@ -56,6 +62,7 @@ impl ServiceConfig {
             })?;
         Ok(Self {
             warehouse: WarehouseName::new(warehouse)?,
+            table_location_root: std::env::var("LAKECAT_WAREHOUSE_LOCATION").ok(),
             bind_addr,
         })
     }
