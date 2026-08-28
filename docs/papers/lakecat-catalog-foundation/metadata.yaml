@@ -1,0 +1,20 @@
+---
+title: "LakeCat: A Thin, Governed, Replayable Catalog Foundation"
+title_stem: lakecat-catalog-foundation
+subtitle: "Open Iceberg Interoperability, Apache Ossie Semantics, and Evidence-Bearing Evaluation"
+author:
+  - Alexy Khrabrov
+lang: en-US
+publisher: First Pair Press
+rights: Copyright Alexy Khrabrov
+date: 2026-08-28
+subject: "Data catalogs; Apache Iceberg; semantic interoperability; governance; reproducible systems evaluation"
+keywords:
+  - Apache Iceberg
+  - data catalog
+  - Apache Ossie
+  - QueryGraph
+  - OpenLineage
+  - reproducible benchmark
+---
+

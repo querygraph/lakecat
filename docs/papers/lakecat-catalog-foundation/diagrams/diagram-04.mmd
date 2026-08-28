@@ -1,0 +1,18 @@
+flowchart TB
+  B[catalog-bench<br/>source-pinned orchestration] --> C1[LakeCat]
+  B --> C2[Apache Polaris]
+  B --> C3[Apache Gravitino]
+  B --> C4[Lakekeeper]
+  E[Stock engines] --> B
+  E1[Spark 4.1.3] --> E
+  E2[Flink 2.1.3] --> E
+  E3[Trino 483] --> E
+  E4[DuckDB 1.5.3] --> E
+  B --> X[Correctness<br/>14 assertions]
+  B --> R[Recovery<br/>faults · restart · restore]
+  B --> M[Migration<br/>peer REST · HadoopCatalog]
+  B --> S[Semantics<br/>Ossie · TPC-DS · drift]
+  X --> N[Immutable bundles<br/>hashes · transcripts · cleanup]
+  R --> N
+  M --> N
+  S --> N

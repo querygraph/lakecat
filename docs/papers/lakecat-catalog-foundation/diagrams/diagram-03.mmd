@@ -1,0 +1,14 @@
+flowchart TD
+  U[Apache Ossie pinned schema<br/>validator + TPC-DS model] --> V[Structural validation<br/>unknown-key-preserving envelope]
+  V --> A[TypeSec publication decision]
+  V --> P[Sail physical binding validation]
+  A --> C[LakeCat CAS publication<br/>artifact + policy + binding hashes]
+  P --> C
+  C --> R[Transactional outbox replay]
+  R --> G[Grust semantic graph]
+  R --> L[OpenLineage events]
+  G --> Q[QueryGraph semantic answers]
+  L --> Q
+  Q --> H{Seven proof bases agree?}
+  H -->|yes| Z[Admit answer]
+  H -->|artifact/model/policy/plan/<br/>graph/lineage/catalog drift| F[Fail closed]

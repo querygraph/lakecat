@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Add a standalone, conference-style LakeCat systems paper with related work,
+  architecture and recovery diagrams, Apache Ossie semantic integration,
+  catalog-bench methodology and results, explicit threats to validity, and a
+  FirstPair contract for publication on the QueryGraph shelf.
+
 - Preserve the Iceberg REST staged-create marker through catalog storage, admit
   its subsequent `assert-create` commit exactly once, and finalize the table on
   commit for stock DuckDB compatibility.

@@ -1,0 +1,47 @@
+{
+  "$schema": "../../../../firstpair/publishing/book.build.schema.json",
+  "schemaVersion": 1,
+  "bookRoot": ".",
+  "manuscript": "${tmpDir}/paper.md",
+  "metadata": "metadata.yaml",
+  "cover": "cover.md",
+  "css": "paper.css",
+  "stem": "lakecat-catalog-foundation",
+  "title": "LakeCat: A Thin, Governed, Replayable Catalog Foundation",
+  "subtitle": "Open Iceberg Interoperability, Apache Ossie Semantics, and Evidence-Bearing Evaluation",
+  "author": "Alexy Khrabrov",
+  "headboardImage": "assets/lakecat-aurora-headboard.png",
+  "version": "1.0.0",
+  "dist": "dist",
+  "buildDir": "${tmpDir}/build",
+  "edition": "full",
+  "primaryFormat": "typst",
+  "mobi": false,
+  "pandoc": {
+    "reader": "markdown+smart",
+    "toc": true,
+    "tocDepth": 2,
+    "numberSections": true,
+    "resourcePaths": ["${tmpDir}", "${tmpDir}/diagrams", ".", "assets"]
+  },
+  "pdf": {
+    "separateCover": false,
+    "coverImage": "assets/lakecat-aurora-headboard.png",
+    "coverWidth": "8.5in",
+    "coverHeight": "11in",
+    "coverFit": "contain",
+    "variables": {
+      "papersize": "us-letter"
+    }
+  },
+  "epub": {
+    "coverImage": "assets/lakecat-aurora-headboard.png",
+    "includeRenderedCover": false
+  },
+  "hooks": {
+    "prepare": [
+      "node prepare-paper.mjs paper.md \"${tmpDir}/paper.md\" diagrams",
+      "cp -R diagrams \"${tmpDir}/diagrams\""
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+flowchart LR
+  C[Stock clients<br/>Spark · Flink · Trino · DuckDB] -->|Iceberg REST| L[LakeCat<br/>identity · tenancy · CAS<br/>audit · transactional outbox]
+  L --> T[(Turso catalog spine)]
+  L -->|typed table work| S[Sail<br/>Iceberg semantics & planning]
+  L -->|decision + receipt| Y[TypeSec<br/>policy & capabilities]
+  L -->|stable events| G[Grust<br/>graph taxonomy & Turso projection]
+  L -->|replay| O[OpenLineage]
+  S --> Q[QueryGraph / QGLake]
+  Y --> Q
+  G --> Q
+  O --> Q
+  style L fill:#d9f0ff,stroke:#1261a0,stroke-width:3px
+  style Q fill:#e9ddff,stroke:#6b46c1,stroke-width:2px

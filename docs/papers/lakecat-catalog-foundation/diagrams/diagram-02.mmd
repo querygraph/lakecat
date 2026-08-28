@@ -1,0 +1,23 @@
+sequenceDiagram
+  participant E as Iceberg client
+  participant L as LakeCat service
+  participant P as Policy/Sail gates
+  participant D as Turso transaction
+  participant X as Graph + lineage sinks
+  E->>L: namespace/table mutation
+  L->>P: authorize and validate
+  P-->>L: typed decision + proof inputs
+  L->>D: state + audit + outbox
+  alt durable admission succeeds
+    D-->>L: commit
+    L-->>E: standard REST response
+    L->>X: drain deterministic event
+    alt sink unavailable
+      X-->>L: retain pending event
+    else sink acknowledges
+      X-->>L: acknowledge event
+    end
+  else transaction fails
+    D-->>L: rollback all three
+    L-->>E: spec-shaped failure
+  end
