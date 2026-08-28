@@ -80,9 +80,8 @@ graph behavior to Grust, and governance semantics to TypeSec.
   QueryGraph independently verified the same OpenLineage aggregate hash; exact
   evidence is in `docs/catalog-community/PHASE-2-ACCEPTANCE.md`. The stock
   engine bundles do not prove engine-native OpenLineage and make no such claim.
-- Phase 1 is closed. All C1-01 through C1-10 units and exit gates have exact
-  committed evidence. With Phase 2 multi-engine interoperability complete, the
-  active delivery front is Phase 3 failure, recovery, migration, and federation.
+- Phase 1 and Phase 2 are closed with exact committed evidence; their detailed
+  acceptance ledgers remain the authoritative proof.
 - Phase 3 C3-01 is complete at `querygraph/catalog-bench@1633d30`. Fresh run
   `objfault_0828a` proves a signed metadata PUT disconnected before upstream
   leaves no object, while an upstream HTTP 200 whose response is disconnected
@@ -128,8 +127,14 @@ graph behavior to Grust, and governance semantics to TypeSec.
   faults, ambiguous commits and restarts, transactional outbox recovery, cold
   state restoration, peer REST metadata-pointer migration, and a legacy
   HadoopCatalog cookbook. The exact proofs and explicit non-claims are in
-  `docs/catalog-community/PHASE-3-ACCEPTANCE.md`. Phase 4 Apache Ossie is the
-  active delivery front.
+  `docs/catalog-community/PHASE-3-ACCEPTANCE.md`.
+- Phase 4 is closed at QueryGraph `5177c2e`, Sail `9f6f8065`, LakeCat
+  `d7b9e3be`, TypeSec `3c5e0b1`, and Grust `cec8ce1`. The pinned upstream
+  Ossie artifacts validate and round-trip losslessly; physical validation,
+  durable publication CAS/outbox state, signed semantic decisions, stable graph
+  taxonomy, and fail-closed admission ordering remain in their owning repos.
+  Exact evidence is in `docs/catalog-community/PHASE-4-ACCEPTANCE.md`. Phase 5
+  TPC-DS is the active delivery front.
 
 ## Next Stage
 

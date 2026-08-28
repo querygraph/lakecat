@@ -67,13 +67,13 @@ acceptance gates; they cannot be declared from this checklist alone.
 
 | ID | Status | Owner | Unit and acceptance evidence |
 | --- | --- | --- | --- |
-| C4-01 | pending | QueryGraph | Vendor-by-hash or fetch-and-verify the pinned upstream schema/validator/examples without forking them. |
-| C4-02 | pending | QueryGraph | Implement typed JSON/YAML import/export, multi-dialect and unknown-extension preservation, structural validation, and explicit loss reports. |
-| C4-03 | pending | Sail | Implement reusable physical dataset/field/type/nullability and executable-expression validation needed by the binding contract. |
-| C4-04 | pending | LakeCat | Add only model artifact pointer/hash, physical binding, publication version/CAS, publisher, policy-binding, audit, and outbox state. |
-| C4-05 | pending | TypeSec | Add publication/consumption/field/metric/semantic-query/AI-access decisions and signed receipt contracts. |
-| C4-06 | pending | Grust | Add reusable semantic model/dataset/field/relationship/metric projection taxonomy and replay tests. |
-| C4-07 | pending | LakeCat/QueryGraph | Prove malformed, unauthorized, missing-physical, schema-drift, model-drift, and unknown-version failures close before graph/lineage promotion. |
+| C4-01 | done | QueryGraph | `a85e879` pins the upstream commit and schema/validator/TPC-DS hashes and fetches them into disposable storage; the upstream validator passes. |
+| C4-02 | done | QueryGraph | `1ec82ac` adds typed lossless JSON/YAML import/export, multiple models/dialects, unknown extension preservation, structural validation, and explicit loss reports. |
+| C4-03 | done | Sail | `9f6f8065` validates physical field existence, Iceberg type, nullability, and parsed-expression inputs; LakeCat locks that revision. |
+| C4-04 | done | LakeCat | `ea5d3a71` and `d7b9e3be` add durable model artifact/hash, bindings, publisher, version/CAS, governed management API, audit, and transactional outbox state. |
+| C4-05 | done | TypeSec | `3c5e0b1` adds six closed semantic actions and signed receipts bound to model version, artifact, policy, and physical bindings. |
+| C4-06 | done | Grust | `cec8ce1` adds model/dataset/field/relationship/metric taxonomy with stable replay identity and broken-reference rejection. |
+| C4-07 | done | LakeCat/QueryGraph | QueryGraph `5177c2e` proves all named failures stop before publication/graph/lineage; LakeCat rejects missing policy references and stale publication versions transactionally. |
 
 ## Phase 5 — semantic supply chain
 

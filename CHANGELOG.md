@@ -9,6 +9,10 @@
 
 ## Unreleased
 
+- Close catalog-community Phase 4 with exact Apache Ossie upstream, lossless
+  document, physical binding, publication, policy receipt, graph taxonomy, and
+  fail-closed admission evidence across the five owning repositories.
+
 - Add LakeCat's thin model-publication record and in-memory CAS boundary,
   binding immutable artifact pointers/hashes to physical and policy references,
   publisher identity, audit, and transactional outbox admission.
