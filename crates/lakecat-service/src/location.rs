@@ -124,7 +124,13 @@ pub(crate) async fn read_metadata_object(
     if bytes.len() as u64 > MAX_TABLE_METADATA_BYTES {
         return Err(metadata_object_size_error(location, bytes.len() as u64));
     }
-    serde_json::from_slice(&bytes).map_err(|err| {
+    let decoded = sail_iceberg::table::decode_metadata_file_with_limit(
+        location,
+        &bytes,
+        MAX_TABLE_METADATA_BYTES as usize,
+    )
+    .map_err(|err| metadata_object_read_error(location, err))?;
+    serde_json::from_slice(&decoded).map_err(|err| {
         LakeCatError::InvalidArgument(format!(
             "metadata object {} is not valid JSON: {}",
             metadata_location_hash_context(location),

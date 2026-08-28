@@ -9,6 +9,10 @@
 
 ## Unreleased
 
+- Decode standard gzip-compressed Iceberg metadata pointers during table
+  registration through Sail's bounded metadata decoder, enabling Lakekeeper to
+  LakeCat migration without weakening metadata size or location controls.
+
 - Accept Phase 3 C3-04 targeted restart and cold backup/restore evidence, with
   exact archive and summary hashes, cleanup proof, scoped Polaris failure, and
   explicit operational non-claims.

@@ -610,6 +610,33 @@ async fn metadata_reader_rejects_oversized_objects_without_collecting_them() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+#[tokio::test]
+async fn metadata_reader_decodes_standard_gzip_pointer() {
+    let root = std::env::temp_dir().join(format!("lakecat-register-gzip-{}", uuid::Uuid::new_v4()));
+    let metadata_path = root.join("events/metadata/lakekeeper-generated.gz.metadata.json");
+    std::fs::create_dir_all(metadata_path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &metadata_path,
+        [
+            31, 139, 8, 0, 0, 0, 0, 0, 2, 255, 171, 86, 74, 203, 47, 202, 77, 44, 209, 45, 75, 45,
+            42, 206, 204, 207, 83, 178, 50, 210, 81, 42, 73, 76, 202, 73, 213, 45, 45, 205, 76, 81,
+            178, 82, 74, 175, 202, 44, 208, 5, 139, 40, 213, 2, 0, 164, 135, 25, 52, 46, 0, 0, 0,
+        ],
+    )
+    .unwrap();
+    let metadata_location = Url::from_file_path(&metadata_path)
+        .expect("temporary metadata path must be a file URL")
+        .to_string();
+
+    let metadata = read_metadata_object(&metadata_location)
+        .await
+        .expect("standard gzip metadata must decode");
+
+    assert_eq!(metadata["format-version"], 2);
+    assert_eq!(metadata["table-uuid"], "gzip-table");
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 #[test]
 fn metadata_write_plan_requires_metadata_location() {
     let table = TableRecord::new(

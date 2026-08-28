@@ -33,6 +33,7 @@ object_store = { workspace = true }
 reqwest = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sail-iceberg = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
 typesec = { workspace = true, optional = true }
@@ -41,4 +42,3 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 sail-catalog-iceberg = { workspace = true }
-sail-iceberg = { workspace = true }
