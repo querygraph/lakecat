@@ -2,10 +2,13 @@
 
 ## Unreleased
 
-- Component-safe namespace identity foundation: add a versioned, length-prefixed
-  internal namespace key that distinguishes a literal dotted component from a
-  multipart namespace while leaving the human-readable Iceberg path unchanged.
-  Persistence migration and derived-key adoption remain the next C1-10 units.
+- Component-safe namespace identity and migration: use a versioned,
+  length-prefixed internal namespace key across Turso namespace, table, view,
+  receipt, soft-delete, and policy scope while leaving the human-readable
+  Iceberg path unchanged. Startup atomically derives legacy rewrites from typed
+  JSON, validates every row scope, records an idempotent schema marker only
+  after success, and rolls back corrupt state. Regression coverage proves that
+  literal dotted and multipart namespaces coexist without cross-object aliases.
 
 - Catalog-community ledger reconciliation: accept the neutral repository's
   completed stock-PyIceberg and contention units, record the exact limited

@@ -126,7 +126,7 @@ async fn turso_namespace_properties_are_atomic_and_hierarchy_safe() {
 
 #[cfg(feature = "turso-local")]
 #[tokio::test]
-async fn turso_legacy_namespaces_without_property_rows_migrate_lazily() {
+async fn turso_namespaces_without_property_rows_migrate_lazily() {
     let store = crate::turso_store::TursoCatalogStore::in_memory()
         .await
         .unwrap();
@@ -135,7 +135,7 @@ async fn turso_legacy_namespaces_without_property_rows_migrate_lazily() {
     let conn = store.database().connect().unwrap();
     conn.execute(
         "insert into namespaces (warehouse, namespace_path, namespace_json) values (?1, ?2, ?3)",
-        (warehouse.as_str(), namespace.path(), r#"["legacy"]"#),
+        (warehouse.as_str(), namespace.storage_key(), r#"["legacy"]"#),
     )
     .await
     .unwrap();

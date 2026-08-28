@@ -41,11 +41,12 @@ graph behavior to Grust, and governance semantics to TypeSec.
   private configuration staging and concrete lifecycle supervision, then run
   the same no-shim workflow. No Flink or Trino production interoperability claim
   exists until its complete optimized evidence is materialized and validated.
-- Phase 1 remains open. C1-09 still needs its complete one-command smoke/full
-  publication contract, generated known-gaps surface, and bundle-wide secret
-  scan. C1-10 still owns a versioned component-safe migration for LakeCat's
-  legacy dot-joined namespace-derived keys across namespace, table, view, and
-  policy state. Phase 1 exit gates must be rerun after those units.
+- Phase 1 remains open only on C1-09. C1-10 is implemented: LakeCat uses a
+  versioned component-safe namespace key across namespace, table, view/receipt,
+  soft-delete, and policy scope, and Turso atomically migrates validated legacy
+  rows with idempotent marking and fail-closed rollback. C1-09 still needs its
+  complete one-command smoke/full publication contract, generated known-gaps
+  surface, bundle-wide secret scan, and final Phase 1 exit rerun.
 
 ## Next Stage
 
@@ -56,27 +57,24 @@ graph behavior to Grust, and governance semantics to TypeSec.
 2. Reconcile C1-07, C1-08, and completed C1-09 evidence into LakeCat's public
    backlog, status, acceptance ledger, and reader documentation without copying
    neutral raw evidence into LakeCat.
-3. Implement and prove C1-10's component-safe key migration in LakeCat, keeping
-   Iceberg format behavior in Sail and preserving compatibility for existing
-   Turso stores.
-4. Close every Phase 1 exit criterion, including one-command smoke/full
+3. Close every Phase 1 exit criterion, including one-command smoke/full
    profiles, immutable generated reports, known gaps, and secret scanning.
-5. Complete Phase 2 for Spark, Flink, Trino, and the largest honest DuckDB path;
+4. Complete Phase 2 for Spark, Flink, Trino, and the largest honest DuckDB path;
    publish only independently admitted optimized evidence and correlate
    OpenLineage only where the pinned engine integration can prove it.
-6. Execute the remaining catalog-community phases in dependency order: failure
+5. Execute the remaining catalog-community phases in dependency order: failure
    and recovery plus migration/federation; the Apache Ossie foundation in its
    owning repositories; the TPC-DS semantic supply chain; and evidence-linked
    upstream/community release artifacts. Treat every phase's exit criteria and
    global acceptance gates in `docs/catalog-community/` as mandatory.
-7. Keep release proof fresh after executable changes with the full local gate.
-8. Replace temporary Sail helper bridges only when upstream helpers are
+6. Keep release proof fresh after executable changes with the full local gate.
+7. Replace temporary Sail helper bridges only when upstream helpers are
    published and covered by Sail tests.
-9. Keep v4 JSON bridging explicit. Apache Iceberg v4 remains a draft; typed
+8. Keep v4 JSON bridging explicit. Apache Iceberg v4 remains a draft; typed
    metadata, relative-location, manifest, delete, and planning support belongs
    in Sail after formal specification adoption.
-10. Keep QueryGraph QGLake verify/import as the end-to-end acceptance boundary.
-11. Continue to use the repo boundaries and verification discipline in
+9. Keep QueryGraph QGLake verify/import as the end-to-end acceptance boundary.
+10. Continue to use the repo boundaries and verification discipline in
    `AGENTS.md` as binding guidance.
 
 ## Source Of Truth

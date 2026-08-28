@@ -25,7 +25,9 @@ pub fn table_ident(
 pub(crate) fn table_key(ident: &TableIdent) -> String {
     format!(
         "{}\u{1f}{}\u{1f}{}",
-        ident.warehouse, ident.namespace, ident.name
+        ident.warehouse,
+        ident.namespace.storage_key(),
+        ident.name
     )
 }
 
@@ -98,7 +100,7 @@ pub(crate) fn validate_table_record_scope(
     validate_table_record_identity(record, ident)?;
     if row_table_key != table_key(ident)
         || row_warehouse != ident.warehouse.as_str()
-        || row_namespace_path != ident.namespace.path()
+        || row_namespace_path != ident.namespace.storage_key()
         || row_table_name != ident.name.as_str()
     {
         return Err(LakeCatError::Internal(
@@ -149,7 +151,7 @@ pub(crate) fn validate_namespace_scope(
     row_warehouse: &WarehouseName,
     row_namespace_path: &str,
 ) -> LakeCatResult<()> {
-    if row_warehouse != expected_warehouse || namespace.path() != row_namespace_path {
+    if row_warehouse != expected_warehouse || namespace.storage_key() != row_namespace_path {
         return Err(LakeCatError::Internal(
             "namespace row scope does not match namespace identity".to_string(),
         ));
@@ -167,7 +169,7 @@ pub(crate) fn validate_policy_binding_scope(
     row_enforced: bool,
 ) -> LakeCatResult<()> {
     binding.validate()?;
-    let binding_namespace_path = binding.namespace.as_ref().map(Namespace::path);
+    let binding_namespace_path = binding.namespace.as_ref().map(Namespace::storage_key);
     let binding_table_name = binding.table.as_ref().map(TableName::as_str);
     if binding.warehouse != *warehouse
         || binding.policy_id != policy_id
@@ -335,7 +337,7 @@ pub(crate) fn view_key_parts(
     namespace: &Namespace,
     name: &TableName,
 ) -> String {
-    format!("{warehouse}\u{1f}{namespace}\u{1f}{name}")
+    format!("{warehouse}\u{1f}{}\u{1f}{name}", namespace.storage_key())
 }
 
 pub(crate) fn audit_event_id(event: &CatalogAuditEvent) -> LakeCatResult<String> {

@@ -53,11 +53,12 @@ Updated: 2026-08-28
   Turso uses a transactional side table with lazy legacy-row migration; and
   property updates have dedicated governed, value-redacted audit/outbox/graph/
   OpenLineage evidence. See `docs/ICEBERG-NAMESPACES.md`.
-- Open namespace identity debt: the wire codec preserves component boundaries,
-  but the pre-existing dot-joined `Namespace::path()` key can alias a literal
-  dotted component with a multipart identity in Turso and derived table/view/
-  policy keys. C1-10 owns one versioned component-safe migration across all
-  affected key families; C1-04 does not claim arbitrary-punctuation coverage.
+- Component-safe namespace identity: the wire codec preserves ordered
+  components and durable Turso scope now uses a versioned, length-prefixed key
+  across namespaces, tables, views/receipts, soft deletes, and policies.
+  Existing dot-joined stores migrate atomically from validated typed JSON;
+  corrupt scope rolls back without a completion marker. Human-readable
+  `Namespace::path()` remains a display and Iceberg compatibility surface.
 - Latest v4 boundary review: Apache Iceberg still lists format version 4 as
   under active development and not formally adopted. LakeCat continues to
   advertise only its extension-ready JSON bridge; typed model, planner, and

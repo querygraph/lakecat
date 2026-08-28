@@ -1020,3 +1020,25 @@ C1-09 remains open. The accepted contention bundle does not yet provide the
 general one-command smoke/full profiles, cross-scenario raw-bundle publication,
 generated known-gaps page, or bundle-wide secret scan, and it does not promote
 C1-03 through C1-07 ignored smoke transcripts into public result records.
+
+## C1-10 — component-safe catalog identity
+
+LakeCat now separates human-readable namespace paths from durable identity.
+`Namespace::storage_key()` uses a versioned length-prefix encoding, and every
+Turso namespace-derived row scope uses it across namespace properties, tables,
+metadata-pointer and idempotency references, audit scope, soft deletes, views,
+view receipts, and policy bindings.
+
+Existing stores migrate at startup in one immediate transaction. The migration
+decodes and validates typed record JSON, admits only the exact legacy or current
+row identity, rewrites each dependent key family, and inserts its schema marker
+only after all rewrites succeed. Reopen is idempotent. Malformed JSON or scope
+drift aborts and rolls back without a marker rather than silently repairing
+corrupt state. Historical audit/outbox payloads remain immutable evidence.
+
+The Turso regression suite proves three independent obligations: literal
+`["a.b"]` and multipart `["a", "b"]` namespaces coexist with isolated
+properties, tables, views, and policies; a simulated legacy file preserves and
+reopens namespace, table, dropped-view receipt, and policy state; and corrupt
+scope leaves both the original row and absent migration marker unchanged.
+This closes C1-10. Phase 1 remains open on C1-09's publication gates.

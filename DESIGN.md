@@ -334,15 +334,14 @@ The current working plan is:
    Grust/TypeSec crates when available, and keep the querygraph/sail `lakecat`
    git dependency explicit until reusable Sail helpers are landed or published.
 7. Keep namespace identity component-safe at every boundary. Iceberg REST uses
-   ordered component arrays and U+001F path encoding; hierarchy, pagination,
-   properties, errors, governance, and replay now follow that model. The older
-   `Namespace::path()` helper still dot-joins components for Turso and several
-   table/view/policy-derived keys, so a literal dotted component can alias a
-   multipart namespace internally. Do not claim arbitrary-punctuation support
-   or patch one key family in isolation. The follow-up must introduce a
-   versioned unambiguous component encoding, detect collisions, migrate every
-   affected key and compatibility read together, and prove cross-object parity.
-   The accepted behavior and migration boundary are specified in
+   ordered component arrays and U+001F path encoding; durable catalog scope uses
+   the versioned length-prefixed `Namespace::storage_key()` across namespace,
+   table, view/receipt, soft-delete, and policy rows. Turso startup derives old
+   dot-joined rewrites only from validated typed JSON, applies them atomically,
+   and records its schema marker only after success. `Namespace::path()` remains
+   human-readable display data and must not be reintroduced as a durable key.
+   Cross-object collision, legacy reopen/idempotence, and corrupt rollback are
+   regression-tested. The accepted behavior is specified in
    `docs/ICEBERG-NAMESPACES.md`.
 8. Keep deterministic commit correctness separate from contention throughput.
    Standard requirements must admit current state, stale state must return the

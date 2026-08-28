@@ -994,7 +994,7 @@ pub(crate) fn memory_view_receipt_key_matches_namespace(
     matches!(
         (parts.next(), parts.next(), parts.next(), parts.next()),
         (Some(row_warehouse), Some(row_namespace), Some(_), None)
-            if row_warehouse == warehouse.as_str() && row_namespace == namespace.path()
+            if row_warehouse == warehouse.as_str() && row_namespace == namespace.storage_key()
     )
 }
 
@@ -1085,6 +1085,25 @@ pub(crate) fn validate_view_receipt_scope(
     Ok(())
 }
 
+#[cfg(feature = "turso-local")]
+pub(crate) fn validate_view_receipt_row_scope(
+    receipt: &ViewVersionReceipt,
+    row_warehouse: &str,
+    row_namespace_key: &str,
+    row_view: &str,
+) -> LakeCatResult<()> {
+    receipt.validate()?;
+    if receipt.warehouse.as_str() != row_warehouse
+        || receipt.namespace.storage_key() != row_namespace_key
+        || receipt.name.as_str() != row_view
+    {
+        return Err(LakeCatError::Internal(
+            "view receipt row scope does not match receipt identity".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 pub(crate) fn validate_view_record_scope(
     record: &ViewRecord,
     warehouse: &WarehouseName,
@@ -1093,6 +1112,25 @@ pub(crate) fn validate_view_record_scope(
 ) -> LakeCatResult<()> {
     record.validate()?;
     if record.warehouse != *warehouse || record.namespace != *namespace || record.name != *view {
+        return Err(LakeCatError::Internal(
+            "view record row scope does not match view identity".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(feature = "turso-local")]
+pub(crate) fn validate_view_record_row_scope(
+    record: &ViewRecord,
+    row_warehouse: &str,
+    row_namespace_key: &str,
+    row_view: &str,
+) -> LakeCatResult<()> {
+    record.validate()?;
+    if record.warehouse.as_str() != row_warehouse
+        || record.namespace.storage_key() != row_namespace_key
+        || record.name.as_str() != row_view
+    {
         return Err(LakeCatError::Internal(
             "view record row scope does not match view identity".to_string(),
         ));

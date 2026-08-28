@@ -77,6 +77,19 @@ Tokens are offsets into the current sorted list, not snapshots. A client that
 requires a transactionally stable inventory must prevent concurrent namespace
 mutation for the duration of its multi-request traversal.
 
+## Durable component identity
+
+The dot-joined namespace path is for human-readable display and compatibility;
+it is not a durable database identity. LakeCat persists a versioned,
+length-prefixed component encoding so a literal `["a.b"]` namespace cannot
+alias multipart `["a", "b"]`. Turso applies that encoding consistently to
+namespace, table, view/receipt, soft-delete, and policy scope.
+
+On first startup after upgrade, LakeCat validates typed JSON against every
+legacy row, rewrites all dependent keys in one transaction, and records a
+schema marker only after success. A corrupt or inconsistent row aborts and
+rolls back the entire migration. Subsequent starts skip the completed migration.
+
 ## Property updates
 
 The update body contains `removals: string[]` and `updates: object`. The store

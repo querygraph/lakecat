@@ -191,6 +191,7 @@ impl TursoCatalogStore {
         conn.execute_batch(TURSO_MIGRATION.join(";\n"))
             .await
             .map_err(turso_error)?;
+        migrate_component_safe_keys(&conn).await?;
         Ok(())
     }
 
@@ -290,7 +291,7 @@ impl CatalogStore for TursoCatalogStore {
                  values (?1, ?2, ?3)",
                         (
                             warehouse.as_str(),
-                            namespace.path(),
+                            namespace.storage_key(),
                             encode_json(namespace.parts())?,
                         ),
                     )
@@ -309,7 +310,7 @@ impl CatalogStore for TursoCatalogStore {
                      ) values (?1, ?2, ?3)",
                     (
                         warehouse.as_str(),
-                        namespace.path(),
+                        namespace.storage_key(),
                         encode_json(properties.as_map())?,
                     ),
                 )
@@ -358,7 +359,7 @@ impl CatalogStore for TursoCatalogStore {
             .query(
                 "select namespace_json, warehouse, namespace_path from namespaces
                      where warehouse = ?1 and namespace_path = ?2",
-                (warehouse.as_str(), namespace.path()),
+                (warehouse.as_str(), namespace.storage_key()),
             )
             .await
             .map_err(turso_error)?;
@@ -392,7 +393,7 @@ impl CatalogStore for TursoCatalogStore {
                      on p.warehouse = n.warehouse
                     and p.namespace_path = n.namespace_path
                   where n.warehouse = ?1 and n.namespace_path = ?2",
-                (warehouse.as_str(), namespace.path()),
+                (warehouse.as_str(), namespace.storage_key()),
             )
             .await
             .map_err(turso_error)?;
@@ -412,7 +413,7 @@ impl CatalogStore for TursoCatalogStore {
             return Ok(NamespaceProperties::default());
         };
         if row_optional_string(&row, 4)?.as_deref() != Some(warehouse.as_str())
-            || row_optional_string(&row, 5)?.as_deref() != Some(namespace.path().as_str())
+            || row_optional_string(&row, 5)?.as_deref() != Some(namespace.storage_key().as_str())
         {
             return Err(LakeCatError::Internal(
                 "namespace properties row scope does not match namespace identity".to_string(),
@@ -434,7 +435,7 @@ impl CatalogStore for TursoCatalogStore {
             let namespace = namespace.clone();
             let update = update.clone();
             Box::pin(async move {
-                let namespace_path = namespace.path();
+                let namespace_path = namespace.storage_key();
                 let mut namespace_rows = conn
                     .query(
                         "select namespace_json, warehouse, namespace_path from namespaces
@@ -513,7 +514,7 @@ impl CatalogStore for TursoCatalogStore {
             let warehouse = warehouse.clone();
             let namespace = namespace.clone();
             Box::pin(async move {
-                let namespace_path = namespace.path();
+                let namespace_path = namespace.storage_key();
                 let mut child_rows = conn
                     .query(
                         "select namespace_json, warehouse, namespace_path from namespaces
@@ -623,11 +624,7 @@ impl CatalogStore for TursoCatalogStore {
         let mut tables = Vec::new();
         while let Some(row) = rows.next().await.map_err(turso_error)? {
             let table: TableRecord = decode_json(row_string(&row, 0)?)?;
-            let ident = TableIdent::new(
-                WarehouseName::new(row_string(&row, 2)?)?,
-                row_string(&row, 3)?.parse()?,
-                TableName::new(row_string(&row, 4)?)?,
-            );
+            let ident = table.ident.clone();
             crate::validate_table_record_scope(
                 &table,
                 &ident,
@@ -649,7 +646,10 @@ impl CatalogStore for TursoCatalogStore {
                 let mut namespace_rows = conn
                     .query(
                         "select 1 from namespaces where warehouse = ?1 and namespace_path = ?2",
-                        (table.ident.warehouse.as_str(), table.ident.namespace.path()),
+                        (
+                            table.ident.warehouse.as_str(),
+                            table.ident.namespace.storage_key(),
+                        ),
                     )
                     .await
                     .map_err(turso_error)?;
@@ -667,7 +667,7 @@ impl CatalogStore for TursoCatalogStore {
                         (
                             table_key(&table.ident),
                             table.ident.warehouse.as_str(),
-                            table.ident.namespace.path(),
+                            table.ident.namespace.storage_key(),
                             table.ident.name.as_str(),
                             table.metadata_location.as_deref(),
                             checked_i64(table.version, "table version")?,
@@ -760,7 +760,10 @@ impl CatalogStore for TursoCatalogStore {
                 let mut namespace_rows = conn
                     .query(
                         "select 1 from namespaces where warehouse = ?1 and namespace_path = ?2",
-                        (destination.warehouse.as_str(), destination.namespace.path()),
+                        (
+                            destination.warehouse.as_str(),
+                            destination.namespace.storage_key(),
+                        ),
                     )
                     .await
                     .map_err(turso_error)?;
@@ -932,7 +935,7 @@ impl CatalogStore for TursoCatalogStore {
                            and table_name = ?3",
                         (
                             source.warehouse.as_str(),
-                            source.namespace.path(),
+                            source.namespace.storage_key(),
                             source.name.as_str(),
                         ),
                     )
@@ -986,7 +989,7 @@ impl CatalogStore for TursoCatalogStore {
                             source_key.as_str(),
                             destination_key.as_str(),
                             destination.warehouse.as_str(),
-                            destination.namespace.path(),
+                            destination.namespace.storage_key(),
                             destination.name.as_str(),
                             encode_json(&table)?,
                             renamed_at.to_rfc3339(),
@@ -1063,7 +1066,7 @@ impl CatalogStore for TursoCatalogStore {
                              where policy_key = ?1",
                             (
                                 policy_key.as_str(),
-                                destination.namespace.path(),
+                                destination.namespace.storage_key(),
                                 destination.name.as_str(),
                                 encode_json(binding)?,
                                 renamed_at.to_rfc3339(),
@@ -1415,7 +1418,7 @@ impl CatalogStore for TursoCatalogStore {
                 let mut namespace_rows = conn
                     .query(
                         "select 1 from namespaces where warehouse = ?1 and namespace_path = ?2",
-                        (ident.warehouse.as_str(), ident.namespace.path()),
+                        (ident.warehouse.as_str(), ident.namespace.storage_key()),
                     )
                     .await
                     .map_err(turso_error)?;
@@ -1470,7 +1473,7 @@ impl CatalogStore for TursoCatalogStore {
                     (
                         table_key(ident),
                         ident.warehouse.as_str(),
-                        ident.namespace.path(),
+                        ident.namespace.storage_key(),
                         ident.name.as_str(),
                         table.metadata_location.as_deref(),
                         checked_i64(table.version, "table version")?,
@@ -1556,7 +1559,7 @@ impl CatalogStore for TursoCatalogStore {
                 let mut namespace_rows = conn
                     .query(
                         "select 1 from namespaces where warehouse = ?1 and namespace_path = ?2",
-                        (ident.warehouse.as_str(), ident.namespace.path()),
+                        (ident.warehouse.as_str(), ident.namespace.storage_key()),
                     )
                     .await
                     .map_err(turso_error)?;
@@ -2038,14 +2041,11 @@ impl CatalogStore for TursoCatalogStore {
                     .map_err(turso_error)?
                     .map(|row| {
                         let view = decode_json::<ViewRecord>(row_string(&row, 0)?)?;
-                        let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
-                        let row_namespace = row_string(&row, 2)?.parse::<Namespace>()?;
-                        let row_view = TableName::new(row_string(&row, 3)?)?;
-                        crate::validate_view_record_scope(
+                        crate::validate_view_record_row_scope(
                             &view,
-                            &row_warehouse,
-                            &row_namespace,
-                            &row_view,
+                            &row_string(&row, 1)?,
+                            &row_string(&row, 2)?,
+                            &row_string(&row, 3)?,
                         )?;
                         Ok(view)
                     })
@@ -2083,7 +2083,7 @@ impl CatalogStore for TursoCatalogStore {
                     (
                         view_key.as_str(),
                         view.warehouse.as_str(),
-                        view.namespace.path().as_str(),
+                        view.namespace.storage_key().as_str(),
                         view.name.as_str(),
                         view.dialect.as_str(),
                         encode_json(&view)?,
@@ -2114,7 +2114,7 @@ impl CatalogStore for TursoCatalogStore {
                         receipt_id.as_str(),
                         view_key.as_str(),
                         receipt.warehouse.as_str(),
-                        receipt.namespace.path().as_str(),
+                        receipt.namespace.storage_key().as_str(),
                         receipt.name.as_str(),
                         checked_i64(receipt.view_version, "view version")?,
                         previous_view_version,
@@ -2153,14 +2153,11 @@ impl CatalogStore for TursoCatalogStore {
         let mut receipts = Vec::new();
         while let Some(row) = rows.next().await.map_err(turso_error)? {
             let receipt: ViewVersionReceipt = decode_json(row_string(&row, 0)?)?;
-            let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
-            let row_namespace = row_string(&row, 2)?.parse::<Namespace>()?;
-            let row_view = TableName::new(row_string(&row, 3)?)?;
-            crate::validate_view_receipt_scope(
+            crate::validate_view_receipt_row_scope(
                 &receipt,
-                &row_warehouse,
-                &row_namespace,
-                Some(&row_view),
+                &row_string(&row, 1)?,
+                &row_string(&row, 2)?,
+                &row_string(&row, 3)?,
             )?;
             crate::validate_view_receipt_scope(&receipt, warehouse, namespace, Some(view))?;
             receipts.push(receipt);
@@ -2180,7 +2177,7 @@ impl CatalogStore for TursoCatalogStore {
                 "select receipt_json, view_name from view_version_receipts
                      where warehouse = ?1 and namespace_path = ?2
                      order by view_name, view_version, recorded_at, receipt_id",
-                (warehouse.as_str(), namespace.path().as_str()),
+                (warehouse.as_str(), namespace.storage_key().as_str()),
             )
             .await
             .map_err(turso_error)?;
@@ -2216,10 +2213,12 @@ impl CatalogStore for TursoCatalogStore {
         .map_err(turso_error)?
         .map(|row| {
             let view = decode_json::<ViewRecord>(row_string(&row, 0)?)?;
-            let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
-            let row_namespace = row_string(&row, 2)?.parse::<Namespace>()?;
-            let row_view = TableName::new(row_string(&row, 3)?)?;
-            crate::validate_view_record_scope(&view, &row_warehouse, &row_namespace, &row_view)?;
+            crate::validate_view_record_row_scope(
+                &view,
+                &row_string(&row, 1)?,
+                &row_string(&row, 2)?,
+                &row_string(&row, 3)?,
+            )?;
             Ok(view)
         })
         .transpose()?
@@ -2278,14 +2277,11 @@ impl CatalogStore for TursoCatalogStore {
                     .map_err(turso_error)?
                     .map(|row| {
                         let view = decode_json::<ViewRecord>(row_string(&row, 0)?)?;
-                        let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
-                        let row_namespace = row_string(&row, 2)?.parse::<Namespace>()?;
-                        let row_view = TableName::new(row_string(&row, 3)?)?;
-                        crate::validate_view_record_scope(
+                        crate::validate_view_record_row_scope(
                             &view,
-                            &row_warehouse,
-                            &row_namespace,
-                            &row_view,
+                            &row_string(&row, 1)?,
+                            &row_string(&row, 2)?,
+                            &row_string(&row, 3)?,
                         )?;
                         Ok(view)
                     })
@@ -2328,7 +2324,7 @@ impl CatalogStore for TursoCatalogStore {
                         receipt_id.as_str(),
                         view_key.as_str(),
                         receipt.warehouse.as_str(),
-                        receipt.namespace.path().as_str(),
+                        receipt.namespace.storage_key().as_str(),
                         receipt.name.as_str(),
                         checked_i64(receipt.view_version, "view version")?,
                         previous_view_version,
@@ -2358,17 +2354,19 @@ impl CatalogStore for TursoCatalogStore {
                 "select record_json, warehouse, namespace_path, view_name from views
                      where warehouse = ?1 and namespace_path = ?2
                      order by view_name",
-                (warehouse.as_str(), namespace.path().as_str()),
+                (warehouse.as_str(), namespace.storage_key().as_str()),
             )
             .await
             .map_err(turso_error)?;
         let mut views = Vec::new();
         while let Some(row) = rows.next().await.map_err(turso_error)? {
             let view: ViewRecord = decode_json(row_string(&row, 0)?)?;
-            let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
-            let row_namespace = row_string(&row, 2)?.parse::<Namespace>()?;
-            let row_view = TableName::new(row_string(&row, 3)?)?;
-            crate::validate_view_record_scope(&view, &row_warehouse, &row_namespace, &row_view)?;
+            crate::validate_view_record_row_scope(
+                &view,
+                &row_string(&row, 1)?,
+                &row_string(&row, 2)?,
+                &row_string(&row, 3)?,
+            )?;
             views.push(view);
         }
         Ok(views)
@@ -2646,7 +2644,7 @@ impl CatalogStore for TursoCatalogStore {
                         policy_key.as_str(),
                         binding.policy_id.as_str(),
                         binding.warehouse.as_str(),
-                        binding.namespace.as_ref().map(Namespace::path),
+                        binding.namespace.as_ref().map(Namespace::storage_key),
                         binding.table.as_ref().map(TableName::as_str),
                         if binding.enforced { 1_i64 } else { 0_i64 },
                         encode_json(&binding)?,
@@ -2708,6 +2706,10 @@ impl CatalogStore for TursoCatalogStore {
 }
 
 const TURSO_MIGRATION: &[&str] = &[
+    "create table if not exists lakecat_schema (
+            migration text primary key,
+            applied_at text not null
+        )",
     "create table if not exists servers (
             server_id text primary key,
             display_name text,
@@ -2854,6 +2856,293 @@ const TURSO_MIGRATION: &[&str] = &[
             on soft_deletes (warehouse, namespace_path, table_name)",
 ];
 
+async fn migrate_component_safe_keys(conn: &Connection) -> LakeCatResult<()> {
+    let mut version_rows = conn
+        .query(
+            "select 1 from lakecat_schema where migration = ?1",
+            ("component-safe-namespace-keys-v1",),
+        )
+        .await
+        .map_err(turso_error)?;
+    if version_rows.next().await.map_err(turso_error)?.is_some() {
+        return Ok(());
+    }
+
+    conn.execute_batch("BEGIN IMMEDIATE")
+        .await
+        .map_err(turso_error)?;
+    let result = migrate_component_safe_keys_transaction(conn).await;
+    match result {
+        Ok(()) => conn.execute_batch("COMMIT").await.map_err(turso_error),
+        Err(error) => {
+            let _ = conn.execute_batch("ROLLBACK").await;
+            Err(error)
+        }
+    }
+}
+
+async fn migrate_component_safe_keys_transaction(conn: &Connection) -> LakeCatResult<()> {
+    let mut namespace_rows = conn
+        .query(
+            "select warehouse, namespace_path, namespace_json from namespaces",
+            (),
+        )
+        .await
+        .map_err(turso_error)?;
+    let mut namespaces = Vec::new();
+    while let Some(row) = namespace_rows.next().await.map_err(turso_error)? {
+        let warehouse = row_string(&row, 0)?;
+        let old_path = row_string(&row, 1)?;
+        let namespace = decode_namespace(row_string(&row, 2)?)?;
+        namespaces.push((warehouse, old_path, namespace.storage_key()));
+    }
+    for (warehouse, old_path, new_path) in &namespaces {
+        conn.execute(
+            "update namespace_properties set namespace_path = ?3
+             where warehouse = ?1 and namespace_path = ?2",
+            (warehouse.as_str(), old_path.as_str(), new_path.as_str()),
+        )
+        .await
+        .map_err(turso_error)?;
+        conn.execute(
+            "update namespaces set namespace_path = ?3
+             where warehouse = ?1 and namespace_path = ?2",
+            (warehouse.as_str(), old_path.as_str(), new_path.as_str()),
+        )
+        .await
+        .map_err(turso_error)?;
+    }
+
+    let mut table_rows = conn
+        .query(
+            "select table_key, record_json, warehouse, namespace_path, table_name from tables",
+            (),
+        )
+        .await
+        .map_err(turso_error)?;
+    let mut tables = Vec::new();
+    while let Some(row) = table_rows.next().await.map_err(turso_error)? {
+        let old_key = row_string(&row, 0)?;
+        let record: TableRecord = decode_json(row_string(&row, 1)?)?;
+        record.validate()?;
+        let legacy_key = format!(
+            "{}\u{1f}{}\u{1f}{}",
+            record.ident.warehouse,
+            record.ident.namespace.path(),
+            record.ident.name
+        );
+        if !migration_value_matches(&old_key, &legacy_key, &table_key(&record.ident))
+            || row_string(&row, 2)? != record.ident.warehouse.as_str()
+            || !migration_value_matches(
+                &row_string(&row, 3)?,
+                &record.ident.namespace.path(),
+                &record.ident.namespace.storage_key(),
+            )
+            || row_string(&row, 4)? != record.ident.name.as_str()
+        {
+            return Err(LakeCatError::Internal(
+                "table row scope is inconsistent during component-safe key migration".to_string(),
+            ));
+        }
+        tables.push((
+            old_key,
+            table_key(&record.ident),
+            record.ident.namespace.storage_key(),
+        ));
+    }
+    for (old_key, new_key, namespace_key) in &tables {
+        conn.execute(
+            "update metadata_pointer_log set table_key = ?2 where table_key = ?1",
+            (old_key.as_str(), new_key.as_str()),
+        )
+        .await
+        .map_err(turso_error)?;
+        conn.execute(
+            "update idempotency_records set table_key = ?2 where table_key = ?1",
+            (old_key.as_str(), new_key.as_str()),
+        )
+        .await
+        .map_err(turso_error)?;
+        conn.execute(
+            "update audit_events set table_key = ?2 where table_key = ?1",
+            (old_key.as_str(), new_key.as_str()),
+        )
+        .await
+        .map_err(turso_error)?;
+        conn.execute(
+            "update soft_deletes set table_key = ?2, namespace_path = ?3 where table_key = ?1",
+            (old_key.as_str(), new_key.as_str(), namespace_key.as_str()),
+        )
+        .await
+        .map_err(turso_error)?;
+        conn.execute(
+            "update tables set table_key = ?2, namespace_path = ?3 where table_key = ?1",
+            (old_key.as_str(), new_key.as_str(), namespace_key.as_str()),
+        )
+        .await
+        .map_err(turso_error)?;
+    }
+
+    let mut view_rows = conn
+        .query(
+            "select view_key, record_json, warehouse, namespace_path, view_name from views",
+            (),
+        )
+        .await
+        .map_err(turso_error)?;
+    let mut views = Vec::new();
+    while let Some(row) = view_rows.next().await.map_err(turso_error)? {
+        let old_key = row_string(&row, 0)?;
+        let record: ViewRecord = decode_json(row_string(&row, 1)?)?;
+        record.validate()?;
+        let legacy_key = format!(
+            "{}\u{1f}{}\u{1f}{}",
+            record.warehouse,
+            record.namespace.path(),
+            record.name
+        );
+        if !migration_value_matches(&old_key, &legacy_key, &view_key(&record))
+            || row_string(&row, 2)? != record.warehouse.as_str()
+            || !migration_value_matches(
+                &row_string(&row, 3)?,
+                &record.namespace.path(),
+                &record.namespace.storage_key(),
+            )
+            || row_string(&row, 4)? != record.name.as_str()
+        {
+            return Err(LakeCatError::Internal(
+                "view row scope is inconsistent during component-safe key migration".to_string(),
+            ));
+        }
+        views.push((old_key, view_key(&record), record.namespace.storage_key()));
+    }
+    for (old_key, new_key, namespace_key) in &views {
+        conn.execute(
+            "update views set view_key = ?2, namespace_path = ?3 where view_key = ?1",
+            (old_key.as_str(), new_key.as_str(), namespace_key.as_str()),
+        )
+        .await
+        .map_err(turso_error)?;
+    }
+
+    let mut receipt_rows = conn
+        .query(
+            "select receipt_id, view_key, warehouse, namespace_path, view_name, receipt_json
+             from view_version_receipts",
+            (),
+        )
+        .await
+        .map_err(turso_error)?;
+    let mut receipts = Vec::new();
+    while let Some(row) = receipt_rows.next().await.map_err(turso_error)? {
+        let receipt_id = row_string(&row, 0)?;
+        let old_key = row_string(&row, 1)?;
+        let receipt: ViewVersionReceipt = decode_json(row_string(&row, 5)?)?;
+        receipt.validate()?;
+        let new_key = view_key_parts(&receipt.warehouse, &receipt.namespace, &receipt.name);
+        let legacy_key = format!(
+            "{}\u{1f}{}\u{1f}{}",
+            receipt.warehouse,
+            receipt.namespace.path(),
+            receipt.name
+        );
+        if !migration_value_matches(&old_key, &legacy_key, &new_key)
+            || row_string(&row, 2)? != receipt.warehouse.as_str()
+            || !migration_value_matches(
+                &row_string(&row, 3)?,
+                &receipt.namespace.path(),
+                &receipt.namespace.storage_key(),
+            )
+            || row_string(&row, 4)? != receipt.name.as_str()
+        {
+            return Err(LakeCatError::Internal(
+                "view receipt row scope is inconsistent during component-safe key migration"
+                    .to_string(),
+            ));
+        }
+        receipts.push((receipt_id, new_key, receipt.namespace.storage_key()));
+    }
+    for (receipt_id, new_key, namespace_key) in &receipts {
+        conn.execute(
+            "update view_version_receipts set view_key = ?2, namespace_path = ?3
+             where receipt_id = ?1",
+            (
+                receipt_id.as_str(),
+                new_key.as_str(),
+                namespace_key.as_str(),
+            ),
+        )
+        .await
+        .map_err(turso_error)?;
+    }
+
+    let mut policy_rows = conn
+        .query(
+            "select policy_key, binding_json, warehouse, namespace_path, table_name
+             from policy_bindings",
+            (),
+        )
+        .await
+        .map_err(turso_error)?;
+    let mut policies = Vec::new();
+    while let Some(row) = policy_rows.next().await.map_err(turso_error)? {
+        let key = row_string(&row, 0)?;
+        let binding: PolicyBinding = decode_json(row_string(&row, 1)?)?;
+        binding.validate()?;
+        if row_string(&row, 2)? != binding.warehouse.as_str()
+            || !migration_optional_namespace_matches(
+                row.get_value(3).map_err(turso_error)?,
+                binding.namespace.as_ref(),
+            )?
+            || row_optional_string(&row, 4)? != binding.table.as_ref().map(ToString::to_string)
+        {
+            return Err(LakeCatError::Internal(
+                "policy binding row scope is inconsistent during component-safe key migration"
+                    .to_string(),
+            ));
+        }
+        policies.push((
+            key,
+            binding.namespace.map(|namespace| namespace.storage_key()),
+        ));
+    }
+    for (key, namespace_key) in &policies {
+        conn.execute(
+            "update policy_bindings set namespace_path = ?2 where policy_key = ?1",
+            (key.as_str(), namespace_key.as_deref()),
+        )
+        .await
+        .map_err(turso_error)?;
+    }
+
+    conn.execute(
+        "insert into lakecat_schema (migration, applied_at) values (?1, ?2)",
+        ("component-safe-namespace-keys-v1", Utc::now().to_rfc3339()),
+    )
+    .await
+    .map_err(turso_error)?;
+    Ok(())
+}
+
+fn migration_value_matches(actual: &str, legacy: &str, current: &str) -> bool {
+    actual == legacy || actual == current
+}
+
+fn migration_optional_namespace_matches(
+    value: TursoValue,
+    namespace: Option<&Namespace>,
+) -> LakeCatResult<bool> {
+    match (value, namespace) {
+        (TursoValue::Null, None) => Ok(true),
+        (TursoValue::Text(actual), Some(namespace)) => Ok(migration_value_matches(
+            &actual,
+            &namespace.path(),
+            &namespace.storage_key(),
+        )),
+        _ => Ok(false),
+    }
+}
+
 fn encode_json(value: impl serde::Serialize) -> LakeCatResult<String> {
     serde_json::to_string(&value)
         .map_err(|err| LakeCatError::Internal(format!("failed to encode store JSON: {err}")))
@@ -2924,14 +3213,11 @@ async fn latest_turso_view_receipt_evidence(
     let mut receipts = Vec::new();
     while let Some(row) = rows.next().await.map_err(turso_error)? {
         let receipt = decode_json::<ViewVersionReceipt>(row_string(&row, 0)?)?;
-        let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
-        let row_namespace = row_string(&row, 2)?.parse::<Namespace>()?;
-        let row_view = TableName::new(row_string(&row, 3)?)?;
-        crate::validate_view_receipt_scope(
+        crate::validate_view_receipt_row_scope(
             &receipt,
-            &row_warehouse,
-            &row_namespace,
-            Some(&row_view),
+            &row_string(&row, 1)?,
+            &row_string(&row, 2)?,
+            &row_string(&row, 3)?,
         )?;
         crate::validate_view_receipt_scope(&receipt, warehouse, namespace, Some(view))?;
         receipts.push(receipt);
@@ -3000,11 +3286,7 @@ async fn ensure_namespace_has_no_active_tables(
     let mut has_active_table = false;
     while let Some(row) = rows.next().await.map_err(turso_error)? {
         let table: TableRecord = decode_json(row_string(&row, 0)?)?;
-        let ident = TableIdent::new(
-            WarehouseName::new(row_string(&row, 2)?)?,
-            row_string(&row, 3)?.parse()?,
-            TableName::new(row_string(&row, 4)?)?,
-        );
+        let ident = table.ident.clone();
         crate::validate_table_record_scope(
             &table,
             &ident,
@@ -3058,11 +3340,7 @@ async fn soft_deleted_table_keys_in_namespace(
     let mut keys = Vec::new();
     while let Some(row) = rows.next().await.map_err(turso_error)? {
         let table: TableRecord = decode_json(row_string(&row, 0)?)?;
-        let ident = TableIdent::new(
-            WarehouseName::new(row_string(&row, 2)?)?,
-            row_string(&row, 3)?.parse()?,
-            TableName::new(row_string(&row, 4)?)?,
-        );
+        let ident = table.ident.clone();
         crate::validate_table_record_scope(
             &table,
             &ident,
@@ -3149,7 +3427,7 @@ fn validate_turso_soft_delete_row(
 ) -> LakeCatResult<()> {
     if row_string(row, offset)? != table_key(ident)
         || row_string(row, offset + 1)? != record.table.warehouse.as_str()
-        || row_string(row, offset + 2)? != record.table.namespace.path()
+        || row_string(row, offset + 2)? != record.table.namespace.storage_key()
         || row_string(row, offset + 3)? != record.table.name.as_str()
     {
         return Err(LakeCatError::Internal(

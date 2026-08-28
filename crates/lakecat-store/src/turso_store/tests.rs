@@ -10,6 +10,351 @@ use crate::{
 use super::*;
 
 #[tokio::test]
+async fn turso_component_safe_keys_isolate_ambiguous_namespace_paths() {
+    let store = TursoCatalogStore::in_memory().await.unwrap();
+    let warehouse = WarehouseName::new("local").unwrap();
+    let dotted = Namespace::new(vec!["a.b".to_string()]).unwrap();
+    let multipart = Namespace::new(vec!["a".to_string(), "b".to_string()]).unwrap();
+    assert_eq!(dotted.path(), multipart.path());
+    assert_ne!(dotted.storage_key(), multipart.storage_key());
+
+    for namespace in [&dotted, &multipart] {
+        store
+            .create_namespace(&warehouse, namespace.clone())
+            .await
+            .unwrap();
+        store
+            .update_namespace_properties(
+                &warehouse,
+                namespace,
+                NamespacePropertyUpdate::new(
+                    Vec::new(),
+                    BTreeMap::from([("identity".to_string(), namespace.storage_key())]),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+        let ident = TableIdent::new(
+            warehouse.clone(),
+            namespace.clone(),
+            TableName::new("events").unwrap(),
+        );
+        store
+            .create_table(TableRecord::new(
+                ident,
+                format!("file:///tmp/{}", namespace.storage_key()),
+                None,
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            ))
+            .await
+            .unwrap();
+        store
+            .upsert_view(
+                ViewRecord::new(
+                    warehouse.clone(),
+                    namespace.clone(),
+                    TableName::new("summary").unwrap(),
+                    "select 1",
+                    "sql",
+                    Some(1),
+                    BTreeMap::new(),
+                    Principal::anonymous(),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+        store
+            .upsert_policy_binding(
+                PolicyBinding::new(
+                    format!("policy-{}", namespace.storage_key().replace(':', "-")),
+                    warehouse.clone(),
+                    Some(namespace.clone()),
+                    Some(TableName::new("events").unwrap()),
+                    true,
+                    serde_json::json!({}),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+    }
+
+    for namespace in [&dotted, &multipart] {
+        assert_eq!(
+            store
+                .load_namespace_properties(&warehouse, namespace)
+                .await
+                .unwrap()
+                .as_map()
+                .get("identity"),
+            Some(&namespace.storage_key())
+        );
+        assert_eq!(
+            store
+                .list_tables(&warehouse)
+                .await
+                .unwrap()
+                .iter()
+                .filter(|table| table.ident.namespace == *namespace)
+                .count(),
+            1
+        );
+        assert_eq!(
+            store.list_views(&warehouse, namespace).await.unwrap().len(),
+            1
+        );
+    }
+    assert_eq!(
+        store.list_policy_bindings(&warehouse).await.unwrap().len(),
+        2
+    );
+}
+
+#[tokio::test]
+async fn turso_component_safe_key_migration_rewrites_legacy_rows_idempotently() {
+    let path = fw16_db_path("component-safe-migration");
+    let warehouse = WarehouseName::new("local").unwrap();
+    let namespace = Namespace::new(vec!["legacy".to_string(), "nested".to_string()]).unwrap();
+    let table_name = TableName::new("events").unwrap();
+    let ident = TableIdent::new(warehouse.clone(), namespace.clone(), table_name.clone());
+    let view_name = TableName::new("summary").unwrap();
+
+    let store = TursoCatalogStore::connect_local(&path).await.unwrap();
+    store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
+    store
+        .update_namespace_properties(
+            &warehouse,
+            &namespace,
+            NamespacePropertyUpdate::new(
+                Vec::new(),
+                BTreeMap::from([("owner".to_string(), "platform".to_string())]),
+            )
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    store
+        .create_table(TableRecord::new(
+            ident.clone(),
+            "file:///tmp/legacy/events".to_string(),
+            None,
+            serde_json::json!({"format-version": 3}),
+            Principal::anonymous(),
+        ))
+        .await
+        .unwrap();
+    store
+        .upsert_view(
+            ViewRecord::new(
+                warehouse.clone(),
+                namespace.clone(),
+                view_name.clone(),
+                "select 1",
+                "sql",
+                Some(1),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    store
+        .drop_view(&warehouse, &namespace, &view_name, Principal::anonymous())
+        .await
+        .unwrap();
+    let policy = PolicyBinding::new(
+        "legacy-policy",
+        warehouse.clone(),
+        Some(namespace.clone()),
+        Some(table_name),
+        true,
+        serde_json::json!({}),
+    )
+    .unwrap();
+    store.upsert_policy_binding(policy).await.unwrap();
+
+    let current_table_key = table_key(&ident);
+    let legacy_table_key = format!(
+        "{}\u{1f}{}\u{1f}{}",
+        warehouse,
+        namespace.path(),
+        ident.name
+    );
+    let current_view_key = view_key_parts(&warehouse, &namespace, &view_name);
+    let legacy_view_key = format!("{}\u{1f}{}\u{1f}{}", warehouse, namespace.path(), view_name);
+    let conn = store.connect().unwrap();
+    conn.execute_batch("BEGIN IMMEDIATE").await.unwrap();
+    conn.execute(
+        "update namespace_properties set namespace_path = ?2 where warehouse = ?1 and namespace_path = ?3",
+        (warehouse.as_str(), namespace.path().as_str(), namespace.storage_key().as_str()),
+    ).await.unwrap();
+    conn.execute(
+        "update namespaces set namespace_path = ?2 where warehouse = ?1 and namespace_path = ?3",
+        (
+            warehouse.as_str(),
+            namespace.path().as_str(),
+            namespace.storage_key().as_str(),
+        ),
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        "update tables set table_key = ?2, namespace_path = ?3 where table_key = ?1",
+        (
+            current_table_key.as_str(),
+            legacy_table_key.as_str(),
+            namespace.path().as_str(),
+        ),
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        "update view_version_receipts set view_key = ?2, namespace_path = ?3 where view_key = ?1",
+        (
+            current_view_key.as_str(),
+            legacy_view_key.as_str(),
+            namespace.path().as_str(),
+        ),
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        "update policy_bindings set namespace_path = ?2 where policy_id = ?1",
+        ("legacy-policy", namespace.path().as_str()),
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        "delete from lakecat_schema where migration = ?1",
+        ("component-safe-namespace-keys-v1",),
+    )
+    .await
+    .unwrap();
+    conn.execute_batch("COMMIT").await.unwrap();
+    drop(conn);
+    drop(store);
+
+    for _ in 0..2 {
+        let migrated = TursoCatalogStore::connect_local(&path).await.unwrap();
+        assert_eq!(migrated.load_table(&ident).await.unwrap().ident, ident);
+        assert_eq!(
+            migrated
+                .load_namespace_properties(&warehouse, &namespace)
+                .await
+                .unwrap()
+                .as_map()
+                .get("owner")
+                .map(String::as_str),
+            Some("platform")
+        );
+        assert_eq!(
+            migrated
+                .list_view_version_receipts(&warehouse, &namespace, &view_name)
+                .await
+                .unwrap()
+                .len(),
+            2
+        );
+        assert_eq!(
+            migrated
+                .list_policy_bindings(&warehouse)
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+        drop(migrated);
+    }
+    let _ = std::fs::remove_file(&path);
+}
+
+#[tokio::test]
+async fn turso_component_safe_key_migration_rolls_back_corrupt_scope() {
+    let path = fw16_db_path("component-safe-rollback");
+    let warehouse = WarehouseName::new("local").unwrap();
+    let namespace = Namespace::new(vec!["legacy".to_string(), "nested".to_string()]).unwrap();
+    let ident = TableIdent::new(
+        warehouse.clone(),
+        namespace.clone(),
+        TableName::new("events").unwrap(),
+    );
+    let store = TursoCatalogStore::connect_local(&path).await.unwrap();
+    store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
+    store
+        .create_table(TableRecord::new(
+            ident.clone(),
+            "file:///tmp/legacy/events".to_string(),
+            None,
+            serde_json::json!({"format-version": 3}),
+            Principal::anonymous(),
+        ))
+        .await
+        .unwrap();
+    let conn = store.connect().unwrap();
+    conn.execute(
+        "update tables set namespace_path = 'corrupt' where table_key = ?1",
+        (table_key(&ident),),
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        "delete from lakecat_schema where migration = ?1",
+        ("component-safe-namespace-keys-v1",),
+    )
+    .await
+    .unwrap();
+    drop(conn);
+    drop(store);
+
+    let error = TursoCatalogStore::connect_local(&path).await.unwrap_err();
+    assert!(matches!(
+        error,
+        LakeCatError::Internal(message)
+            if message.contains("table row scope is inconsistent")
+    ));
+
+    let db = turso::Builder::new_local(&path).build().await.unwrap();
+    let conn = db.connect().unwrap();
+    let mut rows = conn
+        .query(
+            "select namespace_path from tables where table_key = ?1",
+            (table_key(&ident),),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        row_string(&rows.next().await.unwrap().unwrap(), 0).unwrap(),
+        "corrupt"
+    );
+    let mut marker = conn
+        .query(
+            "select count(*) from lakecat_schema where migration = ?1",
+            ("component-safe-namespace-keys-v1",),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        row_i64(&marker.next().await.unwrap().unwrap(), 0).unwrap(),
+        0
+    );
+    drop(marker);
+    drop(rows);
+    drop(conn);
+    drop(db);
+    let _ = std::fs::remove_file(&path);
+}
+
+#[tokio::test]
 async fn turso_read_pool_reuses_connections_and_caps_idle_capacity() {
     let store = TursoCatalogStore::in_memory().await.unwrap();
     let ident = TableIdent::new(
@@ -1219,7 +1564,7 @@ async fn turso_store_rejects_view_record_row_column_scope_drift() {
                  where view_key = ?1",
         (
             original_view_key.as_str(),
-            "tenant_shadow",
+            "v1:13:tenant_shadow",
             "shadow_active_customers",
         ),
     )
@@ -1618,7 +1963,7 @@ async fn turso_store_rejects_view_receipt_row_column_scope_drift() {
                  where receipt_id = ?1",
         (
             receipt_id.as_str(),
-            shadow_namespace.path().as_str(),
+            shadow_namespace.storage_key().as_str(),
             shadow_view_name.as_str(),
         ),
     )
@@ -1740,7 +2085,7 @@ async fn turso_store_rejects_namespace_json_scope_drift() {
         "update namespaces set namespace_json = ?3 where warehouse = ?1 and namespace_path = ?2",
         (
             warehouse.as_str(),
-            namespace.path().as_str(),
+            namespace.storage_key().as_str(),
             encode_json(drifted.parts()).unwrap(),
         ),
     )
@@ -1784,8 +2129,8 @@ async fn turso_store_rejects_namespace_row_column_scope_drift() {
                  where warehouse = ?1 and namespace_path = ?2",
         (
             warehouse.as_str(),
-            namespace.path().as_str(),
-            shadow_namespace.path().as_str(),
+            namespace.storage_key().as_str(),
+            shadow_namespace.storage_key().as_str(),
         ),
     )
     .await
