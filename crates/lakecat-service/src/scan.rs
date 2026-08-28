@@ -18,7 +18,7 @@ use lakecat_sail::catalog_provider::{
     LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
 };
 use lakecat_security::TableScanCapability;
-use lakecat_store::{CatalogAuditEvent, TableRecord, ViewRecord, table_ident};
+use lakecat_store::{CatalogAuditEvent, TableRecord, ViewRecord};
 use serde_json::json;
 
 use crate::*;
@@ -59,7 +59,7 @@ pub(crate) async fn plan_table_scan_in_warehouse(
     request: PlanTableScanRequest,
 ) -> Result<Json<PlanTableScanResponse>, LakeCatHttpError> {
     let identity = request_identity(&headers)?;
-    let ident = table_ident(warehouse.as_str(), namespace, table)?;
+    let ident = rest_table_ident(warehouse.as_str(), &namespace, table)?;
     let capability = authorize_table_scan(&state, identity, ident.clone()).await?;
     let table = state.store.load_table(capability.table()).await?;
     let (scan, scan_request_extensions) =
@@ -230,7 +230,7 @@ pub(crate) async fn fetch_scan_tasks_in_warehouse(
     request: ApiFetchScanTasksRequest,
 ) -> Result<Json<FetchScanTasksResponse>, LakeCatHttpError> {
     let identity = request_identity(&headers)?;
-    let ident = table_ident(warehouse.as_str(), namespace, table)?;
+    let ident = rest_table_ident(warehouse.as_str(), &namespace, table)?;
     let capability = authorize_table_scan(&state, identity, ident).await?;
     let table = state.store.load_table(capability.table()).await?;
     let fetched = fetch_scan_tasks_with_capability(&state, &capability, &table, request).await?;

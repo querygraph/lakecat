@@ -1,7 +1,7 @@
 use std::num::NonZeroUsize;
 
 use lakecat_api::ListNamespacesQuery;
-use lakecat_core::{LakeCatError, LakeCatResult, Namespace};
+use lakecat_core::{LakeCatError, LakeCatResult, Namespace, TableIdent, TableName, WarehouseName};
 
 const REST_NAMESPACE_SEPARATOR: char = '\u{001f}';
 const PAGE_TOKEN_PREFIX: &str = "lakecat-v1:";
@@ -15,6 +15,18 @@ pub(crate) fn parse_rest_namespace(value: &str) -> LakeCatResult<Namespace> {
             .map(str::to_string)
             .collect(),
     )
+}
+
+pub(crate) fn rest_table_ident(
+    warehouse: impl Into<String>,
+    namespace: impl AsRef<str>,
+    table: impl Into<String>,
+) -> LakeCatResult<TableIdent> {
+    Ok(TableIdent::new(
+        WarehouseName::new(warehouse.into())?,
+        parse_rest_namespace(namespace.as_ref())?,
+        TableName::new(table.into())?,
+    ))
 }
 
 pub(crate) fn namespace_parent(query: &ListNamespacesQuery) -> LakeCatResult<Option<Namespace>> {

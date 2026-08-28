@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 use tower::ServiceExt;
 
 use super::common::RecordingGovernance;
-use crate::{LakeCatState, app, namespace_page, parse_rest_namespace};
+use crate::{LakeCatState, app, namespace_page, parse_rest_namespace, rest_table_ident};
 
 async fn request_json(
     app: &Router,
@@ -51,6 +51,9 @@ fn rest_namespace_codec_uses_the_iceberg_unit_separator() {
 
     let dotted_component = parse_rest_namespace("accounting.tax").unwrap();
     assert_eq!(dotted_component.parts(), &["accounting.tax"]);
+
+    let table = rest_table_ident("local", "accounting\u{001f}tax", "events").unwrap();
+    assert_eq!(table.namespace.parts(), &["accounting", "tax"]);
 }
 
 #[test]

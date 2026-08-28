@@ -22,7 +22,7 @@ use lakecat_security::{AuthorizationReceipt, ReadRestriction, ViewDropCapability
 use lakecat_store::{
     CatalogAuditEvent, CredentialIssuanceMode, NamespaceProperties, NamespacePropertyUpdate,
     PolicyBinding, ProjectRecord, ServerRecord, StorageProfile, StorageProvider, TableRecord,
-    ViewRecord, WarehouseRecord, table_ident,
+    ViewRecord, WarehouseRecord,
 };
 use serde_json::{Value, json};
 
@@ -417,7 +417,7 @@ pub(crate) async fn create_table_in_warehouse(
     request: CreateTableRequest,
 ) -> Result<Json<LoadTableResponse>, LakeCatHttpError> {
     let identity = request_identity(&headers)?;
-    let ident = table_ident(
+    let ident = rest_table_ident(
         warehouse.as_str(),
         namespace,
         TableName::new(request.name)?.as_str(),
@@ -546,7 +546,7 @@ pub(crate) async fn load_table_in_warehouse(
     table: String,
 ) -> Result<Json<LoadTableResponse>, LakeCatHttpError> {
     let identity = request_identity(&headers)?;
-    let ident = table_ident(warehouse.as_str(), namespace, table)?;
+    let ident = rest_table_ident(warehouse.as_str(), &namespace, table)?;
     let capability = authorize_table_load(&state, identity, ident).await?;
     let table = state.store.load_table(capability.table()).await?;
     let ident = capability.table().clone();
@@ -596,7 +596,7 @@ pub(crate) async fn delete_table_in_warehouse(
     table: String,
 ) -> Result<StatusCode, LakeCatHttpError> {
     let identity = request_identity(&headers)?;
-    let ident = table_ident(warehouse.as_str(), namespace, table)?;
+    let ident = rest_table_ident(warehouse.as_str(), &namespace, table)?;
     let capability = authorize_table_drop(&state, identity, ident).await?;
     let ident = capability.table().clone();
     state
@@ -619,7 +619,7 @@ pub(crate) async fn restore_table(
 ) -> Result<Json<LoadTableResponse>, LakeCatHttpError> {
     let warehouse = management_warehouse(&state, warehouse)?;
     let identity = request_identity(&headers)?;
-    let ident = table_ident(warehouse.as_str(), namespace, table)?;
+    let ident = rest_table_ident(warehouse.as_str(), &namespace, table)?;
     let capability = authorize_table_restore(&state, identity, ident).await?;
     let restored = state
         .store
@@ -640,7 +640,7 @@ pub(crate) async fn list_table_commits(
     Path((warehouse, namespace, table)): Path<(String, String, String)>,
 ) -> Result<Json<ListTableCommitRecordsResponse>, LakeCatHttpError> {
     let warehouse = management_warehouse(&state, warehouse)?;
-    let ident = table_ident(warehouse.as_str(), namespace, table)?;
+    let ident = rest_table_ident(warehouse.as_str(), &namespace, table)?;
     let capability =
         authorize_table_load(&state, request_identity(&headers)?, ident.clone()).await?;
     state.store.load_table(capability.table()).await?;
@@ -706,7 +706,7 @@ pub(crate) async fn load_credentials_in_warehouse(
     table: String,
 ) -> Result<Json<LoadCredentialsResponse>, LakeCatHttpError> {
     let identity = request_identity(&headers)?;
-    let ident = table_ident(warehouse.as_str(), namespace, table)?;
+    let ident = rest_table_ident(warehouse.as_str(), &namespace, table)?;
     let capability = authorize_credentials_vend(&state, identity, ident).await?;
     let table = state.store.load_table(capability.table()).await?;
     let storage_profile = state.store.storage_profile_for_table(&table).await?;

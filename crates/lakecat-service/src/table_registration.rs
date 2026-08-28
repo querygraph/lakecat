@@ -3,7 +3,7 @@ use axum::extract::{Path, State};
 use axum::http::HeaderMap;
 use lakecat_api::{LoadTableResponse, RegisterTableRequest};
 use lakecat_core::{LakeCatError, TableName, WarehouseName};
-use lakecat_store::{CatalogAuditEvent, TableRecord, table_ident};
+use lakecat_store::{CatalogAuditEvent, TableRecord};
 use serde_json::{Value, json};
 
 use crate::*;
@@ -34,7 +34,7 @@ pub(crate) async fn register_table_in_warehouse(
     namespace: String,
     request: RegisterTableRequest,
 ) -> Result<Json<LoadTableResponse>, LakeCatHttpError> {
-    let ident = table_ident(
+    let ident = rest_table_ident(
         warehouse.as_str(),
         namespace,
         TableName::new(request.name)?.as_str(),

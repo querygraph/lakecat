@@ -161,6 +161,23 @@ async fn create_table_generates_metadata_from_standard_schema() {
 }
 
 #[tokio::test]
+async fn spark_multipart_namespace_probe_returns_not_found_instead_of_bad_request() {
+    let response = test_app()
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri("/catalog/v1/namespaces/default%1Fevents/tables/snapshots")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let (status, body) = collect_json_response(response).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["error"]["type"], "NoSuchTableException");
+}
+
+#[tokio::test]
 async fn standard_create_persists_the_returned_metadata_object() {
     let app = test_app();
     create_namespace_via_route(&app, "/catalog/v1/namespaces", "default").await;

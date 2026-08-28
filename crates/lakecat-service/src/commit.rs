@@ -3,7 +3,7 @@ use axum::http::HeaderMap;
 use lakecat_api::{CommitTableRequest, CommitTableResponse};
 use lakecat_core::sail::CommitPreparationRequest;
 use lakecat_core::{LakeCatError, WarehouseName, content_hash_json};
-use lakecat_store::{TableCommit, table_ident};
+use lakecat_store::TableCommit;
 use serde_json::json;
 
 use crate::*;
@@ -18,7 +18,7 @@ pub(crate) async fn commit_table_in_warehouse(
 ) -> Result<Json<CommitTableResponse>, LakeCatHttpError> {
     let idempotency_key = request_idempotency_key(&headers)?;
     let identity = request_identity(&headers)?;
-    let ident = table_ident(warehouse.as_str(), namespace, table)?;
+    let ident = rest_table_ident(warehouse.as_str(), &namespace, table)?;
     let capability = authorize_table_commit(&state, identity, ident).await?;
     let idempotency_request_hash = idempotency_key
         .as_ref()

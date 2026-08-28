@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Decode Iceberg REST's unit-separated multipart namespace on every table route,
+  not only namespace routes. This makes Spark's standard metadata-table probe
+  return a not-found response for its speculative child namespace instead of a
+  malformed-request error, allowing the connector's metadata-table fallback.
+
 - Assign fresh positive Iceberg field IDs for standard `createTable` requests
   instead of persisting provisional client IDs such as Spark's zero-based
   sequence. Traverse nested struct/list/map IDs deterministically, derive the
