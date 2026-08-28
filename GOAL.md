@@ -24,17 +24,59 @@ graph behavior to Grust, and governance semantics to TypeSec.
   `querygraph/sail#lakecat` (see `LAKECAT-SAIL.md`). QueryGraph's live `qg-rust`
   importer matches LakeCat's receipt-chain contract; refresh its stale
   dependency-guide examples before QueryGraph's next public release.
+- The catalog-community program is active on
+  `codex/catalog-community-phase-1`. Phase 0 is closed. LakeCat's public
+  acceptance ledger is synchronized through C1-06, while the neutral
+  `querygraph/catalog-bench` branch has also implemented and documented C1-07
+  stock PyIceberg interoperability, C1-08 contention execution, and the
+  production-contention publication portion of C1-09. Those later units must be
+  reconciled into LakeCat's backlog and acceptance records before Phase 1 is
+  declared complete.
+- Phase 2 implementation has started in `querygraph/catalog-bench`: the common
+  stock-engine contract, source-bound Spark 4.1.3/Iceberg 1.11.0 runtime, fresh
+  four-catalog Spark workflow, reviewed result materializer, engine-neutral
+  evidence boundary, and source-bound Flink execution path are committed.
+  Trino 483 has a closed policy, renderer, server configuration, state machine,
+  bounded decoders, and process invocation boundary; the next unit must finish
+  private configuration staging and concrete lifecycle supervision, then run
+  the same no-shim workflow. No Flink or Trino production interoperability claim
+  exists until its complete optimized evidence is materialized and validated.
+- Phase 1 remains open. C1-09 still needs its complete one-command smoke/full
+  publication contract, generated known-gaps surface, and bundle-wide secret
+  scan. C1-10 still owns a versioned component-safe migration for LakeCat's
+  legacy dot-joined namespace-derived keys across namespace, table, view, and
+  policy state. Phase 1 exit gates must be rerun after those units.
 
 ## Next Stage
 
-1. Keep release proof fresh after executable changes with the full local gate.
-2. Replace temporary Sail helper bridges only when upstream helpers are
+1. Recover and finish the interrupted `catalog-bench` Trino configuration and
+   lifecycle unit without discarding its existing working-tree changes; update
+   its changelog, pass focused and repository gates, then commit and push it as
+   an independent unit.
+2. Reconcile C1-07, C1-08, and completed C1-09 evidence into LakeCat's public
+   backlog, status, acceptance ledger, and reader documentation without copying
+   neutral raw evidence into LakeCat.
+3. Implement and prove C1-10's component-safe key migration in LakeCat, keeping
+   Iceberg format behavior in Sail and preserving compatibility for existing
+   Turso stores.
+4. Close every Phase 1 exit criterion, including one-command smoke/full
+   profiles, immutable generated reports, known gaps, and secret scanning.
+5. Complete Phase 2 for Spark, Flink, Trino, and the largest honest DuckDB path;
+   publish only independently admitted optimized evidence and correlate
+   OpenLineage only where the pinned engine integration can prove it.
+6. Execute the remaining catalog-community phases in dependency order: failure
+   and recovery plus migration/federation; the Apache Ossie foundation in its
+   owning repositories; the TPC-DS semantic supply chain; and evidence-linked
+   upstream/community release artifacts. Treat every phase's exit criteria and
+   global acceptance gates in `docs/catalog-community/` as mandatory.
+7. Keep release proof fresh after executable changes with the full local gate.
+8. Replace temporary Sail helper bridges only when upstream helpers are
    published and covered by Sail tests.
-3. Keep v4 JSON bridging explicit. Apache Iceberg v4 remains a draft; typed
+9. Keep v4 JSON bridging explicit. Apache Iceberg v4 remains a draft; typed
    metadata, relative-location, manifest, delete, and planning support belongs
    in Sail after formal specification adoption.
-4. Keep QueryGraph QGLake verify/import as the end-to-end acceptance boundary.
-5. Continue to use the repo boundaries and verification discipline in
+10. Keep QueryGraph QGLake verify/import as the end-to-end acceptance boundary.
+11. Continue to use the repo boundaries and verification discipline in
    `AGENTS.md` as binding guidance.
 
 ## Source Of Truth

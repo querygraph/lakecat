@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Catalog-community goal reconciliation: make the live goal reflect the
+  accepted Phase 0/C1-06 LakeCat boundary, the later PyIceberg, contention,
+  Spark, Flink, and in-progress Trino work already committed in the neutral
+  catalog-bench repository, and the exact C1-09/C1-10 and later phase gates that
+  still prevent completion.
+
 - Turso read-path acceleration: reuse a bounded pool of driver-timeout-configured
   connections and apply the same typed, bounded contention retry policy to table
   loads, idempotency replay, storage-profile lookup, and policy-binding lookup.
