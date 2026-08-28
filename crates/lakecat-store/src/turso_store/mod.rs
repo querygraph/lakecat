@@ -17,14 +17,14 @@ use serde_json::Value as JsonValue;
 use turso::{Connection, Database, Row, Value as TursoValue};
 
 use crate::{
-    CatalogAuditEvent, CatalogStore, NamespaceProperties, NamespacePropertyUpdate,
-    NamespacePropertyUpdateResult, OutboxEvent, PolicyBinding, ProjectRecord, ServerRecord,
-    SoftDeleteRecord, StorageProfile, TableCommit, TableCommitRecord, TableRecord, ViewRecord,
-    ViewVersionReceipt, WarehouseRecord, metadata_pointer_conflict, namespace_is_descendant,
-    namespace_not_empty, namespace_not_found, policy_binding_key, policy_bindings_for_table,
-    require_expected_view_version, storage_profile_key, storage_profile_match, table_key,
-    validate_expected_view_version, validate_project_id, validate_view_receipt_chains, view_key,
-    view_key_parts, view_receipt_hash,
+    CatalogAuditEvent, CatalogStore, ModelPublication, NamespaceProperties,
+    NamespacePropertyUpdate, NamespacePropertyUpdateResult, OutboxEvent, PolicyBinding,
+    ProjectRecord, ServerRecord, SoftDeleteRecord, StorageProfile, TableCommit, TableCommitRecord,
+    TableRecord, ViewRecord, ViewVersionReceipt, WarehouseRecord, metadata_pointer_conflict,
+    model_publication_key, namespace_is_descendant, namespace_not_empty, namespace_not_found,
+    policy_binding_key, policy_bindings_for_table, require_expected_view_version,
+    storage_profile_key, storage_profile_match, table_key, validate_expected_view_version,
+    validate_project_id, validate_view_receipt_chains, view_key, view_key_parts, view_receipt_hash,
 };
 
 #[derive(Debug, Clone)]
@@ -2704,6 +2704,81 @@ impl CatalogStore for TursoCatalogStore {
         let bindings = self.list_policy_bindings(&table.warehouse).await?;
         Ok(policy_bindings_for_table(bindings.iter(), table))
     }
+
+    async fn publish_model(
+        &self,
+        publication: ModelPublication,
+        expected_current_version: Option<u64>,
+    ) -> LakeCatResult<ModelPublication> {
+        publication.validate()?;
+        self.write_txn(move |conn| {
+            let publication = publication.clone();
+            Box::pin(async move {
+                let key = model_publication_key(&publication.warehouse, &publication.model_id);
+                let current = conn
+                    .query(
+                        "select max(version) from model_publications where publication_key = ?1",
+                        (key.as_str(),),
+                    )
+                    .await
+                    .map_err(turso_error)?
+                    .next()
+                    .await
+                    .map_err(turso_error)?
+                    .and_then(|row| row_optional_i64(&row, 0).ok().flatten())
+                    .map(|value| u64::try_from(value).map_err(|_| LakeCatError::Internal("model version must be non-negative".to_string())))
+                    .transpose()?;
+                if current != expected_current_version || publication.version != current.unwrap_or(0) + 1 {
+                    return Err(LakeCatError::Conflict("model publication compare-and-swap version mismatch".to_string()));
+                }
+                conn.execute(
+                    "insert into model_publications (publication_key, model_id, warehouse, version, publication_json, published_at) values (?1, ?2, ?3, ?4, ?5, ?6)",
+                    (key.as_str(), publication.model_id.as_str(), publication.warehouse.as_str(), checked_i64(publication.version, "model publication version")?, encode_json(&publication)?, publication.published_at.to_rfc3339()),
+                ).await.map_err(turso_error)?;
+                let payload = serde_json::json!({
+                    "event-type": "model.published", "warehouse": &publication.warehouse,
+                    "model-id": &publication.model_id, "version": publication.version,
+                    "artifact-uri": &publication.artifact_uri, "artifact-hash": &publication.artifact_hash,
+                    "physical-bindings": &publication.physical_bindings,
+                    "policy-binding-ids": &publication.policy_binding_ids, "publisher": &publication.publisher,
+                });
+                let audit = CatalogAuditEvent::new("model.published", None, publication.publisher.clone(), payload)?;
+                let event_id = crate::audit_event_id(&audit)?;
+                conn.execute(
+                    "insert into audit_events (event_id, event_type, table_key, principal_json, request_hash, event_json, created_at) values (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                    (event_id.as_str(), audit.event_type.as_str(), Option::<String>::None, encode_json(&audit.principal)?, audit.request_hash.as_deref(), encode_json(&audit.payload)?, audit.created_at.to_rfc3339()),
+                ).await.map_err(turso_error)?;
+                insert_outbox_event(conn, &crate::audit_outbox_payload(&event_id, &audit), audit.created_at).await?;
+                Ok(publication)
+            })
+        }).await
+    }
+
+    async fn model_publications(
+        &self,
+        warehouse: &WarehouseName,
+        model_id: &str,
+    ) -> LakeCatResult<Vec<ModelPublication>> {
+        let conn = self.connect()?;
+        let key = model_publication_key(warehouse, model_id);
+        let mut rows = conn.query("select publication_json, warehouse, model_id, version from model_publications where publication_key = ?1 order by version", (key.as_str(),)).await.map_err(turso_error)?;
+        let mut publications = Vec::new();
+        while let Some(row) = rows.next().await.map_err(turso_error)? {
+            let publication: ModelPublication = decode_json(row_string(&row, 0)?)?;
+            publication.validate()?;
+            if publication.warehouse.as_str() != row_string(&row, 1)?
+                || publication.model_id != row_string(&row, 2)?
+                || checked_i64(publication.version, "model publication version")?
+                    != row_i64(&row, 3)?
+            {
+                return Err(LakeCatError::Internal(
+                    "model publication row scope does not match record identity".to_string(),
+                ));
+            }
+            publications.push(publication);
+        }
+        Ok(publications)
+    }
 }
 
 const TURSO_MIGRATION: &[&str] = &[
@@ -2841,6 +2916,17 @@ const TURSO_MIGRATION: &[&str] = &[
         )",
     "create index if not exists idx_policy_bindings_warehouse
             on policy_bindings (warehouse, policy_id)",
+    "create table if not exists model_publications (
+            publication_key text not null,
+            model_id text not null,
+            warehouse text not null,
+            version integer not null,
+            publication_json text not null,
+            published_at text not null,
+            primary key (publication_key, version)
+        )",
+    "create index if not exists idx_model_publications_warehouse
+            on model_publications (warehouse, model_id, version)",
     "create table if not exists soft_deletes (
             table_key text primary key,
             warehouse text not null,
@@ -3192,6 +3278,16 @@ fn row_i64(row: &Row, idx: usize) -> LakeCatResult<i64> {
         value => Err(LakeCatError::Internal(format!(
             "Turso catalog store expected integer at column {idx}, got {value:?}"
         ))),
+    }
+}
+
+fn row_optional_i64(row: &Row, idx: usize) -> LakeCatResult<Option<i64>> {
+    match row.get_value(idx).map_err(turso_error)? {
+        TursoValue::Null => Ok(None),
+        TursoValue::Integer(value) => Ok(Some(value)),
+        _ => Err(LakeCatError::Internal(
+            "unexpected Turso value type for optional integer".to_string(),
+        )),
     }
 }
 

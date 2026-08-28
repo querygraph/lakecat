@@ -38,6 +38,7 @@ pub(crate) struct MemoryState {
     pub(crate) views: BTreeMap<String, ViewRecord>,
     pub(crate) view_version_receipts: Vec<MemoryViewVersionReceipt>,
     pub(crate) policy_bindings: BTreeMap<String, PolicyBinding>,
+    pub(crate) model_publications: BTreeMap<String, Vec<ModelPublication>>,
     pub(crate) soft_deletes: BTreeMap<String, SoftDeleteRecord>,
 }
 
@@ -1258,6 +1259,60 @@ impl CatalogStore for MemoryCatalogStore {
             })
             .collect::<LakeCatResult<Vec<_>>>()?;
         Ok(policy_bindings_for_table(bindings, table))
+    }
+
+    async fn publish_model(
+        &self,
+        publication: ModelPublication,
+        expected_current_version: Option<u64>,
+    ) -> LakeCatResult<ModelPublication> {
+        publication.validate()?;
+        let key = model_publication_key(&publication.warehouse, &publication.model_id);
+        let payload = serde_json::json!({
+            "event-type": "model.published",
+            "warehouse": &publication.warehouse,
+            "model-id": &publication.model_id,
+            "version": publication.version,
+            "artifact-uri": &publication.artifact_uri,
+            "artifact-hash": &publication.artifact_hash,
+            "physical-bindings": &publication.physical_bindings,
+            "policy-binding-ids": &publication.policy_binding_ids,
+            "publisher": &publication.publisher,
+        });
+        let audit = CatalogAuditEvent::new(
+            "model.published",
+            None,
+            publication.publisher.clone(),
+            payload,
+        )?;
+        let event_id = audit_event_id(&audit)?;
+        let outbox =
+            outbox_event_from_payload(&audit_outbox_payload(&event_id, &audit), audit.created_at)?;
+        let mut state = self.state.write().await;
+        let publications = state.model_publications.entry(key).or_default();
+        let current = publications.last().map(|item| item.version);
+        if current != expected_current_version || publication.version != current.unwrap_or(0) + 1 {
+            return Err(LakeCatError::Conflict(
+                "model publication compare-and-swap version mismatch".to_string(),
+            ));
+        }
+        publications.push(publication.clone());
+        state.audit_events.push(audit);
+        state.outbox_events.push(outbox);
+        Ok(publication)
+    }
+
+    async fn model_publications(
+        &self,
+        warehouse: &WarehouseName,
+        model_id: &str,
+    ) -> LakeCatResult<Vec<ModelPublication>> {
+        let state = self.state.read().await;
+        Ok(state
+            .model_publications
+            .get(&model_publication_key(warehouse, model_id))
+            .cloned()
+            .unwrap_or_default())
     }
 
     async fn record_audit_event(&self, event: CatalogAuditEvent) -> LakeCatResult<()> {

@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
-use lakecat_core::{AuditStamp, Principal, TableName};
+use chrono::Utc;
+use lakecat_core::{AuditStamp, Principal, TableName, content_hash_bytes};
 
 use crate::{
     CredentialIssuanceMode, MemoryCatalogStore, PolicyBinding, ServerRecord, StorageProvider,
@@ -8,6 +9,56 @@ use crate::{
 };
 
 use super::*;
+
+fn test_model_publication(version: u64) -> ModelPublication {
+    ModelPublication {
+        model_id: "tpcds".to_string(),
+        warehouse: WarehouseName::new("local").unwrap(),
+        version,
+        artifact_uri: format!("s3://models/tpcds/v{version}.yaml"),
+        artifact_hash: content_hash_bytes(format!("model-{version}").as_bytes()),
+        physical_bindings: serde_json::json!({"store_sales": "local.tpcds.store_sales"}),
+        policy_binding_ids: vec!["semantic-read".to_string()],
+        publisher: Principal::anonymous(),
+        published_at: Utc::now(),
+    }
+}
+
+#[tokio::test]
+async fn turso_model_publication_is_durable_cas_and_atomic_outbox() {
+    let store = TursoCatalogStore::in_memory().await.unwrap();
+    store
+        .publish_model(test_model_publication(1), None)
+        .await
+        .unwrap();
+    assert!(matches!(
+        store.publish_model(test_model_publication(2), None).await,
+        Err(LakeCatError::Conflict(_))
+    ));
+    assert_eq!(
+        store.pending_outbox_events(None, 10).await.unwrap().len(),
+        1
+    );
+    store
+        .publish_model(test_model_publication(2), Some(1))
+        .await
+        .unwrap();
+    let publications = store
+        .model_publications(&WarehouseName::new("local").unwrap(), "tpcds")
+        .await
+        .unwrap();
+    assert_eq!(
+        publications
+            .iter()
+            .map(|item| item.version)
+            .collect::<Vec<_>>(),
+        vec![1, 2]
+    );
+    assert_eq!(
+        store.pending_outbox_events(None, 10).await.unwrap().len(),
+        2
+    );
+}
 
 #[tokio::test]
 async fn turso_component_safe_keys_isolate_ambiguous_namespace_paths() {

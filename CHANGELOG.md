@@ -9,6 +9,10 @@
 
 ## Unreleased
 
+- Add LakeCat's thin model-publication record and in-memory CAS boundary,
+  binding immutable artifact pointers/hashes to physical and policy references,
+  publisher identity, audit, and transactional outbox admission.
+
 - Close catalog-community Phase 3 with fresh stock Spark HadoopCatalog-to-
   LakeCat migration evidence preserving schemas, specs, snapshots, refs, the
   metadata pointer, and exact data, and advance the active front to Apache Ossie.

@@ -1557,6 +1557,50 @@ pub struct PolicyBinding {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ModelPublication {
+    pub model_id: String,
+    pub warehouse: WarehouseName,
+    pub version: u64,
+    pub artifact_uri: String,
+    pub artifact_hash: String,
+    #[serde(default)]
+    pub physical_bindings: Value,
+    #[serde(default)]
+    pub policy_binding_ids: Vec<String>,
+    pub publisher: Principal,
+    pub published_at: DateTime<Utc>,
+}
+
+impl ModelPublication {
+    pub fn validate(&self) -> LakeCatResult<()> {
+        if self.model_id.trim().is_empty() || self.model_id.len() > 255 {
+            return Err(LakeCatError::InvalidArgument(
+                "model publication id must be between 1 and 255 characters".to_string(),
+            ));
+        }
+        if self.version == 0 {
+            return Err(LakeCatError::InvalidArgument(
+                "model publication version must be positive".to_string(),
+            ));
+        }
+        url::Url::parse(&self.artifact_uri).map_err(|_| {
+            LakeCatError::InvalidArgument("model artifact URI must be absolute".to_string())
+        })?;
+        validate_idempotency_request_hash_shape(&self.artifact_hash)?;
+        if !self.physical_bindings.is_object() && !self.physical_bindings.is_array() {
+            return Err(LakeCatError::InvalidArgument(
+                "model physical bindings must be an object or array".to_string(),
+            ));
+        }
+        for policy_id in &self.policy_binding_ids {
+            validate_policy_id(policy_id)?;
+        }
+        Ok(())
+    }
+}
+
 impl PolicyBinding {
     pub fn new(
         policy_id: impl Into<String>,

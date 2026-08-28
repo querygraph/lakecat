@@ -546,6 +546,10 @@ pub(crate) fn policy_binding_key(warehouse: &WarehouseName, policy_id: &str) -> 
     format!("{}:{policy_id}", warehouse.as_str())
 }
 
+pub(crate) fn model_publication_key(warehouse: &WarehouseName, model_id: &str) -> String {
+    format!("{}:{model_id}", warehouse.as_str())
+}
+
 pub(crate) fn namespace_not_found(namespace: &Namespace) -> LakeCatError {
     LakeCatError::NotFound {
         object: "namespace",

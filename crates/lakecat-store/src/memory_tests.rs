@@ -49,6 +49,60 @@ fn soft_delete_records_write_canonical_fields_and_read_legacy_aliases() {
     assert_eq!(decoded, record);
 }
 
+fn model_publication(version: u64) -> ModelPublication {
+    ModelPublication {
+        model_id: "tpcds".to_string(),
+        warehouse: WarehouseName::new("local").unwrap(),
+        version,
+        artifact_uri: format!("s3://models/tpcds/v{version}.yaml"),
+        artifact_hash: content_hash_bytes(format!("model-{version}").as_bytes()),
+        physical_bindings: serde_json::json!({"store_sales": "local.tpcds.store_sales"}),
+        policy_binding_ids: vec!["semantic-read".to_string()],
+        publisher: Principal::anonymous(),
+        published_at: Utc::now(),
+    }
+}
+
+#[tokio::test]
+async fn memory_model_publication_is_cas_versioned_and_outboxed() {
+    let store = MemoryCatalogStore::new();
+    let first = store
+        .publish_model(model_publication(1), None)
+        .await
+        .unwrap();
+    assert_eq!(first.version, 1);
+    let state = store.state.read().await;
+    assert_eq!(
+        state.audit_events.last().unwrap().event_type,
+        "model.published"
+    );
+    assert_eq!(
+        state.outbox_events.last().unwrap().event_type,
+        "model.published"
+    );
+    drop(state);
+
+    assert!(matches!(
+        store.publish_model(model_publication(2), None).await,
+        Err(LakeCatError::Conflict(_))
+    ));
+    store
+        .publish_model(model_publication(2), Some(1))
+        .await
+        .unwrap();
+    let publications = store
+        .model_publications(&WarehouseName::new("local").unwrap(), "tpcds")
+        .await
+        .unwrap();
+    assert_eq!(
+        publications
+            .iter()
+            .map(|item| item.version)
+            .collect::<Vec<_>>(),
+        vec![1, 2]
+    );
+}
+
 #[tokio::test]
 async fn memory_store_persists_server_records() {
     let store = MemoryCatalogStore::new();

@@ -291,6 +291,23 @@ pub trait CatalogStore: Send + Sync + 'static {
     ) -> LakeCatResult<Vec<PolicyBinding>> {
         Ok(Vec::new())
     }
+    async fn publish_model(
+        &self,
+        publication: ModelPublication,
+        _expected_current_version: Option<u64>,
+    ) -> LakeCatResult<ModelPublication> {
+        publication.validate()?;
+        Err(LakeCatError::NotSupported(
+            "catalog store does not support model publication".to_string(),
+        ))
+    }
+    async fn model_publications(
+        &self,
+        _warehouse: &WarehouseName,
+        _model_id: &str,
+    ) -> LakeCatResult<Vec<ModelPublication>> {
+        Ok(Vec::new())
+    }
     async fn storage_profile_for_table(
         &self,
         table: &TableRecord,
