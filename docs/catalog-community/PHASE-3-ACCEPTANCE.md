@@ -106,3 +106,47 @@ Per-catalog artifact hashes are:
 The runner removed every run container and volume. This closes C3-02 only; it
 does not prove state-store/outbox failure, rolling restart, backup/restore,
 migration, federation, or performance.
+
+## C3-03 — state failure and outbox outage recovery
+
+Accepted LakeCat revision:
+
+- `lakecat@b6336c54` derives every lineage and OpenLineage event time from the
+  durable outbox admission timestamp instead of retry time and adds a complete
+  outage/backlog/retry acknowledgement proof.
+
+The state-store failure proof forces the transactional Turso outbox insert to
+fail after the paired audit insert is attempted. The transaction rolls back:
+neither audit nor outbox state is admitted. The sink-outage proof admits exactly
+one `table.created` audit/outbox pair, fails lineage projection after graph
+projection, and verifies all of the following:
+
+- the drain returns failure and acknowledges no event;
+- exactly one pending event remains, with the original durable event ID;
+- retry emits byte-equivalent lineage input, including the same admission time;
+- graph replay uses the same stable event IDs, allowing sink-owned idempotency;
+- successful acknowledgement reports exactly one delivered event; and
+- the pending backlog is empty afterward.
+
+Verification passed on the stable toolchain:
+
+```sh
+cargo test -p lakecat-store --features turso-local \
+  turso_store_rolls_back_audit_when_outbox_insert_fails -- --test-threads=1
+cargo test -p lakecat-service \
+  outbox_sink_outage_replays_exact_admitted_event_and_clears_backlog \
+  -- --test-threads=1
+cargo test -p lakecat-service --all-features -- --test-threads=1
+```
+
+The all-features service gate passed 492 library tests and five configured
+integration tests. Source hashes are:
+
+- outbox projector: `sha256:7e2a311f6e04fd2f4cecba4eb196431a91354558acf67dfb3d83e59626522468`
+- outage/replay tests: `sha256:04718439019e711876f2725ba7a18c2bdc08d088f91863b0e2ff37d1c85fac4b`
+- Turso failure tests: `sha256:c8959bb2d0817e188378c736c64a39e8f6ac1439e0cb4dacec8502602ae90698`
+
+This is at-least-once projection with exact stable replay identity. Downstream
+sinks remain responsible for idempotency by event ID; the proof does not claim
+distributed exactly-once delivery. It closes C3-03, not backup/restore,
+rolling restart, migration, or federation.

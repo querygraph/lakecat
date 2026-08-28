@@ -9,6 +9,10 @@
 
 ## Unreleased
 
+- Accept Phase 3 C3-03 with exact source hashes and stable-toolchain evidence
+  for Turso transaction rollback plus outbox sink outage, backlog, deterministic
+  replay, acknowledgement, and the explicit at-least-once delivery boundary.
+
 - Make lineage and OpenLineage replay deterministic by deriving event time from
   the durable outbox admission timestamp; prove a sink outage retains exactly
   one admitted event, replays the same lineage and graph identities, and clears

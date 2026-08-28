@@ -58,7 +58,7 @@ acceptance gates; they cannot be declared from this checklist alone.
 | --- | --- | --- | --- |
 | C3-01 | done | catalog-bench | `catalog-bench@1633d30` publishes the source-pinned proxy/overlay and reviewed `objfault_0828a` proof: before-upstream disconnect leaves metadata absent; after-upstream HTTP 200 plus response loss leaves it present. Exact hashes and non-claims are in `PHASE-3-ACCEPTANCE.md`. |
 | C3-02 | done | catalog-bench | `catalog-bench@c7eb664` publishes exact-request retry, accepted-state ambiguity, idempotency drift, and deterministic restart-during-commit evidence. LakeCat, Gravitino, and Lakekeeper preserve the fixture and pass exact retry; the benchmark's ephemeral Polaris configuration loses it. Exact hashes and caveats are in `PHASE-3-ACCEPTANCE.md`. |
-| C3-03 | pending | LakeCat | Prove state-store failure and outbox sink outage/backlog/exact replay without invented or lost admitted events. |
+| C3-03 | done | LakeCat | `lakecat@b6336c54` proves Turso audit/outbox rollback on state failure and deterministic sink-outage backlog/retry/acknowledgement. Replay keeps the admission timestamp and graph event IDs stable; exact hashes and the at-least-once boundary are in `PHASE-3-ACCEPTANCE.md`. |
 | C3-04 | pending | catalog-bench | Add backup/restore and rolling restart evidence per catalog. |
 | C3-05 | pending | QueryGraph | Implement semantics-preserving LakeCat↔Polaris and LakeCat↔Lakekeeper migration/federation verification. |
 | C3-06 | pending | QueryGraph | Add one Hive, Hadoop, or Glue migration cookbook that verifies snapshots, schemas, specs, refs, metadata locations, and data reads. |

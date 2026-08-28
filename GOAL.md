@@ -98,6 +98,12 @@ graph behavior to Grust, and governance semantics to TypeSec.
   it. Lakekeeper's advertised idempotency remains non-content-bound. Exact
   artifact hashes, cleanup proof, configuration scope, and non-claims are in
   `docs/catalog-community/PHASE-3-ACCEPTANCE.md`.
+- Phase 3 C3-03 is complete at `lakecat@b6336c54`. Turso rolls back the paired
+  audit/outbox write when durable admission fails. A real sink-outage test
+  retains one pending event, replays identical lineage input and stable graph
+  event IDs, acknowledges it once after recovery, and empties the backlog.
+  This is an explicit at-least-once projection contract, not a distributed
+  exactly-once claim.
 
 ## Next Stage
 
