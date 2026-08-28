@@ -1,5 +1,8 @@
 # Changelog
 
+- Record the completed fresh four-catalog stock-Trino interoperability bundle
+  and advance the catalog-community execution front to DuckDB.
+
 ## Unreleased
 
 - Add a validated `LAKECAT_WAREHOUSE_LOCATION` service boundary so standard

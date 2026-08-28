@@ -27,7 +27,7 @@ graph behavior to Grust, and governance semantics to TypeSec.
 - The catalog-community program is active on
   `codex/catalog-community-phase-1`. Phase 0 is closed. LakeCat's public
   acceptance ledger is synchronized through Phase 1. The neutral
-  `querygraph/catalog-bench@c375892` contains the Phase 1 publication plus the
+  `querygraph/catalog-bench@6886c35` contains the Phase 1 publication plus the
   active Phase 2 implementation. Its Phase 1 evidence remains the reviewed immutable
   five-scenario by five-catalog correctness bundle (20 pass, five fail), the
   production contention bundle, one-command smoke/full recomputation,
@@ -54,16 +54,20 @@ graph behavior to Grust, and governance semantics to TypeSec.
   `results/v1/flink-v2-65f0a4c3-2026-08-28/`. The source-bound runner selects
   Flink from the profile, admits every copied runtime byte, and uses Flink's
   stock `local` target for the one-shot isolated execution topology.
+- Phase 2 Trino delivery is complete in `querygraph/catalog-bench@6886c35`.
+  Fresh run `trino_0828f26c` used stock Trino 483 and Iceberg 1.11.0 against
+  LakeCat `b424f778`, Polaris 1.7.0, Gravitino 1.3.0, and Lakekeeper 0.13.3.
+  All four pass the common 14-assertion write/read/evolution, independent-state,
+  sanitization, and cleanup contract. The reviewed deterministic bundle is
+  published under `results/v1/trino-v2-b424f778-2026-08-28/`. LakeCat's
+  configured warehouse root supports standard REST create requests without an
+  explicit table location; catalog-bench now reconciles engine-relative
+  snapshot baselines and bounded standard gzip Iceberg metadata. This remains
+  an unranked correctness result.
 - The remaining Phase 2 implementation has the common engine-neutral evidence
-  boundary plus published Spark and Flink paths committed.
-  Trino 483 has a closed policy, renderer, server configuration, state machine,
-  bounded decoders, process invocation boundary, and private configuration
-  staging and supervised stock-launcher lifecycle with typed readiness and
-  process-group cleanup; the next unit must implement its concrete effects and
-  run the same no-shim workflow. No Trino production interoperability claim
-  exists until its complete optimized evidence is materialized and validated.
-  The active Phase 2 front is concrete Trino effects and publication, followed
-  by the largest honest DuckDB path.
+  boundary plus published Spark, Flink, and Trino paths committed. The active
+  Phase 2 front is the largest honest DuckDB path, with unsupported integration
+  boundaries recorded explicitly rather than filled by a transport shim.
 - Phase 1 is closed. All C1-01 through C1-10 units and exit gates have exact
   committed evidence. The active delivery front is Phase 2 multi-engine
   interoperability.
