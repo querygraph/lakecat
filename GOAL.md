@@ -27,7 +27,8 @@ graph behavior to Grust, and governance semantics to TypeSec.
 - The catalog-community program is active on
   `codex/catalog-community-phase-1`. Phase 0 is closed. LakeCat's public
   acceptance ledger is synchronized through Phase 1. The neutral
-  `querygraph/catalog-bench@290d1fb` publication contains a reviewed immutable
+  `querygraph/catalog-bench@97b7069` contains the Phase 1 publication plus the
+  active Phase 2 implementation. Its Phase 1 evidence remains the reviewed immutable
   five-scenario by five-catalog correctness bundle (20 pass, five fail), the
   production contention bundle, one-command smoke/full recomputation,
   generated known gaps, and a bundle-wide secret scan. LakeCat C1-10 is closed
@@ -39,8 +40,9 @@ graph behavior to Grust, and governance semantics to TypeSec.
   evidence boundary, and source-bound Flink execution path are committed.
   Trino 483 has a closed policy, renderer, server configuration, state machine,
   bounded decoders, process invocation boundary, and private configuration
-  staging; the next unit must finish concrete lifecycle supervision, then run
-  the same no-shim workflow. No Flink or Trino production interoperability claim
+  staging and supervised stock-launcher lifecycle with typed readiness and
+  process-group cleanup; the next unit must implement its concrete effects and
+  run the same no-shim workflow. No Flink or Trino production interoperability claim
   exists until its complete optimized evidence is materialized and validated.
 - Phase 1 is closed. All C1-01 through C1-10 units and exit gates have exact
   committed evidence. The active delivery front is Phase 2 multi-engine

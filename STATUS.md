@@ -7,7 +7,9 @@ Updated: 2026-08-28
 - Catalog-community recovery after the workstation reboot: the persistent goal
   is restored, `GOAL.md` now reflects the actual cross-repository state, and the
   interrupted Trino private-configuration staging unit was recovered, verified,
-  documented, committed, and pushed as `catalog-bench@1f1613f`. The LakeCat
+  documented, committed, and pushed through `catalog-bench@97b7069`, including
+  private staging, typed readiness, early-exit/timeout classification, and
+  guaranteed process-group shutdown. The LakeCat
   ledger now closes C1-07 through C1-10 and all Phase 1 exit gates through
   `catalog-bench@290d1fb` and `lakecat@0dee124b`. Spark, Flink, and Trino Phase 2 implementation state is recorded
   without promoting unreviewed runtime evidence into public results.

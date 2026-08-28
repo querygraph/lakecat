@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Reconcile the live catalog-community goal, status, and backlog with
+  `catalog-bench@97b7069`: Trino 483 now has supervised stock-launcher startup,
+  typed bounded readiness, distinct early-exit/timeout handling, and guaranteed
+  process-group cleanup. Keep concrete effects and live reviewed publication
+  explicitly open rather than overstating interoperability.
+
 - Catalog-community Phase 1 closure: accept `catalog-bench@290d1fb`'s reviewed
   five-scenario by five-catalog correctness bundle, one-command smoke/full
   recomputation, generated known-gaps report, and bundle-wide secret scan;
