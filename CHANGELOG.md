@@ -9,6 +9,10 @@
 
 ## Unreleased
 
+- Accept catalog-bench's deterministic before/after-upstream metadata fault
+  substrate and reviewed persistence evidence as C3-01, without extending that
+  proof into catalog recovery or performance claims.
+
 - Close catalog-community Phase 2 with an exact acceptance ledger for all four
   stock-engine bundles and the verified LakeCat/Sail/QueryGraph OpenLineage
   handoff, while explicitly excluding unproven engine-native lineage claims.

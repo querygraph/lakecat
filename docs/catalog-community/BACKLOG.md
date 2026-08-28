@@ -56,7 +56,7 @@ acceptance gates; they cannot be declared from this checklist alone.
 
 | ID | Status | Owner | Unit and acceptance evidence |
 | --- | --- | --- | --- |
-| C3-01 | pending | catalog-bench | Add deterministic network/object-store fault injection before and after metadata persistence. |
+| C3-01 | done | catalog-bench | `catalog-bench@1633d30` publishes the source-pinned proxy/overlay and reviewed `objfault_0828a` proof: before-upstream disconnect leaves metadata absent; after-upstream HTTP 200 plus response loss leaves it present. Exact hashes and non-claims are in `PHASE-3-ACCEPTANCE.md`. |
 | C3-02 | pending | catalog-bench | Prove exact-request retry, idempotency-key drift, restart-during-commit, and accepted-state ambiguity behavior. |
 | C3-03 | pending | LakeCat | Prove state-store failure and outbox sink outage/backlog/exact replay without invented or lost admitted events. |
 | C3-04 | pending | catalog-bench | Add backup/restore and rolling restart evidence per catalog. |

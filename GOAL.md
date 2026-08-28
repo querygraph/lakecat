@@ -83,6 +83,13 @@ graph behavior to Grust, and governance semantics to TypeSec.
 - Phase 1 is closed. All C1-01 through C1-10 units and exit gates have exact
   committed evidence. With Phase 2 multi-engine interoperability complete, the
   active delivery front is Phase 3 failure, recovery, migration, and federation.
+- Phase 3 C3-01 is complete at `querygraph/catalog-bench@1633d30`. Fresh run
+  `objfault_0828a` proves a signed metadata PUT disconnected before upstream
+  leaves no object, while an upstream HTTP 200 whose response is disconnected
+  leaves the object present. The source-pinned proxy, isolated four-catalog
+  overlay, runnable profile, exact hashes, cleanup, and non-claims are recorded
+  in `docs/catalog-community/PHASE-3-ACCEPTANCE.md`. Catalog recovery remains
+  open in C3-02 through C3-06.
 
 ## Next Stage
 
