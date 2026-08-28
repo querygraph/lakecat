@@ -270,6 +270,7 @@ pub(crate) fn is_known_outbox_event_type(event_type: &str) -> bool {
         event_type,
         "catalog.config-read"
             | "credentials.vend-attempted"
+            | "model.published"
             | "namespace.created"
             | "namespace.dropped"
             | "namespace.listed"

@@ -1611,12 +1611,14 @@ async fn policy_bindings_are_governed_and_attached_to_table_authorization_contex
 async fn model_publications_are_governed_versioned_and_outboxed() {
     let governance = Arc::new(RecordingGovernance::default());
     let store = MemoryCatalogStore::new();
+    let graph = Arc::new(RecordingGraph::default());
+    let lineage = Arc::new(RecordingLineage::default());
     let app = app(
         LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone()).with_integrations(
             default_sail_engine(),
             governance,
-            NoopCatalogGraphSink::new(),
-            HashOnlyLineageSink::new(),
+            graph.clone(),
+            lineage.clone(),
         ),
     );
     let publish = |version, expected: Option<u64>| {
@@ -1668,7 +1670,7 @@ async fn model_publications_are_governed_versioned_and_outboxed() {
         .header("x-lakecat-principal", "publisher@example.com")
         .body(Body::empty())
         .unwrap();
-    let response = app.oneshot(list).await.unwrap();
+    let response = app.clone().oneshot(list).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let body = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
@@ -1689,6 +1691,36 @@ async fn model_publications_are_governed_versioned_and_outboxed() {
             .count(),
         2
     );
+
+    let drain = Request::builder()
+        .method(Method::POST)
+        .uri("/management/v1/lineage/drain")
+        .header("x-lakecat-principal", "publisher@example.com")
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(drain).await.unwrap();
+    let status = response.status();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+    let body: LineageDrainResponse = serde_json::from_slice(&body).unwrap();
+    let summaries = body
+        .events
+        .iter()
+        .filter(|event| event.event_type == "model.published")
+        .collect::<Vec<_>>();
+    assert_eq!(summaries.len(), 2);
+    assert!(summaries.iter().all(|event| event.graph_events >= 1));
+    assert!(summaries.iter().all(|event| event.lineage_events == 1));
+    assert!(graph.events.lock().await.iter().any(|event| {
+        event.label == GraphNodeLabel::QueryGraphModel
+            && event.subject == "lakecat:warehouse:local:querygraph-model:tpcds"
+    }));
+    assert!(lineage.events.lock().await.iter().any(|event| {
+        event.event_type == LineageEventType::ModelPublished
+            && event.payload["artifact-uri"] == "s3://models/tpcds/v1.yaml"
+    }));
 }
 
 #[test]

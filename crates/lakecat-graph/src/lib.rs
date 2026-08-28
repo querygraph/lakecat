@@ -127,6 +127,24 @@ impl GraphEvent {
         }
     }
 
+    pub fn querygraph_model(
+        action: GraphAction,
+        warehouse: WarehouseName,
+        model_id: impl Into<String>,
+        properties: Value,
+    ) -> Self {
+        let model_id = model_id.into();
+        Self {
+            event_id: None,
+            subject: format!("lakecat:warehouse:{warehouse}:querygraph-model:{model_id}"),
+            label: GraphNodeLabel::QueryGraphModel,
+            action,
+            table: None,
+            properties,
+            emitted_at: Utc::now(),
+        }
+    }
+
     pub fn storage_profile(
         action: GraphAction,
         warehouse: WarehouseName,

@@ -72,6 +72,7 @@ pub enum LineageEventType {
     WarehouseUpserted,
     CredentialsVendAttempted,
     QueryGraphBootstrap,
+    ModelPublished,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -503,6 +504,7 @@ fn lineage_event_type_name(event_type: &LineageEventType) -> &'static str {
         LineageEventType::WarehouseUpserted => "warehouse-upserted",
         LineageEventType::CredentialsVendAttempted => "credentials-vend-attempted",
         LineageEventType::QueryGraphBootstrap => "querygraph-bootstrap",
+        LineageEventType::ModelPublished => "model-published",
     }
 }
 

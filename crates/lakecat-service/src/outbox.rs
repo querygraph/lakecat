@@ -410,6 +410,41 @@ pub(crate) async fn project_outbox_event(
             ))
             .await?;
         receipt.record_lineage(lineage_receipt);
+    } else if event.event_type == "model.published" {
+        let warehouse = outbox_warehouse(event, &state.warehouse)?;
+        let model_id = event_payload
+            .get("model-id")
+            .and_then(Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| {
+                LakeCatError::InvalidArgument(
+                    "model publication outbox event must contain a non-blank model-id".to_string(),
+                )
+            })?;
+        state
+            .graph
+            .emit(
+                GraphEvent::querygraph_model(
+                    GraphAction::Upserted,
+                    warehouse,
+                    model_id,
+                    event_payload.clone(),
+                )
+                .with_event_id(event.event_id.clone()),
+            )
+            .await?;
+        receipt.graph_events += 1;
+        let lineage_receipt = state
+            .lineage
+            .emit(replay_lineage_event(
+                event,
+                LineageEventType::ModelPublished,
+                principal,
+                None,
+                event_payload,
+            ))
+            .await?;
+        receipt.record_lineage(lineage_receipt);
     } else if event.event_type == "project.upserted" {
         let project_id = outbox_project(event)?;
         state
