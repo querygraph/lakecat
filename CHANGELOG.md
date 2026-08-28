@@ -11,6 +11,8 @@
 
 - Record completion of the independently validated stock DuckDB 1.5.3
   four-catalog interoperability path and its immutable catalog-bench bundle.
+- Synchronize the catalog-community backlog with the completed Spark, Flink,
+  Trino, and DuckDB Phase 2 evidence units.
 
 - Update the pinned Sail `lakecat` revision so standard Iceberg REST table and
   view update payloads decode their kebab-case field names, including the

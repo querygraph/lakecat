@@ -44,13 +44,13 @@ acceptance gates; they cannot be declared from this checklist alone.
 | ID | Status | Owner | Unit and acceptance evidence |
 | --- | --- | --- | --- |
 | C2-01 | done | catalog-bench | `catalog-bench@ae461a4` defines the common no-shim Iceberg REST write/read/additive-evolution contract shared by Spark, Flink, Trino, and later engines. |
-| C2-02 | in progress | catalog-bench | Spark 4.1.3 + Iceberg 1.11.0 has a source-bound runtime, fresh four-catalog execution, independent transcript admission, reviewed result materializer, and explicit Spark 4.2 connector gap. Through `59840b9`, the production launcher selects the admitted v2 contract and the standalone image builder uses the dependency-complete Compose topology. A new source-bound optimized profile and fresh reviewed production bundle remain. The original Spark 3.5.9 row is superseded by the reviewed maintained-version selection rather than silently claimed. |
-| C2-03 | in progress | catalog-bench | Flink 2.1.3 has a closed policy, renderer, Java child, process adapter, checksum-locked source build, Compose topology, and immutable candidate through `30a4899`; live optimized evidence and the explicit Flink 2.3 gap remain to be published. |
-| C2-04 | in progress | catalog-bench | Trino 483 has a closed policy, renderer, server configuration, state machine, bounded CLI/metadata decoders, sanitized process boundary, private configuration staging, and supervised stock-launcher lifecycle with typed readiness and process-group cleanup through `97b7069`; concrete effects, live execution, review, and publication remain open. |
-| C2-05 | pending | catalog-bench | Add DuckDB 1.5.3's largest honest REST/Iceberg workflow. |
-| C2-06 | pending | catalog-bench | Run one common workflow against LakeCat, Polaris, Gravitino, and Lakekeeper with no undisclosed shims. |
+| C2-02 | done | catalog-bench | `catalog-bench@1f2014e` publishes the independently reviewed stock Spark 4.1.3 + Iceberg 1.11.0 four-catalog v2 correctness bundle. |
+| C2-03 | done | catalog-bench | `catalog-bench@c375892` publishes the independently reviewed stock Flink 2.1.3 + Iceberg 1.11.0 four-catalog v2 correctness bundle. |
+| C2-04 | done | catalog-bench | `catalog-bench@6886c35` publishes the independently reviewed stock Trino 483 + Iceberg 1.11.0 four-catalog v2 correctness bundle. |
+| C2-05 | done | catalog-bench/LakeCat/Sail | `catalog-bench@e9febf6` publishes the stock DuckDB 1.5.3 four-catalog bundle; LakeCat `b8be6bc9` and Sail `54217703` supply the staged-create and spec-correct update semantics exposed by the stock client. |
+| C2-06 | done | catalog-bench | Spark, Flink, Trino, and DuckDB each execute the common v2 workflow against LakeCat, Polaris, Gravitino, and Lakekeeper with protocol-native REST bindings and no catalog-specific client shims. |
 | C2-07 | pending | LakeCat/QueryGraph | Correlate supported engine work with admitted OpenLineage evidence. |
-| C2-08 | pending | catalog-bench | Publish the first evidence-generated interoperability report and raw bundle. |
+| C2-08 | done | catalog-bench | The generated publication index and immutable reviewed raw/result bundles cover the four completed stock engines; every result remains an unranked correctness claim. |
 
 ## Phase 3 — failure, recovery, and migration
 
