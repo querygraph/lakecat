@@ -188,3 +188,48 @@ The runner removed every project container and volume. Polaris's failure is
 scoped to the no-volume benchmark topology. This is cold byte-level recovery,
 not vendor-supported logical backup, online backup, point-in-time recovery,
 rolling upgrade, or a disaster-recovery SLA.
+
+## C3-05 — QueryGraph catalog migration and federation semantics
+
+Accepted revisions:
+
+- `querygraph@9ef2e21` defines the transport-neutral Iceberg semantic identity
+  verifier and its optional stock-PyIceberg live harness.
+- `sail@65df4aa4` exposes bounded standard metadata decompression and separates
+  gzip suffix recognition from metadata-version discovery.
+- `lakecat@f09f7896` consumes that Sail boundary for registration while retaining
+  location controls and the 64 MiB encoded/decoded metadata limit.
+- `catalog-bench@74e098f` publishes the fresh runner and reviewed evidence.
+
+Fresh run `migrate_0828d` used one isolated Compose project, shared MinIO, the
+source-built LakeCat commit, Polaris 1.7.0, Lakekeeper 0.13.3, and pinned stock
+PyIceberg 0.11.1. Each direction creates three rows and a non-empty snapshot,
+registers the exact metadata pointer in the destination through standard REST,
+then independently loads and scans both sides:
+
+| Direction | Semantic mismatches | Snapshots / refs | Exact data |
+| --- | ---: | ---: | --- |
+| LakeCat → Polaris | 0 | 1 / 1 | 3 rows, matching digest |
+| Polaris → LakeCat | 0 | 1 / 1 | 3 rows, matching digest |
+| LakeCat → Lakekeeper | 0 | 1 / 1 | 3 rows, matching digest |
+| Lakekeeper → LakeCat | 0 | 1 / 1 | 3 rows, matching digest |
+
+The semantic comparison covers table UUID, format version, all schemas and the
+current schema, all partition specs and the default spec, all sort orders and
+the default order, snapshots and current snapshot, refs, and metadata location.
+Every exact data digest is
+`sha256:47667d3010f5b9a4f6d9c3f26873938dc46adecf8392d7ba1d1b88409f18315e`.
+The raw summary hash is
+`sha256:7d1f426db69b70d718b7b946ea532d75e3642451e897eed6374ac30220db9e38`;
+its canonical content hash is
+`sha256:be68dda139534b1af64fd71efd694496fe57500216b89b3908e016a98e96c0c9`.
+
+Focused verification passed 58 QueryGraph Python tests, seven Sail metadata
+loader tests, 493 LakeCat service tests plus five configured binary tests, the
+LakeCat local-dependency contract, JSON/evidence equivalence checks, and fresh
+project cleanup with zero remaining containers or volumes.
+
+This proves portable metadata-pointer federation and migration for the named
+catalog pairs against a shared object store. It does not prove physical object
+copy, cross-cloud transfer, concurrent dual-writer safety, incremental sync,
+cutover orchestration, or the legacy Hive/Hadoop/Glue path owned by C3-06.

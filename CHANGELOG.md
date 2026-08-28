@@ -9,6 +9,11 @@
 
 ## Unreleased
 
+- Accept Phase 3 C3-05 with exact QueryGraph/catalog-bench four-direction
+  LakeCat↔Polaris and LakeCat↔Lakekeeper migration evidence, including non-empty
+  snapshots/refs, full semantic identity, exact data scans, and explicit
+  federation non-claims.
+
 - Decode standard gzip-compressed Iceberg metadata pointers during table
   registration through Sail's bounded metadata decoder, enabling Lakekeeper to
   LakeCat migration without weakening metadata size or location controls.

@@ -27,8 +27,8 @@ graph behavior to Grust, and governance semantics to TypeSec.
 - The catalog-community program is active on
   `codex/catalog-community-phase-1`. Phase 0 is closed. LakeCat's public
   acceptance ledger is synchronized through Phase 1. The neutral
-  `querygraph/catalog-bench@e9febf6` contains the Phase 1 publication plus the
-  active Phase 2 implementation. Its Phase 1 evidence remains the reviewed immutable
+  `querygraph/catalog-bench@74e098f` contains the current Phase 3 migration
+  publication. Its Phase 1 evidence remains the reviewed immutable
   five-scenario by five-catalog correctness bundle (20 pass, five fail), the
   production contention bundle, one-command smoke/full recomputation,
   generated known gaps, and a bundle-wide secret scan. LakeCat C1-10 is closed
@@ -109,6 +109,14 @@ graph behavior to Grust, and governance semantics to TypeSec.
   recreates run-owned state volumes. LakeCat/Turso, Gravitino/SQLite, and
   Lakekeeper/PostgreSQL preserve exact table identity; the no-volume Polaris
   topology loses it. The proof is not an online-backup or disaster-recovery SLA.
+- Phase 3 C3-05 is complete at `querygraph/catalog-bench@74e098f`, QueryGraph
+  `9ef2e21`, LakeCat `f09f7896`, and Sail `65df4aa4`. Fresh stock-PyIceberg
+  migration in both directions between LakeCat and Polaris and between LakeCat
+  and Lakekeeper preserves all compared Iceberg semantics, a non-empty snapshot
+  and ref, the exact metadata pointer, and an exact three-row scan. The
+  Lakekeeper path exposed and fixed bounded gzip metadata-pointer registration.
+  Physical copying, dual-writer federation, and legacy catalog migration remain
+  outside this proof; C3-06 is the active front.
 
 ## Next Stage
 

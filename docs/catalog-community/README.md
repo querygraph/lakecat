@@ -75,8 +75,8 @@ the same pinned MinIO instance. A smoke run is not publishable evidence.
   bundles, the admitted governed-read OpenLineage handoff, and the explicit
   boundary around unproven engine-native lineage.
 - [Phase 3 acceptance](PHASE-3-ACCEPTANCE.md) accumulates exact fault,
-  recovery, restart, backup/restore, and migration evidence; only C3-01 is
-  currently complete.
+  recovery, restart, backup/restore, and migration evidence; C3-01 through
+  C3-05 are complete and the legacy-catalog cookbook remains open in C3-06.
 - [Iceberg table lifecycle](../ICEBERG-TABLES.md) records LakeCat's durable
   create/load/update/drop/register/rename, storage, governance, error, and
   no-current-snapshot contract accepted by C1-05.
