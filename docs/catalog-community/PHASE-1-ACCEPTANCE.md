@@ -2,13 +2,14 @@
 
 This ledger accumulates evidence for Phase 1, **Lakekeeper and behavioral
 conformance**. It is deliberately incremental. A completed row proves only its
-named backlog unit; Phase 1 remains open until C1-01 through C1-10 and the phase
-exit criteria and global acceptance gates are satisfied.
+named backlog unit. C1-01 through C1-10 and the Phase 1 exit gates are now
+complete; later phases remain separate claims.
 
-No timing in this ledger is public benchmark evidence. The current candidate
-profile remains `draft`, and C1-09 still owns optimized production builds,
-same-Docker execution, immutable raw bundles, generated reports, and secret
-scanning.
+Timing is public benchmark evidence only in the independently reviewed
+contention bundle. The Phase 1 behavioral profile is runnable and
+artifact-resolved, but its 25 results are correctness-only records with no
+measurements. C1-09 now owns immutable raw bundles, generated reports, and
+secret scanning at `catalog-bench@290d1fb`.
 
 ## Canonical source provenance
 
@@ -1001,12 +1002,17 @@ errors; conflicts never count as throughput failures or accepted work.
 This closes C1-08. Publication of the reviewed run is one completed subset of
 C1-09 rather than a reason to weaken C1-09's broader exit criteria.
 
-## C1-09 — publication pipeline (in progress)
+## C1-09 — publication pipeline
 
-Accepted partial revision:
+Accepted revisions:
 
 - [`02a9c79`](https://github.com/querygraph/catalog-bench/commit/02a9c79)
   publishes and revalidates the immutable reviewed 2026-08-27 contention bundle.
+- [`613f1ba`](https://github.com/querygraph/catalog-bench/commit/613f1ba)
+  adds the cross-bundle publication command, generated index/known-gaps pages,
+  and recursive bundle/source-evidence secret scan.
+- [`290d1fb`](https://github.com/querygraph/catalog-bench/commit/290d1fb)
+  archives and publishes the fresh Phase 1 five-scenario by five-catalog matrix.
 
 The deterministic importer pins the complete 30-round transcript and reviewed
 environment/failure sidecar, recomputes aggregates and rank order, evaluates 14
@@ -1016,10 +1022,23 @@ accepted commits/s, followed by Polaris at 58.110/s and Gravitino at 56.823/s.
 Lakekeeper and Nessie remain unranked failures because their measured rounds
 contain non-conflict server errors; their diagnostics are preserved.
 
-C1-09 remains open. The accepted contention bundle does not yet provide the
-general one-command smoke/full profiles, cross-scenario raw-bundle publication,
-generated known-gaps page, or bundle-wide secret scan, and it does not promote
-C1-03 through C1-07 ignored smoke transcripts into public result records.
+The new behavioral bundle binds 20 optimized conformance transcripts and five
+stock PyIceberg transcripts to exact source profile/scenario digests, a runnable
+artifact-resolved publication profile, reviewed Linux ARM64/Docker environment,
+and a value-safe redaction statement. It emits 25 independently validated result
+records: 20 pass and five fail. The failures preserve Polaris's proprietary
+endpoint advertisement, Lakekeeper's nonstandard commit-conflict semantics, and
+Nessie's namespace/table/commit error-shape mismatches. Optional PyIceberg,
+idempotency, credential, property, view, and pagination gaps remain generated
+and visible rather than being erased by passing result classifications.
+
+`./publish-results.sh smoke` validates every immutable manifest, linked profile,
+scenario, result, raw source artifact, result evidence artifact, generated
+bundle index, generated known-gaps page, and recursive secret scan.
+`./publish-results.sh full` first deterministically recomputes the historical,
+production-contention, and Phase 1 behavioral bundles from reviewed sources.
+Neither mode searches `target/` or promotes unreviewed mutable diagnostics.
+This closes C1-09 without adding a timing claim to correctness workflows.
 
 ## C1-10 — component-safe catalog identity
 
@@ -1041,4 +1060,46 @@ The Turso regression suite proves three independent obligations: literal
 properties, tables, views, and policies; a simulated legacy file preserves and
 reopens namespace, table, dropped-view receipt, and policy state; and corrupt
 scope leaves both the original row and absent migration marker unchanged.
-This closes C1-10. Phase 1 remains open on C1-09's publication gates.
+Accepted LakeCat revision:
+
+- [`0dee124b`](https://github.com/querygraph/lakecat/commit/0dee124b)
+  implements and proves the migration.
+
+This closes C1-10.
+
+## Phase 1 exit criteria
+
+Phase 1 closes because all ten backlog units are done and the shared gates pass:
+
+- every selected catalog runs on the owned Docker network against the same
+  source-built MinIO, with explicit readiness/bootstrap and fixture cleanup;
+- config, namespace, table, deterministic commit, stock PyIceberg, and
+  contention evidence is retained with exact catalog/profile/scenario/runtime
+  identities and value-safe transcripts;
+- correctness and performance claims are separate, failed contention rows are
+  unranked, and the generated known-gaps surface retains required and optional
+  limitations;
+- immutable manifests verify every byte and cross-document link; the recursive
+  scan covers manifests, profiles, scenarios, results, raw source evidence, and
+  result evidence; and
+- LakeCat's remaining internal identity ambiguity migrates atomically and fails
+  closed on corrupt legacy state.
+
+Final focused gates on 2026-08-28 were:
+
+```text
+catalog-bench: profile check-phase1                                      PASS
+catalog-bench: phase1-import check (5 scenarios, 25 results)             PASS
+catalog-bench: publish-results.sh smoke                                  PASS
+catalog-bench: publish-results.sh full                                   PASS
+catalog-bench: schemas check                                             PASS
+catalog-bench: contract-tool tests (54)                                  PASS
+catalog-bench: contract-tool all-target Clippy with -D warnings          PASS
+LakeCat: lakecat-store --features turso-local tests (218)                PASS
+LakeCat: lakecat-store all-target Clippy with -D warnings                PASS
+both repositories: cargo fmt checks and git diff --check                 PASS
+```
+
+The accepted neutral publication revision is `catalog-bench@290d1fb`; the
+accepted LakeCat migration revision is `lakecat@0dee124b`. Phase 2 starts from
+this closed boundary and must publish its engine evidence independently.

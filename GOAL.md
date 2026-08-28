@@ -26,55 +26,44 @@ graph behavior to Grust, and governance semantics to TypeSec.
   dependency-guide examples before QueryGraph's next public release.
 - The catalog-community program is active on
   `codex/catalog-community-phase-1`. Phase 0 is closed. LakeCat's public
-  acceptance ledger is synchronized through C1-06, while the neutral
-  `querygraph/catalog-bench` branch has also implemented and documented C1-07
-  stock PyIceberg interoperability, C1-08 contention execution, and the
-  production-contention publication portion of C1-09. Those later units must be
-  reconciled into LakeCat's backlog and acceptance records before Phase 1 is
-  declared complete.
+  acceptance ledger is synchronized through Phase 1. The neutral
+  `querygraph/catalog-bench@290d1fb` publication contains a reviewed immutable
+  five-scenario by five-catalog correctness bundle (20 pass, five fail), the
+  production contention bundle, one-command smoke/full recomputation,
+  generated known gaps, and a bundle-wide secret scan. LakeCat C1-10 is closed
+  at `0dee124b`; Phase 1 is complete without converting correctness evidence
+  into a performance claim.
 - Phase 2 implementation has started in `querygraph/catalog-bench`: the common
   stock-engine contract, source-bound Spark 4.1.3/Iceberg 1.11.0 runtime, fresh
   four-catalog Spark workflow, reviewed result materializer, engine-neutral
   evidence boundary, and source-bound Flink execution path are committed.
   Trino 483 has a closed policy, renderer, server configuration, state machine,
-  bounded decoders, and process invocation boundary; the next unit must finish
-  private configuration staging and concrete lifecycle supervision, then run
+  bounded decoders, process invocation boundary, and private configuration
+  staging; the next unit must finish concrete lifecycle supervision, then run
   the same no-shim workflow. No Flink or Trino production interoperability claim
   exists until its complete optimized evidence is materialized and validated.
-- Phase 1 remains open only on C1-09. C1-10 is implemented: LakeCat uses a
-  versioned component-safe namespace key across namespace, table, view/receipt,
-  soft-delete, and policy scope, and Turso atomically migrates validated legacy
-  rows with idempotent marking and fail-closed rollback. C1-09 still needs its
-  complete one-command smoke/full publication contract, generated known-gaps
-  surface, bundle-wide secret scan, and final Phase 1 exit rerun.
+- Phase 1 is closed. All C1-01 through C1-10 units and exit gates have exact
+  committed evidence. The active delivery front is Phase 2 multi-engine
+  interoperability.
 
 ## Next Stage
 
-1. Recover and finish the interrupted `catalog-bench` Trino configuration and
-   lifecycle unit without discarding its existing working-tree changes; update
-   its changelog, pass focused and repository gates, then commit and push it as
-   an independent unit.
-2. Reconcile C1-07, C1-08, and completed C1-09 evidence into LakeCat's public
-   backlog, status, acceptance ledger, and reader documentation without copying
-   neutral raw evidence into LakeCat.
-3. Close every Phase 1 exit criterion, including one-command smoke/full
-   profiles, immutable generated reports, known gaps, and secret scanning.
-4. Complete Phase 2 for Spark, Flink, Trino, and the largest honest DuckDB path;
+1. Complete Phase 2 for Spark, Flink, Trino, and the largest honest DuckDB path;
    publish only independently admitted optimized evidence and correlate
    OpenLineage only where the pinned engine integration can prove it.
-5. Execute the remaining catalog-community phases in dependency order: failure
+2. Execute the remaining catalog-community phases in dependency order: failure
    and recovery plus migration/federation; the Apache Ossie foundation in its
    owning repositories; the TPC-DS semantic supply chain; and evidence-linked
    upstream/community release artifacts. Treat every phase's exit criteria and
    global acceptance gates in `docs/catalog-community/` as mandatory.
-6. Keep release proof fresh after executable changes with the full local gate.
-7. Replace temporary Sail helper bridges only when upstream helpers are
+3. Keep release proof fresh after executable changes with the full local gate.
+4. Replace temporary Sail helper bridges only when upstream helpers are
    published and covered by Sail tests.
-8. Keep v4 JSON bridging explicit. Apache Iceberg v4 remains a draft; typed
+5. Keep v4 JSON bridging explicit. Apache Iceberg v4 remains a draft; typed
    metadata, relative-location, manifest, delete, and planning support belongs
    in Sail after formal specification adoption.
-9. Keep QueryGraph QGLake verify/import as the end-to-end acceptance boundary.
-10. Continue to use the repo boundaries and verification discipline in
+6. Keep QueryGraph QGLake verify/import as the end-to-end acceptance boundary.
+7. Continue to use the repo boundaries and verification discipline in
    `AGENTS.md` as binding guidance.
 
 ## Source Of Truth

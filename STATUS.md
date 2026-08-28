@@ -8,8 +8,8 @@ Updated: 2026-08-28
   is restored, `GOAL.md` now reflects the actual cross-repository state, and the
   interrupted Trino private-configuration staging unit was recovered, verified,
   documented, committed, and pushed as `catalog-bench@1f1613f`. The LakeCat
-  ledger now recognizes C1-07 as complete, C1-08 as complete, and C1-09 as in
-  progress. Spark, Flink, and Trino Phase 2 implementation state is recorded
+  ledger now closes C1-07 through C1-10 and all Phase 1 exit gates through
+  `catalog-bench@290d1fb` and `lakecat@0dee124b`. Spark, Flink, and Trino Phase 2 implementation state is recorded
   without promoting unreviewed runtime evidence into public results.
 
 - LakeCat is on `master`.

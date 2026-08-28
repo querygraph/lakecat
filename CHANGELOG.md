@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Catalog-community Phase 1 closure: accept `catalog-bench@290d1fb`'s reviewed
+  five-scenario by five-catalog correctness bundle, one-command smoke/full
+  recomputation, generated known-gaps report, and bundle-wide secret scan;
+  combine it with LakeCat's `0dee124b` component-safe migration proof; and
+  record all C1-01 through C1-10 units and Phase 1 exit gates as complete.
+
 - Component-safe namespace identity and migration: use a versioned,
   length-prefixed internal namespace key across Turso namespace, table, view,
   receipt, soft-delete, and policy scope while leaving the human-readable

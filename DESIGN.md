@@ -618,11 +618,12 @@ The versioned neutral scenario/result schemas are owned and reviewed in
 result bundle rather than keeping a second copy. The full audit, pin policy, and
 incremental delivery ledger live under `docs/catalog-community/`.
 
-The incremental behavior ledger is accepted through C1-06: owned Lakekeeper
-infrastructure, typed adapters, config negotiation, namespaces, tables, and
-deterministic commit correctness. These are conformance proofs, not a replacement
-for the separately generated concurrent ranking. C1-07 through C1-10 and the
-phase exit gates remain open.
+The Phase 1 behavior ledger is closed through C1-10: owned Lakekeeper
+infrastructure, typed adapters, config negotiation, namespaces, tables,
+deterministic commit correctness, stock PyIceberg, production contention,
+reviewed immutable publication, and component-safe LakeCat identity. The
+correctness bundle remains distinct from the separately generated concurrent
+ranking, and failed rows remain visible but unranked.
 
 ## Compatibility Rules
 
