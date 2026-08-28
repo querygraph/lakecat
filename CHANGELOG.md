@@ -9,6 +9,10 @@
 
 ## Unreleased
 
+- Close catalog-community Phase 2 with an exact acceptance ledger for all four
+  stock-engine bundles and the verified LakeCat/Sail/QueryGraph OpenLineage
+  handoff, while explicitly excluding unproven engine-native lineage claims.
+
 - Record completion of the independently validated stock DuckDB 1.5.3
   four-catalog interoperability path and its immutable catalog-bench bundle.
 - Synchronize the catalog-community backlog with the completed Spark, Flink,

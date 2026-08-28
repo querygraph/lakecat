@@ -71,6 +71,9 @@ the same pinned MinIO instance. A smoke run is not publishable evidence.
 - [Phase 1 acceptance](PHASE-1-ACCEPTANCE.md) accumulates exact implementation
   revisions and operation-level evidence for the Lakekeeper and behavioral
   conformance phase; a completed unit does not imply that the phase is closed.
+- [Phase 2 acceptance](PHASE-2-ACCEPTANCE.md) records the four stock-engine
+  bundles, the admitted governed-read OpenLineage handoff, and the explicit
+  boundary around unproven engine-native lineage.
 - [Iceberg table lifecycle](../ICEBERG-TABLES.md) records LakeCat's durable
   create/load/update/drop/register/rename, storage, governance, error, and
   no-current-snapshot contract accepted by C1-05.

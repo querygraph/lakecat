@@ -49,7 +49,7 @@ acceptance gates; they cannot be declared from this checklist alone.
 | C2-04 | done | catalog-bench | `catalog-bench@6886c35` publishes the independently reviewed stock Trino 483 + Iceberg 1.11.0 four-catalog v2 correctness bundle. |
 | C2-05 | done | catalog-bench/LakeCat/Sail | `catalog-bench@e9febf6` publishes the stock DuckDB 1.5.3 four-catalog bundle; LakeCat `b8be6bc9` and Sail `54217703` supply the staged-create and spec-correct update semantics exposed by the stock client. |
 | C2-06 | done | catalog-bench | Spark, Flink, Trino, and DuckDB each execute the common v2 workflow against LakeCat, Polaris, Gravitino, and Lakekeeper with protocol-native REST bindings and no catalog-specific client shims. |
-| C2-07 | pending | LakeCat/QueryGraph | Correlate supported engine work with admitted OpenLineage evidence. |
+| C2-07 | done | LakeCat/QueryGraph | The governed Sail-planned QGLake path drains and replay-verifies admitted OpenLineage evidence, and QueryGraph verify/import agree on the same aggregate hash. `PHASE-2-ACCEPTANCE.md` records exact revisions, hashes, and the explicit engine-native non-claim. |
 | C2-08 | done | catalog-bench | The generated publication index and immutable reviewed raw/result bundles cover the four completed stock engines; every result remains an unranked correctness claim. |
 
 ## Phase 3 — failure, recovery, and migration

@@ -74,10 +74,12 @@ graph behavior to Grust, and governance semantics to TypeSec.
   for staged Iceberg table creation in LakeCat and spec-correct REST update
   decoding plus `add-spec` application in Sail `54217703`; no catalog-specific
   client shim was introduced. This remains an unranked correctness result.
-- Phase 2's common engine-neutral evidence boundary and the published Spark,
-  Flink, Trino, and DuckDB paths are complete. OpenLineage correlation remains
-  gated on proof from each pinned engine integration rather than inferred from
-  catalog state.
+- Phase 2 is closed. Its common engine-neutral evidence boundary and the
+  published Spark, Flink, Trino, and DuckDB paths are complete. The governed
+  Sail-planned QGLake path delivered 26 admitted lineage events and LakeCat plus
+  QueryGraph independently verified the same OpenLineage aggregate hash; exact
+  evidence is in `docs/catalog-community/PHASE-2-ACCEPTANCE.md`. The stock
+  engine bundles do not prove engine-native OpenLineage and make no such claim.
 - Phase 1 is closed. All C1-01 through C1-10 units and exit gates have exact
   committed evidence. With Phase 2 multi-engine interoperability complete, the
   active delivery front is Phase 3 failure, recovery, migration, and federation.
@@ -89,7 +91,9 @@ graph behavior to Grust, and governance semantics to TypeSec.
    owning repositories; the TPC-DS semantic supply chain; and evidence-linked
    upstream/community release artifacts. Treat every phase's exit criteria and
    global acceptance gates in `docs/catalog-community/` as mandatory.
-2. Correlate OpenLineage only where the pinned engine integration can prove it.
+2. Extend OpenLineage correlation to a stock engine only when a separately
+   pinned emitter proves engine run identity through the same admission and
+   replay boundary.
 3. Keep release proof fresh after executable changes with the full local gate.
 4. Replace temporary Sail helper bridges only when upstream helpers are
    published and covered by Sail tests.
