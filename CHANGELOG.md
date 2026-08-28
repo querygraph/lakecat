@@ -9,6 +9,11 @@
 
 ## Unreleased
 
+- Make lineage and OpenLineage replay deterministic by deriving event time from
+  the durable outbox admission timestamp; prove a sink outage retains exactly
+  one admitted event, replays the same lineage and graph identities, and clears
+  the backlog only after successful acknowledgement.
+
 - Accept Phase 3 C3-02 catalog commit recovery evidence: deterministic
   response-loss reconciliation and restart-during-commit comparisons across
   LakeCat, Polaris, Gravitino, and Lakekeeper, with exact hashes and scoped

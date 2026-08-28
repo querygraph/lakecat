@@ -956,6 +956,101 @@ async fn outbox_drain_projects_table_events_to_sinks() {
 }
 
 #[tokio::test]
+async fn outbox_sink_outage_replays_exact_admitted_event_and_clears_backlog() {
+    let table = TableIdent::new(
+        WarehouseName::new("local").unwrap(),
+        "default".parse::<Namespace>().unwrap(),
+        TableName::new("events").unwrap(),
+    );
+    let principal = Principal {
+        subject: "agent:writer".to_string(),
+        kind: PrincipalKind::Agent,
+    };
+    let store = MemoryCatalogStore::new();
+    store
+        .record_audit_event(
+            CatalogAuditEvent::new(
+                "table.created",
+                Some(table.clone()),
+                principal.clone(),
+                json!({
+                    "event-type": "table.created",
+                    "table": table,
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-create",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "metadata-location": "file:///tmp/events/metadata/00000.json",
+                    "format-version": 3,
+                    "version": 0,
+                }),
+            )
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    let admitted = store
+        .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+        .await
+        .unwrap();
+    assert_eq!(admitted.len(), 1);
+    let admitted_event_id = admitted[0].event_id.clone();
+
+    let graph = Arc::new(RecordingGraph::default());
+    let failing_lineage = Arc::new(FailingLineage::default());
+    let failed_state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+        .with_integrations(
+            default_sail_engine(),
+            AllowAllGovernanceEngine::new(),
+            graph.clone(),
+            failing_lineage.clone(),
+        );
+    drain_outbox_once(&failed_state, 10)
+        .await
+        .expect_err("sink outage must fail without acknowledging the event");
+
+    let backlog = store
+        .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+        .await
+        .unwrap();
+    assert_eq!(backlog.len(), 1);
+    assert_eq!(backlog[0].event_id, admitted_event_id);
+
+    let lineage = Arc::new(RecordingLineage::default());
+    let recovered_state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+        .with_integrations(
+            default_sail_engine(),
+            AllowAllGovernanceEngine::new(),
+            graph.clone(),
+            lineage.clone(),
+        );
+    let response = drain_outbox_once(&recovered_state, 10).await.unwrap();
+    assert_eq!(response.delivered, 1);
+    assert_eq!(response.events[0].event_id, admitted_event_id);
+    assert!(
+        store
+            .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+
+    let failed_lineage = failing_lineage.events.lock().await;
+    let recovered_lineage = lineage.events.lock().await;
+    assert_eq!(failed_lineage.as_slice(), recovered_lineage.as_slice());
+    assert_eq!(failed_lineage.len(), 1);
+
+    let graph_events = graph.events.lock().await;
+    assert_eq!(graph_events.len(), 4);
+    assert_eq!(graph_events[0].event_id, graph_events[2].event_id);
+    assert_eq!(graph_events[1].event_id, graph_events[3].event_id);
+}
+
+#[tokio::test]
 async fn outbox_drain_does_not_acknowledge_projection_failures() {
     let table = TableIdent::new(
         WarehouseName::new("local").unwrap(),

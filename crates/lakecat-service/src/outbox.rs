@@ -31,6 +31,18 @@ impl OutboxProjectionReceipt {
     }
 }
 
+fn replay_lineage_event(
+    outbox: &OutboxEvent,
+    event_type: LineageEventType,
+    principal: Principal,
+    table: Option<TableIdent>,
+    payload: Value,
+) -> LineageEvent {
+    let mut event = LineageEvent::new(event_type, principal, table, payload);
+    event.emitted_at = outbox.created_at;
+    event
+}
+
 pub async fn drain_outbox_once(
     state: &LakeCatState,
     limit: usize,
@@ -185,7 +197,8 @@ pub(crate) async fn project_outbox_event(
             }
             let lineage_receipt = state
                 .lineage
-                .emit(LineageEvent::new(
+                .emit(replay_lineage_event(
+                    event,
                     lineage_type,
                     principal,
                     Some(table),
@@ -207,7 +220,8 @@ pub(crate) async fn project_outbox_event(
         receipt.graph_events += 1;
         let lineage_receipt = state
             .lineage
-            .emit(LineageEvent::new(
+            .emit(replay_lineage_event(
+                event,
                 LineageEventType::CatalogConfigRead,
                 principal,
                 None,
@@ -242,7 +256,8 @@ pub(crate) async fn project_outbox_event(
         receipt.graph_events += 1;
         let lineage_receipt = state
             .lineage
-            .emit(LineageEvent::new(
+            .emit(replay_lineage_event(
+                event,
                 lineage_type,
                 principal,
                 None,
@@ -262,7 +277,8 @@ pub(crate) async fn project_outbox_event(
         receipt.graph_events += 1;
         let lineage_receipt = state
             .lineage
-            .emit(LineageEvent::new(
+            .emit(replay_lineage_event(
+                event,
                 LineageEventType::NamespaceListed,
                 principal,
                 None,
@@ -287,7 +303,8 @@ pub(crate) async fn project_outbox_event(
         };
         let lineage_receipt = state
             .lineage
-            .emit(LineageEvent::new(
+            .emit(replay_lineage_event(
+                event,
                 lineage_type,
                 principal,
                 None,
@@ -312,7 +329,8 @@ pub(crate) async fn project_outbox_event(
         receipt.graph_events += 1;
         let lineage_receipt = state
             .lineage
-            .emit(LineageEvent::new(
+            .emit(replay_lineage_event(
+                event,
                 LineageEventType::ViewListed,
                 principal,
                 None,
@@ -323,7 +341,8 @@ pub(crate) async fn project_outbox_event(
     } else if event.event_type == "view.version-receipts-listed" {
         let lineage_receipt = state
             .lineage
-            .emit(LineageEvent::new(
+            .emit(replay_lineage_event(
+                event,
                 LineageEventType::ViewVersionReceiptsListed,
                 principal,
                 None,
@@ -344,7 +363,8 @@ pub(crate) async fn project_outbox_event(
         }
         let lineage_receipt = state
             .lineage
-            .emit(LineageEvent::new(
+            .emit(replay_lineage_event(
+                event,
                 LineageEventType::TableCommitRecordsListed,
                 principal,
                 None,
@@ -355,7 +375,8 @@ pub(crate) async fn project_outbox_event(
     } else if event.event_type == "view.version-receipt-chains-listed" {
         let lineage_receipt = state
             .lineage
-            .emit(LineageEvent::new(
+            .emit(replay_lineage_event(
+                event,
                 LineageEventType::ViewVersionReceiptChainsListed,
                 principal,
                 None,
@@ -380,7 +401,8 @@ pub(crate) async fn project_outbox_event(
         receipt.graph_events += 1;
         let lineage_receipt = state
             .lineage
-            .emit(LineageEvent::new(
+            .emit(replay_lineage_event(
+                event,
                 LineageEventType::PolicyBindingUpserted,
                 principal,
                 None,
@@ -400,7 +422,8 @@ pub(crate) async fn project_outbox_event(
         receipt.graph_events += 1;
         let lineage_receipt = state
             .lineage
-            .emit(LineageEvent::new(
+            .emit(replay_lineage_event(
+                event,
                 LineageEventType::ProjectUpserted,
                 principal,
                 None,
@@ -421,7 +444,8 @@ pub(crate) async fn project_outbox_event(
         receipt.graph_events += 1;
         let lineage_receipt = state
             .lineage
-            .emit(LineageEvent::new(
+            .emit(replay_lineage_event(
+                event,
                 LineageEventType::ServerUpserted,
                 principal,
                 None,
@@ -447,7 +471,8 @@ pub(crate) async fn project_outbox_event(
         receipt.graph_events += 1;
         let lineage_receipt = state
             .lineage
-            .emit(LineageEvent::new(
+            .emit(replay_lineage_event(
+                event,
                 LineageEventType::StorageProfileUpserted,
                 principal,
                 None,
@@ -481,7 +506,8 @@ pub(crate) async fn project_outbox_event(
         receipt.graph_events += 1;
         let lineage_receipt = state
             .lineage
-            .emit(LineageEvent::new(
+            .emit(replay_lineage_event(
+                event,
                 lineage_type,
                 principal,
                 None,
@@ -502,7 +528,8 @@ pub(crate) async fn project_outbox_event(
         receipt.graph_events += 1;
         let lineage_receipt = state
             .lineage
-            .emit(LineageEvent::new(
+            .emit(replay_lineage_event(
+                event,
                 LineageEventType::WarehouseUpserted,
                 principal,
                 None,
@@ -522,7 +549,8 @@ pub(crate) async fn project_outbox_event(
             receipt.graph_events += 1;
             let lineage_receipt = state
                 .lineage
-                .emit(LineageEvent::new(
+                .emit(replay_lineage_event(
+                    event,
                     LineageEventType::TableRestored,
                     principal,
                     Some(table),
@@ -552,7 +580,8 @@ pub(crate) async fn project_outbox_event(
         }
         let lineage_receipt = state
             .lineage
-            .emit(LineageEvent::new(
+            .emit(replay_lineage_event(
+                event,
                 LineageEventType::CredentialsVendAttempted,
                 principal,
                 table,
@@ -563,7 +592,8 @@ pub(crate) async fn project_outbox_event(
     } else if event.event_type == "querygraph.bootstrap" {
         let lineage_receipt = state
             .lineage
-            .emit(LineageEvent::new(
+            .emit(replay_lineage_event(
+                event,
                 LineageEventType::QueryGraphBootstrap,
                 principal,
                 None,
