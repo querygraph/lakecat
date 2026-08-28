@@ -27,7 +27,7 @@ graph behavior to Grust, and governance semantics to TypeSec.
 - The catalog-community program is active on
   `codex/catalog-community-phase-1`. Phase 0 is closed. LakeCat's public
   acceptance ledger is synchronized through Phase 1. The neutral
-  `querygraph/catalog-bench@6886c35` contains the Phase 1 publication plus the
+  `querygraph/catalog-bench@e9febf6` contains the Phase 1 publication plus the
   active Phase 2 implementation. Its Phase 1 evidence remains the reviewed immutable
   five-scenario by five-catalog correctness bundle (20 pass, five fail), the
   production contention bundle, one-command smoke/full recomputation,
@@ -64,24 +64,32 @@ graph behavior to Grust, and governance semantics to TypeSec.
   explicit table location; catalog-bench now reconciles engine-relative
   snapshot baselines and bounded standard gzip Iceberg metadata. This remains
   an unranked correctness result.
-- The remaining Phase 2 implementation has the common engine-neutral evidence
-  boundary plus published Spark, Flink, and Trino paths committed. The active
-  Phase 2 front is the largest honest DuckDB path, with unsupported integration
-  boundaries recorded explicitly rather than filled by a transport shim.
+- Phase 2 DuckDB delivery is complete in `querygraph/catalog-bench@e9febf6`.
+  Fresh run `duckdb_0828h` used stock DuckDB 1.5.3 with its official signed
+  Iceberg, HTTPFS, and Avro extensions against LakeCat `b8be6bc9`, Polaris
+  1.7.0, Gravitino 1.3.0, and Lakekeeper 0.13.3. All four pass the common
+  independently validated write/read/evolution and cleanup contract. The
+  reviewed deterministic bundle is published under
+  `results/v1/duckdb-v2-b8be6bc9-2026-08-28/`. DuckDB exposed and drove fixes
+  for staged Iceberg table creation in LakeCat and spec-correct REST update
+  decoding plus `add-spec` application in Sail `54217703`; no catalog-specific
+  client shim was introduced. This remains an unranked correctness result.
+- Phase 2's common engine-neutral evidence boundary and the published Spark,
+  Flink, Trino, and DuckDB paths are complete. OpenLineage correlation remains
+  gated on proof from each pinned engine integration rather than inferred from
+  catalog state.
 - Phase 1 is closed. All C1-01 through C1-10 units and exit gates have exact
-  committed evidence. The active delivery front is Phase 2 multi-engine
-  interoperability.
+  committed evidence. With Phase 2 multi-engine interoperability complete, the
+  active delivery front is Phase 3 failure, recovery, migration, and federation.
 
 ## Next Stage
 
-1. Complete the remaining Phase 2 work for Trino and the largest honest DuckDB path;
-   publish only independently admitted optimized evidence and correlate
-   OpenLineage only where the pinned engine integration can prove it.
-2. Execute the remaining catalog-community phases in dependency order: failure
+1. Execute the remaining catalog-community phases in dependency order: failure
    and recovery plus migration/federation; the Apache Ossie foundation in its
    owning repositories; the TPC-DS semantic supply chain; and evidence-linked
    upstream/community release artifacts. Treat every phase's exit criteria and
    global acceptance gates in `docs/catalog-community/` as mandatory.
+2. Correlate OpenLineage only where the pinned engine integration can prove it.
 3. Keep release proof fresh after executable changes with the full local gate.
 4. Replace temporary Sail helper bridges only when upstream helpers are
    published and covered by Sail tests.

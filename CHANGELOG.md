@@ -9,6 +9,9 @@
 
 ## Unreleased
 
+- Record completion of the independently validated stock DuckDB 1.5.3
+  four-catalog interoperability path and its immutable catalog-bench bundle.
+
 - Update the pinned Sail `lakecat` revision so standard Iceberg REST table and
   view update payloads decode their kebab-case field names, including the
   `format-version` and `sort-order` updates emitted by DuckDB 1.5.3, and apply
