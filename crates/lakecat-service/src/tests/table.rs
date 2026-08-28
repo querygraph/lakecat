@@ -638,6 +638,26 @@ async fn metadata_reader_decodes_standard_gzip_pointer() {
 }
 
 #[test]
+fn metadata_prefix_accepts_equivalent_file_uri_forms_only_for_children() {
+    assert!(location_is_strictly_within_prefix(
+        "file:/migration/hadoop/events/metadata/v1.metadata.json",
+        "file:///migration/hadoop/events",
+    ));
+    assert!(!location_is_strictly_within_prefix(
+        "file:/migration/hadoop/events",
+        "file:///migration/hadoop/events",
+    ));
+    assert!(!location_is_strictly_within_prefix(
+        "file:/migration/hadoop/events-sibling/metadata/v1.metadata.json",
+        "file:///migration/hadoop/events",
+    ));
+    assert!(!location_is_strictly_within_prefix(
+        "file://remote/migration/hadoop/events/metadata/v1.metadata.json",
+        "file:///migration/hadoop/events",
+    ));
+}
+
+#[test]
 fn metadata_write_plan_requires_metadata_location() {
     let table = TableRecord::new(
         table_ident("local", "default", "events").unwrap(),

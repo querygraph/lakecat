@@ -9,6 +9,10 @@
 
 ## Unreleased
 
+- Compare parsed metadata URL scheme, authority, and child paths when enforcing
+  storage-profile prefixes, admitting Hadoop's equivalent `file:/` pointer
+  beneath a `file:///` table root without admitting sibling or remote paths.
+
 - Accept Phase 3 C3-05 with exact QueryGraph/catalog-bench four-direction
   LakeCat↔Polaris and LakeCat↔Lakekeeper migration evidence, including non-empty
   snapshots/refs, full semantic identity, exact data scans, and explicit

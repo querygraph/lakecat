@@ -312,6 +312,24 @@ pub(crate) fn location_is_strictly_within_prefix(location: &str, prefix: &str) -
     if location == prefix {
         return false;
     }
+    if let (Ok(location_url), Ok(prefix_url)) = (Url::parse(location), Url::parse(prefix)) {
+        if location_url.scheme() == prefix_url.scheme()
+            && location_url.username() == prefix_url.username()
+            && location_url.password() == prefix_url.password()
+            && location_url.host_str() == prefix_url.host_str()
+            && location_url.port_or_known_default() == prefix_url.port_or_known_default()
+        {
+            return path_is_strictly_within_prefix(location_url.path(), prefix_url.path());
+        }
+        return false;
+    }
+    path_is_strictly_within_prefix(location, prefix)
+}
+
+fn path_is_strictly_within_prefix(location: &str, prefix: &str) -> bool {
+    if location == prefix {
+        return false;
+    }
     if prefix.ends_with('/') {
         location.starts_with(prefix)
     } else {
