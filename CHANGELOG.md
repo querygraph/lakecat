@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Assign fresh positive Iceberg field IDs for standard `createTable` requests
+  instead of persisting provisional client IDs such as Spark's zero-based
+  sequence. Traverse nested struct/list/map IDs deterministically, derive the
+  correct `last-column-id`, and rewrite partition/sort `source-id` references.
+  This restores stock Spark table observation while keeping metadata pristine.
+
 - Advance the Phase 2 execution ledger to `catalog-bench@59840b9`: Spark's
   production launcher now selects the admitted v2 scenario, rejects the
   superseded v1 path, and builds under a dependency-complete Compose profile.

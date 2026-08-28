@@ -114,8 +114,8 @@ async fn create_table_generates_metadata_from_standard_schema() {
                     "type": "struct",
                     "schema-id": 0,
                     "fields": [
-                        {"id": 1, "name": "id", "required": true, "type": "long"},
-                        {"id": 2, "name": "name", "required": false, "type": "string"}
+                        {"id": 0, "name": "id", "required": true, "type": "long"},
+                        {"id": 1, "name": "name", "required": false, "type": "string"}
                     ]
                 }
             })
@@ -141,6 +141,8 @@ async fn create_table_generates_metadata_from_standard_schema() {
         serde_json::json!(0)
     );
     assert_eq!(payload["metadata"]["last-column-id"], serde_json::json!(2));
+    assert_eq!(payload["metadata"]["schemas"][0]["fields"][0]["id"], 1);
+    assert_eq!(payload["metadata"]["schemas"][0]["fields"][1]["id"], 2);
     assert_eq!(payload["metadata"]["snapshots"], serde_json::json!([]));
     assert!(payload["metadata"]["table-uuid"].as_str().is_some());
 

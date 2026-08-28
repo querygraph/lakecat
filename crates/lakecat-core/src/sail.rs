@@ -248,8 +248,9 @@ pub fn initial_table_metadata(
     sort_order: Option<&Value>,
     properties: &Value,
 ) -> Value {
-    // schema-id and field ids come from the client schema; derive last-column-id
-    // as the max field id so later column additions keep increasing it.
+    // A create-table request may carry provisional client field IDs (Spark
+    // starts at zero). The catalog owns the persisted Iceberg identity space,
+    // so assign fresh positive IDs in deterministic schema order.
     let mut schema = schema.clone();
     if schema.get("schema-id").is_none()
         && let Some(obj) = schema.as_object_mut()
@@ -257,18 +258,20 @@ pub fn initial_table_metadata(
         obj.insert("schema-id".into(), Value::from(0));
     }
     let current_schema_id = schema.get("schema-id").and_then(Value::as_i64).unwrap_or(0);
-    let last_column_id = max_field_id(&schema);
+    let (last_column_id, field_ids) = assign_fresh_field_ids(&mut schema);
 
-    let partition_spec = partition_spec
+    let mut partition_spec = partition_spec
         .cloned()
         .unwrap_or_else(|| serde_json::json!({"spec-id": 0, "fields": []}));
+    rewrite_source_ids(&mut partition_spec, &field_ids);
     let default_spec_id = partition_spec
         .get("spec-id")
         .and_then(Value::as_i64)
         .unwrap_or(0);
-    let sort_order = sort_order
+    let mut sort_order = sort_order
         .cloned()
         .unwrap_or_else(|| serde_json::json!({"order-id": 0, "fields": []}));
+    rewrite_source_ids(&mut sort_order, &field_ids);
     let default_sort_order_id = sort_order
         .get("order-id")
         .and_then(Value::as_i64)
@@ -297,30 +300,98 @@ pub fn initial_table_metadata(
     })
 }
 
-fn max_field_id(schema: &Value) -> i64 {
-    fn walk(v: &Value, max: &mut i64) {
-        match v {
-            Value::Object(map) => {
-                if let Some(id) = map.get("id").and_then(Value::as_i64)
-                    && id > *max
-                {
-                    *max = id;
-                }
-                for (_k, child) in map {
-                    walk(child, max);
+fn assign_fresh_field_ids(schema: &mut Value) -> (i64, std::collections::BTreeMap<i64, i64>) {
+    fn assign_type(
+        field_type: &mut Value,
+        next: &mut i64,
+        mapping: &mut std::collections::BTreeMap<i64, i64>,
+    ) {
+        let Some(object) = field_type.as_object_mut() else {
+            return;
+        };
+        match object.get("type").and_then(Value::as_str) {
+            Some("struct") => {
+                if let Some(fields) = object.get_mut("fields").and_then(Value::as_array_mut) {
+                    assign_fields(fields, next, mapping);
                 }
             }
-            Value::Array(items) => {
-                for child in items {
-                    walk(child, max);
-                }
+            Some("list") => assign_type_id(object, "element-id", "element", next, mapping),
+            Some("map") => {
+                assign_type_id(object, "key-id", "key", next, mapping);
+                assign_type_id(object, "value-id", "value", next, mapping);
             }
             _ => {}
         }
     }
-    let mut max = 0;
-    walk(schema, &mut max);
-    max
+
+    fn assign_type_id(
+        object: &mut serde_json::Map<String, Value>,
+        id_key: &str,
+        type_key: &str,
+        next: &mut i64,
+        mapping: &mut std::collections::BTreeMap<i64, i64>,
+    ) {
+        let old = object.get(id_key).and_then(Value::as_i64);
+        let assigned = *next;
+        *next = next.saturating_add(1);
+        object.insert(id_key.into(), Value::from(assigned));
+        if let Some(old) = old {
+            mapping.insert(old, assigned);
+        }
+        if let Some(child) = object.get_mut(type_key) {
+            assign_type(child, next, mapping);
+        }
+    }
+
+    fn assign_fields(
+        fields: &mut [Value],
+        next: &mut i64,
+        mapping: &mut std::collections::BTreeMap<i64, i64>,
+    ) {
+        for field in fields {
+            let Some(object) = field.as_object_mut() else {
+                continue;
+            };
+            let old = object.get("id").and_then(Value::as_i64);
+            let assigned = *next;
+            *next = next.saturating_add(1);
+            object.insert("id".into(), Value::from(assigned));
+            if let Some(old) = old {
+                mapping.insert(old, assigned);
+            }
+            if let Some(field_type) = object.get_mut("type") {
+                assign_type(field_type, next, mapping);
+            }
+        }
+    }
+
+    let mut next = 1_i64;
+    let mut mapping = std::collections::BTreeMap::new();
+    if let Some(fields) = schema.get_mut("fields").and_then(Value::as_array_mut) {
+        assign_fields(fields, &mut next, &mut mapping);
+    }
+    (next.saturating_sub(1), mapping)
+}
+
+fn rewrite_source_ids(value: &mut Value, mapping: &std::collections::BTreeMap<i64, i64>) {
+    match value {
+        Value::Object(object) => {
+            if let Some(source_id) = object.get_mut("source-id")
+                && let Some(replacement) = source_id.as_i64().and_then(|id| mapping.get(&id))
+            {
+                *source_id = Value::from(*replacement);
+            }
+            for child in object.values_mut() {
+                rewrite_source_ids(child, mapping);
+            }
+        }
+        Value::Array(values) => {
+            for child in values {
+                rewrite_source_ids(child, mapping);
+            }
+        }
+        _ => {}
+    }
 }
 
 pub fn validate_lakecat_metadata_format(metadata: &Value) -> LakeCatResult<IcebergFormatSupport> {
@@ -343,6 +414,47 @@ pub fn validate_lakecat_metadata_format(metadata: &Value) -> LakeCatResult<Icebe
 mod tests {
     use super::*;
     use crate::{Namespace, TableName, WarehouseName};
+
+    #[test]
+    fn create_table_assigns_fresh_nested_ids_and_rewrites_sources() {
+        let metadata = initial_table_metadata(
+            "11111111-1111-1111-1111-111111111111",
+            "s3://warehouse/events",
+            &serde_json::json!({
+                "type": "struct",
+                "schema-id": 0,
+                "fields": [
+                    {"id": 0, "name": "id", "required": true, "type": "long"},
+                    {"id": 7, "name": "items", "required": false, "type": {
+                        "type": "list", "element-id": 8, "element-required": false,
+                        "element": {"type": "struct", "fields": [
+                            {"id": 9, "name": "value", "required": false, "type": "string"}
+                        ]}
+                    }}
+                ]
+            }),
+            Some(&serde_json::json!({
+                "spec-id": 0,
+                "fields": [{"name": "items", "transform": "identity", "source-id": 7, "field-id": 1000}]
+            })),
+            Some(&serde_json::json!({
+                "order-id": 1,
+                "fields": [{"transform": "identity", "source-id": 9, "direction": "asc", "null-order": "nulls-first"}]
+            })),
+            &serde_json::json!({}),
+        );
+
+        assert_eq!(metadata["last-column-id"], 4);
+        assert_eq!(metadata["schemas"][0]["fields"][0]["id"], 1);
+        assert_eq!(metadata["schemas"][0]["fields"][1]["id"], 2);
+        assert_eq!(metadata["schemas"][0]["fields"][1]["type"]["element-id"], 3);
+        assert_eq!(
+            metadata["schemas"][0]["fields"][1]["type"]["element"]["fields"][0]["id"],
+            4
+        );
+        assert_eq!(metadata["partition-specs"][0]["fields"][0]["source-id"], 2);
+        assert_eq!(metadata["sort-orders"][0]["fields"][0]["source-id"], 4);
+    }
 
     #[tokio::test]
     async fn deferred_engine_rejects_scan_planning() {
