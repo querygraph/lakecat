@@ -79,8 +79,13 @@ the same pinned MinIO instance. A smoke run is not publishable evidence.
   phase. C3-01 through C3-06 and the phase exit gates have exact evidence.
   It is the accepted recovery and migration predecessor to the Ossie work.
 - [Phase 4 acceptance](PHASE-4-ACCEPTANCE.md) records the closed Apache Ossie
-  foundation across QueryGraph, Sail, LakeCat, TypeSec, and Grust. Phase 5's
-  live TPC-DS semantic supply chain is the active delivery front.
+  foundation across QueryGraph, Sail, LakeCat, TypeSec, and Grust.
+- [Phase 5 acceptance](PHASE-5-ACCEPTANCE.md) records the closed stock-Spark
+  TPC-DS semantic supply chain, replay-bound answers, drift rejection, upstream
+  Polaris converter loss report, and clean one-command proof.
+- [Phase 6 acceptance](PHASE-6-ACCEPTANCE.md) records the public proposal,
+  quarterly packet, immutable index, demonstration material, versioned feedback
+  backlog, and four public maintainer review opportunities.
 - [Iceberg table lifecycle](../ICEBERG-TABLES.md) records LakeCat's durable
   create/load/update/drop/register/rename, storage, governance, error, and
   no-current-snapshot contract accepted by C1-05.

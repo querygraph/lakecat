@@ -2409,6 +2409,48 @@ log bundle. It proves that LakeCat replay, graph projection, OpenLineage,
 QueryGraph verification, and QueryGraph import all agreed on the same catalog
 state.
 
+# The Catalog Community and Semantic Supply Chain
+
+LakeCat’s public comparison program now treats Polaris, Gravitino, and
+Lakekeeper as protocol peers. The most useful evidence is not another isolated
+throughput chart: it is the work catalogs are expected to survive and explain.
+The neutral catalog-bench suite therefore publishes unranked stock-client
+correctness matrices for Spark, Flink, Trino, and DuckDB, plus explicit recovery,
+restart, cold-restore, metadata-pointer migration, and HadoopCatalog handoff
+evidence. Every result keeps catalog-specific deployment scope and known gaps
+next to the outcome.
+
+The same discipline extends into Apache Ossie. QueryGraph pins the upstream
+schema, validator, and TPC-DS model by commit and checksum. A clean run creates
+five physical Iceberg fixtures through stock Spark, asks Sail’s catalog boundary
+to validate the bindings, asks TypeSec’s vocabulary to authorize publication,
+and CAS-publishes the exact model artifact in LakeCat. The transactional outbox
+then emits one stable QueryGraph-model graph anchor for Grust and one
+OpenLineage event. Business-model interpretation stays in QueryGraph; LakeCat
+stores only the immutable pointer, version, physical and policy bindings,
+publisher, audit, and replay boundary.
+
+Five representative answers are bound to seven independently hashed bases:
+physical snapshots, canonical model, source artifact, governed policy, SQL
+plans, graph replay, and lineage replay. Deliberately changing physical state,
+model, policy, graph, lineage, or artifact invalidates the saved proof. This is
+small deterministic correctness evidence, not a TPC-DS performance claim or a
+cryptographic attestation of Spark.
+
+Interchange claims are equally bounded. The pinned Apache Ossie Polaris
+converter passes its 45 Java tests and preserves the TPC-DS model, five datasets,
+and 31 fields through live Polaris 1.7.0. It currently omits four relationships,
+five metrics, AI context, and the source model extensions while generating
+physical reconstruction extensions. The published result therefore says
+`verified-with-loss`, and the evidence motivates a machine-readable converter
+loss-report proposal rather than hiding gaps behind “conversion succeeded.”
+
+The 2026-Q3 packet links an immutable evidence index, generated known gaps,
+reproduction and demo guides, and public review issues for all four catalogs.
+An open review issue is an opportunity for correction, not maintainer
+endorsement. Corrections create a new feedback-bundle version; historical
+evidence is never rewritten.
+
 # Future Work
 
 LakeCat is a direction more than a single release. The next stage should keep
@@ -2416,12 +2458,11 @@ the architecture more true without pushing engine, graph, or security semantics
 back into the catalog.
 
 Marciana v1 is complete as a durable local-service proof; implementing agent
-memory is therefore not a LakeCat backlog item. LakeCat's future opportunity is
-narrower: let a downstream QueryGraph workflow bind an allowed answer to the
-catalog receipt, scan-plan, snapshot, bootstrap, and OpenLineage hashes that
-justify it, so those LakeCat-owned anchors become Marciana provenance without
-copying raw table data into the catalog or making LakeCat responsible for
-recall.
+memory is therefore not a LakeCat backlog item. LakeCat now proves the narrower
+boundary: a downstream QueryGraph workflow binds an allowed answer to physical,
+model, artifact, policy, plan, graph, and lineage hashes. Future work should
+carry those accepted anchors into Marciana provenance without copying raw table
+data into the catalog or making LakeCat responsible for recall.
 
 1. Point the Sail git dependency at upstream (or a published crate) only after
    the required helpers land there, then retire the querygraph/sail `lakecat`

@@ -4,17 +4,16 @@ Updated: 2026-08-28
 
 ## Current State
 
-- Catalog-community recovery after the workstation reboot: the persistent goal
-  is restored, `GOAL.md` now reflects the actual cross-repository state, and the
-  interrupted Trino private-configuration staging unit was recovered, verified,
-  documented, committed, and pushed through `catalog-bench@97b7069`, including
-  private staging, typed readiness, early-exit/timeout classification, and
-  guaranteed process-group shutdown. The LakeCat
-  ledger now closes C1-07 through C1-10 and all Phase 1 exit gates through
-  `catalog-bench@290d1fb` and `lakecat@0dee124b`. Spark, Flink, and Trino Phase 2 implementation state is recorded
-  without promoting unreviewed runtime evidence into public results.
+- The catalog-community program is implemented through Phase 6. Phases 1–3
+  publish neutral behavioral, stock-engine, recovery, and migration evidence;
+  Phase 4 establishes the pinned Apache Ossie boundary in the owning repos;
+  Phase 5 publishes the replay-bound TPC-DS semantic proof and explicit Polaris
+  converter loss report; Phase 6 publishes the Q3 release packet and four public
+  maintainer review opportunities. Exact gates are in
+  `docs/catalog-community/PHASE-1-ACCEPTANCE.md` through
+  `PHASE-6-ACCEPTANCE.md`.
 
-- LakeCat is on `master`.
+- LakeCat community work is on `codex/catalog-community-phase-1`.
 - Release naming: `v0.1.0` is the original Bobcat release. The durable feline
   codename map and planned SemVer emphasis live in `docs/RELEASES.md`; future
   codenames remain planning labels until release proof is complete.
@@ -22,19 +21,12 @@ Updated: 2026-08-28
   as `docs/completed/GOAL1.md`. The new `GOAL.md` is the concise live
   release-and-next-stage charter and defers detailed execution guidance to the
   current design, status, release, book, and agent documents.
-- Latest catalog-community acceptance: C1-06 deterministic commit correctness
-  is complete at `catalog-bench@f072422`/`fdb2a9a` and canonical
-  `lakecat@ef94b550`. Stable Rust 1.97.1 production executables ran on one
-  Docker network against one local MinIO. LakeCat, Gravitino, and Polaris pass
-  all 10 required assertions; Lakekeeper and Nessie pass 9 of 10, preserving
-  complete state but returning nonstandard stale-conflict error types.
-  Lakekeeper alone advertises idempotency: exact replay passes, while same-key
-  content drift returns a cached 200 instead of 409 without applying drifted
-  state. All 16 transcript-referenced metadata objects were found directly in
-  MinIO, and every fixture cleanup and secret-sanitization assertion passed.
-  Exact artifacts, transcript hashes, findings, tests, and non-claims are in
-  `docs/catalog-community/PHASE-1-ACCEPTANCE.md` and
-  `docs/ICEBERG-COMMITS.md`.
+- Latest catalog-community acceptance: stock-Spark run `tpcds_0828g` binds five
+  semantic answers to physical, model, artifact, policy, plan, graph, and
+  lineage hashes and rejects all six required drift dimensions. The Q3 index is
+  public at `querygraph/catalog-bench@285415d`; review is active at LakeCat #4,
+  Polaris #5403, Gravitino #12719, and Lakekeeper #2002 without implying any
+  maintainer endorsement.
 - Table lifecycle compatibility: missing-parent list is a spec-shaped 404,
   duplicate create is 409, standard create durably writes initial metadata,
   false-overwrite registration preserves the source UUID and metadata pointer,

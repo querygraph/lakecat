@@ -79,20 +79,20 @@ acceptance gates; they cannot be declared from this checklist alone.
 
 | ID | Status | Owner | Unit and acceptance evidence |
 | --- | --- | --- | --- |
-| C5-01 | pending | QueryGraph | Build reproducible physical TPC-DS Iceberg fixtures through a stock client. |
-| C5-02 | pending | QueryGraph/LakeCat | Validate, bind, authorize, CAS-publish, audit, and drain the exact upstream TPC-DS model. |
-| C5-03 | pending | Grust/OpenLineage | Project semantic facts and physical/semantic lineage with exact replay evidence. |
-| C5-04 | pending | QueryGraph/Sail | Execute representative metrics and bind answers to snapshot, model, policy, plan, graph, and lineage hashes. |
-| C5-05 | pending | QueryGraph | Prove deliberate physical, semantic, policy, graph, lineage, and artifact drift invalidates saved proof. |
-| C5-06 | pending | QueryGraph | Run the upstream Polaris converter and publish structural, semantic, extension-preservation, and loss reports. |
-| C5-07 | pending | all | Deliver and verify a clean-environment one-command operator/client demonstration. |
+| C5-01 | done | QueryGraph | Stock Spark/Iceberg REST run `tpcds_0828g` creates five source-pinned physical fixtures with schema, data, and snapshot evidence. |
+| C5-02 | done | QueryGraph/LakeCat | The exact artifact is policy-bound, CAS-published, read back, audited, and drained at LakeCat `8917e5c6`. |
+| C5-03 | done | Grust/OpenLineage | LakeCat drains stable graph/OpenLineage hashes; Grust `e5edc99` proves exact 42-node/45-edge TPC-DS replay. |
+| C5-04 | done | QueryGraph/Sail | Five answers bind to physical, model, artifact, policy, plan, graph, and lineage hashes in the reviewed proof. |
+| C5-05 | done | QueryGraph | Six required basis drifts and answer/basis/proof tampering invalidate saved proof. |
+| C5-06 | done | QueryGraph | The pinned upstream Polaris converter passes 45 tests and publishes explicit live TPC-DS retention/loss evidence. |
+| C5-07 | done | all | The unique-run one-command demo completes and leaves zero labeled containers or volumes. |
 
 ## Phase 6 — upstream and community release
 
 | ID | Status | Owner | Unit and acceptance evidence |
 | --- | --- | --- | --- |
-| C6-01 | pending | QueryGraph | Prepare a focused Apache Ossie contribution or public proposal from proven fixtures and loss reports. |
-| C6-02 | pending | catalog-bench | Give each catalog maintainer an evidence-linked adapter/result review opportunity and retain corrections. |
-| C6-03 | pending | catalog-bench | Publish the quarterly report, immutable sanitized bundle, generated known-gaps page, and reproduction guide. |
-| C6-04 | pending | QueryGraph | Produce community presentation/demo material with no claims beyond linked evidence. |
-| C6-05 | pending | all | Convert external feedback into a new versioned backlog and record accepted or actively reviewed upstream artifacts. |
+| C6-01 | done | QueryGraph | Public proposal `f0e4afd` derives a converter loss-report contract from the pinned live evidence. |
+| C6-02 | done | catalog-bench | LakeCat #4, Polaris #5403, Gravitino #12719, and Lakekeeper #2002 provide public evidence-linked review opportunities. |
+| C6-03 | done | catalog-bench | `56ffdb0` publishes the Q3 report, nine-entry immutable index, known gaps, and reproduction guide. |
+| C6-04 | done | QueryGraph | `f0e4afd` publishes a bounded operator/demo narrative linked to reviewed evidence and non-claims. |
+| C6-05 | done | all | `285415d` records active reviews in feedback backlog v2 without claiming maintainer endorsement. |

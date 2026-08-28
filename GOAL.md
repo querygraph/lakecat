@@ -134,15 +134,26 @@ graph behavior to Grust, and governance semantics to TypeSec.
   durable publication CAS/outbox state, signed semantic decisions, stable graph
   taxonomy, and fail-closed admission ordering remain in their owning repos.
   Exact evidence is in `docs/catalog-community/PHASE-4-ACCEPTANCE.md`. Phase 5
-  TPC-DS is the active delivery front.
+  TPC-DS was its accepted successor.
+- Phase 5 is closed at LakeCat `8917e5c6`, QueryGraph `f0e4afd`, Grust
+  `e5edc99`, and `querygraph/catalog-bench@61183ba`. Fresh stock-Spark run
+  `tpcds_0828g` creates the physical fixtures, policy-binds and CAS-publishes
+  the exact pinned Ossie model, drains graph/OpenLineage replay, evaluates five
+  representative answers, binds seven proof bases, and rejects all six required
+  drift dimensions. The upstream Polaris converter’s live TPC-DS run is
+  explicitly `verified-with-loss`, not described as lossless.
+- Phase 6 is closed at QueryGraph `f0e4afd` and
+  `querygraph/catalog-bench@285415d`. The public Q3 report, immutable evidence
+  index, reproduction and demo guides, Ossie report-contract proposal, feedback
+  backlog v2, and review opportunities for LakeCat #4, Polaris #5403, Gravitino
+  #12719, and Lakekeeper #2002 are published. No maintainer endorsement is
+  inferred from an open issue.
 
 ## Next Stage
 
-1. Execute the remaining catalog-community phases in dependency order: failure
-   and recovery plus migration/federation; the Apache Ossie foundation in its
-   owning repositories; the TPC-DS semantic supply chain; and evidence-linked
-   upstream/community release artifacts. Treat every phase's exit criteria and
-   global acceptance gates in `docs/catalog-community/` as mandatory.
+1. Maintain the completed catalog-community evidence as immutable history.
+   Triage public maintainer feedback into backlog v3 with source URLs and new
+   artifact versions; do not rewrite accepted Q3 evidence.
 2. Extend OpenLineage correlation to a stock engine only when a separately
    pinned emitter proves engine run identity through the same admission and
    replay boundary.

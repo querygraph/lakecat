@@ -12,6 +12,10 @@
 - Project governed semantic-model publications through LakeCat's outbox into
   stable QueryGraph model graph anchors and hash-bound OpenLineage events.
 
+- Close catalog-community Phases 5 and 6 with the reviewed TPC-DS semantic
+  proof, explicit Polaris converter loss report, community release index,
+  public proposal/demo, versioned feedback backlog, and four maintainer reviews.
+
 - Close catalog-community Phase 4 with exact Apache Ossie upstream, lossless
   document, physical binding, publication, policy receipt, graph taxonomy, and
   fail-closed admission evidence across the five owning repositories.
