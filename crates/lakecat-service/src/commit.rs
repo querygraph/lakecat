@@ -48,6 +48,17 @@ pub(crate) async fn commit_table_in_warehouse(
         }));
     }
     let current = state.store.load_table(capability.table()).await?;
+    let requirements = if current.staged {
+        request
+            .requirements
+            .into_iter()
+            .filter(|requirement| {
+                requirement.get("type").and_then(serde_json::Value::as_str) != Some("assert-create")
+            })
+            .collect()
+    } else {
+        request.requirements
+    };
     let storage_profile = state.store.storage_profile_for_table(&current).await?;
     let current_metadata_location = current.metadata_location.clone();
     let commit_plan = state
@@ -59,7 +70,7 @@ pub(crate) async fn commit_table_in_warehouse(
             new_metadata_location: request.metadata_location,
             current_metadata: current.metadata,
             new_metadata: request.metadata,
-            requirements: request.requirements,
+            requirements,
             updates: request.updates,
         })
         .await?;

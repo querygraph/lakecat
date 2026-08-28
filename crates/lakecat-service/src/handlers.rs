@@ -479,13 +479,14 @@ pub(crate) async fn create_table_in_warehouse(
         .into());
         };
 
-    let table = TableRecord::new(
+    let mut table = TableRecord::new(
         ident.clone(),
         location,
         metadata_location,
         metadata,
         principal.clone(),
     );
+    table.staged = request.stage_create.unwrap_or(false);
     let metadata_write = if persist_initial_metadata {
         let storage_profile = state.store.storage_profile_for_table(&table).await?;
         let metadata_location = table.metadata_location.as_deref().ok_or_else(|| {

@@ -1209,6 +1209,7 @@ impl CatalogStore for TursoCatalogStore {
             ));
         }
         table.metadata_location = commit.new_metadata_location.clone();
+        table.staged = false;
         if let Some(new_metadata) = commit.new_metadata {
             table.metadata = new_metadata;
         }

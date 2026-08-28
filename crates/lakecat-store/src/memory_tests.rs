@@ -3022,6 +3022,7 @@ async fn memory_store_rejects_deserialized_empty_table_locations() {
         created: AuditStamp::now(Principal::anonymous()),
         updated_at: Utc::now(),
         version: 0,
+        staged: false,
     };
 
     let err = store.create_table(table).await.unwrap_err();
@@ -3057,6 +3058,7 @@ async fn memory_store_rejects_deserialized_invalid_table_metadata() {
         created: AuditStamp::now(Principal::anonymous()),
         updated_at: Utc::now(),
         version: 0,
+        staged: false,
     };
 
     let mut empty_metadata_location = base.clone();
@@ -3088,6 +3090,7 @@ async fn memory_store_rejects_deserialized_invalid_table_metadata() {
         created: AuditStamp::now(Principal::anonymous()),
         updated_at: Utc::now(),
         version: 0,
+        staged: false,
     };
     let err = store
         .create_table(missing_format_version.clone())

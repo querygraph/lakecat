@@ -1,5 +1,9 @@
 # Changelog
 
+- Preserve the Iceberg REST staged-create marker through catalog storage, admit
+  its subsequent `assert-create` commit exactly once, and finalize the table on
+  commit for stock DuckDB compatibility.
+
 - Record the completed fresh four-catalog stock-Trino interoperability bundle
   and advance the catalog-community execution front to DuckDB.
 

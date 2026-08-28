@@ -123,6 +123,9 @@ pub struct TableRecord {
     pub created: AuditStamp,
     pub updated_at: DateTime<Utc>,
     pub version: u64,
+    /// True only between an Iceberg REST staged create and its assert-create commit.
+    #[serde(default)]
+    pub staged: bool,
 }
 
 impl TableRecord {
@@ -142,6 +145,7 @@ impl TableRecord {
             updated_at: created.at,
             created,
             version: 0,
+            staged: false,
         }
     }
 
