@@ -454,6 +454,33 @@ async fn validates_commit_requirements_against_sail_metadata() {
 }
 
 #[tokio::test]
+async fn accepts_spec_named_format_version_update_from_rest_clients() {
+    let engine = SailRestModelCatalogEngine;
+    let table = TableIdent::new(
+        WarehouseName::new("local").unwrap(),
+        "default".parse::<Namespace>().unwrap(),
+        TableName::new("events").unwrap(),
+    );
+    let plan = engine
+        .prepare_commit(CommitPreparationRequest {
+            table,
+            principal: Principal::anonymous(),
+            current_metadata_location: Some("file:///tmp/events/metadata/00000.json".to_string()),
+            new_metadata_location: None,
+            current_metadata: sample_metadata(2),
+            new_metadata: None,
+            requirements: Vec::new(),
+            updates: vec![json!({
+                "action": "upgrade-format-version",
+                "format-version": 3
+            })],
+        })
+        .await
+        .expect("Iceberg REST format-version field should decode through Sail");
+    assert_eq!(plan.new_metadata["format-version"], json!(3));
+}
+
+#[tokio::test]
 async fn commit_plan_accepts_lakecat_metadata_location_extension() {
     let engine = SailRestModelCatalogEngine;
     let table = TableIdent::new(

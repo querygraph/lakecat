@@ -9,6 +9,10 @@
 
 ## Unreleased
 
+- Update the pinned Sail `lakecat` revision so standard Iceberg REST
+  `upgrade-format-version` updates use the specified `format-version` field,
+  including the staged-create commit emitted by DuckDB 1.5.3.
+
 - Add a validated `LAKECAT_WAREHOUSE_LOCATION` service boundary so standard
   Iceberg REST creates without an explicit location derive durable table roots
   from the configured warehouse instead of the embedded local fallback.
