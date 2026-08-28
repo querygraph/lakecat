@@ -89,7 +89,15 @@ graph behavior to Grust, and governance semantics to TypeSec.
   leaves the object present. The source-pinned proxy, isolated four-catalog
   overlay, runnable profile, exact hashes, cleanup, and non-claims are recorded
   in `docs/catalog-community/PHASE-3-ACCEPTANCE.md`. Catalog recovery remains
-  open in C3-02 through C3-06.
+  open in C3-03 through C3-06.
+- Phase 3 C3-02 is complete at `querygraph/catalog-bench@c7eb664`. Fresh run
+  `restart_0828d` proves before/after response-loss reconciliation and a real
+  mid-request service restart across LakeCat, Polaris, Gravitino, and
+  Lakekeeper. LakeCat, Gravitino, and Lakekeeper preserve the fixture and
+  accept exact retry; the benchmark's ephemeral Polaris configuration loses
+  it. Lakekeeper's advertised idempotency remains non-content-bound. Exact
+  artifact hashes, cleanup proof, configuration scope, and non-claims are in
+  `docs/catalog-community/PHASE-3-ACCEPTANCE.md`.
 
 ## Next Stage
 

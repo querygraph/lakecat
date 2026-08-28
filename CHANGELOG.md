@@ -9,6 +9,11 @@
 
 ## Unreleased
 
+- Accept Phase 3 C3-02 catalog commit recovery evidence: deterministic
+  response-loss reconciliation and restart-during-commit comparisons across
+  LakeCat, Polaris, Gravitino, and Lakekeeper, with exact hashes and scoped
+  failure disclosures.
+
 - Accept catalog-bench's deterministic before/after-upstream metadata fault
   substrate and reviewed persistence evidence as C3-01, without extending that
   proof into catalog recovery or performance claims.
