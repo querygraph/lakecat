@@ -27,33 +27,41 @@ graph behavior to Grust, and governance semantics to TypeSec.
 - The catalog-community program is active on
   `codex/catalog-community-phase-1`. Phase 0 is closed. LakeCat's public
   acceptance ledger is synchronized through Phase 1. The neutral
-  `querygraph/catalog-bench@59840b9` contains the Phase 1 publication plus the
+  `querygraph/catalog-bench@1f2014e` contains the Phase 1 publication plus the
   active Phase 2 implementation. Its Phase 1 evidence remains the reviewed immutable
   five-scenario by five-catalog correctness bundle (20 pass, five fail), the
   production contention bundle, one-command smoke/full recomputation,
   generated known gaps, and a bundle-wide secret scan. LakeCat C1-10 is closed
   at `0dee124b`; Phase 1 is complete without converting correctness evidence
   into a performance claim.
-- Phase 2 implementation has started in `querygraph/catalog-bench`: the common
-  stock-engine contract, source-bound Spark 4.1.3/Iceberg 1.11.0 runtime, fresh
-  four-catalog Spark workflow, reviewed result materializer, engine-neutral
-  evidence boundary, and source-bound Flink execution path are committed.
+- Phase 2 Spark delivery is complete in `querygraph/catalog-bench@1f2014e`.
+  Fresh run `sparkv2_08280548` used stock Spark 4.1.3 and Iceberg 1.11.0
+  against LakeCat `65f0a4c3`, Polaris 1.7.0, Gravitino 1.3.0, and Lakekeeper
+  0.13.3 through protocol-native REST bindings and shared MinIO. All four pass
+  all 14 required write/read/evolution, independent-state, sanitization, and
+  cleanup assertions. The reviewed transcripts and deterministic immutable
+  bundle are published under
+  `results/v1/spark-v2-65f0a4c3-2026-08-28/`; this is an unranked correctness
+  matrix, not a performance claim. LakeCat `5d62f1c4` fixed catalog-owned
+  create-table field IDs, and `65f0a4c3` completed Iceberg REST multipart
+  namespace handling required by Spark metadata-table fallback.
+- The remaining Phase 2 implementation has the common engine-neutral evidence
+  boundary and source-bound Flink execution path committed.
   Trino 483 has a closed policy, renderer, server configuration, state machine,
   bounded decoders, process invocation boundary, and private configuration
   staging and supervised stock-launcher lifecycle with typed readiness and
   process-group cleanup; the next unit must implement its concrete effects and
   run the same no-shim workflow. No Flink or Trino production interoperability claim
   exists until its complete optimized evidence is materialized and validated.
-  Spark's launcher now selects the current v2 transcript contract and its image
-  builder uses a dependency-complete Compose profile set; a new source-bound
-  optimized profile is still required before the fresh publication run.
+  The active Phase 2 front is now fresh Flink materialization/publication,
+  followed by concrete Trino effects and the largest honest DuckDB path.
 - Phase 1 is closed. All C1-01 through C1-10 units and exit gates have exact
   committed evidence. The active delivery front is Phase 2 multi-engine
   interoperability.
 
 ## Next Stage
 
-1. Complete Phase 2 for Spark, Flink, Trino, and the largest honest DuckDB path;
+1. Complete the remaining Phase 2 work for Flink, Trino, and the largest honest DuckDB path;
    publish only independently admitted optimized evidence and correlate
    OpenLineage only where the pinned engine integration can prove it.
 2. Execute the remaining catalog-community phases in dependency order: failure

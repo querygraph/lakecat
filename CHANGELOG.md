@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Reconcile the live goal to the published stock-Spark v2 result at
+  `catalog-bench@1f2014e`: LakeCat `65f0a4c3`, Polaris, Gravitino, and
+  Lakekeeper each pass all 14 correctness assertions in fresh run
+  `sparkv2_08280548`. Record Spark as complete and move the Phase 2 front to
+  Flink, Trino, and DuckDB without making a performance claim.
+
 - Decode Iceberg REST's unit-separated multipart namespace on every table route,
   not only namespace routes. This makes Spark's standard metadata-table probe
   return a not-found response for its speculative child namespace instead of a
