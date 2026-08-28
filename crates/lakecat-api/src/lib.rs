@@ -516,6 +516,39 @@ pub struct ListPolicyBindingsResponse {
     pub policies: Vec<PolicyBindingResponse>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct PublishModelRequest {
+    pub version: u64,
+    pub expected_current_version: Option<u64>,
+    pub artifact_uri: String,
+    pub artifact_hash: String,
+    #[serde(default)]
+    pub physical_bindings: Value,
+    #[serde(default)]
+    pub policy_binding_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ModelPublicationResponse {
+    pub model_id: String,
+    pub warehouse: String,
+    pub version: u64,
+    pub artifact_uri: String,
+    pub artifact_hash: String,
+    pub physical_bindings: Value,
+    pub policy_binding_ids: Vec<String>,
+    pub publisher: lakecat_core::Principal,
+    pub published_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ListModelPublicationsResponse {
+    pub publications: Vec<ModelPublicationResponse>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct LineageDrainResponse {

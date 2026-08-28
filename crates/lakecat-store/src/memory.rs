@@ -1289,6 +1289,17 @@ impl CatalogStore for MemoryCatalogStore {
         let outbox =
             outbox_event_from_payload(&audit_outbox_payload(&event_id, &audit), audit.created_at)?;
         let mut state = self.state.write().await;
+        for policy_id in &publication.policy_binding_ids {
+            if !state
+                .policy_bindings
+                .contains_key(&policy_binding_key(&publication.warehouse, policy_id))
+            {
+                return Err(LakeCatError::NotFound {
+                    object: "policy binding",
+                    name: content_hash_bytes(policy_id.as_bytes()),
+                });
+            }
+        }
         let publications = state.model_publications.entry(key).or_default();
         let current = publications.last().map(|item| item.version);
         if current != expected_current_version || publication.version != current.unwrap_or(0) + 1 {

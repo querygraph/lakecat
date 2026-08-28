@@ -28,6 +28,20 @@ fn test_model_publication(version: u64) -> ModelPublication {
 async fn turso_model_publication_is_durable_cas_and_atomic_outbox() {
     let store = TursoCatalogStore::in_memory().await.unwrap();
     store
+        .upsert_policy_binding(
+            PolicyBinding::new(
+                "semantic-read",
+                WarehouseName::new("local").unwrap(),
+                None,
+                None,
+                true,
+                serde_json::json!({}),
+            )
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    store
         .publish_model(test_model_publication(1), None)
         .await
         .unwrap();

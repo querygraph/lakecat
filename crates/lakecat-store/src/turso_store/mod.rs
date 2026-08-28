@@ -2731,6 +2731,13 @@ impl CatalogStore for TursoCatalogStore {
                 if current != expected_current_version || publication.version != current.unwrap_or(0) + 1 {
                     return Err(LakeCatError::Conflict("model publication compare-and-swap version mismatch".to_string()));
                 }
+                for policy_id in &publication.policy_binding_ids {
+                    let policy_key = policy_binding_key(&publication.warehouse, policy_id);
+                    let count = conn.query("select count(*) from policy_bindings where policy_key = ?1", (policy_key.as_str(),)).await.map_err(turso_error)?.next().await.map_err(turso_error)?.map(|row| row_i64(&row, 0)).transpose()?.unwrap_or(0);
+                    if count != 1 {
+                        return Err(LakeCatError::NotFound { object: "policy binding", name: content_hash_bytes(policy_id.as_bytes()) });
+                    }
+                }
                 conn.execute(
                     "insert into model_publications (publication_key, model_id, warehouse, version, publication_json, published_at) values (?1, ?2, ?3, ?4, ?5, ?6)",
                     (key.as_str(), publication.model_id.as_str(), publication.warehouse.as_str(), checked_i64(publication.version, "model publication version")?, encode_json(&publication)?, publication.published_at.to_rfc3339()),

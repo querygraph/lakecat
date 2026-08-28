@@ -3,13 +3,13 @@ use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use lakecat_api::{
     CatalogConfigResponse, CommitTableRequest, CommitTableResponse, ConfigEntry,
-    CreateNamespaceRequest, CreateTableRequest, ListNamespacesQuery, ListNamespacesResponse,
-    ListPolicyBindingsResponse, ListProjectsResponse, ListServersResponse,
+    CreateNamespaceRequest, CreateTableRequest, ListModelPublicationsResponse, ListNamespacesQuery,
+    ListNamespacesResponse, ListPolicyBindingsResponse, ListProjectsResponse, ListServersResponse,
     ListStorageProfilesResponse, ListTableCommitRecordsResponse, ListTablesResponse,
     ListViewVersionReceiptChainsResponse, ListViewVersionReceiptsResponse, ListViewsResponse,
-    ListWarehousesResponse, LoadCredentialsResponse, LoadTableResponse, NamespaceResponse,
-    PolicyBindingResponse, ProjectResponse, ServerResponse, StorageCredential,
-    StorageProfileResponse, TableIdentifier, UpdateNamespacePropertiesRequest,
+    ListWarehousesResponse, LoadCredentialsResponse, LoadTableResponse, ModelPublicationResponse,
+    NamespaceResponse, PolicyBindingResponse, ProjectResponse, PublishModelRequest, ServerResponse,
+    StorageCredential, StorageProfileResponse, TableIdentifier, UpdateNamespacePropertiesRequest,
     UpdateNamespacePropertiesResponse, UpsertPolicyBindingRequest, UpsertProjectRequest,
     UpsertServerRequest, UpsertStorageProfileRequest, UpsertViewRequest, UpsertWarehouseRequest,
     ViewResponse, WarehouseResponse,
@@ -20,9 +20,9 @@ use lakecat_core::{
 };
 use lakecat_security::{AuthorizationReceipt, ReadRestriction, ViewDropCapability};
 use lakecat_store::{
-    CatalogAuditEvent, CredentialIssuanceMode, NamespaceProperties, NamespacePropertyUpdate,
-    PolicyBinding, ProjectRecord, ServerRecord, StorageProfile, StorageProvider, TableRecord,
-    ViewRecord, WarehouseRecord,
+    CatalogAuditEvent, CredentialIssuanceMode, ModelPublication, NamespaceProperties,
+    NamespacePropertyUpdate, PolicyBinding, ProjectRecord, ServerRecord, StorageProfile,
+    StorageProvider, TableRecord, ViewRecord, WarehouseRecord,
 };
 use serde_json::{Value, json};
 
@@ -1825,6 +1825,62 @@ pub(crate) async fn upsert_policy_binding(
         )?)
         .await?;
     Ok(Json(policy_binding_response(&binding)))
+}
+
+pub(crate) async fn publish_model(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, model)): Path<(String, String)>,
+    Json(request): Json<PublishModelRequest>,
+) -> Result<Json<ModelPublicationResponse>, LakeCatHttpError> {
+    let warehouse = management_warehouse(&state, warehouse)?;
+    let capability = authorize_policy_manage(&state, request_identity(&headers)?).await?;
+    let publication = ModelPublication {
+        model_id: model,
+        warehouse,
+        version: request.version,
+        artifact_uri: request.artifact_uri,
+        artifact_hash: request.artifact_hash,
+        physical_bindings: request.physical_bindings,
+        policy_binding_ids: request.policy_binding_ids,
+        publisher: capability.receipt().principal.clone(),
+        published_at: chrono::Utc::now(),
+    };
+    let publication = state
+        .store
+        .publish_model(publication, request.expected_current_version)
+        .await?;
+    Ok(Json(model_publication_response(&publication)))
+}
+
+pub(crate) async fn list_model_publications(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, model)): Path<(String, String)>,
+) -> Result<Json<ListModelPublicationsResponse>, LakeCatHttpError> {
+    let warehouse = management_warehouse(&state, warehouse)?;
+    authorize_policy_manage(&state, request_identity(&headers)?).await?;
+    let publications = state.store.model_publications(&warehouse, &model).await?;
+    Ok(Json(ListModelPublicationsResponse {
+        publications: publications
+            .iter()
+            .map(model_publication_response)
+            .collect(),
+    }))
+}
+
+fn model_publication_response(publication: &ModelPublication) -> ModelPublicationResponse {
+    ModelPublicationResponse {
+        model_id: publication.model_id.clone(),
+        warehouse: publication.warehouse.as_str().to_string(),
+        version: publication.version,
+        artifact_uri: publication.artifact_uri.clone(),
+        artifact_hash: publication.artifact_hash.clone(),
+        physical_bindings: publication.physical_bindings.clone(),
+        policy_binding_ids: publication.policy_binding_ids.clone(),
+        publisher: publication.publisher.clone(),
+        published_at: publication.published_at.to_rfc3339(),
+    }
 }
 
 pub(crate) async fn commit_table(

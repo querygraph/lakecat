@@ -66,6 +66,20 @@ fn model_publication(version: u64) -> ModelPublication {
 #[tokio::test]
 async fn memory_model_publication_is_cas_versioned_and_outboxed() {
     let store = MemoryCatalogStore::new();
+    store
+        .upsert_policy_binding(
+            PolicyBinding::new(
+                "semantic-read",
+                WarehouseName::new("local").unwrap(),
+                None,
+                None,
+                true,
+                serde_json::json!({}),
+            )
+            .unwrap(),
+        )
+        .await
+        .unwrap();
     let first = store
         .publish_model(model_publication(1), None)
         .await

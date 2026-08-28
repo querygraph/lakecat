@@ -1607,6 +1607,90 @@ async fn policy_bindings_are_governed_and_attached_to_table_authorization_contex
     );
 }
 
+#[tokio::test]
+async fn model_publications_are_governed_versioned_and_outboxed() {
+    let governance = Arc::new(RecordingGovernance::default());
+    let store = MemoryCatalogStore::new();
+    let app = app(
+        LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone()).with_integrations(
+            default_sail_engine(),
+            governance,
+            NoopCatalogGraphSink::new(),
+            HashOnlyLineageSink::new(),
+        ),
+    );
+    let publish = |version, expected: Option<u64>| {
+        Request::builder()
+            .method(Method::POST)
+            .uri("/management/v1/warehouses/local/models/tpcds")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "publisher@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "version": version,
+                    "expected-current-version": expected,
+                    "artifact-uri": format!("s3://models/tpcds/v{version}.yaml"),
+                    "artifact-hash": content_hash_bytes(format!("model-{version}").as_bytes()),
+                    "physical-bindings": {"store_sales": "local.tpcds.store_sales"},
+                    "policy-binding-ids": []
+                })
+                .to_string(),
+            ))
+            .unwrap()
+    };
+    assert_eq!(
+        app.clone()
+            .oneshot(publish(1, None))
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        app.clone()
+            .oneshot(publish(2, None))
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::CONFLICT
+    );
+    assert_eq!(
+        app.clone()
+            .oneshot(publish(2, Some(1)))
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::OK
+    );
+
+    let list = Request::builder()
+        .uri("/management/v1/warehouses/local/models/tpcds")
+        .header("x-lakecat-principal", "publisher@example.com")
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(list).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body["publications"].as_array().unwrap().len(), 2);
+    assert_eq!(
+        body["publications"][1]["publisher"]["subject"],
+        "publisher@example.com"
+    );
+    assert_eq!(
+        store
+            .pending_outbox_events(None, 10)
+            .await
+            .unwrap()
+            .iter()
+            .filter(|event| event.event_type == "model.published")
+            .count(),
+        2
+    );
+}
+
 #[test]
 fn projection_receipt_evidence_rejects_malformed_lineage_hashes() {
     let event = OutboxEvent {

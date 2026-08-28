@@ -180,6 +180,10 @@ pub fn app(state: LakeCatState) -> Router {
             "/management/v1/warehouses/{warehouse}/policies/{policy}",
             post(upsert_policy_binding).put(upsert_policy_binding),
         )
+        .route(
+            "/management/v1/warehouses/{warehouse}/models/{model}",
+            get(list_model_publications).post(publish_model),
+        )
         .route("/management/v1/lineage/drain", post(drain_lineage_outbox))
         .route("/management/v1/servers", get(list_servers))
         .route(
