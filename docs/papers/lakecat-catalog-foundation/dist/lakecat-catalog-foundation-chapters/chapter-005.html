@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov — QueryGraph Project" />
+  <meta name="dcterms.date" content="2026-08-28" />
+  <meta name="keywords" content="Apache Iceberg, catalog, Apache
+Ossie, semantic
+interoperability, governance, lineage, reproducibility" />
+  <title>Design Principles</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: 1.5em;}
+    div.column{flex: auto;}
+    @media screen {
+    div.columns{gap: min(4vw, 1.5em);}
+    div.column{overflow-x: auto;}
+    }
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">LakeCat: A Thin, Governed, Replayable Catalog Foundation</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">LakeCat: A Thin, Governed, Replayable Catalog Foundation</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-006.html" accesskey="n" rel="next">Architecture</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-004.html" accesskey="p" rel="previous">Background and Related Work</a>
+</span>
+</div>
+</nav>
+<h1 data-number="4" id="design-principles"><span
+class="header-section-number">4</span> Design Principles</h1>
+<p>LakeCat is guided by six principles.</p>
+<p><strong>Protocol fidelity precedes extensions.</strong> Ordinary
+Iceberg clients must not need non-standard endpoints for table access.
+Errors, namespace encoding, pagination, requirement validation, commits,
+registration, views, and metadata pointer behavior remain
+spec-shaped.</p>
+<p><strong>Iceberg metadata stays pristine.</strong> Policy, graph,
+lineage, semantic-model, and agent state are derived control-plane
+records. A table remains readable by standard tools that know nothing
+about QueryGraph.</p>
+<p><strong>The catalog owns admission, not every domain.</strong>
+LakeCat asks a policy engine for a decision and persists a receipt; it
+does not invent a second policy language. It asks Sail to interpret
+Iceberg and Grust to project graphs.</p>
+<p><strong>Durable side effects are replayed.</strong> A table mutation
+must not disappear because a graph or lineage endpoint is down, and an
+external sink must not be allowed to block the authoritative catalog
+transaction indefinitely.</p>
+<p><strong>Credentials are exceptional evidence.</strong> Governed
+Sail-planned reads are the default for agents and untrusted principals.
+Raw credential vending is a deliberate audited exception.</p>
+<p><strong>Claims must be reproducible and bounded.</strong> Every
+comparison binds source versions, client versions, configuration,
+assertions, transcripts, hashes, and cleanup. Passing a behavioral
+workload is not presented as a throughput or production-availability
+result.</p>
+</body>
+</html>

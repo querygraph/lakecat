@@ -20,4 +20,3 @@ const rendered = readFileSync(inputArg, "utf8").replace(
 
 if (index !== 4) throw new Error(`expected 4 diagrams, found ${index}`);
 writeFileSync(outputArg, rendered);
-

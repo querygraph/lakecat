@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov — QueryGraph Project" />
+  <meta name="dcterms.date" content="2026-08-28" />
+  <meta name="keywords" content="Apache Iceberg, catalog, Apache
+Ossie, semantic
+interoperability, governance, lineage, reproducibility" />
+  <title>Introduction</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: 1.5em;}
+    div.column{flex: auto;}
+    @media screen {
+    div.columns{gap: min(4vw, 1.5em);}
+    div.column{overflow-x: auto;}
+    }
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">LakeCat: A Thin, Governed, Replayable Catalog Foundation</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">LakeCat: A Thin, Governed, Replayable Catalog Foundation</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-004.html" accesskey="n" rel="next">Background and Related Work</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-002.html" accesskey="p" rel="previous">LakeCat</a>
+</span>
+</div>
+</nav>
+<h1 data-number="2" id="introduction"><span
+class="header-section-number">2</span> Introduction</h1>
+<p>The modern lakehouse rests on a useful separation of concerns. An
+open table format describes durable table state in object storage; many
+compute engines interpret that state; and a catalog coordinates names
+and the current metadata pointer. Apache Iceberg makes the table state
+explicit and provides optimistic concurrency, schema and partition
+evolution, snapshots, branches, and tags. Its REST Catalog protocol then
+gives languages and engines a shared catalog API rather than requiring
+one client implementation for every catalog backend [1].</p>
+<p>That apparently narrow service now sits at a much wider systems
+boundary. A catalog receives concurrent mutations from mutually
+independent engines. It is asked to authenticate tenants, vend or
+constrain storage access, survive ambiguous network outcomes, support
+migration, emit lineage, feed discovery graphs, and govern semantic
+definitions consumed by business intelligence and AI systems. Expanding
+the catalog to implement all of these domains locally is tempting, but
+it couples protocol compatibility to policy, planning, graph, and
+semantic-model evolution. Conversely, treating the catalog as a simple
+key-value map leaves no durable place to bind a decision, state
+transition, and integration evidence.</p>
+<p>LakeCat explores a third design point: a <em>thin but
+evidence-bearing catalog foundation</em>. The boundary is thin in
+semantic ownership, not in correctness. LakeCat owns those facts that
+only the catalog can authoritatively establish: tenant-scoped identity,
+namespace and table state, metadata-pointer compare-and-swap (CAS),
+standard REST behavior, idempotency, audit admission, and durable
+integration events. Domain implementations remain in reusable
+components. Sail owns Iceberg format interpretation and scan planning;
+TypeSec owns policy composition and signed decisions; Grust owns graph
+taxonomy and projection; QueryGraph owns end-to-end semantic
+composition.</p>
+<p>This work makes four contributions:</p>
+<ol type="1">
+<li><strong>A compatibility-preserving decomposition.</strong> LakeCat
+exposes standard Iceberg REST behavior while placing planning,
+governance, and graph logic behind typed traits. Business semantics are
+derived control-plane data and never become required custom Iceberg
+metadata.</li>
+<li><strong>A durable evidence boundary.</strong> Catalog state,
+redacted audit evidence, and deterministic outbox events are admitted
+transactionally. External graph and lineage delivery is replayable and
+explicitly at least once.</li>
+<li><strong>An Apache Ossie semantic supply chain.</strong> A pinned
+upstream semantic model is validated, bound to physical Iceberg state
+and policy decisions, published by CAS, projected, and checked against
+seven proof bases before semantic answers are accepted.</li>
+<li><strong>A neutral catalog evaluation method.</strong> catalog-bench
+compares LakeCat, Apache Polaris, Apache Gravitino, and Lakekeeper with
+stock clients, shared assertions, immutable evidence bundles, fault
+campaigns, migration, and semantic drift tests. It intentionally
+separates correctness observations from performance claims.</li>
+</ol>
+<p>The implementation and evaluation described here correspond to
+LakeCat 0.3.0 and the catalog-community evidence published on August 28,
+2026. Versions and commit identities are recorded with each artifact
+rather than inferred from a floating container tag.</p>
+</body>
+</html>

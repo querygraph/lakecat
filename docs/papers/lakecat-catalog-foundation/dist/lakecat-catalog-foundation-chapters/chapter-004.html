@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov — QueryGraph Project" />
+  <meta name="dcterms.date" content="2026-08-28" />
+  <meta name="keywords" content="Apache Iceberg, catalog, Apache
+Ossie, semantic
+interoperability, governance, lineage, reproducibility" />
+  <title>Background and Related Work</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: 1.5em;}
+    div.column{flex: auto;}
+    @media screen {
+    div.columns{gap: min(4vw, 1.5em);}
+    div.column{overflow-x: auto;}
+    }
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">LakeCat: A Thin, Governed, Replayable Catalog Foundation</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">LakeCat: A Thin, Governed, Replayable Catalog Foundation</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-005.html" accesskey="n" rel="next">Design Principles</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-003.html" accesskey="p" rel="previous">Introduction</a>
+</span>
+</div>
+</nav>
+<h1 data-number="3" id="background-and-related-work"><span
+class="header-section-number">3</span> Background and Related Work</h1>
+<h2 data-number="3.1"
+id="from-metastores-to-a-common-rest-boundary"><span
+class="header-section-number">3.1</span> From metastores to a common
+REST boundary</h2>
+<p>Traditional analytical catalogs grew around engine-specific
+metastores. The Hive Metastore’s Thrift API became widely shared, but
+its data model and client assumptions remain historically coupled to
+Hive. Iceberg instead places table history and schema in versioned
+metadata files and uses the catalog to resolve names and atomically
+replace a table’s current metadata pointer. The Iceberg REST protocol
+addresses the multiplicative integration problem: a client can implement
+one protocol and interact with many conforming catalogs [1]. The
+protocol also makes server-side conflict handling, retries, metadata
+upgrades, credential vending or remote signing, and server-side planning
+possible.</p>
+<p>Project Nessie emphasizes Git-inspired branching, cross-table
+visibility, and transactional catalog semantics for Iceberg data [2].
+Its design demonstrates that a catalog can be more than a name service,
+although LakeCat does not claim Nessie’s Git-like multi-table version
+graph. LakeCat instead concentrates on a small embedded/deployable
+catalog spine and proof-carrying integration seams.</p>
+<h2 data-number="3.2" id="contemporary-open-catalog-systems"><span
+class="header-section-number">3.2</span> Contemporary open catalog
+systems</h2>
+<p>Apache Polaris describes itself as a fully featured open catalog for
+Iceberg and implements the REST API for multiple engines [3]. Its
+current surface also includes realms, policies, credential vending,
+federation, external policy decision points, and multiple metastore
+options. Polaris represents a broad, production-oriented Iceberg control
+plane.</p>
+<p>Apache Gravitino describes a federated “metadata lake” spanning
+tabular, file, messaging, and model assets [4]. It abstracts
+heterogeneous sources and aims at geo-distributed metadata management
+and governance. Its scope is therefore deliberately broader than a
+single table-format catalog.</p>
+<p>Lakekeeper is, like LakeCat, Rust-native and presents a
+standards-oriented Iceberg REST catalog [5]. It emphasizes secure
+multi-warehouse operation, storage integrations, management APIs, and
+operational usability.</p>
+<p>These systems are not interchangeable products with one scalar notion
+of quality. They occupy different scope points: Polaris provides an
+extensive Iceberg catalog and management plane; Gravitino federates
+multiple metadata classes; Lakekeeper provides an operational Rust
+catalog; and LakeCat is a foundation engineered to compose with the
+QueryGraph stack. The evaluation in this paper therefore tests shared
+behaviors and reports scoped differences. It does not collapse
+architecture, deployment maturity, feature breadth, or throughput into a
+league table.</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>System</th>
+<th>Primary stated scope</th>
+<th>Distinctive comparison dimension</th>
+<th>This paper’s shared boundary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LakeCat</td>
+<td>Thin Iceberg-compatible foundation for QueryGraph</td>
+<td>Typed delegation, transactional evidence, governed planning</td>
+<td>Iceberg REST, recovery, migration, semantics</td>
+</tr>
+<tr>
+<td>Apache Polaris</td>
+<td>Full-featured open Iceberg catalog</td>
+<td>Management plane, policy, federation, credential vending</td>
+<td>Same stock client workloads and selected recovery paths</td>
+</tr>
+<tr>
+<td>Apache Gravitino</td>
+<td>Federated metadata lake</td>
+<td>Multi-source and multi-asset metadata abstraction</td>
+<td>Iceberg catalog profile in the common harness</td>
+</tr>
+<tr>
+<td>Lakekeeper</td>
+<td>Rust Iceberg REST catalog</td>
+<td>Operational warehouses, security, storage integrations</td>
+<td>Same protocol-native engine and recovery profiles</td>
+</tr>
+<tr>
+<td>Project Nessie</td>
+<td>Transactional catalog with Git-like semantics</td>
+<td>Branches, merges, cross-table versioning</td>
+<td>Related-work context; not in the reported four-way run</td>
+</tr>
+</tbody>
+</table>
+<h2 data-number="3.3" id="semantics-and-lineage"><span
+class="header-section-number">3.3</span> Semantics and lineage</h2>
+<p>Table catalogs answer <em>which physical table version is
+current</em>; semantic models answer <em>what a measure, relationship,
+or business concept means</em>. Apache Ossie (formerly Open Semantic
+Interchange) is an incubating Apache effort to exchange semantic
+metadata across analytics, AI, and BI systems with a vendor-neutral
+JSON/YAML specification [6]. Its repository includes a machine-readable
+schema, validators, converters, and a TPC-DS example. Ossie addresses
+semantic portability, but a schema-valid document alone does not prove
+that referenced physical fields exist, that a principal may use a
+metric, or that the projected graph and runtime lineage correspond to
+the published artifact.</p>
+<p>OpenLineage defines an extensible event model around datasets, jobs,
+and runs [7]. It is complementary to catalog state: lineage records
+execution and movement, whereas a catalog admits metadata transitions.
+LakeCat connects the two through a transactional outbox rather than
+making an external lineage service part of the catalog’s commit
+transaction.</p>
+</body>
+</html>

@@ -11,4 +11,3 @@ operational rules live in `~/src/firstpair`.
 
 The paper is a separate QueryGraph-shelf publication and does not replace the
 `lakecat` book owned by the repository-level `FIRSTPAIR.md`.
-

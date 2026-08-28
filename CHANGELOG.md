@@ -6,6 +6,8 @@
   architecture and recovery diagrams, Apache Ossie semantic integration,
   catalog-bench methodology and results, explicit threats to validity, and a
   FirstPair contract for publication on the QueryGraph shelf.
+- Build and validate the paper's version-stamped PDF, EPUB, HTML reader, and
+  split chapter artifacts for FirstPair delivery.
 
 - Preserve the Iceberg REST staged-create marker through catalog storage, admit
   its subsequent `assert-create` commit exactly once, and finalize the table on

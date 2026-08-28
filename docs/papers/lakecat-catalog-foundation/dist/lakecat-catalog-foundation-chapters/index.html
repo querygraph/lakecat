@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov — QueryGraph Project" />
+  <meta name="dcterms.date" content="2026-08-28" />
+  <meta name="keywords" content="Apache Iceberg, catalog, Apache
+Ossie, semantic
+interoperability, governance, lineage, reproducibility" />
+  <title>LakeCat: A Thin, Governed, Replayable Catalog
+Foundation</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: 1.5em;}
+    div.column{flex: auto;}
+    @media screen {
+    div.columns{gap: min(4vw, 1.5em);}
+    div.column{overflow-x: auto;}
+    }
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+</span>
+<span class="navlink">
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-001.html" accesskey="n" rel="next">LakeCat: A Thin, Governed, Replayable Catalog Foundation</a>
+</span>
+<span class="navlink">
+</span>
+</div>
+</nav>
+<header id="title-block-header">
+<h1 class="title">LakeCat: A Thin, Governed, Replayable Catalog
+Foundation</h1>
+<p class="subtitle">Open Iceberg Interoperability, Apache Ossie
+Semantics, and Evidence-Bearing Evaluation</p>
+<p class="author">Alexy Khrabrov — QueryGraph Project</p>
+<p class="date">2026-08-28</p>
+<div class="abstract">
+<div class="abstract-title">Abstract</div>
+<p>Open table formats have separated analytical data from individual
+query engines, but the catalog has become a consequential coordination
+boundary: it must preserve table-format semantics across heterogeneous
+clients while mediating identity, authorization, metadata-pointer
+transitions, recovery, lineage, and increasingly semantic models used by
+people and AI agents. This paper presents LakeCat, a Rust-native Apache
+Iceberg REST catalog foundation for QueryGraph. LakeCat deliberately
+keeps this boundary thin. It owns catalog identity, tenancy, optimistic
+metadata-pointer state, idempotency, policy gates, audit, and a
+transactional outbox; it delegates reusable Iceberg interpretation to
+Sail, governance semantics to TypeSec, graph behavior to Grust, and
+end-to-end composition to QueryGraph. We further describe an Apache
+Ossie supply chain in which immutable semantic artifacts are
+structurally and physically validated, policy-bound, compare-and-swap
+published, projected, and correlated with OpenLineage evidence before an
+answer is admitted. Evaluation uses catalog-bench, a source-pinned,
+non-ranking behavioral harness. Stock Spark, Flink, Trino, and DuckDB
+clients execute a common 14-assertion Iceberg workload against LakeCat,
+Apache Polaris, Apache Gravitino, and Lakekeeper. Additional campaigns
+exercise ambiguous commits, service restart, cold restore, peer
+migration, HadoopCatalog registration, outbox recovery, and Ossie-backed
+TPC-DS semantic drift. The results show protocol interoperability across
+the four catalogs and demonstrate that correctness evidence can extend
+beyond the immediate REST response without placing non-standard metadata
+in Iceberg tables. The paper reports correctness and recovery
+observations, not a throughput ranking or a compliant TPC-DS performance
+result.</p>
+</div>
+</header>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="chapter-002.html#lakecat" id="toc-lakecat"><span
+class="toc-section-number">1</span> LakeCat</a>
+<ul>
+<li><a
+href="chapter-002.html#a-thin-governed-replayable-catalog-foundation"
+id="toc-a-thin-governed-replayable-catalog-foundation"><span
+class="toc-section-number">1.1</span> A Thin, Governed, Replayable
+Catalog Foundation</a></li>
+</ul></li>
+<li><a href="chapter-003.html#introduction" id="toc-introduction"><span
+class="toc-section-number">2</span> Introduction</a></li>
+<li><a href="chapter-004.html#background-and-related-work"
+id="toc-background-and-related-work"><span
+class="toc-section-number">3</span> Background and Related Work</a>
+<ul>
+<li><a href="chapter-004.html#from-metastores-to-a-common-rest-boundary"
+id="toc-from-metastores-to-a-common-rest-boundary"><span
+class="toc-section-number">3.1</span> From metastores to a common REST
+boundary</a></li>
+<li><a href="chapter-004.html#contemporary-open-catalog-systems"
+id="toc-contemporary-open-catalog-systems"><span
+class="toc-section-number">3.2</span> Contemporary open catalog
+systems</a></li>
+<li><a href="chapter-004.html#semantics-and-lineage"
+id="toc-semantics-and-lineage"><span
+class="toc-section-number">3.3</span> Semantics and lineage</a></li>
+</ul></li>
+<li><a href="chapter-005.html#design-principles"
+id="toc-design-principles"><span class="toc-section-number">4</span>
+Design Principles</a></li>
+<li><a href="chapter-006.html#architecture" id="toc-architecture"><span
+class="toc-section-number">5</span> Architecture</a>
+<ul>
+<li><a href="chapter-006.html#catalog-spine"
+id="toc-catalog-spine"><span class="toc-section-number">5.1</span>
+Catalog spine</a></li>
+<li><a href="chapter-006.html#sail-reusable-iceberg-behavior"
+id="toc-sail-reusable-iceberg-behavior"><span
+class="toc-section-number">5.2</span> Sail: reusable Iceberg
+behavior</a></li>
+<li><a href="chapter-006.html#typesec-decisions-and-receipts"
+id="toc-typesec-decisions-and-receipts"><span
+class="toc-section-number">5.3</span> TypeSec: decisions and
+receipts</a></li>
+<li><a href="chapter-006.html#grust-and-openlineage-derived-projections"
+id="toc-grust-and-openlineage-derived-projections"><span
+class="toc-section-number">5.4</span> Grust and OpenLineage: derived
+projections</a></li>
+<li><a href="chapter-006.html#querygraph-as-acceptance-boundary"
+id="toc-querygraph-as-acceptance-boundary"><span
+class="toc-section-number">5.5</span> QueryGraph as acceptance
+boundary</a></li>
+</ul></li>
+<li><a href="chapter-007.html#transactional-evidence-and-recovery"
+id="toc-transactional-evidence-and-recovery"><span
+class="toc-section-number">6</span> Transactional Evidence and
+Recovery</a></li>
+<li><a href="chapter-008.html#apache-ossie-integration"
+id="toc-apache-ossie-integration"><span
+class="toc-section-number">7</span> Apache Ossie Integration</a></li>
+<li><a href="chapter-009.html#catalog-bench-methodology"
+id="toc-catalog-bench-methodology"><span
+class="toc-section-number">8</span> catalog-bench Methodology</a>
+<ul>
+<li><a href="chapter-009.html#systems-and-clients"
+id="toc-systems-and-clients"><span class="toc-section-number">8.1</span>
+Systems and clients</a></li>
+<li><a href="chapter-009.html#workload-and-assertions"
+id="toc-workload-and-assertions"><span
+class="toc-section-number">8.2</span> Workload and assertions</a></li>
+<li><a href="chapter-009.html#claim-discipline"
+id="toc-claim-discipline"><span class="toc-section-number">8.3</span>
+Claim discipline</a></li>
+</ul></li>
+<li><a href="chapter-010.html#results" id="toc-results"><span
+class="toc-section-number">9</span> Results</a>
+<ul>
+<li><a href="chapter-010.html#stock-engine-interoperability"
+id="toc-stock-engine-interoperability"><span
+class="toc-section-number">9.1</span> Stock-engine
+interoperability</a></li>
+<li><a href="chapter-010.html#recovery-and-migration"
+id="toc-recovery-and-migration"><span
+class="toc-section-number">9.2</span> Recovery and migration</a></li>
+<li><a href="chapter-010.html#semantic-evaluation"
+id="toc-semantic-evaluation"><span class="toc-section-number">9.3</span>
+Semantic evaluation</a></li>
+</ul></li>
+<li><a href="chapter-011.html#discussion" id="toc-discussion"><span
+class="toc-section-number">10</span> Discussion</a>
+<ul>
+<li><a
+href="chapter-011.html#why-a-thin-catalog-can-carry-strong-guarantees"
+id="toc-why-a-thin-catalog-can-carry-strong-guarantees"><span
+class="toc-section-number">10.1</span> Why a thin catalog can carry
+strong guarantees</a></li>
+<li><a href="chapter-011.html#comparison-as-multidimensional-evidence"
+id="toc-comparison-as-multidimensional-evidence"><span
+class="toc-section-number">10.2</span> Comparison as multidimensional
+evidence</a></li>
+<li><a href="chapter-011.html#catalog-tasks-beyond-crud-and-throughput"
+id="toc-catalog-tasks-beyond-crud-and-throughput"><span
+class="toc-section-number">10.3</span> Catalog tasks beyond CRUD and
+throughput</a></li>
+</ul></li>
+<li><a href="chapter-012.html#threats-to-validity-and-limitations"
+id="toc-threats-to-validity-and-limitations"><span
+class="toc-section-number">11</span> Threats to Validity and
+Limitations</a></li>
+<li><a href="chapter-013.html#reproducibility-and-community-process"
+id="toc-reproducibility-and-community-process"><span
+class="toc-section-number">12</span> Reproducibility and Community
+Process</a></li>
+<li><a href="chapter-014.html#future-work" id="toc-future-work"><span
+class="toc-section-number">13</span> Future Work</a></li>
+<li><a href="chapter-015.html#conclusion" id="toc-conclusion"><span
+class="toc-section-number">14</span> Conclusion</a></li>
+<li><a href="chapter-016.html#references"
+id="toc-references">References</a></li>
+</ul>
+</nav>
+
+</body>
+</html>

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov — QueryGraph Project" />
+  <meta name="dcterms.date" content="2026-08-28" />
+  <meta name="keywords" content="Apache Iceberg, catalog, Apache
+Ossie, semantic
+interoperability, governance, lineage, reproducibility" />
+  <title>Transactional Evidence and Recovery</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: 1.5em;}
+    div.column{flex: auto;}
+    @media screen {
+    div.columns{gap: min(4vw, 1.5em);}
+    div.column{overflow-x: auto;}
+    }
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">LakeCat: A Thin, Governed, Replayable Catalog Foundation</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">LakeCat: A Thin, Governed, Replayable Catalog Foundation</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-008.html" accesskey="n" rel="next">Apache Ossie Integration</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-006.html" accesskey="p" rel="previous">Architecture</a>
+</span>
+</div>
+</nav>
+<h1 data-number="6" id="transactional-evidence-and-recovery"><span
+class="header-section-number">6</span> Transactional Evidence and
+Recovery</h1>
+<figure>
+<img src="diagrams/diagram-02.png" alt="Diagram 2" />
+<figcaption aria-hidden="true">Diagram 2</figcaption>
+</figure>
+<p><em>Figure 2. A catalog mutation admits state, audit, and outbox
+atomically; external projections are acknowledged after replay.</em></p>
+<p>For each governed mutation, LakeCat first authenticates and validates
+the request. It evaluates policy and reusable Iceberg semantics before
+entering the durable store transaction. The transaction writes three
+logically coupled records: catalog state, a value-redacted audit record,
+and an outbox event. If any write fails, all three roll back. Only then
+can a standard REST success response be returned.</p>
+<p>The outbox drain validates the outer event envelope, inner event
+type, content-bound identifier, and sensitive location evidence before
+projection. An unavailable sink leaves the event pending. Recovery
+replays identical input; acknowledgement removes the backlog only after
+the sink accepts it. This is an at-least-once contract. LakeCat does not
+claim distributed exactly once, and sinks must tolerate deterministic
+duplicate delivery.</p>
+<p>This design addresses a common ambiguous-outcome problem. A
+disconnected HTTP client cannot infer whether an operation committed.
+Idempotency and exact retry can reconcile requests within the advertised
+profile; durable audit/outbox state lets operators and downstream
+systems reconstruct what the catalog admitted. The benchmark
+distinguishes a request lost before upstream object storage from an
+upstream success whose response was lost, service restart from cold
+state restore, and catalog durability from object-store durability.</p>
+</body>
+</html>

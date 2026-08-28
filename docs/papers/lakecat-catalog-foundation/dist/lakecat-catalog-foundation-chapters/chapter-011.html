@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov — QueryGraph Project" />
+  <meta name="dcterms.date" content="2026-08-28" />
+  <meta name="keywords" content="Apache Iceberg, catalog, Apache
+Ossie, semantic
+interoperability, governance, lineage, reproducibility" />
+  <title>Discussion</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: 1.5em;}
+    div.column{flex: auto;}
+    @media screen {
+    div.columns{gap: min(4vw, 1.5em);}
+    div.column{overflow-x: auto;}
+    }
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">LakeCat: A Thin, Governed, Replayable Catalog Foundation</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">LakeCat: A Thin, Governed, Replayable Catalog Foundation</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-012.html" accesskey="n" rel="next">Threats to Validity and Limitations</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-010.html" accesskey="p" rel="previous">Results</a>
+</span>
+</div>
+</nav>
+<h1 data-number="10" id="discussion"><span
+class="header-section-number">10</span> Discussion</h1>
+<h2 data-number="10.1"
+id="why-a-thin-catalog-can-carry-strong-guarantees"><span
+class="header-section-number">10.1</span> Why a thin catalog can carry
+strong guarantees</h2>
+<p>“Thin” can be mistaken for stateless or weak. LakeCat’s design
+suggests a more useful definition: minimize <em>domain ownership</em>
+while strengthening <em>coordination ownership</em>. The catalog does
+not need to parse every manifest, implement a graph engine, or define a
+policy calculus. It does need to ensure that the decision, state
+transition, and integration intent are admitted in a consistent order.
+Typed seams and durable hashes make that coordination auditable without
+contaminating Iceberg metadata.</p>
+<h2 data-number="10.2"
+id="comparison-as-multidimensional-evidence"><span
+class="header-section-number">10.2</span> Comparison as multidimensional
+evidence</h2>
+<p>A catalog comparison is most useful when it preserves dimensions
+rather than manufacturing a total order. Protocol behavior, engine
+interoperability, deployment persistence, migration, policy breadth,
+asset breadth, recovery, and semantic integration answer different
+questions. The shared harness makes common behaviors visible;
+project-native documentation describes capabilities outside that
+intersection. This structure can absorb future catalogs and profiles
+without changing historical evidence.</p>
+<h2 data-number="10.3"
+id="catalog-tasks-beyond-crud-and-throughput"><span
+class="header-section-number">10.3</span> Catalog tasks beyond CRUD and
+throughput</h2>
+<p>The work identifies widely useful catalog evaluation tasks:</p>
+<ul>
+<li>ambiguous-commit reconciliation and idempotent retry;</li>
+<li>exact metadata-pointer import/export and no-copy migration;</li>
+<li>backup/restore and persistence-topology disclosure;</li>
+<li>namespace encoding, pagination, and error-envelope
+compatibility;</li>
+<li>concurrent CAS conflict and orphan-object cleanup;</li>
+<li>credential and error sanitization;</li>
+<li>transactional audit/outbox durability and replay;</li>
+<li>policy-bound server-side scan planning;</li>
+<li>view and branch/tag lifecycle conformance;</li>
+<li>semantic-model publication, converter loss reporting, and drift
+rejection;</li>
+<li>OpenLineage correlation and independent evidence hashing;</li>
+<li>stock-client matrices across Java, Python, Rust, and native engine
+stacks.</li>
+</ul>
+<p>These tasks complement microbenchmarks. They are particularly
+relevant to catalogs because many costly failures are rare
+state-transition errors rather than steady-state throughput
+limitations.</p>
+</body>
+</html>

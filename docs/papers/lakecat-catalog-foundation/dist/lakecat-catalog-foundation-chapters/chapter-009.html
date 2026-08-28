@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov — QueryGraph Project" />
+  <meta name="dcterms.date" content="2026-08-28" />
+  <meta name="keywords" content="Apache Iceberg, catalog, Apache
+Ossie, semantic
+interoperability, governance, lineage, reproducibility" />
+  <title>catalog-bench Methodology</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: 1.5em;}
+    div.column{flex: auto;}
+    @media screen {
+    div.columns{gap: min(4vw, 1.5em);}
+    div.column{overflow-x: auto;}
+    }
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">LakeCat: A Thin, Governed, Replayable Catalog Foundation</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">LakeCat: A Thin, Governed, Replayable Catalog Foundation</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-010.html" accesskey="n" rel="next">Results</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-008.html" accesskey="p" rel="previous">Apache Ossie Integration</a>
+</span>
+</div>
+</nav>
+<h1 data-number="8" id="catalog-bench-methodology"><span
+class="header-section-number">8</span> catalog-bench Methodology</h1>
+<figure>
+<img src="diagrams/diagram-04.png" alt="Diagram 4" />
+<figcaption aria-hidden="true">Diagram 4</figcaption>
+</figure>
+<p><em>Figure 4. catalog-bench separates stock-engine correctness,
+recovery, migration, and semantic evidence while retaining one immutable
+artifact discipline.</em></p>
+<p>catalog-bench is maintained outside the LakeCat source tree under the
+QueryGraph organization. This separation does not make it automatically
+neutral, but it makes shared profiles, expected results, and catalog
+adapters reviewable without embedding them in a system under test. Each
+run records exact repository revisions, released engine/catalog
+versions, configuration, assertions, raw transcripts, sanitization,
+cleanup, and SHA-256 indexes.</p>
+<h2 data-number="8.1" id="systems-and-clients"><span
+class="header-section-number">8.1</span> Systems and clients</h2>
+<p>The completed stock-engine campaign used:</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Pinned versions in the accepted runs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Catalogs</td>
+<td>LakeCat source revisions per fix; Apache Polaris 1.7.0; Apache
+Gravitino 1.3.0; Lakekeeper 0.13.3</td>
+</tr>
+<tr>
+<td>Engines</td>
+<td>Spark 4.1.3; Flink 2.1.3; Trino 483; DuckDB 1.5.3</td>
+</tr>
+<tr>
+<td>Iceberg runtime</td>
+<td>1.11.0 for Spark, Flink, and Trino</td>
+</tr>
+<tr>
+<td>Storage</td>
+<td>Shared run-isolated MinIO object storage</td>
+</tr>
+<tr>
+<td>Semantic fixture</td>
+<td>Pinned Apache Ossie TPC-DS model and stock Spark physical run</td>
+</tr>
+</tbody>
+</table>
+<p>Stock means that each engine uses its released Iceberg REST
+integration rather than a LakeCat-specific client shim. Catalog-specific
+deployment and authentication configuration remain necessary and are
+disclosed. All catalog instances receive isolated state, and cleanup is
+asserted.</p>
+<h2 data-number="8.2" id="workload-and-assertions"><span
+class="header-section-number">8.2</span> Workload and assertions</h2>
+<p>The common engine workload exercises namespace and table creation,
+writes, reads, schema evolution, partition evolution where supported by
+the path, independent state inspection, response sanitization, and
+cleanup. Fourteen required assertions are evaluated per catalog/engine
+combination. The harness does not treat an HTTP 2xx alone as
+correctness: independent reads and metadata inspection confirm the
+resulting table state.</p>
+<p>The recovery campaign adds deterministic object/network faults,
+response loss, mid-request service restart, transactional outbox outage
+and replay, and cold restore from run-owned persistent volumes.
+Migration campaigns use stock PyIceberg to register exact metadata
+pointers in both directions between LakeCat and Polaris and between
+LakeCat and Lakekeeper. A separate stock Spark HadoopCatalog workload
+evolves snapshots, partition specs, and refs before registering the
+exact pointer in LakeCat.</p>
+<h2 data-number="8.3" id="claim-discipline"><span
+class="header-section-number">8.3</span> Claim discipline</h2>
+<p>The benchmark is an <em>unranked correctness matrix</em>. It does not
+report QPS, latency percentiles, resource efficiency, or a winner. The
+TPC-DS fixture is used to create realistic physical and semantic
+structure, not to claim an audited TPC-DS result. The TPC organization
+requires specific disclosure and fair-use conditions for compliant
+results [8]; the present experiment neither runs nor names itself as
+such a performance result.</p>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov — QueryGraph Project" />
+  <meta name="dcterms.date" content="2026-08-28" />
+  <meta name="keywords" content="Apache Iceberg, catalog, Apache
+Ossie, semantic
+interoperability, governance, lineage, reproducibility" />
+  <title>Architecture</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: 1.5em;}
+    div.column{flex: auto;}
+    @media screen {
+    div.columns{gap: min(4vw, 1.5em);}
+    div.column{overflow-x: auto;}
+    }
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">LakeCat: A Thin, Governed, Replayable Catalog Foundation</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">LakeCat: A Thin, Governed, Replayable Catalog Foundation</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-007.html" accesskey="n" rel="next">Transactional Evidence and Recovery</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-005.html" accesskey="p" rel="previous">Design Principles</a>
+</span>
+</div>
+</nav>
+<h1 data-number="5" id="architecture"><span
+class="header-section-number">5</span> Architecture</h1>
+<figure>
+<img src="diagrams/diagram-01.png" alt="Diagram 1" />
+<figcaption aria-hidden="true">Diagram 1</figcaption>
+</figure>
+<p><em>Figure 1. LakeCat keeps the catalog’s authoritative state
+boundary narrow and composes domain-owned services through typed
+seams.</em></p>
+<p>LakeCat is a Rust workspace organized around existing trait seams:
+<code>CatalogStore</code>, <code>SailCatalogEngine</code>,
+<code>GovernanceEngine</code>, <code>CatalogGraphSink</code>, and
+<code>LineageSink</code>. Defaults remain safe for embedded tests; real
+integrations are activated by explicit feature gates. The principal
+components are as follows.</p>
+<h2 data-number="5.1" id="catalog-spine"><span
+class="header-section-number">5.1</span> Catalog spine</h2>
+<p>The <code>CatalogStore</code> maintains tenant-scoped namespaces,
+tables, views, metadata pointers, policy bindings, idempotency records,
+audit entries, and outbox rows. LakeCat prefers the Rust
+<code>turso</code> crate for its durable local spine, while an in-memory
+implementation supports deterministic unit and integration tests.
+Namespace identity is component-safe: wire-level multipart names are
+preserved, and durable scope uses a versioned length-prefixed key rather
+than ambiguous dot joining.</p>
+<p>Table commits validate Iceberg requirements and updates before
+mutation. The store applies optimistic concurrency to the authoritative
+pointer and stages state transitions so a failed validation or
+transaction cannot partially mutate memory or durable state. Initial
+metadata writes are create-only. Failed commits retry cleanup of an
+uncommitted metadata object while retaining the original CAS or store
+error as authoritative.</p>
+<h2 data-number="5.2" id="sail-reusable-iceberg-behavior"><span
+class="header-section-number">5.2</span> Sail: reusable Iceberg
+behavior</h2>
+<p>Sail owns reusable format behavior: metadata models, manifest and
+metric interpretation, pruning, scan planning, delete handling, and
+metadata-as-data. LakeCat consumes Sail through a catalog engine
+interface. This prevents the REST service from developing a second
+Iceberg implementation. It also allows a governed scan capability to be
+carried from the HTTP admission point into planning and task fetch
+without silently reauthorizing reconstructed context.</p>
+<h2 data-number="5.3" id="typesec-decisions-and-receipts"><span
+class="header-section-number">5.3</span> TypeSec: decisions and
+receipts</h2>
+<p>The governance boundary accepts catalog and read context and returns
+typed decisions or signed proofs. TypeSec owns policy composition,
+capabilities, ODRL-derived restrictions, TypeDID envelopes, and
+authorization semantics. LakeCat records the receipt and the hashes
+needed to connect the decision to the admitted state transition.
+Malformed active restrictions fail before Sail, credential issuer,
+graph, or lineage side effects.</p>
+<h2 data-number="5.4"
+id="grust-and-openlineage-derived-projections"><span
+class="header-section-number">5.4</span> Grust and OpenLineage: derived
+projections</h2>
+<p>Grust owns graph schema, taxonomy, stable identity, Turso
+persistence, traversal, and Cypher behavior. LakeCat emits
+catalog-facing events to this boundary but does not implement a graph
+database. OpenLineage receives corresponding replayed events for
+interoperable execution metadata. Stable event identifiers and content
+hashes make retries observable and testable.</p>
+<h2 data-number="5.5" id="querygraph-as-acceptance-boundary"><span
+class="header-section-number">5.5</span> QueryGraph as acceptance
+boundary</h2>
+<p>QueryGraph composes the catalog, Sail, TypeSec, Grust, OpenLineage,
+and semantic interchange formats. Its QGLake workflow independently
+verifies handoff hashes, replays events, imports the graph, and checks
+proof-chain continuity. This end-to-end target prevents a
+component-local “pass” from standing in for a working stack.</p>
+</body>
+</html>

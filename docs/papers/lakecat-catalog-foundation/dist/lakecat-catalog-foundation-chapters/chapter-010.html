@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov — QueryGraph Project" />
+  <meta name="dcterms.date" content="2026-08-28" />
+  <meta name="keywords" content="Apache Iceberg, catalog, Apache
+Ossie, semantic
+interoperability, governance, lineage, reproducibility" />
+  <title>Results</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: 1.5em;}
+    div.column{flex: auto;}
+    @media screen {
+    div.columns{gap: min(4vw, 1.5em);}
+    div.column{overflow-x: auto;}
+    }
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">LakeCat: A Thin, Governed, Replayable Catalog Foundation</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">LakeCat: A Thin, Governed, Replayable Catalog Foundation</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-011.html" accesskey="n" rel="next">Discussion</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-009.html" accesskey="p" rel="previous">catalog-bench Methodology</a>
+</span>
+</div>
+</nav>
+<h1 data-number="9" id="results"><span
+class="header-section-number">9</span> Results</h1>
+<h2 data-number="9.1" id="stock-engine-interoperability"><span
+class="header-section-number">9.1</span> Stock-engine
+interoperability</h2>
+<p>All four catalogs passed all 14 required assertions under each of the
+four accepted stock-engine profiles. Thus the Phase 2 matrix contains 16
+successful catalog-engine cells and 224 passing required assertions.
+This result supports the bounded claim that the tested versions
+interoperated for the exercised write/read/evolution lifecycle. It does
+not establish complete REST endpoint coverage or production
+equivalence.</p>
+<p>The campaign was also diagnostically productive. Spark exposed
+catalog-owned field-ID and multipart namespace behavior. Trino exercised
+default warehouse location construction and bounded gzip metadata.
+DuckDB exposed staged table creation and spec-correct update decoding,
+including partition-spec updates. Fixes were made at their ownership
+boundary—LakeCat for REST/catalog behavior and Sail for reusable Iceberg
+update semantics—without adding client-specific wire shims.</p>
+<h2 data-number="9.2" id="recovery-and-migration"><span
+class="header-section-number">9.2</span> Recovery and migration</h2>
+<p>The fault proxy distinguished a signed metadata upload disconnected
+before upstream from an upstream 200 whose response was disconnected:
+the former left no object, while the latter left the object present.
+Under the benchmark’s ephemeral deployments, LakeCat, Gravitino, and
+Lakekeeper preserved the fixture across a real mid-request restart and
+accepted exact retry; the no-volume Polaris topology lost it. The same
+limitation appeared in cold restore. This is a finding about the
+disclosed benchmark configuration, not a claim about Polaris with a
+production metastore.</p>
+<p>LakeCat’s durable test rolled back paired audit/outbox admission on
+injected failure. During a real sink outage it retained one pending
+event, replayed stable lineage input and graph event identity after
+recovery, acknowledged it once, and emptied the backlog.</p>
+<p>Bidirectional pointer migration between LakeCat and Polaris and
+between LakeCat and Lakekeeper preserved all compared Iceberg semantics,
+a non-empty snapshot and ref, the exact metadata pointer, and an exact
+three-row scan. The HadoopCatalog cookbook likewise preserved two
+snapshots, two partition specs, two refs, and the same three rows after
+registration. These tests move catalog identity by pointer registration;
+they do not prove physical object copying, dual-writer federation, or
+arbitrary legacy metastore migration.</p>
+<h2 data-number="9.3" id="semantic-evaluation"><span
+class="header-section-number">9.3</span> Semantic evaluation</h2>
+<p>The Phase 5 run created physical fixtures with stock Spark,
+policy-bound and CAS-published the pinned Ossie model, drained graph and
+OpenLineage replay, evaluated five representative semantic answers, and
+bound each to the seven proof bases. The six independent drift
+injections were all rejected. The run admitted 26 lineage events and
+LakeCat and QueryGraph independently computed the same aggregate
+OpenLineage hash in the governed QGLake path.</p>
+<p>The result demonstrates a stronger property than schema-valid
+semantic exchange: a semantic answer can be connected to immutable model
+content, physical table state, policy, plan, derived graph, runtime
+lineage, and catalog publication. It does not establish that all Ossie
+constructs or all TPC-DS queries are implemented. Five answers were
+selected as representative proof cases, and the Polaris converter path
+disclosed conversion loss.</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Evaluation slice</th>
+<th>Accepted observation</th>
+<th>Explicit non-claim</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Spark/Flink/Trino/DuckDB × four catalogs</td>
+<td>Every tested cell passed 14 common assertions</td>
+<td>Complete protocol conformance or performance rank</td>
+</tr>
+<tr>
+<td>Ambiguous object write</td>
+<td>Before-upstream loss differs from after-upstream response loss</td>
+<td>Universal cloud-storage failure model</td>
+</tr>
+<tr>
+<td>Restart and cold restore</td>
+<td>Persistence followed configured durable volumes</td>
+<td>Production disaster-recovery SLA</td>
+</tr>
+<tr>
+<td>Outbox outage</td>
+<td>Pending event survived and replayed with stable identity</td>
+<td>Distributed exactly-once delivery</td>
+</tr>
+<tr>
+<td>Peer and Hadoop migration</td>
+<td>Exact pointers and compared scans/semantics preserved</td>
+<td>Data copying, federation, every legacy catalog</td>
+</tr>
+<tr>
+<td>Ossie/TPC-DS proof</td>
+<td>Five answers bound seven bases; six drift classes rejected</td>
+<td>Full Ossie coverage or compliant TPC-DS result</td>
+</tr>
+</tbody>
+</table>
+</body>
+</html>

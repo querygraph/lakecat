@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov — QueryGraph Project" />
+  <meta name="dcterms.date" content="2026-08-28" />
+  <meta name="keywords" content="Apache Iceberg, catalog, Apache
+Ossie, semantic
+interoperability, governance, lineage, reproducibility" />
+  <title>Threats to Validity and Limitations</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: 1.5em;}
+    div.column{flex: auto;}
+    @media screen {
+    div.columns{gap: min(4vw, 1.5em);}
+    div.column{overflow-x: auto;}
+    }
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">LakeCat: A Thin, Governed, Replayable Catalog Foundation</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">LakeCat: A Thin, Governed, Replayable Catalog Foundation</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-013.html" accesskey="n" rel="next">Reproducibility and Community Process</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-011.html" accesskey="p" rel="previous">Discussion</a>
+</span>
+</div>
+</nav>
+<h1 data-number="11" id="threats-to-validity-and-limitations"><span
+class="header-section-number">11</span> Threats to Validity and
+Limitations</h1>
+<p><strong>Selection bias.</strong> The harness and LakeCat are
+developed in the same broader community. Public profiles, raw
+transcripts, immutable hashes, and maintainer review issues reduce but
+do not eliminate bias. External reproduction and correction remain
+important.</p>
+<p><strong>Version specificity.</strong> Results apply to the recorded
+releases and source revisions. Catalog and engine behavior changes
+quickly. A later run must create a new bundle rather than rewriting
+accepted evidence.</p>
+<p><strong>Deployment realism.</strong> The benchmark uses
+containerized, run-isolated local deployments and shared MinIO. This
+gives control and reproducibility but does not model multi-region
+latency, managed identity, production databases, or cloud-provider
+failure distributions. In particular, the observed Polaris persistence
+behavior is explicitly a no-volume topology observation.</p>
+<p><strong>Coverage.</strong> Four engines and four catalogs provide
+useful diversity but do not cover every REST client, endpoint,
+authentication flow, or table feature. Nessie, vendor-managed catalogs,
+Hive-compatible systems, and emerging multi-format catalogs warrant
+future profiles.</p>
+<p><strong>Semantic scope.</strong> The Ossie experiment evaluates a
+pinned, evolving upstream revision and five semantic answers. It proves
+the composition path and drift controls, not universal semantic
+equivalence among BI tools. Converter loss must continue to be treated
+as data.</p>
+<p><strong>Performance.</strong> No latency, throughput, cost, or
+scalability conclusion can be drawn. A future performance study would
+require equivalent durable configurations, resource accounting, warmup,
+statistical treatment, and project review independent of the correctness
+matrix.</p>
+</body>
+</html>

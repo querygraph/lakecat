@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov — QueryGraph Project" />
+  <meta name="dcterms.date" content="2026-08-28" />
+  <meta name="keywords" content="Apache Iceberg, catalog, Apache
+Ossie, semantic
+interoperability, governance, lineage, reproducibility" />
+  <title>Apache Ossie Integration</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: 1.5em;}
+    div.column{flex: auto;}
+    @media screen {
+    div.columns{gap: min(4vw, 1.5em);}
+    div.column{overflow-x: auto;}
+    }
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">LakeCat: A Thin, Governed, Replayable Catalog Foundation</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">LakeCat: A Thin, Governed, Replayable Catalog Foundation</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-009.html" accesskey="n" rel="next">catalog-bench Methodology</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-007.html" accesskey="p" rel="previous">Transactional Evidence and Recovery</a>
+</span>
+</div>
+</nav>
+<h1 data-number="7" id="apache-ossie-integration"><span
+class="header-section-number">7</span> Apache Ossie Integration</h1>
+<figure>
+<img src="diagrams/diagram-03.png" alt="Diagram 3" />
+<figcaption aria-hidden="true">Diagram 3</figcaption>
+</figure>
+<p><em>Figure 3. The Ossie path binds a pinned semantic artifact to
+policy, physical state, catalog CAS, graph, lineage, and answer
+evidence.</em></p>
+<p>LakeCat’s Ossie integration treats the semantic document as an
+immutable artifact, not custom table metadata. QueryGraph pins upstream
+commit <code>1d9ebcea2932d3381c0840cc8304f0850d366509</code> and
+verifies the SHA-256 digests of the schema, validator, and TPC-DS model
+before use. The upstream validator checks the model. QueryGraph’s
+envelope round-trips JSON and YAML without discarding unknown keys,
+multiple models, extensions, or dialect expressions; conversion loss is
+reported rather than normalized away.</p>
+<p>The admission order is deliberately fail closed:</p>
+<ol type="1">
+<li>Validate document structure and supported Ossie version.</li>
+<li>Obtain a TypeSec decision for publication or consumption.</li>
+<li>Ask Sail to validate dataset fields, Iceberg types, nullability, and
+parsed expression inputs against physical tables.</li>
+<li>CAS-publish an immutable pointer and hashes through LakeCat, binding
+the artifact, physical mapping, policy, publisher, and monotonic
+version.</li>
+<li>Transactionally admit audit and outbox state with the
+publication.</li>
+<li>Replay the stable semantic taxonomy into Grust and the correlated
+activity into OpenLineage.</li>
+<li>Admit a semantic answer only when the required proof bases
+agree.</li>
+</ol>
+<p>The TPC-DS evaluation binds seven proof bases: physical data, model,
+artifact, policy, plan, graph, and lineage. It then independently
+perturbs artifact, model, policy, plan, graph, and lineage identity. All
+six drift dimensions are rejected. A stale publication CAS, missing
+policy reference, schema drift, or unknown Ossie version produces
+neither catalog promotion nor downstream projection.</p>
+<p>This separation yields a useful interoperability property. Ossie
+remains a portable upstream document; Sail remains the authority for
+physical Iceberg compatibility; TypeSec remains the authority for
+permission; LakeCat remains the authority for publication order; and
+Grust/OpenLineage remain derived views. No one component silently
+redefines the others’ schema.</p>
+<p>The evaluation also ran the upstream Apache Polaris Ossie converter
+on the live TPC-DS model. That path is labeled
+<code>verified-with-loss</code>, not lossless. A machine-readable loss
+report is part of the evidence, motivating a proposed converter report
+contract that makes unsupported or transformed constructs explicit.
+Converter success without semantic-loss accounting would be an
+insufficient interoperability claim.</p>
+</body>
+</html>
