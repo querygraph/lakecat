@@ -1,8 +1,16 @@
 # LakeCat Status
 
-Updated: 2026-08-26
+Updated: 2026-08-28
 
 ## Current State
+
+- Catalog-community recovery after the workstation reboot: the persistent goal
+  is restored, `GOAL.md` now reflects the actual cross-repository state, and the
+  interrupted Trino private-configuration staging unit was recovered, verified,
+  documented, committed, and pushed as `catalog-bench@1f1613f`. The LakeCat
+  ledger now recognizes C1-07 as complete, C1-08 as complete, and C1-09 as in
+  progress. Spark, Flink, and Trino Phase 2 implementation state is recorded
+  without promoting unreviewed runtime evidence into public results.
 
 - LakeCat is on `master`.
 - Release naming: `v0.1.0` is the original Bobcat release. The durable feline

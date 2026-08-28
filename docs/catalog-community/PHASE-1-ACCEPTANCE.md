@@ -954,7 +954,69 @@ proves the existing implementation already satisfies it.
 This closes C1-06 only. It is deterministic behavioral evidence, not a
 throughput, latency, variance, RSS, or contention ranking. It does not prove
 ambiguous network-write recovery or a LakeCat standard idempotency profile.
-The exact transcripts remain ignored smoke files. C1-07 next owns the stock
-PyIceberg matrix; C1-09 retains final runnable profile/result materialization,
-manual redaction review, secret scanning, generated public reports,
-adversari.al publication, and live site verification.
+The exact transcripts remain ignored smoke files. C1-07 owns the separately
+accepted stock PyIceberg matrix; C1-09 retains final runnable profile/result
+materialization, manual redaction review, secret scanning, generated public
+reports, adversari.al publication, and live site verification.
+
+## C1-07 — stock PyIceberg interoperability
+
+Accepted catalog-bench revision:
+
+- [`f2f66ee45574a64d1e76330e95e7aa551c3a148b`](https://github.com/querygraph/catalog-bench/commit/f2f66ee45574a64d1e76330e95e7aa551c3a148b)
+  owns the accepted no-shim runner and exact five-catalog evidence; the durable
+  review is `docs/PYICEBERG-INTEROPERABILITY.md` in that repository.
+
+One hash-locked Linux ARM64 image ran public PyIceberg 0.11.1 APIs against
+LakeCat, Polaris, Gravitino, Lakekeeper, and Nessie on the shared Docker network.
+The workflow created, appended, scanned, evolved, deleted, refreshed, retried,
+renamed, and registered within the operations supported by the stock client and
+scenario. It proved exact row counts, ranges, and canonical hashes without
+persisting raw rows. Direct MinIO inspection found all 135 retained Iceberg
+objects and all 20 distinct transcript metadata locations. Every catalog fixture
+was removed and every sanitization and literal-secret assertion passed.
+
+This closes C1-07. Its transcripts remain reviewed behavioral evidence rather
+than performance results; it adds no latency or throughput claim.
+
+## C1-08 — production contention behavior
+
+Accepted implementation and runtime revisions include:
+
+- [`e5345a260a42148aa5cd1044fb3f43acfc2232d2`](https://github.com/querygraph/catalog-bench/commit/e5345a260a42148aa5cd1044fb3f43acfc2232d2)
+  for the source-bound production contention runner and retained metadata
+  evidence;
+- [`8c250e4`](https://github.com/querygraph/catalog-bench/commit/8c250e4)
+  for the runnable narrowed production profile; and
+- [`962f43cb2d2f345addf188e63be0cf6059bc26b0`](https://github.com/querygraph/lakecat/commit/962f43cb2d2f345addf188e63be0cf6059bc26b0)
+  for LakeCat's accepted Turso contention recovery and commit-adjacent read path.
+
+The strict v2 scenario executes repeated conditioning and measured rounds with
+eight same-table writers, fixed resources, one Docker network, one source-built
+MinIO, run-owned private catalog state, direct object attribution, deterministic
+cleanup, and p50/p95/p99/maximum plus variance evidence. It distinguishes
+accepted commits, expected stale-state 409 conflicts, and all other request
+errors; conflicts never count as throughput failures or accepted work.
+
+This closes C1-08. Publication of the reviewed run is one completed subset of
+C1-09 rather than a reason to weaken C1-09's broader exit criteria.
+
+## C1-09 — publication pipeline (in progress)
+
+Accepted partial revision:
+
+- [`02a9c79`](https://github.com/querygraph/catalog-bench/commit/02a9c79)
+  publishes and revalidates the immutable reviewed 2026-08-27 contention bundle.
+
+The deterministic importer pins the complete 30-round transcript and reviewed
+environment/failure sidecar, recomputes aggregates and rank order, evaluates 14
+assertions per catalog, emits five result records plus a manifest, and generates
+the pass-only matrix. LakeCat ranks first among passing catalogs at 147.536
+accepted commits/s, followed by Polaris at 58.110/s and Gravitino at 56.823/s.
+Lakekeeper and Nessie remain unranked failures because their measured rounds
+contain non-conflict server errors; their diagnostics are preserved.
+
+C1-09 remains open. The accepted contention bundle does not yet provide the
+general one-command smoke/full profiles, cross-scenario raw-bundle publication,
+generated known-gaps page, or bundle-wide secret scan, and it does not promote
+C1-03 through C1-07 ignored smoke transcripts into public result records.

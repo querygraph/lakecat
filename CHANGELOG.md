@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Catalog-community ledger reconciliation: accept the neutral repository's
+  completed stock-PyIceberg and contention units, record the exact limited
+  completion of C1-09's immutable contention publication, and reflect the
+  committed Spark, Flink, and Trino implementation state without claiming
+  unpublished engine results.
+
 - Catalog-community goal reconciliation: make the live goal reflect the
   accepted Phase 0/C1-06 LakeCat boundary, the later PyIceberg, contention,
   Spark, Flink, and in-progress Trino work already committed in the neutral
