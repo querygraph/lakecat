@@ -101,6 +101,22 @@ impl Namespace {
     pub fn path(&self) -> String {
         self.0.join(".")
     }
+
+    /// Collision-free internal identity for persistence and derived keys.
+    ///
+    /// `path()` is intentionally human-readable and therefore cannot distinguish
+    /// `["a.b"]` from `["a", "b"]`. This length-prefixed encoding preserves
+    /// component boundaries without changing Iceberg-facing namespace display.
+    pub fn storage_key(&self) -> String {
+        let mut key = String::from("v1");
+        for part in &self.0 {
+            key.push(':');
+            key.push_str(part.len().to_string().as_str());
+            key.push(':');
+            key.push_str(part);
+        }
+        key
+    }
 }
 
 impl FromStr for Namespace {
@@ -259,4 +275,20 @@ fn validate_name(kind: &str, value: &str) -> LakeCatResult<()> {
         )));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Namespace;
+
+    #[test]
+    fn namespace_storage_key_preserves_component_boundaries() {
+        let dotted = Namespace::new(vec!["a.b".to_string()]).unwrap();
+        let multipart = Namespace::new(vec!["a".to_string(), "b".to_string()]).unwrap();
+
+        assert_eq!(dotted.path(), multipart.path());
+        assert_eq!(dotted.storage_key(), "v1:3:a.b");
+        assert_eq!(multipart.storage_key(), "v1:1:a:1:b");
+        assert_ne!(dotted.storage_key(), multipart.storage_key());
+    }
 }

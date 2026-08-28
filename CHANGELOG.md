@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Component-safe namespace identity foundation: add a versioned, length-prefixed
+  internal namespace key that distinguishes a literal dotted component from a
+  multipart namespace while leaving the human-readable Iceberg path unchanged.
+  Persistence migration and derived-key adoption remain the next C1-10 units.
+
 - Catalog-community ledger reconciliation: accept the neutral repository's
   completed stock-PyIceberg and contention units, record the exact limited
   completion of C1-09's immutable contention publication, and reflect the
