@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Reconcile the live goal to the published stock-Flink v2 result at
+  `catalog-bench@c375892`: LakeCat `65f0a4c3`, Polaris, Gravitino, and
+  Lakekeeper pass the complete fresh correctness workflow in run
+  `flinkv2_08280635`. Record Flink as complete and move Phase 2 to Trino and
+  DuckDB without making a performance claim.
+
 - Reconcile the live goal to the published stock-Spark v2 result at
   `catalog-bench@1f2014e`: LakeCat `65f0a4c3`, Polaris, Gravitino, and
   Lakekeeper each pass all 14 correctness assertions in fresh run
