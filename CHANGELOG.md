@@ -15,6 +15,8 @@
 - Close catalog-community Phases 5 and 6 with the reviewed TPC-DS semantic
   proof, explicit Polaris converter loss report, community release index,
   public proposal/demo, versioned feedback backlog, and four maintainer reviews.
+- Clarify that the cross-bundle Q3 artifact is an index rather than a typed
+  per-run benchmark manifest.
 
 - Close catalog-community Phase 4 with exact Apache Ossie upstream, lossless
   document, physical binding, publication, policy receipt, graph taxonomy, and

@@ -10,7 +10,7 @@ opportunities are public; it does not mean external projects endorsed them.
   proposal and a bounded one-command TPC-DS demonstration guide.
 - catalog-bench publishes the 2026-Q3 report, reproduction guide, generated
   known-gaps page, and a nine-entry immutable cross-bundle SHA-256 index at
-  `results/v1/2026-q3-community/manifest.json`.
+  `results/v1/2026-q3-community/index.json`.
 - The community report retains the program’s non-ranking boundary and separates
   stock-engine correctness, recovery/migration, semantic proof, and converter
   loss findings.
