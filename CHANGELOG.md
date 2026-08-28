@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Advance the Phase 2 execution ledger to `catalog-bench@59840b9`: Spark's
+  production launcher now selects the admitted v2 scenario, rejects the
+  superseded v1 path, and builds under a dependency-complete Compose profile.
+  Keep new optimized profile materialization and reviewed publication open.
+
 - Reconcile the live catalog-community goal, status, and backlog with
   `catalog-bench@97b7069`: Trino 483 now has supervised stock-launcher startup,
   typed bounded readiness, distinct early-exit/timeout handling, and guaranteed

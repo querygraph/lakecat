@@ -27,7 +27,7 @@ graph behavior to Grust, and governance semantics to TypeSec.
 - The catalog-community program is active on
   `codex/catalog-community-phase-1`. Phase 0 is closed. LakeCat's public
   acceptance ledger is synchronized through Phase 1. The neutral
-  `querygraph/catalog-bench@97b7069` contains the Phase 1 publication plus the
+  `querygraph/catalog-bench@59840b9` contains the Phase 1 publication plus the
   active Phase 2 implementation. Its Phase 1 evidence remains the reviewed immutable
   five-scenario by five-catalog correctness bundle (20 pass, five fail), the
   production contention bundle, one-command smoke/full recomputation,
@@ -44,6 +44,9 @@ graph behavior to Grust, and governance semantics to TypeSec.
   process-group cleanup; the next unit must implement its concrete effects and
   run the same no-shim workflow. No Flink or Trino production interoperability claim
   exists until its complete optimized evidence is materialized and validated.
+  Spark's launcher now selects the current v2 transcript contract and its image
+  builder uses a dependency-complete Compose profile set; a new source-bound
+  optimized profile is still required before the fresh publication run.
 - Phase 1 is closed. All C1-01 through C1-10 units and exit gates have exact
   committed evidence. The active delivery front is Phase 2 multi-engine
   interoperability.
