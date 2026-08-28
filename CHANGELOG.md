@@ -9,6 +9,10 @@
 
 ## Unreleased
 
+- Close catalog-community Phase 3 with fresh stock Spark HadoopCatalog-to-
+  LakeCat migration evidence preserving schemas, specs, snapshots, refs, the
+  metadata pointer, and exact data, and advance the active front to Apache Ossie.
+
 - Compare parsed metadata URL scheme, authority, and child paths when enforcing
   storage-profile prefixes, admitting Hadoop's equivalent `file:/` pointer
   beneath a `file:///` table root without admitting sibling or remote paths.

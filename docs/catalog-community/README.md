@@ -74,9 +74,10 @@ the same pinned MinIO instance. A smoke run is not publishable evidence.
 - [Phase 2 acceptance](PHASE-2-ACCEPTANCE.md) records the four stock-engine
   bundles, the admitted governed-read OpenLineage handoff, and the explicit
   boundary around unproven engine-native lineage.
-- [Phase 3 acceptance](PHASE-3-ACCEPTANCE.md) accumulates exact fault,
-  recovery, restart, backup/restore, and migration evidence; C3-01 through
-  C3-05 are complete and the legacy-catalog cookbook remains open in C3-06.
+- [Phase 3 acceptance](PHASE-3-ACCEPTANCE.md) records the closed fault,
+  recovery, restart, backup/restore, federation, and HadoopCatalog migration
+  phase. C3-01 through C3-06 and the phase exit gates have exact evidence.
+  Phase 4, the Apache Ossie foundation, is the active delivery front.
 - [Iceberg table lifecycle](../ICEBERG-TABLES.md) records LakeCat's durable
   create/load/update/drop/register/rename, storage, governance, error, and
   no-current-snapshot contract accepted by C1-05.

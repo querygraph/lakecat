@@ -116,7 +116,20 @@ graph behavior to Grust, and governance semantics to TypeSec.
   and ref, the exact metadata pointer, and an exact three-row scan. The
   Lakekeeper path exposed and fixed bounded gzip metadata-pointer registration.
   Physical copying, dual-writer federation, and legacy catalog migration remain
-  outside this proof; C3-06 is the active front.
+  outside this proof.
+- Phase 3 C3-06 is complete at QueryGraph `b176d1d2`,
+  `querygraph/catalog-bench@ad3707d`, and LakeCat `20116489`. Fresh run
+  `hadoop_0828i` uses stock Spark 4.1.3 and Iceberg 1.11 HadoopCatalog, evolves
+  two snapshots and two partition specs, retains two refs, and registers the
+  exact metadata pointer in LakeCat. Both sides independently scan the same
+  three rows. The run is isolated, sanitized, reproducible, and leaves no
+  containers or volumes.
+- Phase 3 is closed. C3-01 through C3-06 cover deterministic storage/network
+  faults, ambiguous commits and restarts, transactional outbox recovery, cold
+  state restoration, peer REST metadata-pointer migration, and a legacy
+  HadoopCatalog cookbook. The exact proofs and explicit non-claims are in
+  `docs/catalog-community/PHASE-3-ACCEPTANCE.md`. Phase 4 Apache Ossie is the
+  active delivery front.
 
 ## Next Stage
 

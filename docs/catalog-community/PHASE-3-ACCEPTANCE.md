@@ -233,3 +233,74 @@ This proves portable metadata-pointer federation and migration for the named
 catalog pairs against a shared object store. It does not prove physical object
 copy, cross-cloud transfer, concurrent dual-writer safety, incremental sync,
 cutover orchestration, or the legacy Hive/Hadoop/Glue path owned by C3-06.
+
+## C3-06 — legacy HadoopCatalog migration
+
+Accepted revisions:
+
+- `querygraph@b176d1d2` provides a stock Spark HadoopCatalog fixture, semantic
+  verifier, focused tests, and the operator cookbook
+  `docs/catalog-community/HADOOP-TO-LAKECAT.md`.
+- `lakecat@20116489` compares parsed metadata URL components and admits
+  Hadoop's equivalent `file:/` spelling only for children of the configured
+  `file:///` storage root.
+- `catalog-bench@ad3707d` publishes the reviewed `hadoop_0828i` evidence;
+  `catalog-bench@98c2a3e` advances the deployment provenance assertion to that
+  exact LakeCat source revision.
+
+Fresh run `hadoop_0828i` used stock Spark 4.1.3 and Iceberg 1.11.0. Spark
+created the source in a standard HadoopCatalog on a run-owned shared filesystem,
+performed additive schema evolution, wrote two snapshots under two partition
+specifications, and created an audit branch. It then registered the exact
+metadata pointer through LakeCat's standard Iceberg REST endpoint. Independent
+loads of source and destination reported zero semantic mismatches:
+
+| Property | HadoopCatalog source | LakeCat destination |
+| --- | ---: | ---: |
+| Snapshots | 2 | 2 |
+| Partition specs | 2 | 2 |
+| Refs | 2 | 2 |
+| Rows | 3 | 3 |
+
+Both semantic digests are
+`sha256:a0f7d2bd253157da45ec523ddd49398ff4f579a1ac5410f4d410b25d6976ccca`.
+Both exact data digests are
+`sha256:399e7ecbc386cd9c12454862d2cfdd2da5f20c6fe264396215b7110212258b50`.
+The metadata-location digest is
+`sha256:81239a07d208c8ec5f9facae38f0c8c4da39b68c1841b061f7943e24e2ee3a47`.
+The sanitized summary's canonical content hash is
+`sha256:7b45bced25c8dd7966b74b88df2ed3d867f2e4738efe7aacc10ce1cedae416e4`.
+
+The accepted command was:
+
+```sh
+docker/run-querygraph-hadoop-migration.sh hadoop_0828i
+```
+
+The runner rejects non-fresh state, binds QueryGraph and LakeCat to exact
+revisions, retains only a digest of the metadata location, and removed every
+run container and volume. QueryGraph's focused tests passed; LakeCat's
+all-feature service suite passed 494 library and five binary tests; and the
+complete locked catalog-bench workspace passed.
+
+This is a same-filesystem legacy HadoopCatalog registration cookbook. It does
+not claim Hive Metastore or Glue coverage, physical object copying, cross-cloud
+transfer, concurrent dual-writer safety, incremental synchronization, or
+automated cutover.
+
+## Phase 3 exit gates
+
+Phase 3 is closed. C3-01 through C3-06 are complete and collectively provide:
+
+- deterministic, source-pinned, occurrence-bounded fault injection;
+- visible catalog-specific ambiguity, retry, restart, and cold-restore results;
+- transactional catalog/outbox failure and at-least-once replay proof;
+- peer-catalog and legacy HadoopCatalog migration with semantic and data checks;
+- exact source revisions, runner/config hashes, sanitized reviewed evidence,
+  explicit non-claims, and fresh-state guards; and
+- successful cleanup with no run-owned containers or volumes remaining.
+
+The implementations remain in their owning repositories: the neutral lab in
+catalog-bench, migration composition in QueryGraph, Iceberg decoding in Sail,
+and only catalog admission/location enforcement in LakeCat. No Phase 3 result
+is ranked as performance evidence. Phase 4 Apache Ossie work may now begin.
