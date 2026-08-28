@@ -9,6 +9,10 @@
 
 ## Unreleased
 
+- Accept Phase 3 C3-04 targeted restart and cold backup/restore evidence, with
+  exact archive and summary hashes, cleanup proof, scoped Polaris failure, and
+  explicit operational non-claims.
+
 - Accept Phase 3 C3-03 with exact source hashes and stable-toolchain evidence
   for Turso transaction rollback plus outbox sink outage, backlog, deterministic
   replay, acknowledgement, and the explicit at-least-once delivery boundary.

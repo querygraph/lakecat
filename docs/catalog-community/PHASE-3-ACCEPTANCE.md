@@ -150,3 +150,41 @@ This is at-least-once projection with exact stable replay identity. Downstream
 sinks remain responsible for idempotency by event ID; the proof does not claim
 distributed exactly-once delivery. It closes C3-03, not backup/restore,
 rolling restart, migration, or federation.
+
+## C3-04 — per-catalog restart and cold restore
+
+Accepted catalog-bench revision:
+
+- `catalog-bench@2debd3f` publishes the neutral cold backup/restore scenario,
+  ownership-preserving source-built archive helper, fresh runner, sanitized
+  before/after identities, archive hashes, cleanup proof, and reproduction guide.
+
+The restart half is the independently targeted service restart from C3-02:
+each catalog process restarts while the shared object store and other catalogs
+remain available. The cold-restore half creates a standard Iceberg REST fixture,
+stops the state owner, archives its run-owned durable volume, deletes and
+recreates that volume, restores it, and compares table UUID plus
+metadata-location hash through standard REST.
+
+Fresh run `backup_0828a` produced reviewed summary hash
+`sha256:592e122218671efc08ea7d1bed726ff40677db3454bb24422a9516739efdea0a`:
+
+| Catalog | State | Cold restore |
+| --- | --- | --- |
+| LakeCat | Turso | pass |
+| Polaris | ephemeral benchmark state | fail: fixture absent (HTTP 404) |
+| Gravitino | SQLite | pass |
+| Lakekeeper | PostgreSQL | pass |
+
+Archive evidence is retained by size and SHA-256 rather than committing
+database bytes. The LakeCat archive is 4,959 bytes with hash
+`cd7b1097bbe3b302ff83076d7eb6fb7a0f742a159e0686a4eb6fd717a14c33a1`;
+Gravitino is 699 bytes with hash
+`b51980245e36c9b5a65e4b4c49d21faf25025dc7939b8697591111a595a26853`;
+Lakekeeper is 7,898,765 bytes with hash
+`6fa0c37829952cc9d3283ca744d56d7111d2e9f70a23440636ce9507b6a29f7b`.
+
+The runner removed every project container and volume. Polaris's failure is
+scoped to the no-volume benchmark topology. This is cold byte-level recovery,
+not vendor-supported logical backup, online backup, point-in-time recovery,
+rolling upgrade, or a disaster-recovery SLA.

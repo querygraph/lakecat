@@ -104,6 +104,11 @@ graph behavior to Grust, and governance semantics to TypeSec.
   event IDs, acknowledges it once after recovery, and empties the backlog.
   This is an explicit at-least-once projection contract, not a distributed
   exactly-once claim.
+- Phase 3 C3-04 is complete at `querygraph/catalog-bench@2debd3f`. Targeted
+  restart evidence is paired with a fresh cold restore that deletes and
+  recreates run-owned state volumes. LakeCat/Turso, Gravitino/SQLite, and
+  Lakekeeper/PostgreSQL preserve exact table identity; the no-volume Polaris
+  topology loses it. The proof is not an online-backup or disaster-recovery SLA.
 
 ## Next Stage
 
