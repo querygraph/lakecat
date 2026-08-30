@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add the "Getting Out of the Way" blog post announcing the engine-truth paper
+  under `docs/blog/getting-out-of-the-way/`, with its Ulysses/Omnighost
+  `.textpack` deliverable bundling the paper's headboard and two figures.
+
 - Add a second, scholarly LakeCat paper, "Getting Out of the Way: Engine
   Truth, Typed Governance, and the Thin Catalog", under
   `docs/papers/lakecat-engine-truth/`. It presents prior work from first
