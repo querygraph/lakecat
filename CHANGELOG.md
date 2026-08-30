@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add a second, scholarly LakeCat paper, "Getting Out of the Way: Engine
+  Truth, Typed Governance, and the Thin Catalog", under
+  `docs/papers/lakecat-engine-truth/`. It presents prior work from first
+  principles (optimistic concurrency, information-flow types, capability
+  systems, property-graph query languages, OLAP semantic models, adversarial
+  storage evaluation), defines engine truth and the engine contract, explains
+  TypeSec, Grust, and the Responsible Semantic Layer, and reports the
+  adversarial reviews and catalog-community campaigns with their open findings.
+
 - Add a standalone, conference-style LakeCat systems paper with related work,
   architecture and recovery diagrams, Apache Ossie semantic integration,
   catalog-bench methodology and results, explicit threats to validity, and a

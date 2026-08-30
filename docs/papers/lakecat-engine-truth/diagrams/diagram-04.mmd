@@ -1,0 +1,21 @@
+sequenceDiagram
+  participant E as Iceberg client
+  participant L as LakeCat
+  participant T as TypeSec
+  participant S as Sail
+  participant D as Turso (BEGIN CONCURRENT)
+  participant X as Grust / OpenLineage
+  E->>L: commit (requirements + updates)
+  L->>T: authorize table-commit
+  T-->>L: receipt → typed capability
+  L->>S: validate requirements, apply updates
+  S-->>L: new metadata (create-only object)
+  L->>D: pointer CAS + pointer log + audit + outbox + idempotency
+  alt CAS holds
+    D-->>L: COMMIT
+    L-->>E: 200 LoadTableResponse
+    L->>X: drain outbox (at-least-once, re-validated)
+  else stale requirement / write-write conflict
+    D-->>L: ROLLBACK (retry on transient, then 409)
+    L-->>E: 409 CommitFailedException
+  end

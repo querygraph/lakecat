@@ -1,0 +1,52 @@
+{
+  "$schema": "../../../../firstpair/publishing/book.build.schema.json",
+  "schemaVersion": 1,
+  "bookRoot": ".",
+  "manuscript": "${tmpDir}/paper.md",
+  "metadata": "metadata.yaml",
+  "cover": "cover.md",
+  "css": "paper.css",
+  "stem": "lakecat-engine-truth",
+  "title": "Getting Out of the Way",
+  "subtitle": "Engine Truth, Typed Governance, and the Thin Catalog: LakeCat, TypeSec, Grust, and a Responsible Semantic Layer under Adversarial Evaluation",
+  "author": "Alexy Khrabrov",
+  "headboardImage": "assets/engine-truth-header.png",
+  "version": "1.0.0",
+  "dist": "dist",
+  "buildDir": "${tmpDir}/build",
+  "edition": "full",
+  "primaryFormat": "typst",
+  "mobi": false,
+  "pandoc": {
+    "reader": "markdown+smart",
+    "toc": true,
+    "tocDepth": 2,
+    "numberSections": true,
+    "resourcePaths": [
+      "${tmpDir}",
+      "${tmpDir}/diagrams",
+      ".",
+      "assets"
+    ]
+  },
+  "pdf": {
+    "separateCover": false,
+    "coverImage": "assets/engine-truth-cover.png",
+    "coverWidth": "8.5in",
+    "coverHeight": "11in",
+    "coverFit": "contain",
+    "variables": {
+      "papersize": "us-letter"
+    }
+  },
+  "epub": {
+    "coverImage": "assets/engine-truth-cover.png",
+    "includeRenderedCover": false
+  },
+  "hooks": {
+    "prepare": [
+      "node prepare-paper.mjs paper.md \"${tmpDir}/paper.md\" diagrams",
+      "cp -R diagrams \"${tmpDir}/diagrams\""
+    ]
+  }
+}

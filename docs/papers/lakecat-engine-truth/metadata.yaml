@@ -1,0 +1,21 @@
+---
+title: "Getting Out of the Way"
+title_stem: lakecat-engine-truth
+subtitle: "Engine Truth, Typed Governance, and the Thin Catalog: LakeCat, TypeSec, Grust, and a Responsible Semantic Layer under Adversarial Evaluation"
+author:
+  - Alexy Khrabrov
+lang: en-US
+publisher: First Pair Press
+rights: Copyright Alexy Khrabrov
+date: 2026-08-30
+subject: "Data catalogs; Apache Iceberg; type-level governance; information-flow types; property graphs; semantic layers; adversarial systems evaluation"
+keywords:
+  - Apache Iceberg
+  - data catalog
+  - TypeSec
+  - Grust
+  - QueryGraph
+  - Apache Ossie
+  - engine truth
+  - adversarial evaluation
+---

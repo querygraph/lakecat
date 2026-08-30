@@ -1,0 +1,10 @@
+flowchart TD
+  P[Policy engines<br/>RBAC · ODRL · graph · JWT] -->|Allow| M[mint_capability<br/>pub crate only]
+  P -->|Deny / Delegate| E[Typed error<br/>no capability exists]
+  M --> C["Capability&lt;Action, Resource&gt;<br/>phantom types · sealed Permission"]
+  C --> W[Privileged method<br/>requires &amp;Capability]
+  C --> R[Signed receipt<br/>ed25519 · positive-only · expiring]
+  S["SecureValue&lt;Label, T, R&gt;"] -->|reveal / declassify<br/>same resource instance| C
+  S -->|zip| J[Join lattice<br/>Public &lt; Internal &lt; Sensitive &lt; Secret]
+  style C fill:#fff3e0,stroke:#e65100,stroke-width:3px
+  style E fill:#ffebee,stroke:#b71c1c

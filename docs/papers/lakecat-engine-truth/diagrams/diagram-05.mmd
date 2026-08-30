@@ -1,0 +1,15 @@
+flowchart TB
+  R[Adversarial reviews<br/>OPUS1 · OPUS2 · 53-agent verify · FABLE-1<br/>findings → refute → closure ledger] --> B
+  B[catalog-bench<br/>source-pinned · unranked · immutable bundles<br/>59 adversarial harness tests] --> C1[Contention<br/>8 writers · same table]
+  B --> C2[Deterministic commit<br/>stale requirement → 409, state unmoved]
+  B --> C3[Stock engines<br/>Spark · Flink · Trino · DuckDB · PyIceberg]
+  B --> C4[Faults<br/>proxy · restart · cold restore · outbox]
+  B --> C5[Migration<br/>peer REST · HadoopCatalog]
+  B --> C6[Semantics<br/>Ossie · 7 bases · 6 drifts · converter loss]
+  B --> C7[Stack<br/>adversarial-cognition · AgentGym]
+  C1 --> I[Immutable 2026-Q3 index<br/>9 SHA-256 entries · 4 public review issues]
+  C2 --> I
+  C3 --> I
+  C4 --> I
+  C5 --> I
+  C6 --> I

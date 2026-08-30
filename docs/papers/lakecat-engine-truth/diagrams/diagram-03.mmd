@@ -1,0 +1,15 @@
+flowchart TD
+  U[Pinned Apache Ossie<br/>schema · validator · TPC-DS model<br/>commit + SHA-256] --> V[Structural validation]
+  V --> A[TypeSec publication decision]
+  V --> P[Sail physical binding validation<br/>fields · types · nullability · expressions]
+  A --> C[LakeCat CAS publication<br/>version · artifact hash · bindings · publisher from receipt]
+  P --> C
+  C --> O[Audit + outbox, one transaction]
+  O --> G[Grust semantic graph]
+  O --> L[OpenLineage ModelPublished]
+  G --> Q[QueryGraph answers]
+  L --> Q
+  Q --> H{artifact · graph · lineage · model<br/>physical · plan · policy agree?}
+  H -->|yes| Z[Admit answer]
+  H -->|any drift| F[Fail closed]
+  style C fill:#d9f0ff,stroke:#1261a0,stroke-width:3px

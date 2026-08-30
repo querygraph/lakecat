@@ -1,0 +1,15 @@
+flowchart LR
+  subgraph thin[Engine contract]
+    c[LakeCat<br/>identity · CAS · receipts<br/>audit · outbox] -->|typed decision| t[TypeSec]
+    c -->|restriction → plan| s[Sail<br/>engine truth]
+    c -->|bounded events| g[Grust]
+    s -->|bounded scan tasks| a[Agent / engine]
+  end
+  subgraph fat[Fat catalog]
+    f1[Catalog] --> f2[Own manifest parser]
+    f1 --> f3[Own policy language]
+    f1 --> f4[Own graph store]
+    f2 -.drift.-> fe[(Engine semantics)]
+  end
+  style c fill:#d9f0ff,stroke:#1261a0,stroke-width:3px
+  style s fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
