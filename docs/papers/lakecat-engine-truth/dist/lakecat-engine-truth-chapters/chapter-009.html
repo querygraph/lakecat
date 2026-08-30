@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov — QueryGraph Project" />
+  <meta name="dcterms.date" content="2026-08-30" />
+  <meta name="keywords" content="Apache Iceberg, data
+catalog, governance, information-flow types, capabilities, property
+graphs, semantic layer, Apache Ossie, adversarial evaluation, Rust" />
+  <title>LakeCat: The Thin Catalog</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: 1.5em;}
+    div.column{flex: auto;}
+    @media screen {
+    div.columns{gap: min(4vw, 1.5em);}
+    div.column{overflow-x: auto;}
+    }
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">Getting Out of the Way</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">Getting Out of the Way</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-010.html" accesskey="n" rel="next">Adversarial Evaluation</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-008.html" accesskey="p" rel="previous">The Responsible Semantic Layer</a>
+</span>
+</div>
+</nav>
+<h1 data-number="8" id="lakecat-the-thin-catalog"><span
+class="header-section-number">8</span> LakeCat: The Thin Catalog</h1>
+<h2 data-number="8.1" id="trait-seams"><span
+class="header-section-number">8.1</span> Trait seams</h2>
+<p>The workspace expresses the boundary directly. Five
+traits—<code>CatalogStore</code>, <code>SailCatalogEngine</code>,
+<code>GovernanceEngine</code>, <code>CatalogGraphSink</code>,
+<code>LineageSink</code>—are the only places domain behavior enters, and
+their defaults are conservative: an in-memory store, an allow-all engine
+that labels itself <code>lakecat-allow-all-local</code>, a deferred Sail
+engine whose <code>plan_scan</code> returns <code>NotSupported</code>
+rather than an empty plan, a no-op graph sink, and a credential issuer
+that vends only public configuration. Real integrations are activated by
+explicit features (<code>turso-local</code>, <code>sail-local</code>,
+<code>typesec-local</code>, <code>grust-turso-local</code>). The default
+build, in particular, honors obligation 4 of the engine contract:
+without Sail it <em>rejects</em> Iceberg updates it cannot apply instead
+of returning success and leaving the table unchanged—a behavior the
+first adversarial review found and reported as silent acceptance
+(§8.1).</p>
+<h2 data-number="8.2" id="commit-path-cas-idempotency-outbox"><span
+class="header-section-number">8.2</span> Commit path: CAS, idempotency,
+outbox</h2>
+<p>An Iceberg REST commit is an optimistic transition: the client
+presents requirements describing the state it planned against and
+updates producing the next metadata document. LakeCat validates
+requirements before updates; asks Sail to apply the updates and write a
+<em>create-only</em> metadata object; and then performs one store
+transaction that (i) conditionally advances the metadata pointer,
+guarded on the prior
+location—<code>updated_rows == 0 ⇒ Conflict</code>—(ii) appends a
+pointer-log row, (iii) appends a value-redacted audit event, (iv) stages
+an outbox event, and (v) records an idempotency entry binding the key to
+the request’s content hash. If any write fails, all roll back; the
+standard REST response is returned only afterward. A stale requirement
+yields HTTP 409 <code>CommitFailedException</code>, and no part of the
+attempted transition becomes current. Cleanup of an uncommitted metadata
+object is attempted only on error and never overrides the original CAS
+or store error.</p>
+<p>This is Richardson’s transactional outbox [58] applied to catalog
+side effects: graph and lineage projections are durable catalog facts
+drained <em>after</em> commit, in <code>created_at, event_id</code>
+order, so lineage reflects committed state rather than a handler’s
+best-effort side effect. The contract is explicitly at-least-once; sinks
+must tolerate deterministic duplicate delivery, and the drain
+re-validates each event against a closed schema—requiring, for instance,
+that a governed scan replay carry the same read restriction at the top
+level and inside the receipt context, a non-blank purpose, and a
+positive TTL cap—so downstream evidence can never inherit a claim the
+receipt did not capture.</p>
+<figure>
+<img src="diagrams/diagram-04.png" alt="Diagram 4" />
+<figcaption aria-hidden="true">Diagram 4</figcaption>
+</figure>
+<p><em>Figure 4. The catalog transaction binds the pointer transition to
+its audit, outbox, and idempotency evidence; external projections are
+replayed from committed state.</em></p>
+<h2 data-number="8.3" id="turso-mvcc-and-begin-concurrent"><span
+class="header-section-number">8.3</span> Turso MVCC and
+<code>BEGIN CONCURRENT</code></h2>
+<p>The durable spine is the Rust <code>turso</code> database [59]. Its
+first LakeCat integration serialized all writers behind a per-store
+mutex—correct, but coupling unrelated warehouses and the outbox relay to
+one lock. Replacing it required an empirical finding: under
+<code>PRAGMA journal_mode=mvcc</code>, the binding’s typed
+<code>conn.transaction()</code> still issues <code>BEGIN DEFERRED</code>
+and remains single-writer, so a second writer to a <em>different</em>
+row fails with “database is locked.” Concurrency requires issuing
+<code>BEGIN CONCURRENT</code> explicitly. With that, distinct-row
+commits run truly concurrently, and a same-row race yields exactly one
+winner and a <code>Write-write conflict</code> for the loser at
+<code>COMMIT</code>—Bernstein and Goodman’s multiversion scheme [60]
+surfacing as snapshot-isolation write conflicts [61].</p>
+<p>LakeCat’s <code>write_txn</code> helper therefore opens a
+pragma-warmed pooled connection, issues <code>BEGIN CONCURRENT</code>,
+runs the body, and commits; on <code>Busy</code>,
+<code>BusySnapshot</code>, <code>Write-write conflict</code>, or
+<code>Commit dependency aborted</code> it rolls back and retries with
+exponential backoff, capped at eight attempts, at the begin, body, and
+commit boundaries. Correctness under a same-table race follows from
+composition: the loser’s retry re-reads the winner’s snapshot, the
+conditional pointer update mismatches, and the outcome is the terminal
+Iceberg 409—bounded retry converges to one winner plus conflicts, with
+no livelock. Exhausted transient contention now returns an Iceberg REST
+503 rather than a misleading 500. Regression tests hold eight writers
+through 100 synchronized same-table CAS rounds and 1,600 concurrent
+read-before-commit cycles, requiring that every write be either the sole
+accepted winner or an explicit pointer conflict, and that an active
+table never disappear or surface an internal error.</p>
+<h2 data-number="8.4" id="component-safe-identity"><span
+class="header-section-number">8.4</span> Component-safe identity</h2>
+<p>Iceberg REST namespaces are ordered component arrays, encoded on the
+wire with U+001F separators. A catalog that joins components with
+<code>.</code> for its internal keys silently aliases
+<code>["a.b"]</code> with <code>["a", "b"]</code>. LakeCat’s first
+adversarial review recorded the seed of this defect (a
+<code>.</code>-permissive name validator); the community program refused
+to patch one key family and instead introduced a versioned,
+length-prefixed storage key—<code>v1:3:a.b</code> versus
+<code>v1:1:a:1:b</code>—applied to namespace, table, view, receipt,
+soft-delete, and policy scope, with a startup migration that validates
+every legacy row, rewrites all dependent keys in one transaction,
+records a schema marker only on success, and rolls back on any corrupt
+row. The human-readable dotted path survives as display data and “must
+not be reintroduced as a durable key” [62].</p>
+<h2 data-number="8.5" id="governed-reads-narrow-never-widen"><span
+class="header-section-number">8.5</span> Governed reads: narrow, never
+widen</h2>
+<p>The read path is where the engine contract’s second obligation is
+discharged. After authorization, LakeCat loads <em>the capability’s</em>
+table, builds a <code>ReadRestriction</code> (allowed columns, row
+predicate, purpose, policy hash), and calls Sail’s
+<code>plan_authorized_table_scan</code> with the capability itself, so
+the planner reuses “the exact receipt and restriction that LakeCat will
+record as scan evidence” and does not re-authorize reconstructed
+context. Inside, the restriction becomes
+<code>effective_projection(requested)</code> and
+<code>mandatory_filters()</code> before any file task exists. The
+governing rule is <em>narrow, never widen</em>: an empty client
+projection under a column restriction means the allowed columns; a
+client projection may narrow further but cannot widen. LakeCat records
+both the requested and the effective projection as replay evidence, and
+recomputes the restriction on every stateless
+<code>fetchScanTasks</code> so a stale token cannot expand back to all
+columns. When Sail drives the catalog directly as a
+<code>CatalogProvider</code>, the same gate runs inside each provider
+method and mints the same typed capabilities—“the ‘policy and plan fuse
+in one process’ property the design called the architectural prize”
+[54].</p>
+</body>
+</html>

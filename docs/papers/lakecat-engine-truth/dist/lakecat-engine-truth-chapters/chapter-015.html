@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov — QueryGraph Project" />
+  <meta name="dcterms.date" content="2026-08-30" />
+  <meta name="keywords" content="Apache Iceberg, data
+catalog, governance, information-flow types, capabilities, property
+graphs, semantic layer, Apache Ossie, adversarial evaluation, Rust" />
+  <title>Conclusion</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: 1.5em;}
+    div.column{flex: auto;}
+    @media screen {
+    div.columns{gap: min(4vw, 1.5em);}
+    div.column{overflow-x: auto;}
+    }
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">Getting Out of the Way</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">Getting Out of the Way</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-016.html" accesskey="n" rel="next">References</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-014.html" accesskey="p" rel="previous">Future Work</a>
+</span>
+</div>
+</nav>
+<h1 data-number="14" id="conclusion"><span
+class="header-section-number">14</span> Conclusion</h1>
+<p>A catalog cannot be both the place where every engine and agent is
+governed and a second implementation of everything it governs. LakeCat
+resolves the tension by getting out of the way: it keeps the transaction
+and the evidence, and it binds that evidence to truth owned
+elsewhere—the engine’s interpretation of the table, TypeSec’s typed
+decision, Grust’s derived graph, QueryGraph’s business semantics. Engine
+truth and the engine contract are the principles; unforgeable
+capabilities, labeled values, receipts persisted in the commit
+transaction, restrictions compiled into the plan, and CAS-published
+semantic models are the mechanisms. The design was developed under
+adversarial review and evaluated under adversarial conditions in a
+neutral harness, and both the results and the open rows are reported.
+For an ecosystem assembled from independently evolving open components,
+explicit boundaries—of software and of claims—are the contribution.</p>
+</body>
+</html>

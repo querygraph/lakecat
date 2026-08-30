@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov — QueryGraph Project" />
+  <meta name="dcterms.date" content="2026-08-30" />
+  <meta name="keywords" content="Apache Iceberg, data
+catalog, governance, information-flow types, capabilities, property
+graphs, semantic layer, Apache Ossie, adversarial evaluation, Rust" />
+  <title>Prior Work, from First Principles</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: 1.5em;}
+    div.column{flex: auto;}
+    @media screen {
+    div.columns{gap: min(4vw, 1.5em);}
+    div.column{overflow-x: auto;}
+    }
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">Getting Out of the Way</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">Getting Out of the Way</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-005.html" accesskey="n" rel="next">Engine Truth and the Engine Contract</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-003.html" accesskey="p" rel="previous">Introduction</a>
+</span>
+</div>
+</nav>
+<h1 data-number="3" id="prior-work-from-first-principles"><span
+class="header-section-number">3</span> Prior Work, from First
+Principles</h1>
+<h2 data-number="3.1" id="the-catalog-as-a-coordination-boundary"><span
+class="header-section-number">3.1</span> The catalog as a coordination
+boundary</h2>
+<p>The Hive Metastore gave analytical systems a shared Thrift API for
+table metadata, but its data model coupled the catalog to Hive’s notion
+of a table and made atomic multi-file commits an exercise in convention
+[9]. Iceberg inverted the responsibility: table state lives in
+versioned, immutable metadata files, and the catalog’s sole atomic act
+is to move a table’s <em>current metadata pointer</em> under an
+optimistic requirement [2, 3]. This is Kung and Robinson’s optimistic
+concurrency control [10] applied at the granularity of a table: the
+committer states the state it planned against, and the catalog accepts
+the new pointer only if the requirement still holds. Delta Lake reached
+a similar position through an ordered log of JSON actions with a single
+mutual-exclusion point [11]; the lakehouse argument generalizes both
+[1].</p>
+<p>Because the pointer is the only thing the catalog must move
+atomically, the catalog’s <em>coordination</em> responsibility is small
+and precise, while its <em>domain</em> responsibilities—policy,
+planning, lineage, semantics—are large and open-ended. The systems that
+followed took different positions on that ratio. Project Nessie added
+Git-like branching and cross-table transactions to the pointer store
+[12]. Apache Polaris became a broad Iceberg control plane with realms,
+policies, credential vending, and federation [13]. Apache Gravitino
+federates tabular, file, messaging, and model metadata into a “metadata
+lake” [14]. Lakekeeper, like LakeCat Rust-native, emphasizes
+multi-warehouse operation, storage integration, and management APIs
+[15]. Databricks’ Unity Catalog, open-sourced in 2024, spans tables,
+models, and functions with its own governance model [16]. These are not
+interchangeable products; they occupy different points on the
+domain-ownership axis. LakeCat’s position is the minimal one on that
+axis and, we will argue, the maximal one on the <em>evidence</em>
+axis.</p>
+<h2 data-number="3.2"
+id="governance-from-access-control-lists-to-types"><span
+class="header-section-number">3.2</span> Governance: from access-control
+lists to types</h2>
+<p>Authorization in data systems descends from two traditions. The first
+is the access matrix and its row and column decompositions—ACLs and
+capabilities—that Lampson and Dennis and Van Horn articulated in the
+1960s and 70s [17, 18]. The second is information-flow control:
+Denning’s lattice model, in which every datum carries a label from a
+partially ordered set and information may flow only upward in the
+lattice [19]; Myers and Liskov’s decentralized label model, which let
+principals own and declassify labels [20]; and language-based
+enforcement, surveyed by Sabelfeld and Myers, in which the type checker
+rather than a runtime monitor establishes noninterference [21]. Russo,
+Claessen, and Hughes showed the discipline could be a <em>library</em>:
+SecLib wraps values in a <code>Sec s a</code> container whose label is a
+type parameter and whose escape requires an explicit, typed authority
+[22]; LIO extended the idea to a monadic, dynamic variant [23].</p>
+<p>Policy engines took a different path. XACML standardized
+attribute-based decisions with combining algorithms such as
+deny-overrides [24]; Open Policy Agent generalized the decision service
+[25]; Google’s Zanzibar showed relationship-based authorization at
+planetary scale [26]; Amazon’s Cedar brought a verified, analyzable
+policy language [27]. Bearer-token capability systems—Macaroons [28],
+Biscuit [29]—made a decision portable and attenuable across process
+boundaries. The W3C’s ODRL provides a machine-readable rights vocabulary
+of permissions, prohibitions, and constraints [30]; Decentralized
+Identifiers give principals self-certifying, key-bound identity
+[31].</p>
+<p>What the policy-engine tradition returns to the application is a
+boolean, or a token that the application must remember to check. What
+the information-flow tradition returns is a <em>type</em> that the
+compiler checks on every path. TypeSec [4] is, as its authors record, a
+direct descendant of SecLib by way of Andrzejewski’s 2018 work on
+privacy-aware data science with type-level programming [32]: it brings
+the SecLib move to Rust, where phantom types, sealed traits, and
+crate-private constructors make the container unforgeable [33, 34], and
+it composes runtime engines (RBAC, ODRL, graph, JWT-claims) behind a
+single <code>PolicyEngine</code> contract whose only positive output is
+such a type. Section 4 develops this from first principles.</p>
+<h2 data-number="3.3" id="graphs-of-metadata-and-lineage"><span
+class="header-section-number">3.3</span> Graphs of metadata and
+lineage</h2>
+<p>Catalog facts form a graph: warehouses contain namespaces, namespaces
+contain tables, tables have columns, snapshots, commits, policies, and
+lineage runs. Enterprise metadata systems have modeled this
+explicitly—Google’s Goods inferred a dataset graph across the company
+[35]; Apache Atlas, DataHub, and Amundsen expose graph-shaped discovery
+and lineage [36]. The property-graph data model and its query languages
+matured in parallel: Cypher [37], the foundations Angles et al. surveyed
+[38], and in 2024 the ISO/IEC 39075 GQL standard [39] with SQL/PGQ as
+its relational sibling [40]. OpenLineage standardized the
+run/job/dataset event model for execution lineage [41].</p>
+<p>The design question for a catalog is not whether such a graph is
+useful but <em>who owns it</em>. A catalog that embeds a graph database
+inherits a query language, a storage engine, and a schema-evolution
+problem. Grust [8] answers by separating graph <em>construction</em>
+from graph <em>querying</em>: a small, backend-neutral Rust model of
+labeled nodes, labeled edges, and typed properties, a traversal
+expressed as a serializable IR rather than a query string, an async
+<code>GraphStore</code> trait, and a Cypher/GQL layer implemented once
+over that trait. The catalog builds a <code>Graph</code>; a backend
+decides how to persist or query it (§5).</p>
+<h2 data-number="3.4" id="semantic-layers"><span
+class="header-section-number">3.4</span> Semantic layers</h2>
+<p>The semantic layer is older than its current name. Codd’s OLAP
+manifesto and Kimball’s dimensional modeling separated <em>what a
+measure means</em> from <em>how a table is stored</em> [42, 43]; MDX and
+cube servers made the separation executable. A second generation
+embedded the layer in BI tools and transformation frameworks—LookML,
+dbt’s MetricFlow, Cube, AtScale, Malloy—each with its own dialect. The
+Open Semantic Interchange initiative, founded in 2025 by Snowflake,
+Salesforce, dbt Labs, and others, and now incubating at Apache as Ossie,
+proposes a vendor-neutral JSON/YAML model with a machine-readable
+schema, validators, converters, and a TPC-DS example [44].</p>
+<p>A schema-valid semantic document is a portable <em>claim</em>: that a
+metric is defined by an expression over named fields. It is not evidence
+that the fields exist in the physical table, that the principal may use
+the metric, that the plan an engine executed corresponds to the
+expression, or that the graph and lineage projections downstream
+correspond to the published version. The gap between semantic claim and
+physical, policy, and runtime evidence is the subject of §6.</p>
+<h2 data-number="3.5"
+id="adversarial-evaluation-of-storage-systems"><span
+class="header-section-number">3.5</span> Adversarial evaluation of
+storage systems</h2>
+<p>Distributed storage systems fail in rare state transitions rather
+than in steady-state throughput, and the community’s most consequential
+evaluation work has been adversarial: Jepsen’s partition-and-history
+checking [45]; Yuan et al.’s finding that most catastrophic failures
+were triggered by unhandled error paths that simple tests would have
+caught [46]; Gunawi et al.’s taxonomy of cloud outages [47]; chaos
+engineering as a production discipline [48]. On the benchmarking side,
+Gray’s handbook [49], the TPC’s fair-use rules [50], and Raasveldt et
+al.’s catalogue of ways to mislead with database benchmarks [51] argue
+for pinned configurations, disclosed environments, and separated
+claims.</p>
+<p>The evaluation reported here (§8) follows both lines. Correctness and
+recovery campaigns inject faults at exact points and verify state
+independently of the client’s response; the harness is
+<em>unranked</em>, records <code>pass</code>, <code>fail</code>,
+<code>unsupported</code>, and <code>not-tested</code> as distinct
+outcomes, and treats performance eligibility as a derived view rather
+than a fifth correctness result. It adds one method that is newer: the
+<em>adversarial review</em>, in which parallel reviewers generate
+findings that a second pass attempts to refute before any are accepted,
+and every accepted finding is tracked to closure in later reviews.</p>
+</body>
+</html>

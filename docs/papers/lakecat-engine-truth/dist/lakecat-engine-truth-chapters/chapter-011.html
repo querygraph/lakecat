@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov — QueryGraph Project" />
+  <meta name="dcterms.date" content="2026-08-30" />
+  <meta name="keywords" content="Apache Iceberg, data
+catalog, governance, information-flow types, capabilities, property
+graphs, semantic layer, Apache Ossie, adversarial evaluation, Rust" />
+  <title>Discussion</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: 1.5em;}
+    div.column{flex: auto;}
+    @media screen {
+    div.columns{gap: min(4vw, 1.5em);}
+    div.column{overflow-x: auto;}
+    }
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">Getting Out of the Way</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">Getting Out of the Way</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-012.html" accesskey="n" rel="next">What Remains Open</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-010.html" accesskey="p" rel="previous">Adversarial Evaluation</a>
+</span>
+</div>
+</nav>
+<h1 data-number="10" id="discussion"><span
+class="header-section-number">10</span> Discussion</h1>
+<h2 data-number="10.1"
+id="why-type-level-enforcement-changes-the-catalog-landscape"><span
+class="header-section-number">10.1</span> Why type-level enforcement
+changes the catalog landscape</h2>
+<p>Every catalog in §2.1 can check a policy. The difference the
+composition reported here makes is in <em>what survives the
+check</em>.</p>
+<p>With a boolean, the application must remember to ask and must trust
+every downstream step to honor the answer. With a
+<code>Capability&lt;Action, Resource&gt;</code> that only the engine can
+mint, the privileged method cannot be called without it; the check is
+not remembered, it is <em>required by the signature</em>. With a receipt
+bound to the current pointer and persisted in the same transaction as
+the transition, the decision becomes part of the catalog’s history
+rather than an event in a log beside it. With the restriction compiled
+into the engine’s plan, the client no longer holds the restriction—the
+scan tasks it receives already embody it, and a stateless fetch cannot
+widen them. With a labeled container whose join is a type, derived data
+cannot fall below its sources’ label by accident. And with a semantic
+publication that is a CAS transition whose publisher comes from the
+receipt, business definitions acquire the same optimistic-concurrency
+and audit discipline as the tables they describe.</p>
+<p>None of these mechanisms is novel in isolation: optimistic pointer
+CAS is Iceberg’s, information-flow types are SecLib’s, capability
+minting is the object-capability discipline, the outbox is a
+microservices pattern, and property graphs and OLAP semantics have
+decades of literature. The contribution is the <em>placement</em>: each
+is applied at the catalog, which is the one point every engine and every
+agent already passes through, and each is placed in the component that
+owns its truth. That placement is what lets a catalog remain thin and
+standard-shaped while its evidence becomes strong. “Thin” means minimal
+<em>domain</em> ownership with maximal <em>coordination</em>
+ownership.</p>
+<h2 data-number="10.2"
+id="comparison-as-multidimensional-evidence"><span
+class="header-section-number">10.2</span> Comparison as multidimensional
+evidence</h2>
+<p>The evaluation deliberately preserves dimensions. Polaris is a broad
+control plane; Gravitino federates asset classes; Lakekeeper is an
+operational Rust catalog with the only advertised idempotency profile in
+the matrix; Nessie has Git-like versioning the others lack. The shared
+harness makes common behaviors visible and reports scoped differences—an
+ephemeral topology that loses state on restart, an error type that is
+not the spec’s, an idempotency key that is not content-bound—next to the
+outcome, and it opened public review issues with each project so those
+findings can be corrected. An open issue is an opportunity for review,
+not endorsement.</p>
+</body>
+</html>

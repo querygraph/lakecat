@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov — QueryGraph Project" />
+  <meta name="dcterms.date" content="2026-08-30" />
+  <meta name="keywords" content="Apache Iceberg, data
+catalog, governance, information-flow types, capabilities, property
+graphs, semantic layer, Apache Ossie, adversarial evaluation, Rust" />
+  <title>Future Work</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: 1.5em;}
+    div.column{flex: auto;}
+    @media screen {
+    div.columns{gap: min(4vw, 1.5em);}
+    div.column{overflow-x: auto;}
+    }
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">Getting Out of the Way</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">Getting Out of the Way</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-015.html" accesskey="n" rel="next">Conclusion</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-013.html" accesskey="p" rel="previous">Threats to Validity</a>
+</span>
+</div>
+</nav>
+<h1 data-number="13" id="future-work"><span
+class="header-section-number">13</span> Future Work</h1>
+<p>Close the open governance ledger: route context to
+<code>check_with_context</code>, add a distinct raw-vend action, label
+the allow-all path honestly, and reject unsigned plan tasks. Extend the
+harness with distinct-table concurrency, attempted-throughput, and
+internal-retry telemetry as <em>separate</em> scenarios, and add a
+separately pinned stock-engine OpenLineage emitter so engine run
+identity crosses the same admission and replay boundary. Bring Nessie
+and further REST catalogs into the engine matrix, and add Gravitino- and
+Polaris-specific profiles for capabilities outside the common
+denominator. Move migration from pointer registration to inventory
+reconciliation and controlled writer cutover, and backup/restore to
+supported production backends with published recovery objectives. Adopt
+canonical JSON or a shared golden-hash fixture. Push typed Iceberg v4
+into Sail after formal adoption, keeping JSON passthrough an explicit
+bridge. Publish the benchmark the semantic-layer thesis implies and
+nobody has run for an open, end-to-end governed system: how much a
+governed semantic layer improves agent accuracy over the same lakehouse
+on Spider- and BIRD-style tasks [67, 68]. And promote only the
+proper-noun-free ideas—exact retry, pointer history, redacted conflict
+proof, transactional catalog-event identity, replay-admissible evidence,
+governed scan proof, credential posture proof—toward optional, engine-
+and policy-neutral profiles.</p>
+</body>
+</html>

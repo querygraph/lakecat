@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov — QueryGraph Project" />
+  <meta name="dcterms.date" content="2026-08-30" />
+  <meta name="keywords" content="Apache Iceberg, data
+catalog, governance, information-flow types, capabilities, property
+graphs, semantic layer, Apache Ossie, adversarial evaluation, Rust" />
+  <title>What Remains Open</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: 1.5em;}
+    div.column{flex: auto;}
+    @media screen {
+    div.columns{gap: min(4vw, 1.5em);}
+    div.column{overflow-x: auto;}
+    }
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">Getting Out of the Way</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">Getting Out of the Way</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-013.html" accesskey="n" rel="next">Threats to Validity</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-011.html" accesskey="p" rel="previous">Discussion</a>
+</span>
+</div>
+</nav>
+<h1 data-number="11" id="what-remains-open"><span
+class="header-section-number">11</span> What Remains Open</h1>
+<p>Adversarial development is only honest if the paper reports the
+ledger’s open rows. As of FABLE-REVIEW-1 the following governance
+findings were confirmed open, and we have not re-verified their closure
+for this paper:</p>
+<ul>
+<li><strong>Context-blind policy invocation.</strong> LakeCat’s TypeSec
+integration calls <code>check</code>, not
+<code>check_with_context</code>; the rich request context (purpose, read
+restriction, bindings) is hashed into the receipt’s
+<code>policy_hash</code> but does not reach the engine’s decision.
+Purpose-bound ODRL constraints therefore cannot yet bind at the TypeSec
+layer; today they bind in LakeCat’s parsed subset.</li>
+<li><strong>Header-trusted principal.</strong> A bare
+<code>x-lakecat-principal</code> header defaults to a human principal,
+and the raw-credential exception is decided by LakeCat’s
+<code>kind == Human</code> heuristic rather than re-evaluated by TypeSec
+as a distinct action. Both are contained on the default build and are
+the intended target of a <code>credentials.vend-raw</code> action in the
+engine.</li>
+<li><strong>Indistinguishable allow-all.</strong> The
+<code>typesec-local</code> feature without a policy file wires an
+allow-all engine that reports <code>engine="typesec"</code> with a
+synthetic policy hash; the non-TypeSec path uses a distinct honesty
+label, and the TypeSec path should too.</li>
+<li><strong>Unsigned plan-task forms.</strong> The plan-task decoder
+accepts unsigned legacy forms alongside signed ones; downstream
+re-validation bounds the exposure, but the decoder should reject
+them.</li>
+</ul>
+<p>Two design tensions are also unresolved. Grust’s catalog identities
+are deterministic string compositions, not content-addressed; content
+addressing would let two catalogs’ projections be compared by hash. And
+content hashing across the stack is deterministic but not RFC 8785
+canonical [66], so cross-language importers must byte-match
+<code>serde_json</code> today.</p>
+</body>
+</html>

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov — QueryGraph Project" />
+  <meta name="dcterms.date" content="2026-08-30" />
+  <meta name="keywords" content="Apache Iceberg, data
+catalog, governance, information-flow types, capabilities, property
+graphs, semantic layer, Apache Ossie, adversarial evaluation, Rust" />
+  <title>Introduction</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: 1.5em;}
+    div.column{flex: auto;}
+    @media screen {
+    div.columns{gap: min(4vw, 1.5em);}
+    div.column{overflow-x: auto;}
+    }
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">Getting Out of the Way</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">Getting Out of the Way</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-004.html" accesskey="n" rel="next">Prior Work, from First Principles</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-002.html" accesskey="p" rel="previous">Getting Out of the Way</a>
+</span>
+</div>
+</nav>
+<h1 data-number="2" id="introduction"><span
+class="header-section-number">2</span> Introduction</h1>
+<p>The open lakehouse rests on a separation that has proved durable: a
+table format describes state in object storage, many engines interpret
+that state, and a catalog resolves names to the current metadata pointer
+[1, 2]. Apache Iceberg made the table side of that separation
+precise—snapshots, manifests, schema and partition evolution, optimistic
+commits—and its REST Catalog protocol made the catalog side portable, so
+that one client implementation can speak to many catalogs [3].</p>
+<p>The catalog’s job description has since expanded faster than its
+design. It is now asked to authenticate tenants, decide what a principal
+may see, vend or withhold storage credentials, survive ambiguous network
+outcomes, emit lineage, feed discovery graphs, and increasingly to
+govern the business definitions that BI tools and AI agents consume.
+Three responses are common, and each is a failure of boundary rather
+than of effort.</p>
+<p>The first is the <em>fat catalog</em>: implement everything locally.
+The catalog parses manifests to estimate what a policy permits,
+evaluates policies in a language of its own, maintains its own graph
+store, and interprets semantic models. Each parser looks cheaper than an
+engine call; collectively they become a second Iceberg implementation
+with weaker tests, fewer execution users, and quiet drift from the
+planner that actually reads the data.</p>
+<p>The second is the <em>dumb catalog</em>: a name-to-pointer map with
+an access-control list in front. It is easy to make compatible and
+impossible to make trustworthy. It can check a policy before access but
+cannot carry the restriction <em>into</em> the scan; it can vend
+credentials but cannot prove why a broad credential was justified; and
+it produces lineage as an after-the-fact side effect that need not
+correspond to what was committed.</p>
+<p>The third is <em>sidecar governance</em>: a policy decision point
+beside the catalog, consulted by convention. The decision is a boolean
+returned to code that must remember to ask. As the TypeSec authors put
+it, such a system “is only as strong as its most forgetful call site”
+[4].</p>
+<p>This paper reports a fourth design point and the evidence behind it.
+LakeCat [5] is a Rust-native Iceberg REST catalog foundation for
+QueryGraph [6] built on one discipline: <strong>the catalog gets out of
+the way</strong>. It owns exactly the facts only a catalog can
+establish—tenant-scoped identity, namespace and table state, the
+compare-and-swap (CAS) of the metadata pointer, idempotency, audit
+admission, and durable integration events—and binds every proof it
+records to truth established elsewhere:</p>
+<ul>
+<li><strong>Engine truth.</strong> Sail [7], a Rust lakehouse engine, is
+the only authority on what an Iceberg table <em>means</em>: field-id
+projection, manifest pruning, delete visibility, scan tasks, commit
+validation. The catalog never reimplements the format; it binds its
+receipts to the engine’s plan.</li>
+<li><strong>Typed governance.</strong> TypeSec [4] decides. It encodes
+permissions as unforgeable Rust types: a privileged operation takes a
+<code>Capability&lt;Action, Resource&gt;</code> that only a policy check
+can mint, so the “forgotten check” is a compile error rather than an
+incident.</li>
+<li><strong>A graph substrate.</strong> Grust [8] owns graph taxonomy,
+stable identity, traversal, and Cypher over durable stores; the catalog
+only emits bounded events through a sink.</li>
+<li><strong>A Responsible Semantic Layer.</strong> QueryGraph composes
+Croissant, CDIF, ODRL, DIDs, OpenLineage, and Apache Ossie semantic
+models above the catalog; the catalog stores only immutable publication
+pointers, versions, and bindings.</li>
+</ul>
+<p>The paper makes four contributions. First, it states <em>engine
+truth</em> and the <em>engine contract</em> as design principles and
+shows the concrete mechanisms that honor them (§3, §7). Second, it
+explains TypeSec, Grust, and the Responsible Semantic Layer from first
+principles—information-flow lattices, capability systems, property-graph
+query languages, OLAP semantic models—and argues why composing them
+<em>at the catalog</em> delivers governance that earlier catalog designs
+could only promise (§2, §4–§6). Third, it documents an adversarial
+development method: successive multi-agent adversarial reviews whose
+findings are tracked to closure, and a neutral, source-pinned, unranked
+benchmark harness whose fault-injection, contention, restore, migration,
+and semantic drift campaigns were run against four peer catalogs with
+stock engines (§8). Fourth, it reports what remains open, including
+governance findings the reviews confirmed and the current release has
+not yet closed (§9).</p>
+<p>The implementation corresponds to LakeCat 0.3.0 (“Ocelot”, July 2026)
+with the catalog-community work through August 28, 2026; TypeSec
+0.12–0.13; Grust 0.12; QueryGraph 0.4; and the
+<code>querygraph/catalog-bench</code> evidence bundles cited in §8. All
+version and commit identities are recorded with each artifact.</p>
+</body>
+</html>

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov — QueryGraph Project" />
+  <meta name="dcterms.date" content="2026-08-30" />
+  <meta name="keywords" content="Apache Iceberg, data
+catalog, governance, information-flow types, capabilities, property
+graphs, semantic layer, Apache Ossie, adversarial evaluation, Rust" />
+  <title>Threats to Validity</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: 1.5em;}
+    div.column{flex: auto;}
+    @media screen {
+    div.columns{gap: min(4vw, 1.5em);}
+    div.column{overflow-x: auto;}
+    }
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">Getting Out of the Way</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">Getting Out of the Way</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-014.html" accesskey="n" rel="next">Future Work</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-012.html" accesskey="p" rel="previous">What Remains Open</a>
+</span>
+</div>
+</nav>
+<h1 data-number="12" id="threats-to-validity"><span
+class="header-section-number">12</span> Threats to Validity</h1>
+<p><strong>Selection bias.</strong> The harness, LakeCat, TypeSec,
+Grust, and QueryGraph are developed in one community and, in part, by
+the author. Public profiles, raw sanitized transcripts, immutable
+hashes, and open review issues reduce but do not remove this. The
+adversarial reviews were performed by AI reviewers instructed to refute;
+they are not a substitute for independent human review, and their
+refuted-findings discipline addresses false positives more than false
+negatives.</p>
+<p><strong>Version specificity.</strong> Every result binds to recorded
+releases and revisions (Polaris 1.7.0, Gravitino 1.3.0, Lakekeeper
+0.13.3, Spark 4.1.3, Flink 2.1.3, Trino 483, DuckDB 1.5.3, PyIceberg
+0.11.1, Iceberg 1.11.0, Ossie <code>1d9ebcea</code>). A later run must
+produce a new bundle.</p>
+<p><strong>Deployment realism.</strong> Containerized, run-isolated
+local deployments on one Docker network with shared MinIO give control
+and reproducibility, not multi-region latency, managed identity, or
+cloud failure distributions. The Polaris persistence observations are
+explicitly about a no-volume topology.</p>
+<p><strong>Coverage.</strong> Four peer catalogs, five clients, and one
+Ossie revision are useful diversity, not conformance. Nessie was absent
+from the engine matrix; Unity Catalog, Hive-compatible systems, and
+vendor catalogs are future profiles. The semantic evaluation covers five
+answers and one converter.</p>
+<p><strong>Performance.</strong> No latency, throughput, cost, or
+scalability conclusion beyond the disclosed commit, cache, and engine
+figures should be drawn, and those figures are bound to their
+environments and asterisks.</p>
+<p><strong>Type-level claims.</strong> TypeSec’s guarantees are those of
+Rust’s type system and crate privacy against <em>safe</em> code;
+<code>unsafe</code>, build scripts, and reflection-free but malicious
+dependencies are outside the model, and the information-flow lattice is
+deliberately small.</p>
+</body>
+</html>

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov — QueryGraph Project" />
+  <meta name="dcterms.date" content="2026-08-30" />
+  <meta name="keywords" content="Apache Iceberg, data
+catalog, governance, information-flow types, capabilities, property
+graphs, semantic layer, Apache Ossie, adversarial evaluation, Rust" />
+  <title>TypeSec: Governance as a Property of Types</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: 1.5em;}
+    div.column{flex: auto;}
+    @media screen {
+    div.columns{gap: min(4vw, 1.5em);}
+    div.column{overflow-x: auto;}
+    }
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    html { -webkit-text-size-adjust: 100%; }
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { color: #008000; } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { color: #008000; font-weight: bold; } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">Getting Out of the Way</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">Getting Out of the Way</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-007.html" accesskey="n" rel="next">Grust: A Typed Graph Substrate for Derived Metadata</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-005.html" accesskey="p" rel="previous">Engine Truth and the Engine Contract</a>
+</span>
+</div>
+</nav>
+<h1 data-number="5" id="typesec-governance-as-a-property-of-types"><span
+class="header-section-number">5</span> TypeSec: Governance as a Property
+of Types</h1>
+<h2 data-number="5.1" id="unforgeable-capabilities"><span
+class="header-section-number">5.1</span> Unforgeable capabilities</h2>
+<p>TypeSec’s thesis fits in one sentence: <em>policies are encoded in
+types; violations are compile errors</em> [4]. The mechanism is a
+capability whose existence is the proof of a permission check:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> Capability<span class="op">&lt;</span>P<span class="op">:</span> Permission<span class="op">,</span> R<span class="op">:</span> Resource<span class="op">&gt;</span> <span class="op">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    resource_id<span class="op">:</span> ResourceId<span class="op">,</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    expires_at<span class="op">:</span> <span class="dt">Option</span><span class="op">&lt;</span>Instant<span class="op">&gt;,</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    _permission<span class="op">:</span> PhantomData<span class="op">&lt;</span><span class="kw">fn</span>() <span class="op">-&gt;</span> P<span class="op">&gt;,</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    _resource<span class="op">:</span> PhantomData<span class="op">&lt;</span><span class="kw">fn</span>() <span class="op">-&gt;</span> R<span class="op">&gt;,</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Three properties make it unforgeable. The constructor is
+<code>pub(crate)</code>, so only the policy engine inside
+<code>typesec-core</code> can create one; the type parameters are
+phantom, so <code>Capability&lt;CanRead, Report&gt;</code> and
+<code>Capability&lt;CanWrite, Report&gt;</code> are distinct types that
+no cast relates; and the <code>Permission</code> trait is
+<em>sealed</em>, so no external crate can invent a permission the engine
+did not define. The only production path to a capability runs a policy
+check and emits an audit event; a denial is a typed error, never a
+capability. Rust’s ownership and trait coherence rules are what make the
+argument sound: the language guarantees that a value of a
+private-constructor type can originate only inside its defining module
+[33, 34].</p>
+<p>The consequence for API design is that a privileged method <em>does
+not exist</em> for code that lacks the capability:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">impl</span> Report <span class="op">{</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> <span class="kw">fn</span> write(<span class="op">&amp;</span><span class="kw">mut</span> <span class="kw">self</span><span class="op">,</span> cap<span class="op">:</span> <span class="op">&amp;</span>Capability<span class="op">&lt;</span>CanWrite<span class="op">,</span> Report<span class="op">&gt;,</span> body<span class="op">:</span> <span class="op">&amp;</span><span class="dt">str</span>) <span class="op">{</span> … <span class="op">}</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The “forgotten check” of guard-based systems becomes a missing
+argument, which the compiler reports. The reviews of TypeSec confirmed
+the invariant directly: <code>Capability&lt;P, R&gt;</code> has no
+public constructor, <code>mint_capability*</code> is the only production
+path, and sealed traits plus compile-fail (<code>tests/ui</code>) tests
+guard the boundary [52].</p>
+<h2 data-number="5.2" id="labeled-values-and-the-join-lattice"><span
+class="header-section-number">5.2</span> Labeled values and the join
+lattice</h2>
+<p>Capabilities govern <em>actions</em>; <code>SecureValue</code>
+governs <em>data</em>. Adapting SecLib’s <code>Sec s a</code> [22], a
+<code>SecureValue&lt;L, T, R&gt;</code> carries a value of type
+<code>T</code>, a privacy label <code>L</code> drawn from the sealed set
+<code>Public &lt; Internal &lt; Sensitive &lt; Secret</code>, and the
+resource instance <code>R</code> it protects. Sensitive data can be
+transformed while it stays inside the container; extracting it requires
+an explicit typed capability:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">fn</span> reveal(<span class="kw">self</span><span class="op">,</span> cap<span class="op">:</span> <span class="op">&amp;</span>Capability<span class="op">&lt;</span>CanReadSensitive<span class="op">,</span> R<span class="op">&gt;</span>) <span class="op">-&gt;</span> <span class="dt">Result</span><span class="op">&lt;</span>T<span class="op">,</span> SecureAccessError<span class="op">&gt;;</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">fn</span> declassify(<span class="kw">self</span><span class="op">,</span> cap<span class="op">:</span> <span class="op">&amp;</span>Capability<span class="op">&lt;</span>CanDeclassify<span class="op">,</span> R<span class="op">&gt;</span>)</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    <span class="op">-&gt;</span> <span class="dt">Result</span><span class="op">&lt;</span>SecureValue<span class="op">&lt;</span>Public<span class="op">,</span> T<span class="op">,</span> R<span class="op">&gt;,</span> SecureAccessError<span class="op">&gt;;</span></span></code></pre></div>
+<p>Both paths check that the capability was minted for the <em>same
+resource instance</em>—a capability for <code>customer/2</code> cannot
+reveal data protected under <code>customer/1</code> even though both
+share the resource type—and both check that the capability lease is
+still active. The container deliberately implements neither
+<code>PartialEq</code> nor <code>Debug</code> over the inner value:
+equality would be an oracle for guessing protected contents, and
+<code>Debug</code> would print them into logs.</p>
+<p>Combining labeled values is Denning’s lattice join [19], written as a
+trait with an associated type:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">trait</span> Join<span class="op">&lt;</span>Rhs<span class="op">:</span> PrivacyLevel<span class="op">&gt;:</span> PrivacyLevel <span class="op">{</span> <span class="kw">type</span> Output: PrivacyLevel<span class="op">;</span> <span class="op">}</span></span></code></pre></div>
+<p>All sixteen edges of the four-point lattice are enumerated; there is
+no blanket implementation, so the lattice is closed. The practical
+effect is the one the TypeSec memory work states as a rule: <em>a
+summary of a Sensitive memory is born Sensitive; transformation does not
+launder it</em> [53]. The authors are explicit that this is a small,
+deliberately incomplete information-flow language rather than a full
+noninterference proof; what it provides is the property that matters at
+the catalog boundary—derived data cannot silently drop below the label
+of its sources.</p>
+<h2 data-number="5.3" id="decisions-receipts-and-composition"><span
+class="header-section-number">5.3</span> Decisions, receipts, and
+composition</h2>
+<p>Runtime policy still exists. The <code>PolicyEngine</code> trait
+accepts <code>(subject, action, resource, context)</code> and returns a
+<code>PolicyResult</code> that is <code>#[non_exhaustive]</code> and
+<code>#[must_use = "policy decisions must be checked; an ignored result is a silent allow/deny"]</code>—the
+lint makes an unchecked decision a compiler warning:</p>
+<pre class="text"><code>Allow | Deny(reason) | Delegate(reason)</code></pre>
+<p><code>Delegate</code> means “this engine cannot decide; defer,” which
+is what allows an RBAC engine, an ODRL engine, a graph engine, and
+identity-provider adapters to be composed by a
+<code>ComposedEngine</code> with <code>AllowIfAll</code>,
+<code>AllowIfAny</code>, <code>DenyOverrides</code> (the XACML default
+[24]), or <code>PriorityOrder</code> strategies. ODRL prohibitions
+always override permissions, and the ODRL engine’s decision function is
+pure—it returns the verdict and the audit events together—so the audit
+trail is testable [4].</p>
+<p>A decision can also be made <em>portable</em>. A signed decision
+receipt is an ed25519-signed, short-lived token binding
+<code>(subject, action, resource, tool, call_id)</code> with an expiry;
+any downstream service holding the verifying key can check it offline,
+with no shared policy file and no callback to the issuer. Receipts are
+positive-only: only allowed decisions are worth carrying. This extends
+the unforgeable-capability invariant across process boundaries in the
+manner of Macaroons and Biscuit [28, 29], and it is the shape LakeCat
+persists.</p>
+<p>TypeSec’s identity layer, TypeDID, wraps agent messages in signed
+envelopes whose <code>auth_version</code> fails closed when missing or
+unknown at every gateway, and whose signing <code>did:key</code>
+[31]—not a caller-supplied body field—is the policy subject.</p>
+<figure>
+<img src="diagrams/diagram-02.png" alt="Diagram 2" />
+<figcaption aria-hidden="true">Diagram 2</figcaption>
+</figure>
+<p><em>Figure 2. In TypeSec the positive outcome of a policy check is a
+value that only the engine can construct; privileged code takes that
+value as an argument, and labeled data cannot leave its container
+without it.</em></p>
+<h2 data-number="5.4" id="how-lakecat-consumes-typesec"><span
+class="header-section-number">5.4</span> How LakeCat consumes
+TypeSec</h2>
+<p>LakeCat is a policy <em>enforcement</em> point, not an author of
+security semantics. Its governance seam is one method:</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="at">#[</span>async_trait<span class="at">]</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">trait</span> GovernanceEngine<span class="op">:</span> <span class="bu">Send</span> <span class="op">+</span> <span class="bu">Sync</span> <span class="op">+</span> <span class="ot">&#39;static</span> <span class="op">{</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">async</span> <span class="kw">fn</span> authorize(<span class="op">&amp;</span><span class="kw">self</span><span class="op">,</span> request<span class="op">:</span> AuthorizationRequest) <span class="op">-&gt;</span> LakeCatResult<span class="op">&lt;</span>AuthorizationReceipt<span class="op">&gt;;</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The request carries a principal, a closed <code>CatalogAction</code>
+enumeration (<code>table-plan-scan</code>, <code>table-commit</code>,
+<code>credentials-vend</code>, <code>policy-manage</code>, and some
+twenty others), an optional table, and a context document; the receipt
+records the decision, the engine label, a policy hash, the context, and
+the time. The TypeSec implementation composes an RBAC engine with an
+optional fallback under <code>PriorityOrder</code>, and maps the verdict
+fail-closed: only <code>PolicyResult::Allow</code> is allowed;
+<code>Deny</code> and <code>Delegate</code> both become a
+<code>Forbidden</code> error.</p>
+<p>The receipt is then lifted into LakeCat’s own typed capability:</p>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> Capability<span class="op">&lt;</span>Action<span class="op">,</span> Resource<span class="op">&gt;</span> <span class="op">{</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    receipt<span class="op">:</span> AuthorizationReceipt<span class="op">,</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    resource<span class="op">:</span> Resource<span class="op">,</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    _action<span class="op">:</span> PhantomData<span class="op">&lt;</span>Action<span class="op">&gt;,</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Its fields are private and it is mintable only through per-action
+<code>from_receipt</code> constructors that reject a receipt unless
+<code>allowed</code> is true, the action matches, and the resource scope
+matches. Every privileged handler takes the typed capability, not a
+boolean; as the second adversarial review put it, “an unauthorized path
+cannot construct one” [54]. The order of operations in the request path
+is fixed: verify TypeDID identity; load table-scoped policy bindings;
+derive a read restriction (columns, row predicate, purpose, TTL cap) for
+scan and credential-vend actions; build a context that
+operation-specific context may extend but not overwrite; call the
+engine; and fail closed.</p>
+<p>This is where ODRL becomes operational. A policy may say a principal
+reads only certain columns, only for a purpose, only under a row
+predicate. LakeCat parses the minimal enforceable subset and fails
+closed on missing or deny-shaped operators, blank column lists, blank
+purposes, or disagreeing purpose sources; composition and reasoning stay
+in TypeSec.</p>
+<p>Credential vending is the audited exception. Governed, Sail-planned
+reads are the default for agents and untrusted principals. When a raw
+credential must issue, TypeSec checks the <code>credentials.issue</code>
+capability for the exact secret reference, LakeCat caps the TTL to the
+tightest <code>max-credential-ttl-seconds</code> across all policy
+locations, replaces issuer-supplied evidence with catalog-derived
+values, and records only hashed prefixes.</p>
+</body>
+</html>

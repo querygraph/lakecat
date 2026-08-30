@@ -1,0 +1,10 @@
+body { font-family: Georgia, "Times New Roman", serif; line-height: 1.5; color: #172033; }
+h1, h2, h3 { font-family: Inter, Helvetica, Arial, sans-serif; color: #102a43; }
+h1 { border-bottom: 1px solid #9fb3c8; padding-bottom: .25em; }
+figure { break-inside: avoid; text-align: center; margin: 1.5em auto; }
+figcaption { color: #486581; font-size: .9em; }
+table { border-collapse: collapse; width: 100%; font-size: .9em; }
+th, td { border: 1px solid #bcccdc; padding: .45em; vertical-align: top; }
+th { background: #eaf2f8; }
+code { color: #243b53; }
+blockquote { border-left: 3px solid #2f80a8; margin-left: 0; padding-left: 1em; color: #334e68; }

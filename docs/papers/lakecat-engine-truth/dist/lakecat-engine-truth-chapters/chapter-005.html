@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov — QueryGraph Project" />
+  <meta name="dcterms.date" content="2026-08-30" />
+  <meta name="keywords" content="Apache Iceberg, data
+catalog, governance, information-flow types, capabilities, property
+graphs, semantic layer, Apache Ossie, adversarial evaluation, Rust" />
+  <title>Engine Truth and the Engine Contract</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: 1.5em;}
+    div.column{flex: auto;}
+    @media screen {
+    div.columns{gap: min(4vw, 1.5em);}
+    div.column{overflow-x: auto;}
+    }
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Up:</span> <a href="chapter-001.html" accesskey="u" rel="up">Getting Out of the Way</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Top:</span> <a href="index.html" accesskey="t" rel="top">Getting Out of the Way</a>
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-006.html" accesskey="n" rel="next">TypeSec: Governance as a Property of Types</a>
+</span>
+<span class="navlink">
+<span class="navlink-label">Previous:</span> <a href="chapter-004.html" accesskey="p" rel="previous">Prior Work, from First Principles</a>
+</span>
+</div>
+</nav>
+<h1 data-number="4" id="engine-truth-and-the-engine-contract"><span
+class="header-section-number">4</span> Engine Truth and the Engine
+Contract</h1>
+<h2 data-number="4.1" id="definitions"><span
+class="header-section-number">4.1</span> Definitions</h2>
+<p>LakeCat’s documentation partitions every concept it uses into six
+categories, and the test for placing a concept is stated once: <em>ask
+what breaks if a client knows nothing about LakeCat</em> [5]. If a
+PySpark job cannot load, commit, or drop a table without the concept, it
+belongs to standard compatibility; if PySpark keeps working but
+operators, governed agents, or QueryGraph gain stronger evidence, the
+concept is an additive surface. One of the six categories is defined as
+follows:</p>
+<blockquote>
+<p><strong>Sail engine truth</strong> — table-format interpretation,
+metadata-as-data, scan planning, commit validation, and typed v4
+behavior. The catalog binds its proof to engine truth rather than
+reimplementing the format.</p>
+</blockquote>
+<p>We restate this as a principle and derive its obligations.</p>
+<p><strong>Engine truth.</strong> Iceberg table state is not a set of
+easy strings. A claim that “only these columns” may be read is
+meaningful only after it has been mapped through field ids, nested
+schema evolution, aliases, and projection rules. A claim that “only
+these rows” may be read is meaningful only after the predicate has been
+bound by the same expression system that will plan the scan. A claim
+that “these files” satisfy a scan is meaningful only after manifest
+metrics, residual predicates, partition transforms, delete files,
+sequence numbers, and snapshot context have been interpreted. The only
+component that does all of this <em>and is exercised by real
+execution</em> is the engine. Engine truth is therefore the principle
+that the interpretation of table state is authoritative only in the
+engine that plans and executes, and that any other component’s statement
+about table content is a <em>binding</em> to that interpretation, never
+a substitute for it.</p>
+<p><strong>The engine contract</strong> is the set of obligations a
+catalog accepts once it adopts engine truth. We name it here because the
+components below discharge it in different ways, and because it is the
+property the adversarial reviews tested most directly.</p>
+<ol type="1">
+<li><em>The catalog owns the transaction; the engine owns the
+table.</em> The catalog proves authority:
+<code>principal → tenant → warehouse → namespace → table</code>,
+<code>request → decision → current pointer → CAS/idempotency</code>,
+<code>accepted state → audit → outbox → replay admission</code>. The
+engine proves table work:
+<code>metadata → field ids → projection</code>,
+<code>metadata → manifests/statistics → pruning</code>,
+<code>metadata → deletes → row visibility</code>,
+<code>metadata → scan tasks / commit validation</code>. Neither proof is
+complete alone; the record binds them.</li>
+<li><em>Restrictions are compiled into the plan, not checked beside
+it.</em> A governance decision that narrows columns or rows must reach
+the engine as projection and mandatory filters before file tasks exist,
+and no later stateless step may widen it.</li>
+<li><em>Data is brought closer to the engine.</em> The proof-heavy path
+stays Rust to Rust in one process—no JVM sidecar, Python shim, or remote
+plugin in the hot path—and reusable read-path machinery such as an
+object-store cache lives in the engine, where every engine user
+benefits, rather than in the catalog.</li>
+<li><em>Fail closed when engine truth is unavailable.</em> A catalog
+build without the engine must refuse work it cannot interpret rather
+than accept it and hope.</li>
+</ol>
+<h2 data-number="4.2" id="consequences-getting-out-of-the-way"><span
+class="header-section-number">4.2</span> Consequences: getting out of
+the way</h2>
+<p>The most dangerous failure mode of a “smart” catalog is to become a
+partial engine. It begins innocently—validate a schema here, expand a
+manifest list there, peek at a <code>format-version</code> field—and
+ends with a shadow implementation that is slower, less correct, and
+unreusable. The engine contract forbids the first step.</p>
+<p>The less obvious consequence is that a <em>passive</em> intermediary
+loses information. A pass-through catalog sees the table name, the
+pointer, the caller, and perhaps a credential request; the engine sees
+schema, manifests, statistics, deletes, and filters; governance sees
+policy; lineage sees an after-the-fact event. Each holds a shard of the
+truth, and the costs are concrete: policy is checked before access but
+not carried into planning; credentials are vended without a recorded
+reason for the exception; lineage says something happened but cannot
+bind to the governed plan, snapshot, policy, and metadata that produced
+it.</p>
+<p>“Getting out of the way” therefore does not mean doing less. It means
+the catalog stands <em>beside</em> the request rather than <em>in front
+of</em> the data. It admits the request, obtains a typed decision, binds
+that decision to the current pointer and identity, asks the engine to
+turn the restriction into engine work, records the result, and steps
+aside. The stock client sees ordinary Iceberg REST. The governed agent
+receives bounded work—Sail-planned tasks with scope, TTL, projection,
+and predicate already bound—instead of broad credentials. The operator
+receives a transaction log. QueryGraph receives anchors it can accept as
+proof.</p>
+<figure>
+<img src="diagrams/diagram-01.png" alt="Diagram 1" />
+<figcaption aria-hidden="true">Diagram 1</figcaption>
+</figure>
+<p><em>Figure 1. A fat catalog drifts from engine semantics by
+reimplementing them; a catalog under the engine contract binds its
+authority proof to the engine’s table proof and steps aside.</em></p>
+<h2 data-number="4.3" id="what-the-catalog-keeps"><span
+class="header-section-number">4.3</span> What the catalog keeps</h2>
+<p>The ownership rule, stated once in the LakeCat design and reproduced
+here, fixes the boundary:</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Concern</th>
+<th>Owner</th>
+<th>LakeCat keeps only</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Iceberg format, manifests, scan planning, pruning, delete handling,
+v4</td>
+<td>Sail</td>
+<td>The call into Sail and the proof binding its result</td>
+</tr>
+<tr>
+<td>Graph schema, taxonomy, traversal, stores, Cypher</td>
+<td>Grust</td>
+<td>The catalog-facing sink/projection boundary</td>
+</tr>
+<tr>
+<td>Authorization, policy composition, capabilities, TypeDID, credential
+decisions</td>
+<td>TypeSec</td>
+<td>The request for a decision and the persisted receipt</td>
+</tr>
+<tr>
+<td>Croissant/CDIF/OSI/ODRL/OpenLineage composition, agent
+workflows</td>
+<td>QueryGraph</td>
+<td>The governed bootstrap bundle it emits</td>
+</tr>
+<tr>
+<td>Identity, tenancy, pointer CAS, idempotency, audit, outbox,
+replay</td>
+<td>LakeCat</td>
+<td>All of it — this is the thin catalog</td>
+</tr>
+</tbody>
+</table>
+<p>Two corollaries govern standardization. Iceberg metadata stays
+pristine: policy, graph, lineage, semantic-model, and agent state are
+derived control-plane records, never required custom metadata, so a
+table remains readable by tools that know nothing of QueryGraph. And the
+<em>proper-noun test</em> separates project choices from portable ideas:
+“use Rust,” “use Turso,” “use TypeSec” are choices; “reject idempotency
+drift; record redacted pointer history; emit transactional catalog-event
+identity; admit only scoped replay evidence; prove a governed scan was
+narrowed by an engine” are ideas any catalog could adopt [5].</p>
+</body>
+</html>

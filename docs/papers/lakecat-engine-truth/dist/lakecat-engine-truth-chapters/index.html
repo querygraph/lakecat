@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Alexy Khrabrov — QueryGraph Project" />
+  <meta name="dcterms.date" content="2026-08-30" />
+  <meta name="keywords" content="Apache Iceberg, data
+catalog, governance, information-flow types, capabilities, property
+graphs, semantic layer, Apache Ossie, adversarial evaluation, Rust" />
+  <title>Getting Out of the Way</title>
+  <style>
+    div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
+    span.navlink { flex: 1; }
+    span.navlink-label { display: inline-block; min-width: 4em; }
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: 1.5em;}
+    div.column{flex: auto;}
+    @media screen {
+    div.columns{gap: min(4vw, 1.5em);}
+    div.column{overflow-x: auto;}
+    }
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="book.css" />
+</head>
+<body>
+<nav id="sitenav">
+<div class="sitenav">
+<span class="navlink">
+</span>
+<span class="navlink">
+</span>
+</div>
+<div class="sitenav">
+<span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-001.html" accesskey="n" rel="next">Getting Out of the Way</a>
+</span>
+<span class="navlink">
+</span>
+</div>
+</nav>
+<header id="title-block-header">
+<h1 class="title">Getting Out of the Way</h1>
+<p class="subtitle">Engine Truth, Typed Governance, and the Thin
+Catalog: LakeCat, TypeSec, Grust, and a Responsible Semantic Layer under
+Adversarial Evaluation</p>
+<p class="author">Alexy Khrabrov — QueryGraph Project</p>
+<p class="date">2026-08-30</p>
+<div class="abstract">
+<div class="abstract-title">Abstract</div>
+<p>A lakehouse catalog sits between every engine and every table, which
+makes it the natural place to put governance and the worst place to put
+a second query engine. Most catalogs resolve this tension by growing:
+they parse manifests, evaluate policies in their own language, and vend
+broad storage credentials while hoping the client honors a restriction
+it cannot enforce. This paper argues for the opposite discipline and
+reports a system built on it. LakeCat is a Rust-native Apache Iceberg
+REST catalog that keeps the catalog boundary deliberately thin—identity,
+tenancy, metadata-pointer compare-and-swap, idempotency, audit, and a
+transactional outbox—and binds every proof it records to <em>engine
+truth</em>: the interpretation of table state by the engine that will
+actually plan and execute the scan (Sail). We name the obligations that
+follow the <em>engine contract</em>: the catalog owns the transaction,
+the engine owns the table; governance restrictions are compiled into the
+plan rather than checked beside it; data is brought closer to the
+engine, Rust to Rust; and the catalog fails closed when engine truth is
+unavailable. Governance itself is delegated to TypeSec, which encodes
+permissions as unforgeable Rust types so that an unauthorized path
+cannot construct the value a privileged operation requires; graph
+projection is delegated to Grust, a typed property-graph substrate; and
+business semantics live in a Responsible Semantic Layer (QueryGraph)
+whose Apache Ossie publications are compare-and-swap admitted through
+the catalog and bound to seven independently hashed proof bases. We
+present the prior work each component descends from—optimistic
+concurrency, information-flow types, capability systems, property-graph
+query languages, OLAP semantic models—and explain why composing them at
+the catalog changes what a catalog can promise. The design was developed
+under adversarial pressure: three successive multi-agent adversarial
+reviews, 59 adversarial harness tests, deterministic fault injection,
+eight-writer contention, cold restore, peer migration, and six-way
+semantic drift injection, evaluated in a neutral, source-pinned,
+unranked harness against Apache Polaris, Apache Gravitino, Lakekeeper,
+and Apache Nessie with stock Spark, Flink, Trino, DuckDB, and PyIceberg
+clients. We report the results with their limits, including the
+governance findings that remain open.</p>
+</div>
+</header>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="chapter-002.html#getting-out-of-the-way"
+id="toc-getting-out-of-the-way"><span
+class="toc-section-number">1</span> Getting Out of the Way</a>
+<ul>
+<li><a
+href="chapter-002.html#engine-truth-typed-governance-and-the-thin-catalog"
+id="toc-engine-truth-typed-governance-and-the-thin-catalog"><span
+class="toc-section-number">1.1</span> Engine Truth, Typed Governance,
+and the Thin Catalog</a></li>
+</ul></li>
+<li><a href="chapter-003.html#introduction" id="toc-introduction"><span
+class="toc-section-number">2</span> Introduction</a></li>
+<li><a href="chapter-004.html#prior-work-from-first-principles"
+id="toc-prior-work-from-first-principles"><span
+class="toc-section-number">3</span> Prior Work, from First
+Principles</a>
+<ul>
+<li><a href="chapter-004.html#the-catalog-as-a-coordination-boundary"
+id="toc-the-catalog-as-a-coordination-boundary"><span
+class="toc-section-number">3.1</span> The catalog as a coordination
+boundary</a></li>
+<li><a
+href="chapter-004.html#governance-from-access-control-lists-to-types"
+id="toc-governance-from-access-control-lists-to-types"><span
+class="toc-section-number">3.2</span> Governance: from access-control
+lists to types</a></li>
+<li><a href="chapter-004.html#graphs-of-metadata-and-lineage"
+id="toc-graphs-of-metadata-and-lineage"><span
+class="toc-section-number">3.3</span> Graphs of metadata and
+lineage</a></li>
+<li><a href="chapter-004.html#semantic-layers"
+id="toc-semantic-layers"><span class="toc-section-number">3.4</span>
+Semantic layers</a></li>
+<li><a href="chapter-004.html#adversarial-evaluation-of-storage-systems"
+id="toc-adversarial-evaluation-of-storage-systems"><span
+class="toc-section-number">3.5</span> Adversarial evaluation of storage
+systems</a></li>
+</ul></li>
+<li><a href="chapter-005.html#engine-truth-and-the-engine-contract"
+id="toc-engine-truth-and-the-engine-contract"><span
+class="toc-section-number">4</span> Engine Truth and the Engine
+Contract</a>
+<ul>
+<li><a href="chapter-005.html#definitions" id="toc-definitions"><span
+class="toc-section-number">4.1</span> Definitions</a></li>
+<li><a href="chapter-005.html#consequences-getting-out-of-the-way"
+id="toc-consequences-getting-out-of-the-way"><span
+class="toc-section-number">4.2</span> Consequences: getting out of the
+way</a></li>
+<li><a href="chapter-005.html#what-the-catalog-keeps"
+id="toc-what-the-catalog-keeps"><span
+class="toc-section-number">4.3</span> What the catalog keeps</a></li>
+</ul></li>
+<li><a href="chapter-006.html#typesec-governance-as-a-property-of-types"
+id="toc-typesec-governance-as-a-property-of-types"><span
+class="toc-section-number">5</span> TypeSec: Governance as a Property of
+Types</a>
+<ul>
+<li><a href="chapter-006.html#unforgeable-capabilities"
+id="toc-unforgeable-capabilities"><span
+class="toc-section-number">5.1</span> Unforgeable capabilities</a></li>
+<li><a href="chapter-006.html#labeled-values-and-the-join-lattice"
+id="toc-labeled-values-and-the-join-lattice"><span
+class="toc-section-number">5.2</span> Labeled values and the join
+lattice</a></li>
+<li><a href="chapter-006.html#decisions-receipts-and-composition"
+id="toc-decisions-receipts-and-composition"><span
+class="toc-section-number">5.3</span> Decisions, receipts, and
+composition</a></li>
+<li><a href="chapter-006.html#how-lakecat-consumes-typesec"
+id="toc-how-lakecat-consumes-typesec"><span
+class="toc-section-number">5.4</span> How LakeCat consumes
+TypeSec</a></li>
+</ul></li>
+<li><a
+href="chapter-007.html#grust-a-typed-graph-substrate-for-derived-metadata"
+id="toc-grust-a-typed-graph-substrate-for-derived-metadata"><span
+class="toc-section-number">6</span> Grust: A Typed Graph Substrate for
+Derived Metadata</a></li>
+<li><a href="chapter-008.html#the-responsible-semantic-layer"
+id="toc-the-responsible-semantic-layer"><span
+class="toc-section-number">7</span> The Responsible Semantic Layer</a>
+<ul>
+<li><a href="chapter-008.html#two-semantic-layers"
+id="toc-two-semantic-layers"><span class="toc-section-number">7.1</span>
+Two semantic layers</a></li>
+<li><a href="chapter-008.html#publication-as-a-catalog-transaction"
+id="toc-publication-as-a-catalog-transaction"><span
+class="toc-section-number">7.2</span> Publication as a catalog
+transaction</a></li>
+<li><a href="chapter-008.html#seven-proof-bases-and-drift"
+id="toc-seven-proof-bases-and-drift"><span
+class="toc-section-number">7.3</span> Seven proof bases and
+drift</a></li>
+</ul></li>
+<li><a href="chapter-009.html#lakecat-the-thin-catalog"
+id="toc-lakecat-the-thin-catalog"><span
+class="toc-section-number">8</span> LakeCat: The Thin Catalog</a>
+<ul>
+<li><a href="chapter-009.html#trait-seams" id="toc-trait-seams"><span
+class="toc-section-number">8.1</span> Trait seams</a></li>
+<li><a href="chapter-009.html#commit-path-cas-idempotency-outbox"
+id="toc-commit-path-cas-idempotency-outbox"><span
+class="toc-section-number">8.2</span> Commit path: CAS, idempotency,
+outbox</a></li>
+<li><a href="chapter-009.html#turso-mvcc-and-begin-concurrent"
+id="toc-turso-mvcc-and-begin-concurrent"><span
+class="toc-section-number">8.3</span> Turso MVCC and
+<code>BEGIN CONCURRENT</code></a></li>
+<li><a href="chapter-009.html#component-safe-identity"
+id="toc-component-safe-identity"><span
+class="toc-section-number">8.4</span> Component-safe identity</a></li>
+<li><a href="chapter-009.html#governed-reads-narrow-never-widen"
+id="toc-governed-reads-narrow-never-widen"><span
+class="toc-section-number">8.5</span> Governed reads: narrow, never
+widen</a></li>
+</ul></li>
+<li><a href="chapter-010.html#adversarial-evaluation"
+id="toc-adversarial-evaluation"><span
+class="toc-section-number">9</span> Adversarial Evaluation</a>
+<ul>
+<li><a
+href="chapter-010.html#adversarial-review-as-a-development-method"
+id="toc-adversarial-review-as-a-development-method"><span
+class="toc-section-number">9.1</span> Adversarial review as a
+development method</a></li>
+<li><a
+href="chapter-010.html#catalog-bench-neutral-source-pinned-unranked"
+id="toc-catalog-bench-neutral-source-pinned-unranked"><span
+class="toc-section-number">9.2</span> catalog-bench: neutral,
+source-pinned, unranked</a></li>
+<li><a
+href="chapter-010.html#contention-and-deterministic-commit-correctness"
+id="toc-contention-and-deterministic-commit-correctness"><span
+class="toc-section-number">9.3</span> Contention and deterministic
+commit correctness</a></li>
+<li><a href="chapter-010.html#stock-engine-interoperability"
+id="toc-stock-engine-interoperability"><span
+class="toc-section-number">9.4</span> Stock-engine
+interoperability</a></li>
+<li><a href="chapter-010.html#faults-restart-restore-and-migration"
+id="toc-faults-restart-restore-and-migration"><span
+class="toc-section-number">9.5</span> Faults, restart, restore, and
+migration</a></li>
+<li><a href="chapter-010.html#semantic-drift-and-converter-loss"
+id="toc-semantic-drift-and-converter-loss"><span
+class="toc-section-number">9.6</span> Semantic drift and converter
+loss</a></li>
+<li><a href="chapter-010.html#stack-level-adversarial-benchmarks"
+id="toc-stack-level-adversarial-benchmarks"><span
+class="toc-section-number">9.7</span> Stack-level adversarial
+benchmarks</a></li>
+<li><a href="chapter-010.html#performance-with-its-asterisks"
+id="toc-performance-with-its-asterisks"><span
+class="toc-section-number">9.8</span> Performance, with its
+asterisks</a></li>
+</ul></li>
+<li><a href="chapter-011.html#discussion" id="toc-discussion"><span
+class="toc-section-number">10</span> Discussion</a>
+<ul>
+<li><a
+href="chapter-011.html#why-type-level-enforcement-changes-the-catalog-landscape"
+id="toc-why-type-level-enforcement-changes-the-catalog-landscape"><span
+class="toc-section-number">10.1</span> Why type-level enforcement
+changes the catalog landscape</a></li>
+<li><a href="chapter-011.html#comparison-as-multidimensional-evidence"
+id="toc-comparison-as-multidimensional-evidence"><span
+class="toc-section-number">10.2</span> Comparison as multidimensional
+evidence</a></li>
+</ul></li>
+<li><a href="chapter-012.html#what-remains-open"
+id="toc-what-remains-open"><span class="toc-section-number">11</span>
+What Remains Open</a></li>
+<li><a href="chapter-013.html#threats-to-validity"
+id="toc-threats-to-validity"><span class="toc-section-number">12</span>
+Threats to Validity</a></li>
+<li><a href="chapter-014.html#future-work" id="toc-future-work"><span
+class="toc-section-number">13</span> Future Work</a></li>
+<li><a href="chapter-015.html#conclusion" id="toc-conclusion"><span
+class="toc-section-number">14</span> Conclusion</a></li>
+<li><a href="chapter-016.html#references"
+id="toc-references">References</a></li>
+</ul>
+</nav>
+
+</body>
+</html>
