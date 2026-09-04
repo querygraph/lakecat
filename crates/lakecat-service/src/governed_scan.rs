@@ -111,7 +111,19 @@ pub(crate) fn issue_governed_scan_grant(
         ));
     }
     let receipt = capability.receipt();
-    let identity_context = verified_identity_context(receipt)?;
+    // A durable grant is Marciana's handoff artifact and is issued only for
+    // identities the catalog itself verified. An agent whose identity rests
+    // on bare headers keeps its TypeSec-governed scan but receives no grant;
+    // the scan evidence records that no grant was issued.
+    let identity_context = match verified_identity_context(receipt) {
+        Ok(identity) => identity,
+        Err(LakeCatError::Conflict(message))
+            if message.contains("requires verified TypeDID identity evidence") =>
+        {
+            return Ok(None);
+        }
+        Err(error) => return Err(error),
+    };
     let authorization_receipt_digest = authorization_digest(receipt)?;
     let policy_decision_digest = policy_digest(receipt, restriction)?;
     let proof = GovernedScanProof::issue(GovernedScanProofEvidence {

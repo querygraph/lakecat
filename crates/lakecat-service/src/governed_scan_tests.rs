@@ -153,9 +153,9 @@ impl Fixture {
 }
 
 #[tokio::test]
-async fn issuance_rejects_unverified_agent_identity() {
+async fn issuance_withholds_grant_for_unverified_agent_identity() {
     let fixture = Fixture::new().await;
-    let error = issue_governed_scan_grant(
+    let grant = issue_governed_scan_grant(
         fixture.state.catalog_identity(),
         &fixture.capability("unverified"),
         &fixture.table,
@@ -163,8 +163,11 @@ async fn issuance_rejects_unverified_agent_identity() {
         vec!["event_id".to_string()],
         vec!["event_id".to_string()],
     )
-    .unwrap_err();
-    assert!(error.to_string().contains("verified TypeDID"));
+    .unwrap();
+    assert!(
+        grant.is_none(),
+        "an agent without verified TypeDID evidence must not receive a durable grant"
+    );
 }
 
 fn policy_binding(table: &TableIdent, columns: &[&str]) -> PolicyBinding {
