@@ -43,34 +43,24 @@ impl SailRestModelCatalogEngine {
 #[async_trait]
 impl SailCatalogEngine for SailRestModelCatalogEngine {
     async fn prepare_commit(&self, request: CommitPreparationRequest) -> LakeCatResult<CommitPlan> {
+        let CommitPreparationRequest {
+            current_metadata_location,
+            new_metadata_location,
+            current_metadata,
+            new_metadata,
+            requirements,
+            updates,
+            ..
+        } = request;
         let (metadata_summary, typed_metadata) =
-            inspect_sail_table_metadata_with_typed(&request.current_metadata)?;
+            inspect_sail_table_metadata_with_typed(&current_metadata)?;
         let validated_requirements = match typed_metadata.as_ref() {
-            Some(metadata) => validate_stable_commit_requirements(metadata, &request.requirements)?,
-            None => {
-                validate_v4_extension_commit_requirements(&metadata_summary, &request.requirements)?
-            }
+            Some(metadata) => validate_stable_commit_requirements(metadata, &requirements)?,
+            None => validate_v4_extension_commit_requirements(&metadata_summary, &requirements)?,
         };
-        let sail_request = json!({
-            "requirements": request.requirements,
-            "updates": request.updates,
-        });
         // Keep raw JSON updates for v4/extension work, but prove the envelope is
         // compatible with Sail's generated REST catalog model.
-        let _: models::CommitTableRequest =
-            serde_json::from_value(sail_request.clone()).map_err(|err| {
-                LakeCatError::InvalidArgument(format!(
-                    "invalid Iceberg REST commit request for Sail: {err}"
-                ))
-            })?;
-        let requirements = sail_request["requirements"]
-            .as_array()
-            .cloned()
-            .unwrap_or_default();
-        let updates = sail_request["updates"]
-            .as_array()
-            .cloned()
-            .unwrap_or_default();
+        validate_rest_commit_request(&requirements, &updates)?;
         // Three commit shapes:
         //  1. register/stage: the client supplied a full new metadata doc.
         //  2. standard updateTable: apply the REST updates to the current
@@ -78,45 +68,46 @@ impl SailCatalogEngine for SailRestModelCatalogEngine {
         //     metadata-location (the catalog then writes it and CAS-es).
         //  3. no-op: no updates and no supplied metadata -> pass through.
         let (new_metadata, new_metadata_location, metadata_write_required) =
-            if let Some(client_metadata) = request.new_metadata.clone() {
-                let location = request
-                    .new_metadata_location
+            if let Some(client_metadata) = new_metadata {
+                let location = new_metadata_location
                     .clone()
-                    .or_else(|| request.current_metadata_location.clone());
+                    .or_else(|| current_metadata_location.clone());
                 (client_metadata, location, true)
             } else if !updates.is_empty() {
-                let mut metadata = typed_metadata.clone().ok_or_else(|| {
+                let mut metadata = typed_metadata.ok_or_else(|| {
                     LakeCatError::NotSupported(
                         "applying Iceberg REST updates needs typed Sail metadata".to_string(),
                     )
                 })?;
-                let typed_updates: Vec<TableUpdate> =
-                    serde_json::from_value(Value::Array(updates.clone())).map_err(|err| {
-                        LakeCatError::InvalidArgument(format!(
-                            "invalid Iceberg REST table updates for Sail: {err}"
-                        ))
-                    })?;
+                let typed_updates = updates
+                    .iter()
+                    .map(|update| {
+                        TableUpdate::deserialize(update).map_err(|err| {
+                            LakeCatError::InvalidArgument(format!(
+                                "invalid Iceberg REST table updates for Sail: {err}"
+                            ))
+                        })
+                    })
+                    .collect::<LakeCatResult<Vec<_>>>()?;
                 let now_ms = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .map(|d| d.as_millis() as i64)
                     .unwrap_or(0);
                 apply_table_updates(&mut metadata, &typed_updates, now_ms)
                     .map_err(|err| LakeCatError::InvalidArgument(err.to_string()))?;
-                let new_metadata: Value =
-                    serde_json::from_slice(&metadata.to_json().map_err(|err| {
-                        LakeCatError::Internal(format!(
-                            "failed to serialize updated table metadata: {err}"
-                        ))
-                    })?)
-                    .map_err(|err| LakeCatError::Internal(err.to_string()))?;
+                metadata.ensure_required_format_fields();
+                let new_metadata = serde_json::to_value(&metadata).map_err(|err| {
+                    LakeCatError::Internal(format!(
+                        "failed to serialize updated table metadata: {err}"
+                    ))
+                })?;
                 let location = next_metadata_location(&metadata.location, now_ms);
                 (new_metadata, Some(location), true)
             } else {
-                let location = request
-                    .new_metadata_location
+                let location = new_metadata_location
                     .clone()
-                    .or_else(|| request.current_metadata_location.clone());
-                (request.current_metadata.clone(), location, false)
+                    .or_else(|| current_metadata_location.clone());
+                (current_metadata, location, false)
             };
         validate_lakecat_metadata_format(&new_metadata)?;
         Ok(CommitPlan {
@@ -131,7 +122,7 @@ impl SailCatalogEngine for SailRestModelCatalogEngine {
                 "lakecat:format-support": IcebergFormatSupport::default(),
                 "lakecat:sail-metadata": metadata_summary,
                 "lakecat:validated-requirements": validated_requirements,
-                "previous-metadata-location": request.current_metadata_location,
+                "previous-metadata-location": current_metadata_location,
                 "new-metadata-location": new_metadata_location,
             }),
         })
@@ -283,6 +274,29 @@ impl SailCatalogEngine for SailRestModelCatalogEngine {
     }
 }
 
+fn validate_rest_commit_request(requirements: &[Value], updates: &[Value]) -> LakeCatResult<()> {
+    let requirements = requirements
+        .iter()
+        .map(models::TableRequirement::deserialize)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|err| {
+            LakeCatError::InvalidArgument(format!(
+                "invalid Iceberg REST commit request for Sail: {err}"
+            ))
+        })?;
+    let updates = updates
+        .iter()
+        .map(models::TableUpdate::deserialize)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|err| {
+            LakeCatError::InvalidArgument(format!(
+                "invalid Iceberg REST commit request for Sail: {err}"
+            ))
+        })?;
+    let _ = models::CommitTableRequest::new(requirements, updates);
+    Ok(())
+}
+
 fn plan_task_tokens_from_values(tasks: &[Value]) -> LakeCatResult<Vec<String>> {
     tasks
         .iter()
@@ -334,10 +348,7 @@ fn inspect_sail_table_metadata_with_typed(
     if format_version == 4 {
         return Ok((inspect_v4_extension_metadata(metadata), None));
     }
-    let bytes = serde_json::to_vec(metadata).map_err(|err| {
-        LakeCatError::InvalidArgument(format!("invalid Iceberg table metadata JSON: {err}"))
-    })?;
-    let sail_metadata = TableMetadata::from_json(&bytes).map_err(|err| {
+    let sail_metadata = TableMetadata::deserialize(metadata).map_err(|err| {
         LakeCatError::InvalidArgument(format!("invalid Sail Iceberg table metadata model: {err}"))
     })?;
     let schema = sail_metadata.current_schema();

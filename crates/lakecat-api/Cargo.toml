@@ -10,3 +10,10 @@ description = "LakeCat Iceberg REST request/response types and API adapters"
 lakecat-core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "scan_request"
+harness = false

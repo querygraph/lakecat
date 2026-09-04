@@ -686,15 +686,12 @@ artifact and transcript hashes, matrix, cleanup proof, and non-claims are in
 and the neutral
 [`catalog-bench` report](https://github.com/querygraph/catalog-bench/blob/fdb2a9af1d8570ef36491beb408aabb71570cce6/docs/COMMIT-CONFORMANCE.md).
 
-This is also why Rust did not, by itself, win the benchmark. The commit path is
-I/O-bound, so runtime CPU speed is nearly irrelevant against a network PUT and an
-fsynced transaction, and a warm, long-running server running a tight commit loop is
-the JVM's best case — JIT-compiled hot paths and warm connection pools, with its
-real weaknesses of cold start and memory footprint nowhere in frame. Where the Rust
-implementation keeps its edge is exactly what a warm steady-state benchmark hides:
-no GC pauses and so steadier tail latency, a far smaller resident footprint, and
-instant cold start — properties that matter for serverless, edge, and
-many-tenant-per-host deployments rather than for a single warm server in a loop.
+Rust did not, by itself, win the benchmark. The accepted path includes a network
+object write plus private-state work, so connection reuse and transaction setup
+matter more than runtime CPU speed. A warm, long-running server running a tight
+commit loop is also the JVM's best case: JIT-compiled paths and connection pools
+are hot. Cold start, resident memory, and garbage-collection behavior are outside
+this experiment and need separate measurements rather than being inferred from it.
 
 The driver, impartial Docker/MinIO harness, versioned contract, raw evidence, and
 generated reports live in
@@ -723,13 +720,17 @@ The cache is a per-worker, read-through *page* cache in Sail's `sail-object-stor
 crate — `CachingObjectStore` over a `CacheConfig` — added to answer Sail issue #1015.
 It is ported from lancedb/ocra, attributed in the crate, with the original Moka
 backing store swapped for Foyer. It is opt-in: `SAIL_OBJECT_STORE_CACHE` turns it on,
-and `SAIL_OBJECT_STORE_CACHE_PAGE_SIZE`, `_MEMORY`, and `_METADATA` tune it — by
-default 1 MiB pages, 1 GiB of value memory, and 64 MiB of metadata. Because
+and `SAIL_OBJECT_STORE_CACHE_PAGE_SIZE`, `_MEMORY`, `_METADATA`, and
+`_METADATA_TTL_SECS` tune it — by default 1 MiB pages, 1 GiB of value memory,
+64 MiB of combined metadata/path-identity memory, and a 60 second metadata TTL. Because
 `object_store` exposes its read methods as a non-overridable blanket trait, the cache
 cannot wrap them directly; it intercepts the two range entry points the engine
 actually reads through — `get_opts` and `get_ranges` — and serves whole pages from
 memory. The current tier is in-memory only; Foyer's hybrid disk tiering is a follow-up
-the same seam already anticipates.
+the same seam already anticipates. Writes invalidate before and after mutation;
+external replacements rotate the object's compact cache identity after TTL
+revalidation; conditional and version-specific requests bypass the cache. Page,
+metadata, and path-identity state are all capacity bounded.
 
 On the same files the difference is roughly twenty-six fold: the per-file scan median
 falls from about 47.5 ms cold and uncached to 1.81 ms warm. None of this lives in
@@ -909,10 +910,14 @@ questions LakeCat sends to Sail are the ones that require table-format knowledge
 
 For Ocelot, the Sail crates report version `0.6.4` and resolve from the
 `lakecat` branch of `github.com/querygraph/sail`. `Cargo.lock` pins that
-branch to revision `bddb1706ba2308e5029d47f04f03121236edbfa6`. The branch is
+branch to revision `dbff52b0dfff5fed302d09a72eeb7feb92f50725`. The branch is
 explicit release provenance: it carries the Iceberg planning, snapshot-append,
-and Foyer cache work LakeCat needs until those APIs can move to an upstream or
-published Sail line.
+Foyer cache, and measured SQL/Iceberg hot-path work LakeCat needs until those APIs
+can move to an upstream or published Sail line. The reusable cache and hot-path
+changes are proposed to LakeSail in
+[`lakehq/sail#2400`](https://github.com/lakehq/sail/pull/2400); QueryGraph's cache
+implementation is aligned with that reviewed source while retaining LakeCat-only
+provider and commit seams.
 
 LakeCat evolves under three rules: conform to Iceberg v3 for ordinary clients;
 preserve unknown/emerging v4 metadata without claiming settled semantics; prefer
@@ -983,7 +988,7 @@ versions and sources; the lockfile records the exact build:
 | LakeCat workspace | `0.3.0`, Ocelot | All LakeCat crates and `qglake-bundle` share the workspace version. |
 | Grust | `0.12.0`, Lobster, crates.io | `grust-graph` and `grust-turso` provide graph projection, Cypher, and the durable Turso graph backend. |
 | TypeSec | `0.12.0`, Torcello, crates.io | The `typesec` facade provides the authorization and receipt boundary used by `lakecat-security`. |
-| Sail | `0.6.4`, git branch `querygraph/sail#lakecat`, locked at `bddb1706` | Sail supplies Iceberg planning, model, commit-update, and object-store-cache behavior not yet consumed from a published release. |
+| Sail | `0.6.4`, git branch `querygraph/sail#lakecat`, locked at `dbff52b0` | Sail supplies Iceberg planning, model, commit-update, finalized object-store-cache behavior, and measured SQL/Iceberg hot paths not yet consumed from a published release; reusable work is proposed upstream in `lakehq/sail#2400`. |
 | QueryGraph | `0.4.0`, Sentinel | Acceptance peer rather than a compiled LakeCat dependency; its importer consumes LakeCat `qglake-bundle` and `lakecat-core` `0.3.0` while the handoff gate drives verify/import under `--locked`. |
 
 This distinction matters operationally. Updating a version in prose is not a
@@ -1856,6 +1861,58 @@ The future proposal candidate is not "TypeSec in Iceberg"; it is a
 policy-engine-neutral governed access profile with proof-carrying scan and
 credential posture.
 
+For a purpose-bound scan, LakeCat now makes that binding durable. The additive
+scan response can carry a versioned `GovernedScanProof` over the current table
+version and snapshot, ordered effective projection, principal, purpose, and
+canonical domain-separated digests of the Sail plan tasks, verified identity,
+original authorization receipt, and policy decision. The memory and Turso
+catalog stores retain the corresponding grant without raw plan tokens, reusable
+receipts, TypeDID envelopes, credentials, or signing material. Turso creation is
+idempotent under concurrent requests and the grant remains available after the
+service reopens.
+
+A received proof is not trusted merely because it deserializes. LakeCat's shared
+core validator limits each identity or field to 4 KiB and limits projections and
+namespaces to 256 entries and 64 KiB in total. It also requires trimmed,
+control-free text, unique projection fields, and constructor-equivalent
+validation of warehouse, namespace, and table names. Issuance and integrity
+checking share this contract, and structural validation runs before proof JSON
+is serialized or hashed. Persisted grant principals, policy-engine identities,
+and optional requested projections reuse the same limits. This makes the public
+in-process adapter fail before durable lookup on malformed or oversized proof
+shape and gives Marciana and QueryGraph one LakeCat-owned validator to reuse.
+
+LakeCat likewise owns the canonical snapshot and source-scope digests used by
+those adapters. Proof schema v2 and its v2 proof-digest domain now bind the
+catalog identity selected by trusted LakeCat process configuration at issuance.
+`LAKECAT_CATALOG_IDENTITY` may set it at deployment time; otherwise LakeCat
+derives a bounded stable default from the warehouse. Request data never selects
+it, and its bounded type validates canonical shape rather than authenticating
+an arbitrary string. Legacy v1 and identity-less proofs therefore fail closed.
+
+The snapshot v1 domain binds the proof-owned catalog identity to the exact table
+identity, table version, and snapshot after proof validation. The source-scope
+v1 domain composes that snapshot digest with the durable grant ID. Their fields
+and semantics did not change, so both digest domains remain v1 while ownership
+moved into the v2 proof. QueryGraph and Marciana consume one LakeCat-produced
+pair instead of supplying a catalog string or reproducing canonicalization; the
+pair's private fields come from one proof-validation and snapshot-hash pass.
+
+Before downstream cognition applies a proposal, LakeCat's in-process
+revalidation API reloads the exact grant, checks current table and policy state,
+and requests a fresh governance decision. Stale snapshots, revocation, or drift
+in purpose, ordered projection, restriction, subject, authority scope, or policy
+decision fail closed. The sealed, non-deserializable result keeps the exact
+durable proof, paired snapshot/source-scope digests, and current projection
+while reporting fresh authorization and policy digests separately; callers
+cannot construct the result or pair unrelated values. Its local
+`revalidated_at` completion time is an observation, not signed evidence and not
+an authorization lease. One digest pair is source provenance and the fresh
+decisions are application-time authority, so callers must not substitute them.
+Marciana or QueryGraph can consume this through an optional adapter. LakeCat
+does not add a revalidation REST route, and normal Iceberg clients do not depend
+on the proof schema.
+
 QueryGraph and QGLake handoff surfaces are product integration surfaces, not
 standard Iceberg semantics. QueryGraph needs bootstrap evidence, management
 inventory, table and view manifests, OpenLineage event hashes, graph import
@@ -1899,7 +1956,7 @@ be shared.
 | Iceberg REST namespace and table paths | Standard catalog compatibility: config, namespace operations, table load/create/drop, metadata locations, requirements, and optimistic commit. | LakeCat serves these paths while attaching server-side audit, outbox, and replay evidence. | Standard floor. Do not make normal clients depend on QueryGraph, TypeSec, Grust, QGLake, or LakeCat proof schemas. |
 | Commit CAS | Optimistic metadata-pointer movement under commit requirements. | LakeCat binds the accepted transition to idempotency, pointer logs, audit, outbox, redacted conflict proof, and replay admission. | CAS is standard. The proof envelope is a future optional reliability-profile candidate. |
 | Idempotency, pointer logs, audit/outbox, replay validation | Not generally standard table semantics, except insofar as they protect commit correctness. | LakeCat makes retries exact, pointer history inspectable, side effects recoverable, and downstream proof admission fail-closed. | LakeCat extension today. Strong candidate for neutral catalog reliability and event-admission profiles. |
-| Governed scan receipts | Iceberg provides table metadata that engines can plan; it does not define TypeSec authorization receipts. | TypeSec decides capability and restriction, LakeCat binds the receipt to catalog state, and Sail produces bounded table work. | Extension today. Plausible future proof-carrying scan profile if policy-engine-neutral and engine-neutral. |
+| Governed scan grants | Iceberg provides table metadata that engines can plan; it does not define TypeSec authorization receipts or cognition grants. | TypeSec decides capability and restriction, Sail produces bounded table work, and LakeCat issues, durably stores, and freshly revalidates a secret-free proof over both. | Additive extension today. It stays beside standard Iceberg routes and is consumed through an optional in-process adapter. |
 | Governed credential receipts | Credential vending is catalog-adjacent, but broad governance proof is outside ordinary table semantics. | Raw credential vending is a deliberate audited exception; governed Sail-planned work is the default for agents. | Extension today. Possible governed credential-posture profile if redacted and policy-neutral. |
 | QueryGraph/QGLake/OpenLineage/bootstrap/management/view/commit proof | Not required for standard table access. | QueryGraph consumes catalog anchors, OpenLineage hashes, view receipt chains, credential posture, graph/import hashes, and replay verdicts. | Product integration. Extract only narrow neutral shapes, such as event identity, lineage binding, view lifecycle proof, and commit proof. |
 | Typed Iceberg v4 behavior | Belongs to Iceberg table semantics as the format evolves. | LakeCat should preserve compatibility while Sail grows typed support for table and view metadata, deletes, planning, metadata-as-data, and commit validation. | Engine and Iceberg work. JSON passthrough is a bridge, not a final LakeCat-owned semantics layer. |
@@ -2463,6 +2520,13 @@ boundary: a downstream QueryGraph workflow binds an allowed answer to physical,
 model, artifact, policy, plan, graph, and lineage hashes. Future work should
 carry those accepted anchors into Marciana provenance without copying raw table
 data into the catalog or making LakeCat responsible for recall.
+Implementing agent memory is not a LakeCat backlog item. LakeCat now owns the
+narrow governed-source boundary needed by downstream Marciana work: a durable
+secret-free scan grant plus fresh in-process revalidation of current catalog and
+policy state. Marciana still owns cognition, proposals, protected memory,
+jobs, and recall; its optional LakeCat adapter joins the original grant and
+fresh authority evidence to the TypeSec application request without copying raw
+table data into the catalog.
 
 1. Point the Sail git dependency at upstream (or a published crate) only after
    the required helpers land there, then retire the querygraph/sail `lakecat`
@@ -2483,10 +2547,10 @@ data into the catalog or making LakeCat responsible for recall.
    substrate while preserving the locked receipt-chain and graph-handoff proof.
 7. Prove the bootstrap bundle through QueryGraph import on every meaningful
    public-surface change, and keep local release evidence ahead of cloud CI.
-8. Define an optional handoff profile that binds governed answer text to
-   LakeCat receipt and lineage hashes before qg-rust writes it to Marciana,
-   while keeping capability minting, content rehydration, and recall wholly in
-   TypeSec and QueryGraph.
+8. Keep the governed-scan proof schema versioned and exercise the optional
+   Marciana/QueryGraph adapter against LakeCat's in-process revalidation API,
+   while keeping capability minting, content rehydration, cognition, and recall
+   outside LakeCat.
 
 That optional binding must preserve the upstream v1 limits rather than turning
 them into LakeCat claims. `MemoryId::next()` is process-local, so a new write

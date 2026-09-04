@@ -174,6 +174,47 @@ impl TableRecord {
     }
 }
 
+/// Immutable table state captured by a validated catalog read for an
+/// optimistic commit.
+///
+/// The snapshot intentionally excludes table metadata: commit preparation
+/// already consumes that document and produces its replacement. Stores can use
+/// these stable fields to avoid reading and decoding the same table twice while
+/// still enforcing a version and metadata-pointer compare-and-swap.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TableCommitSnapshot {
+    ident: TableIdent,
+    location: String,
+    metadata_location: Option<String>,
+    created: AuditStamp,
+    updated_at: DateTime<Utc>,
+    version: u64,
+    staged: bool,
+}
+
+impl TableCommitSnapshot {
+    pub fn try_from_table(table: &TableRecord) -> LakeCatResult<Self> {
+        table.validate()?;
+        Ok(Self {
+            ident: table.ident.clone(),
+            location: table.location.clone(),
+            metadata_location: table.metadata_location.clone(),
+            created: table.created.clone(),
+            updated_at: table.updated_at,
+            version: table.version,
+            staged: table.staged,
+        })
+    }
+
+    pub fn ident(&self) -> &TableIdent {
+        &self.ident
+    }
+
+    pub fn version(&self) -> u64 {
+        self.version
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TableCommit {
     pub requirements: Vec<Value>,
@@ -999,6 +1040,14 @@ pub(crate) fn memory_view_receipt_key_matches_namespace(
         (parts.next(), parts.next(), parts.next(), parts.next()),
         (Some(row_warehouse), Some(row_namespace), Some(_), None)
             if row_warehouse == warehouse.as_str() && row_namespace == namespace.storage_key()
+    )
+}
+
+pub(crate) fn view_key_matches_warehouse(view_key: &str, warehouse: &WarehouseName) -> bool {
+    let mut parts = view_key.split('\u{1f}');
+    matches!(
+        (parts.next(), parts.next(), parts.next(), parts.next()),
+        (Some(row_warehouse), Some(_), Some(_), None) if row_warehouse == warehouse.as_str()
     )
 }
 

@@ -101,6 +101,19 @@ pub trait CatalogStore: Send + Sync + 'static {
         ident: &TableIdent,
         commit: TableCommit,
     ) -> LakeCatResult<TableRecord>;
+    /// Commit from table state returned by an earlier validated read.
+    ///
+    /// The default preserves compatibility for stores that cannot exploit the
+    /// snapshot. Implementations that override this method must retain the same
+    /// optimistic conflict semantics as [`CatalogStore::commit_table`].
+    async fn commit_table_with_snapshot(
+        &self,
+        snapshot: TableCommitSnapshot,
+        commit: TableCommit,
+    ) -> LakeCatResult<TableRecord> {
+        self.commit_table(snapshot.ident(), commit).await
+    }
+
     async fn replay_table_commit(
         &self,
         _ident: &TableIdent,
@@ -115,6 +128,22 @@ pub trait CatalogStore: Send + Sync + 'static {
         start_version: u64,
         end_version: Option<u64>,
     ) -> LakeCatResult<Vec<TableCommitRecord>>;
+    async fn save_governed_scan_grant(
+        &self,
+        grant: GovernedScanGrant,
+    ) -> LakeCatResult<GovernedScanGrant> {
+        grant.validate()?;
+        Err(LakeCatError::NotSupported(
+            "durable governed scan grants".to_string(),
+        ))
+    }
+    async fn load_governed_scan_grant(&self, grant_id: &str) -> LakeCatResult<GovernedScanGrant> {
+        validate_governed_scan_grant_id(grant_id)?;
+        Err(LakeCatError::NotFound {
+            object: "governed scan grant",
+            name: grant_id.to_string(),
+        })
+    }
     async fn upsert_server(&self, server: ServerRecord) -> LakeCatResult<ServerRecord> {
         server.validate()?;
         Ok(server)
@@ -122,12 +151,34 @@ pub trait CatalogStore: Send + Sync + 'static {
     async fn list_servers(&self) -> LakeCatResult<Vec<ServerRecord>> {
         Ok(Vec::new())
     }
+    async fn load_server(&self, server_id: &str) -> LakeCatResult<ServerRecord> {
+        validate_project_id(server_id)?;
+        self.list_servers()
+            .await?
+            .into_iter()
+            .find(|server| server.server_id == server_id)
+            .ok_or_else(|| LakeCatError::NotFound {
+                object: "server",
+                name: server_id.to_string(),
+            })
+    }
     async fn upsert_project(&self, project: ProjectRecord) -> LakeCatResult<ProjectRecord> {
         project.validate()?;
         Ok(project)
     }
     async fn list_projects(&self) -> LakeCatResult<Vec<ProjectRecord>> {
         Ok(Vec::new())
+    }
+    async fn load_project(&self, project_id: &str) -> LakeCatResult<ProjectRecord> {
+        validate_project_id(project_id)?;
+        self.list_projects()
+            .await?
+            .into_iter()
+            .find(|project| project.project_id == project_id)
+            .ok_or_else(|| LakeCatError::NotFound {
+                object: "project",
+                name: project_id.to_string(),
+            })
     }
     async fn upsert_warehouse(&self, warehouse: WarehouseRecord) -> LakeCatResult<WarehouseRecord> {
         warehouse.validate()?;
@@ -222,10 +273,32 @@ pub trait CatalogStore: Send + Sync + 'static {
     }
     async fn list_namespace_view_version_receipts(
         &self,
-        _warehouse: &WarehouseName,
-        _namespace: &Namespace,
+        warehouse: &WarehouseName,
+        namespace: &Namespace,
     ) -> LakeCatResult<Vec<ViewVersionReceipt>> {
-        Ok(Vec::new())
+        let views = self.list_views(warehouse, namespace).await?;
+        let mut receipts = Vec::new();
+        for view in views {
+            receipts.extend(
+                self.list_view_version_receipts(warehouse, namespace, &view.name)
+                    .await?,
+            );
+        }
+        Ok(receipts)
+    }
+    async fn list_warehouse_view_version_receipts(
+        &self,
+        warehouse: &WarehouseName,
+    ) -> LakeCatResult<Vec<ViewVersionReceipt>> {
+        let namespaces = self.list_namespaces(warehouse).await?;
+        let mut receipts = Vec::new();
+        for namespace in namespaces {
+            receipts.extend(
+                self.list_namespace_view_version_receipts(warehouse, &namespace)
+                    .await?,
+            );
+        }
+        Ok(receipts)
     }
     async fn load_view(
         &self,
@@ -275,6 +348,17 @@ pub trait CatalogStore: Send + Sync + 'static {
     ) -> LakeCatResult<Vec<ViewRecord>> {
         Ok(Vec::new())
     }
+    async fn list_warehouse_views(
+        &self,
+        warehouse: &WarehouseName,
+    ) -> LakeCatResult<Vec<ViewRecord>> {
+        let namespaces = self.list_namespaces(warehouse).await?;
+        let mut views = Vec::new();
+        for namespace in namespaces {
+            views.extend(self.list_views(warehouse, &namespace).await?);
+        }
+        Ok(views)
+    }
     async fn upsert_policy_binding(&self, binding: PolicyBinding) -> LakeCatResult<PolicyBinding> {
         binding.validate()?;
         Ok(binding)
@@ -308,6 +392,21 @@ pub trait CatalogStore: Send + Sync + 'static {
     ) -> LakeCatResult<Vec<ModelPublication>> {
         Ok(Vec::new())
     }
+    /// Return enforced policy bindings for each table in the same order.
+    ///
+    /// Stores can override this bulk boundary to share a catalog read across
+    /// many tables. The default preserves compatibility by delegating to the
+    /// single-table operation.
+    async fn policy_bindings_for_tables(
+        &self,
+        tables: &[TableIdent],
+    ) -> LakeCatResult<Vec<Vec<PolicyBinding>>> {
+        let mut bindings = Vec::with_capacity(tables.len());
+        for table in tables {
+            bindings.push(self.policy_bindings_for_table(table).await?);
+        }
+        Ok(bindings)
+    }
     async fn storage_profile_for_table(
         &self,
         table: &TableRecord,
@@ -329,14 +428,20 @@ pub trait CatalogStore: Send + Sync + 'static {
     }
 }
 
+mod governed_scan;
 mod helpers;
 mod memory;
 mod records;
 
+pub use governed_scan::*;
 pub use helpers::table_ident;
 pub(crate) use helpers::*;
 pub use memory::*;
 pub use records::*;
+
+#[cfg(test)]
+#[path = "governed_scan_tests.rs"]
+mod governed_scan_tests;
 
 #[cfg(test)]
 mod memory_tests;

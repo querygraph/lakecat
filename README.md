@@ -86,7 +86,11 @@ can be activated without code edits. `LAKECAT_WAREHOUSE` selects the served
 warehouse, and `LAKECAT_BIND_ADDR` selects the listen address; defaults are
 `local` and `127.0.0.1:8181`. `LAKECAT_WAREHOUSE_LOCATION` optionally selects a
 validated `file://` or `s3://` root for standard creates that omit an explicit
-table location. With the `turso-local` feature, `LAKECAT_TURSO_PATH` selects a
+table location. `LAKECAT_CATALOG_IDENTITY` optionally sets the stable
+governed-scan identity from trusted process configuration; it defaults to
+`lakecat://<warehouse>` (or a bounded hash form for an unusually long warehouse
+name) and must never come from request data. With the `turso-local` feature,
+`LAKECAT_TURSO_PATH` selects a
 Turso-backed `TursoCatalogStore` for namespaces, table records, metadata pointer
 history, audit/outbox rows, and idempotent commit replay; without it the binary
 keeps the in-memory store.

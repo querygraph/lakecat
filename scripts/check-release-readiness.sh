@@ -222,7 +222,7 @@ if [[ "$mode" == "full" ]]; then
     if [[ "$require_clean" -ne 0 ]]; then
       book_tmpdir="$(mktemp -d)"
       cleanup_dirs+=("$book_tmpdir")
-      run env LAKECAT_BOOK_DIST_DIR="$book_tmpdir/book-dist" docs/book/build.sh
+      run docs/book/build.sh --dist "$book_tmpdir/book-dist"
       run scripts/check-book-artifact-contract.sh "$book_tmpdir/book-dist"
     else
       run docs/book/build.sh

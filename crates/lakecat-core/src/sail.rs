@@ -12,6 +12,8 @@ use serde_json::Value;
 
 use crate::{LakeCatError, LakeCatResult, Principal, TableIdent};
 
+pub use crate::governed_scan::GovernedScanProof;
+
 #[async_trait]
 pub trait SailCatalogEngine: Send + Sync + 'static {
     async fn prepare_commit(&self, request: CommitPreparationRequest) -> LakeCatResult<CommitPlan>;

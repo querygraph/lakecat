@@ -3,6 +3,7 @@ use std::{net::SocketAddr, sync::Arc};
 use lakecat_core::WarehouseName;
 #[cfg(any(feature = "grust-turso-local", feature = "typesec-local"))]
 use lakecat_core::content_hash_bytes;
+use lakecat_core::governed_scan::GovernedScanCatalogIdentity;
 use lakecat_graph::CatalogGraphSink;
 #[cfg(not(feature = "grust-local"))]
 use lakecat_graph::NoopCatalogGraphSink;
@@ -16,7 +17,8 @@ use lakecat_store::{CatalogStore, MemoryCatalogStore};
 #[tokio::main]
 async fn main() {
     let config = ServiceConfig::from_env().expect("configure LakeCat service");
-    let mut state = LakeCatState::new(config.warehouse.clone(), configured_store().await);
+    let mut state = LakeCatState::new(config.warehouse.clone(), configured_store().await)
+        .with_catalog_identity(config.catalog_identity.clone());
     if let Some(location_root) = config.table_location_root {
         state = state
             .with_table_location_root(location_root)
@@ -46,12 +48,26 @@ async fn main() {
 struct ServiceConfig {
     warehouse: WarehouseName,
     table_location_root: Option<String>,
+    catalog_identity: GovernedScanCatalogIdentity,
     bind_addr: SocketAddr,
 }
 
 impl ServiceConfig {
     fn from_env() -> lakecat_core::LakeCatResult<Self> {
-        let warehouse = std::env::var("LAKECAT_WAREHOUSE").unwrap_or_else(|_| "local".to_string());
+        let warehouse = WarehouseName::new(
+            std::env::var("LAKECAT_WAREHOUSE").unwrap_or_else(|_| "local".to_string()),
+        )?;
+        let catalog_identity = match std::env::var("LAKECAT_CATALOG_IDENTITY") {
+            Ok(value) => GovernedScanCatalogIdentity::new(value)?,
+            Err(std::env::VarError::NotPresent) => {
+                GovernedScanCatalogIdentity::for_warehouse(&warehouse)
+            }
+            Err(std::env::VarError::NotUnicode(_)) => {
+                return Err(lakecat_core::LakeCatError::InvalidArgument(
+                    "LAKECAT_CATALOG_IDENTITY must be valid UTF-8".to_string(),
+                ));
+            }
+        };
         let bind_addr = std::env::var("LAKECAT_BIND_ADDR")
             .unwrap_or_else(|_| "127.0.0.1:8181".to_string())
             .parse::<SocketAddr>()
@@ -61,8 +77,9 @@ impl ServiceConfig {
                 ))
             })?;
         Ok(Self {
-            warehouse: WarehouseName::new(warehouse)?,
+            warehouse,
             table_location_root: std::env::var("LAKECAT_WAREHOUSE_LOCATION").ok(),
+            catalog_identity,
             bind_addr,
         })
     }

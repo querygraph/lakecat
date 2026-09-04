@@ -372,7 +372,7 @@ pub(crate) fn validate_table_commit_hash_evidence(event: &OutboxEvent) -> Result
         "committed-at",
         "table commit evidence committed_at timestamp",
     )?;
-    if !aliased_evidence_field(
+    if aliased_evidence_field(
         event,
         commit,
         "new_metadata_location",
@@ -380,7 +380,7 @@ pub(crate) fn validate_table_commit_hash_evidence(event: &OutboxEvent) -> Result
         "table commit",
     )?
     .and_then(Value::as_str)
-    .is_some_and(|location| !location.trim().is_empty())
+    .is_none_or(|location| location.trim().is_empty())
     {
         return Err(outbox_evidence_error(
             event,
@@ -406,9 +406,9 @@ pub(crate) fn validate_table_commit_hash_evidence(event: &OutboxEvent) -> Result
         "table commit",
     )?
     .is_some_and(|location| {
-        !location
+        location
             .as_str()
-            .is_some_and(|location| !location.trim().is_empty())
+            .is_none_or(|location| location.trim().is_empty())
     }) {
         return Err(outbox_evidence_error(
             event,

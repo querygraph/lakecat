@@ -1,0 +1,92 @@
+use serde_json::json;
+
+use super::*;
+use crate::{Namespace, TableName, WarehouseName};
+
+pub(super) fn evidence() -> GovernedScanProofEvidence {
+    GovernedScanProofEvidence {
+        catalog_identity: GovernedScanCatalogIdentity::new("lakecat-production").unwrap(),
+        table: TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        ),
+        table_version: 7,
+        snapshot_id: 42,
+        plan_task_digest: governed_plan_digest(&[json!({"plan-task": "secret-plan-token"})])
+            .unwrap(),
+        principal_subject: "did:key:agent".to_string(),
+        purpose: "research".to_string(),
+        effective_projection: vec!["finding".to_string()],
+        identity_context_digest: governed_evidence_digest(
+            "lakecat.test.identity",
+            &json!({"subject": "did:key:agent"}),
+        )
+        .unwrap(),
+        authorization_receipt_digest: governed_authorization_digest(&json!({
+            "allowed": true,
+            "receipt": "signed-receipt",
+        }))
+        .unwrap(),
+        policy_decision_digest: governed_policy_digest(&json!({"policy": "current"})).unwrap(),
+    }
+}
+
+#[test]
+fn proof_is_secret_free_and_integrity_bound() {
+    let proof = GovernedScanProof::issue(evidence()).unwrap();
+    let encoded = serde_json::to_string(&proof).unwrap();
+    assert!(!encoded.contains("secret-plan-token"));
+    assert!(!encoded.contains("signed-receipt"));
+    proof.validate_integrity().unwrap();
+
+    let mut changed = serde_json::to_value(proof).unwrap();
+    changed["snapshotId"] = json!(43);
+    assert!(serde_json::from_value::<GovernedScanProof>(changed).is_err());
+}
+
+#[test]
+fn evidence_hashing_is_canonical_and_domain_separated() {
+    let left = json!({"b": 2, "a": {"d": 4, "c": 3}});
+    let right = json!({"a": {"c": 3, "d": 4}, "b": 2});
+    assert_eq!(
+        governed_evidence_digest("lakecat.test.left", &left).unwrap(),
+        governed_evidence_digest("lakecat.test.left", &right).unwrap()
+    );
+    assert_ne!(
+        governed_evidence_digest("lakecat.test.left", &left).unwrap(),
+        governed_evidence_digest("lakecat.test.right", &left).unwrap()
+    );
+}
+
+#[test]
+fn proof_rejects_noncanonical_digest_encodings() {
+    let mut uppercase = evidence();
+    uppercase.plan_task_digest = format!(
+        "sha256:{}",
+        uppercase.plan_task_digest[7..].to_ascii_uppercase()
+    );
+    let error = GovernedScanProof::issue(uppercase).unwrap_err();
+    assert!(error.to_string().contains("canonical lowercase"));
+
+    let mut truncated = evidence();
+    truncated.plan_task_digest = "sha256:abcd".to_string();
+    let error = GovernedScanProof::issue(truncated).unwrap_err();
+    assert!(error.to_string().contains("canonical lowercase"));
+
+    let proof = GovernedScanProof::issue(evidence()).unwrap();
+    let mut encoded = serde_json::to_value(proof).unwrap();
+    let grant_id = encoded["grantId"].as_str().unwrap();
+    encoded["grantId"] = json!(format!("sha256:{}", grant_id[7..].to_ascii_uppercase()));
+    let error = serde_json::from_value::<GovernedScanProof>(encoded).unwrap_err();
+    assert!(error.to_string().contains("canonical lowercase"));
+}
+
+#[path = "governed_scan_tests/bounds.rs"]
+mod bounds;
+#[path = "governed_scan_tests/catalog_identity.rs"]
+mod catalog_identity;
+#[path = "governed_scan_tests/proof_version.rs"]
+mod proof_version;
+#[path = "governed_scan_tests/source_scope.rs"]
+mod source_scope;

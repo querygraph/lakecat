@@ -459,7 +459,7 @@ async fn table_scan_authorization_carries_policy_read_restriction() {
     )
     .await
     .unwrap();
-    let restriction = capability.read_restriction().unwrap();
+    let restriction = capability.read_restriction();
     assert_eq!(
         restriction.allowed_columns.as_deref(),
         Some(&["event_id".to_string()][..])
@@ -540,8 +540,14 @@ fn scan_planned_audit_payload_surfaces_policy_context() {
         "requested-stats-fields": ["event_id", "payload"],
         "effective-stats-fields": ["event_id"]
     });
-    let payload =
-        table_scan_planned_audit_payload(&ident, &table, &receipt, &scan, &scan_request_extensions);
+    let capability = TableScanCapability::from_receipt(receipt, ident.clone()).unwrap();
+    let payload = table_scan_planned_audit_payload(
+        &ident,
+        &table,
+        &capability,
+        &scan,
+        &scan_request_extensions,
+    );
     assert_eq!(
         payload["storage-location"],
         serde_json::json!("file:///tmp/events")
@@ -733,10 +739,11 @@ fn scan_tasks_fetched_audit_payload_surfaces_policy_context() {
         "effective-stats-fields": ["event_id"],
         "stats-fields": ["event_id"],
     });
+    let capability = TableScanCapability::from_receipt(receipt, ident.clone()).unwrap();
     let payload = table_scan_tasks_fetched_audit_payload(
         &ident,
         &table,
-        &receipt,
+        &capability,
         &fetched,
         &fetch_extensions,
     );

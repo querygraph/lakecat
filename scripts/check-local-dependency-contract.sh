@@ -246,12 +246,14 @@ require_pattern 'release-candidate' scripts/check-release-readiness.sh \
   "release-readiness help must document clean release-candidate mode"
 require_pattern 'release candidate gate requires a clean tree' scripts/check-release-readiness.sh \
   "release-readiness gate must enforce clean-tree release-candidate evidence"
-require_pattern 'LAKECAT_BOOK_DIST_DIR' scripts/check-release-readiness.sh \
-  "release-candidate gate must build book artifacts out of tree"
-require_pattern 'LAKECAT_BOOK_DIST_DIR' docs/book/build.sh \
-  "book build must support an explicit artifact dist directory"
-require_pattern 'CALIBRE_CONFIG_DIRECTORY' docs/book/build.sh \
-  "book build must isolate Calibre conversion state from the operator profile"
+require_pattern 'docs/book/build\.sh --dist "\$book_tmpdir/book-dist"' scripts/check-release-readiness.sh \
+  "release-candidate gate must pass its out-of-tree dist through the FirstPair CLI"
+require_pattern 'build-library-book\.sh' docs/book/build.sh \
+  "book build must delegate to the shared FirstPair builder"
+require_pattern '[[:space:]]--repo-root "\$repo_root"' docs/book/build.sh \
+  "book build must identify the source repository to FirstPair"
+require_pattern '"\$@"' docs/book/build.sh \
+  "book build must forward FirstPair CLI options such as --dist"
 require_pattern 'partial[[:space:]]+evidence instead of release-candidate success' scripts/check-release-readiness.sh \
   "release-readiness help must describe skipped full runs as partial evidence"
 require_pattern 'docs/book/check_pdf_layout\.sh' RELEASE.md \

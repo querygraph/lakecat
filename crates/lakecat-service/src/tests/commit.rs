@@ -1353,8 +1353,12 @@ async fn idempotent_commit_replay_does_not_rewrite_metadata_object() {
     };
     let response = app.clone().oneshot(commit()).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let original_written = std::fs::read_to_string(&committed_metadata_path).unwrap();
-    assert!(original_written.contains("\"current-snapshot-id\": 43"));
+    let original_written: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&committed_metadata_path).unwrap()).unwrap();
+    assert_eq!(
+        original_written["current-snapshot-id"],
+        serde_json::json!(43)
+    );
 
     let sentinel = "{\n  \"sentinel\": \"replay must not rewrite metadata\"\n}\n";
     std::fs::write(&committed_metadata_path, sentinel).unwrap();

@@ -142,6 +142,12 @@ async fn memory_store_persists_server_records() {
     .unwrap();
     store.upsert_server(updated.clone()).await.unwrap();
 
+    assert_eq!(store.load_server("lakecat-local").await.unwrap(), updated);
+    assert!(matches!(
+        store.load_server("missing-server").await,
+        Err(LakeCatError::NotFound { object, name })
+            if object == "server" && name == "missing-server"
+    ));
     assert_eq!(store.list_servers().await.unwrap(), vec![updated]);
 }
 
@@ -687,6 +693,12 @@ async fn memory_store_persists_project_records() {
     .unwrap();
     store.upsert_project(updated.clone()).await.unwrap();
 
+    assert_eq!(store.load_project("default").await.unwrap(), updated);
+    assert!(matches!(
+        store.load_project("missing-project").await,
+        Err(LakeCatError::NotFound { object, name })
+            if object == "project" && name == "missing-project"
+    ));
     assert_eq!(store.list_projects().await.unwrap(), vec![updated]);
 
     let missing_server = ProjectRecord::new(
@@ -1203,6 +1215,16 @@ async fn memory_store_rejects_corrupt_policy_bindings_on_read() {
         LakeCatError::InvalidArgument(message)
             if message.contains("table-scoped policy binding requires namespace")
     ));
+
+    let err = store
+        .policy_bindings_for_tables(std::slice::from_ref(&table))
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        LakeCatError::InvalidArgument(message)
+            if message.contains("table-scoped policy binding requires namespace")
+    ));
 }
 
 #[tokio::test]
@@ -1244,6 +1266,16 @@ async fn memory_store_rejects_policy_binding_map_scope_drift() {
     ));
 
     let err = store.policy_bindings_for_table(&table).await.unwrap_err();
+    assert!(matches!(
+        err,
+        LakeCatError::Internal(message)
+            if message.contains("policy binding row scope does not match")
+    ));
+
+    let err = store
+        .policy_bindings_for_tables(std::slice::from_ref(&table))
+        .await
+        .unwrap_err();
     assert!(matches!(
         err,
         LakeCatError::Internal(message)
@@ -1702,6 +1734,16 @@ async fn memory_store_rejects_corrupt_view_receipts_on_read() {
 
     let err = store
         .list_namespace_view_version_receipts(&warehouse, &namespace)
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        LakeCatError::Internal(message)
+            if message.contains("view receipt hash must be a SHA-256 digest")
+    ));
+
+    let err = store
+        .list_warehouse_view_version_receipts(&warehouse)
         .await
         .unwrap_err();
     assert!(matches!(

@@ -40,6 +40,7 @@ pub(crate) struct MemoryState {
     pub(crate) policy_bindings: BTreeMap<String, PolicyBinding>,
     pub(crate) model_publications: BTreeMap<String, Vec<ModelPublication>>,
     pub(crate) soft_deletes: BTreeMap<String, SoftDeleteRecord>,
+    pub(crate) governed_scan_grants: BTreeMap<String, GovernedScanGrant>,
 }
 
 #[derive(Debug, Clone)]
@@ -639,6 +640,41 @@ impl CatalogStore for MemoryCatalogStore {
             .collect()
     }
 
+    async fn save_governed_scan_grant(
+        &self,
+        grant: GovernedScanGrant,
+    ) -> LakeCatResult<GovernedScanGrant> {
+        grant.validate()?;
+        let mut state = self.state.write().await;
+        if let Some(existing) = state.governed_scan_grants.get(grant.proof.grant_id()) {
+            if existing.has_same_stable_evidence(&grant) {
+                return Ok(existing.clone());
+            }
+            return Err(LakeCatError::Conflict(
+                "governed scan grant id was reused with different evidence".to_string(),
+            ));
+        }
+        state
+            .governed_scan_grants
+            .insert(grant.proof.grant_id().to_owned(), grant.clone());
+        Ok(grant)
+    }
+
+    async fn load_governed_scan_grant(&self, grant_id: &str) -> LakeCatResult<GovernedScanGrant> {
+        validate_governed_scan_grant_id(grant_id)?;
+        let state = self.state.read().await;
+        let grant = state
+            .governed_scan_grants
+            .get(grant_id)
+            .cloned()
+            .ok_or_else(|| LakeCatError::NotFound {
+                object: "governed scan grant",
+                name: grant_id.to_string(),
+            })?;
+        grant.validate()?;
+        Ok(grant)
+    }
+
     async fn upsert_server(&self, server: ServerRecord) -> LakeCatResult<ServerRecord> {
         server.validate()?;
         let mut state = self.state.write().await;
@@ -663,6 +699,22 @@ impl CatalogStore for MemoryCatalogStore {
             .collect::<LakeCatResult<Vec<_>>>()?;
         servers.sort_by(|left, right| left.server_id.cmp(&right.server_id));
         Ok(servers)
+    }
+
+    async fn load_server(&self, server_id: &str) -> LakeCatResult<ServerRecord> {
+        validate_project_id(server_id)?;
+        let state = self.state.read().await;
+        let server =
+            state
+                .servers
+                .get(server_id)
+                .cloned()
+                .ok_or_else(|| LakeCatError::NotFound {
+                    object: "server",
+                    name: server_id.to_string(),
+                })?;
+        validate_server_record_map_scope(&server, server_id)?;
+        Ok(server)
     }
 
     async fn upsert_project(&self, project: ProjectRecord) -> LakeCatResult<ProjectRecord> {
@@ -698,6 +750,22 @@ impl CatalogStore for MemoryCatalogStore {
             .collect::<LakeCatResult<Vec<_>>>()?;
         projects.sort_by(|left, right| left.project_id.cmp(&right.project_id));
         Ok(projects)
+    }
+
+    async fn load_project(&self, project_id: &str) -> LakeCatResult<ProjectRecord> {
+        validate_project_id(project_id)?;
+        let state = self.state.read().await;
+        let project =
+            state
+                .projects
+                .get(project_id)
+                .cloned()
+                .ok_or_else(|| LakeCatError::NotFound {
+                    object: "project",
+                    name: project_id.to_string(),
+                })?;
+        validate_project_record_map_scope(&project, project_id)?;
+        Ok(project)
     }
 
     async fn upsert_warehouse(&self, warehouse: WarehouseRecord) -> LakeCatResult<WarehouseRecord> {
@@ -1091,6 +1159,36 @@ impl CatalogStore for MemoryCatalogStore {
         Ok(receipts)
     }
 
+    async fn list_warehouse_view_version_receipts(
+        &self,
+        warehouse: &WarehouseName,
+    ) -> LakeCatResult<Vec<ViewVersionReceipt>> {
+        let state = self.state.read().await;
+        let mut receipts = state
+            .view_version_receipts
+            .iter()
+            .filter(|receipt| view_key_matches_warehouse(&receipt.view_key, warehouse))
+            .map(|receipt| {
+                validate_memory_view_receipt_scope(
+                    receipt,
+                    warehouse,
+                    &receipt.receipt.namespace,
+                    Some(&receipt.receipt.name),
+                )?;
+                Ok(receipt.receipt.clone())
+            })
+            .collect::<LakeCatResult<Vec<_>>>()?;
+        receipts.sort_by(|left, right| {
+            left.namespace
+                .cmp(&right.namespace)
+                .then_with(|| left.name.as_str().cmp(right.name.as_str()))
+                .then_with(|| left.view_version.cmp(&right.view_version))
+                .then_with(|| left.recorded_at.cmp(&right.recorded_at))
+        });
+        validate_view_receipt_chains(&receipts)?;
+        Ok(receipts)
+    }
+
     async fn load_view(
         &self,
         warehouse: &WarehouseName,
@@ -1193,6 +1291,28 @@ impl CatalogStore for MemoryCatalogStore {
             .cloned()
             .collect::<Vec<_>>();
         views.sort_by(|left, right| left.name.as_str().cmp(right.name.as_str()));
+        Ok(views)
+    }
+
+    async fn list_warehouse_views(
+        &self,
+        warehouse: &WarehouseName,
+    ) -> LakeCatResult<Vec<ViewRecord>> {
+        let state = self.state.read().await;
+        let mut views = state
+            .views
+            .iter()
+            .filter(|(view_key, _)| view_key_matches_warehouse(view_key, warehouse))
+            .map(|(view_key, view)| {
+                validate_view_record_map_scope(view, view_key)?;
+                Ok(view.clone())
+            })
+            .collect::<LakeCatResult<Vec<_>>>()?;
+        views.sort_by(|left, right| {
+            left.namespace
+                .cmp(&right.namespace)
+                .then_with(|| left.name.as_str().cmp(right.name.as_str()))
+        });
         Ok(views)
     }
 
@@ -1324,6 +1444,25 @@ impl CatalogStore for MemoryCatalogStore {
             .get(&model_publication_key(warehouse, model_id))
             .cloned()
             .unwrap_or_default())
+    }
+
+    async fn policy_bindings_for_tables(
+        &self,
+        tables: &[TableIdent],
+    ) -> LakeCatResult<Vec<Vec<PolicyBinding>>> {
+        let state = self.state.read().await;
+        let bindings = state
+            .policy_bindings
+            .iter()
+            .map(|(binding_key, binding)| {
+                validate_policy_binding_map_scope(binding, binding_key)?;
+                Ok(binding)
+            })
+            .collect::<LakeCatResult<Vec<_>>>()?;
+        Ok(tables
+            .iter()
+            .map(|table| policy_bindings_for_table(bindings.iter().copied(), table))
+            .collect())
     }
 
     async fn record_audit_event(&self, event: CatalogAuditEvent) -> LakeCatResult<()> {

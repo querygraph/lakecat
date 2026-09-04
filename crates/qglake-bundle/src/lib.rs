@@ -1,10 +1,11 @@
 use chrono::{DateTime, Utc};
 use lakecat_core::{
-    LakeCatResult, TableIdent, WarehouseName, content_hash_bytes, content_hash_json,
+    LakeCatResult, TableIdent, TableName, WarehouseName, content_hash_bytes, content_hash_json,
 };
-use serde::{Deserialize, Serialize};
+use serde::ser::SerializeSeq;
+use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{Value, json};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "kebab-case")]
@@ -24,22 +25,27 @@ impl QueryGraphBootstrap {
         mut self,
         evidence: Vec<QueryGraphViewReceiptEvidence>,
     ) -> LakeCatResult<Self> {
-        validate_view_receipt_evidence(&self.views, &evidence)?;
-        let evidence_hash = if evidence.is_empty() {
-            None
-        } else {
-            Some(view_receipt_evidence_hash(&evidence)?)
-        };
-        let import_contract = self.manifest.querygraph_import.as_mut().ok_or_else(|| {
+        self.manifest
+            .attach_view_receipt_evidence(&self.views, evidence)?;
+        self.bundle_hash = self.computed_bundle_hash()?;
+        Ok(self)
+    }
+
+    /// Return the verification-shaped claims captured while this bundle was
+    /// constructed, without recomputing content hashes.
+    ///
+    /// This is only appropriate for an in-process bundle immediately produced
+    /// by a trusted constructor that computed every manifest field. Consumers
+    /// of deserialized or otherwise external bundles must call
+    /// [`Self::verify_manifest`] instead.
+    pub fn construction_summary(&self) -> LakeCatResult<QueryGraphBootstrapVerification> {
+        let import_contract = self.manifest.querygraph_import.as_ref().ok_or_else(|| {
             lakecat_core::LakeCatError::InvalidArgument(
                 "QueryGraph bootstrap manifest is missing querygraph-import compatibility contract"
                     .to_string(),
             )
         })?;
-        import_contract.view_receipt_evidence = evidence;
-        import_contract.view_receipt_evidence_hash = evidence_hash;
-        self.bundle_hash = self.computed_bundle_hash()?;
-        Ok(self)
+        Ok(self.verification_summary(import_contract))
     }
 
     pub fn verify_manifest(&self) -> LakeCatResult<QueryGraphBootstrapVerification> {
@@ -68,22 +74,22 @@ impl QueryGraphBootstrap {
             self.tables.iter().map(|table| table.stable_id.as_str()),
         )?;
         validate_duplicate_free_stable_ids(
+            "QueryGraph bootstrap view projections",
+            self.views.iter().map(|view| view.stable_id.as_str()),
+        )?;
+        let table_artifacts = index_duplicate_free_stable_ids(
             "QueryGraph bootstrap table artifacts",
             self.manifest
                 .table_artifacts
                 .iter()
-                .map(|artifact| artifact.stable_id.as_str()),
+                .map(|artifact| (artifact.stable_id.as_str(), artifact)),
         )?;
-        validate_duplicate_free_stable_ids(
-            "QueryGraph bootstrap view projections",
-            self.views.iter().map(|view| view.stable_id.as_str()),
-        )?;
-        validate_duplicate_free_stable_ids(
+        let view_artifacts = index_duplicate_free_stable_ids(
             "QueryGraph bootstrap view artifacts",
             self.manifest
                 .view_artifacts
                 .iter()
-                .map(|artifact| artifact.stable_id.as_str()),
+                .map(|artifact| (artifact.stable_id.as_str(), artifact)),
         )?;
 
         let open_lineage_hash = content_hash_json(&self.open_lineage)?;
@@ -102,11 +108,8 @@ impl QueryGraphBootstrap {
         }
 
         for table in &self.tables {
-            let expected = self
-                .manifest
-                .table_artifacts
-                .iter()
-                .find(|artifact| artifact.stable_id == table.stable_id)
+            let expected = table_artifacts
+                .get(table.stable_id.as_str())
                 .ok_or_else(|| {
                     lakecat_core::LakeCatError::InvalidArgument(format!(
                         "QueryGraph bootstrap manifest is missing table {}",
@@ -116,17 +119,12 @@ impl QueryGraphBootstrap {
             expected.verify(table)?;
         }
         for view in &self.views {
-            let expected = self
-                .manifest
-                .view_artifacts
-                .iter()
-                .find(|artifact| artifact.stable_id == view.stable_id)
-                .ok_or_else(|| {
-                    lakecat_core::LakeCatError::InvalidArgument(format!(
-                        "QueryGraph bootstrap manifest is missing view {}",
-                        view.stable_id
-                    ))
-                })?;
+            let expected = view_artifacts.get(view.stable_id.as_str()).ok_or_else(|| {
+                lakecat_core::LakeCatError::InvalidArgument(format!(
+                    "QueryGraph bootstrap manifest is missing view {}",
+                    view.stable_id
+                ))
+            })?;
             expected.verify(view)?;
         }
 
@@ -189,7 +187,14 @@ impl QueryGraphBootstrap {
             )));
         }
 
-        Ok(QueryGraphBootstrapVerification {
+        Ok(self.verification_summary(import_contract))
+    }
+
+    fn verification_summary(
+        &self,
+        import_contract: &QueryGraphImportCompatibility,
+    ) -> QueryGraphBootstrapVerification {
+        QueryGraphBootstrapVerification {
             warehouse: self.warehouse.as_str().to_string(),
             table_count: self.tables.len(),
             view_count: self.views.len(),
@@ -223,24 +228,42 @@ impl QueryGraphBootstrap {
                     )
                 })
                 .collect(),
-            bundle_hash,
-            graph_hash,
-            open_lineage_hash,
+            bundle_hash: self.bundle_hash.clone(),
+            graph_hash: self.manifest.graph_hash.clone(),
+            open_lineage_hash: self.manifest.open_lineage_hash.clone(),
             querygraph_import_hash: import_contract.table_only_bundle_hash.clone(),
             standards: self.manifest.standards.clone(),
-        })
+        }
     }
 
     fn computed_bundle_hash(&self) -> LakeCatResult<String> {
-        content_hash_json(&json!({
-            "warehouse": self.warehouse.as_str(),
-            "manifest": self.manifest,
-            "tables": self.tables,
-            "views": self.views,
-            "graph": self.graph,
-            "openLineage": self.open_lineage,
-        }))
+        querygraph_bundle_hash(
+            &self.warehouse,
+            &self.manifest,
+            &self.tables,
+            &self.views,
+            &self.graph,
+            &self.open_lineage,
+        )
     }
+}
+
+pub fn querygraph_bundle_hash(
+    warehouse: &WarehouseName,
+    manifest: &QueryGraphBundleManifest,
+    tables: &[QueryGraphTableProjection],
+    views: &[QueryGraphViewProjection],
+    graph: &QueryGraphCatalogGraph,
+    open_lineage: &Value,
+) -> LakeCatResult<String> {
+    content_hash_json(&CanonicalQueryGraphBundle {
+        graph: CanonicalQueryGraph::from(graph),
+        manifest: CanonicalQueryGraphBundleManifest::from(manifest),
+        open_lineage,
+        tables: CanonicalJsonSlice::new(tables),
+        views: CanonicalJsonSlice::new(views),
+        warehouse: warehouse.as_str(),
+    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -315,6 +338,34 @@ impl QueryGraphBundleManifest {
             querygraph_import: None,
         })
     }
+
+    /// Validate and install receipt evidence before the enclosing bundle hash
+    /// is computed.
+    ///
+    /// Existing bundles should use
+    /// [`QueryGraphBootstrap::with_view_receipt_evidence`] so their bundle hash
+    /// is refreshed after this manifest mutation.
+    pub fn attach_view_receipt_evidence(
+        &mut self,
+        views: &[QueryGraphViewProjection],
+        evidence: Vec<QueryGraphViewReceiptEvidence>,
+    ) -> LakeCatResult<()> {
+        validate_view_receipt_evidence(views, &evidence)?;
+        let evidence_hash = if evidence.is_empty() {
+            None
+        } else {
+            Some(view_receipt_evidence_hash(&evidence)?)
+        };
+        let import_contract = self.querygraph_import.as_mut().ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(
+                "QueryGraph bootstrap manifest is missing querygraph-import compatibility contract"
+                    .to_string(),
+            )
+        })?;
+        import_contract.view_receipt_evidence = evidence;
+        import_contract.view_receipt_evidence_hash = evidence_hash;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -385,11 +436,20 @@ pub fn validate_view_receipt_evidence(
             views.len()
         )));
     }
+    let mut evidence_by_id = HashMap::with_capacity(evidence.len());
+    for record in evidence {
+        if evidence_by_id
+            .insert(record.stable_id.as_str(), record)
+            .is_some()
+        {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QueryGraph bootstrap import contract view receipt evidence must be duplicate-free by stable id: {}",
+                record.stable_id
+            )));
+        }
+    }
     for view in views {
-        let Some(record) = evidence
-            .iter()
-            .find(|record| record.stable_id == view.stable_id)
-        else {
+        let Some(record) = evidence_by_id.get(view.stable_id.as_str()) else {
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
                 "QueryGraph bootstrap import contract is missing view receipt evidence for {}",
                 view.stable_id
@@ -420,12 +480,7 @@ pub fn validate_view_receipt_evidence(
 pub fn view_receipt_evidence_hash(
     evidence: &[QueryGraphViewReceiptEvidence],
 ) -> LakeCatResult<String> {
-    let value = serde_json::to_value(evidence).map_err(|err| {
-        lakecat_core::LakeCatError::Internal(format!(
-            "failed to encode QueryGraph view receipt evidence: {err}"
-        ))
-    })?;
-    content_hash_json(&value)
+    content_hash_json(&CanonicalJsonSlice::new(evidence))
 }
 
 pub fn querygraph_bootstrap_standards() -> Vec<String> {
@@ -480,7 +535,7 @@ impl QueryGraphTableArtifactHashes {
             cdif_hash: content_hash_json(&table.cdif)?,
             osi_hash: content_hash_json(&table.osi)?,
             odrl_hash: content_hash_json(&table.odrl)?,
-            policy_bindings_hash: content_hash_json(&policy_bindings_value(table)?)?,
+            policy_bindings_hash: policy_bindings_hash(table)?,
         })
     }
 
@@ -492,10 +547,14 @@ impl QueryGraphTableArtifactHashes {
         verify_hash(
             "policy bindings",
             &self.policy_bindings_hash,
-            &policy_bindings_value(table)?,
+            &CanonicalJsonSlice::new(&table.policy_bindings),
         )?;
         Ok(())
     }
+}
+
+pub fn policy_bindings_hash(table: &QueryGraphTableProjection) -> LakeCatResult<String> {
+    content_hash_json(&CanonicalJsonSlice::new(&table.policy_bindings))
 }
 
 pub fn policy_bindings_value(table: &QueryGraphTableProjection) -> LakeCatResult<Value> {
@@ -507,12 +566,7 @@ pub fn policy_bindings_value(table: &QueryGraphTableProjection) -> LakeCatResult
 }
 
 pub fn graph_hash(graph: &QueryGraphCatalogGraph) -> LakeCatResult<String> {
-    let value = serde_json::to_value(graph).map_err(|err| {
-        lakecat_core::LakeCatError::Internal(format!(
-            "failed to encode QueryGraph catalog graph: {err}"
-        ))
-    })?;
-    content_hash_json(&value)
+    content_hash_json(&CanonicalQueryGraph::from(graph))
 }
 
 pub fn table_only_querygraph_import_hash(
@@ -522,60 +576,478 @@ pub fn table_only_querygraph_import_hash(
     graph: &QueryGraphCatalogGraph,
     open_lineage: &Value,
 ) -> LakeCatResult<String> {
-    let graph = serde_json::to_value(graph).map_err(|err| {
-        lakecat_core::LakeCatError::Internal(format!(
-            "failed to encode QueryGraph catalog graph for import hash: {err}"
-        ))
-    })?;
-    content_hash_json(&json!({
-        "warehouse": warehouse.as_str(),
-        "manifest": table_only_querygraph_import_manifest(manifest),
-        "tables": tables
-            .iter()
-            .map(table_only_querygraph_import_table)
-            .collect::<Vec<_>>(),
-        "graph": graph,
-        "openLineage": open_lineage,
-    }))
-}
-
-fn table_only_querygraph_import_manifest(manifest: &QueryGraphBundleManifest) -> Value {
-    json!({
-        "schema-version": manifest.schema_version,
-        "producer": manifest.producer,
-        "standards": manifest.standards,
-        "table-artifacts": manifest
-            .table_artifacts
-            .iter()
-            .map(table_only_querygraph_import_table_artifact)
-            .collect::<Vec<_>>(),
-        "open-lineage-hash": manifest.open_lineage_hash,
+    content_hash_json(&TableOnlyQueryGraphImport {
+        graph: CanonicalQueryGraph::from(graph),
+        manifest: TableOnlyQueryGraphImportManifest::from(manifest),
+        open_lineage,
+        tables: TableOnlyQueryGraphImportTables(tables),
+        warehouse: warehouse.as_str(),
     })
 }
 
-fn table_only_querygraph_import_table_artifact(artifact: &QueryGraphTableArtifactHashes) -> Value {
-    json!({
-        "stable-id": artifact.stable_id,
-        "croissant-hash": artifact.croissant_hash,
-        "cdif-hash": artifact.cdif_hash,
-        "osi-hash": artifact.osi_hash,
-        "odrl-hash": artifact.odrl_hash,
-    })
+/// Borrowed JSON projection whose declaration order matches the sorted object
+/// keys emitted by the original `serde_json::Value` hash contract.
+#[derive(Serialize)]
+struct CanonicalQueryGraph<'a> {
+    edges: CanonicalJsonSlice<'a, QueryGraphEdge>,
+    nodes: CanonicalJsonSlice<'a, QueryGraphNode>,
 }
 
-fn table_only_querygraph_import_table(table: &QueryGraphTableProjection) -> Value {
-    json!({
-        "ident": table.ident,
-        "stable-id": table.stable_id,
-        "location": table.location,
-        "metadata-location": table.metadata_location,
-        "version": table.version,
-        "format-version": table.format_version,
-        "croissant": table.croissant,
-        "cdif": table.cdif,
-        "osi": table.osi,
-        "odrl": table.odrl,
-    })
+impl<'a> From<&'a QueryGraphCatalogGraph> for CanonicalQueryGraph<'a> {
+    fn from(graph: &'a QueryGraphCatalogGraph) -> Self {
+        Self {
+            edges: CanonicalJsonSlice::new(&graph.edges),
+            nodes: CanonicalJsonSlice::new(&graph.nodes),
+        }
+    }
+}
+
+trait CanonicalJson {
+    type Projection<'a>: Serialize
+    where
+        Self: 'a;
+
+    fn canonical_json(&self) -> Self::Projection<'_>;
+}
+
+struct CanonicalJsonSlice<'a, T>(&'a [T]);
+
+impl<'a, T> CanonicalJsonSlice<'a, T> {
+    fn new(values: &'a [T]) -> Self {
+        Self(values)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl<T> Serialize for CanonicalJsonSlice<'_, T>
+where
+    T: CanonicalJson,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut sequence = serializer.serialize_seq(Some(self.0.len()))?;
+        for value in self.0 {
+            sequence.serialize_element(&value.canonical_json())?;
+        }
+        sequence.end()
+    }
+}
+
+#[derive(Serialize)]
+struct CanonicalQueryGraphEdge<'a> {
+    from: &'a str,
+    label: &'a str,
+    to: &'a str,
+}
+
+impl CanonicalJson for QueryGraphEdge {
+    type Projection<'a> = CanonicalQueryGraphEdge<'a>;
+
+    fn canonical_json(&self) -> Self::Projection<'_> {
+        CanonicalQueryGraphEdge {
+            from: &self.from,
+            label: &self.label,
+            to: &self.to,
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct CanonicalQueryGraphNode<'a> {
+    id: &'a str,
+    label: &'a str,
+    properties: &'a Value,
+}
+
+impl CanonicalJson for QueryGraphNode {
+    type Projection<'a> = CanonicalQueryGraphNode<'a>;
+
+    fn canonical_json(&self) -> Self::Projection<'_> {
+        CanonicalQueryGraphNode {
+            id: &self.id,
+            label: &self.label,
+            properties: &self.properties,
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct CanonicalQueryGraphBundle<'a> {
+    graph: CanonicalQueryGraph<'a>,
+    manifest: CanonicalQueryGraphBundleManifest<'a>,
+    #[serde(rename = "openLineage")]
+    open_lineage: &'a Value,
+    tables: CanonicalJsonSlice<'a, QueryGraphTableProjection>,
+    views: CanonicalJsonSlice<'a, QueryGraphViewProjection>,
+    warehouse: &'a str,
+}
+
+#[derive(Serialize)]
+struct CanonicalQueryGraphBundleManifest<'a> {
+    #[serde(rename = "graph-hash")]
+    graph_hash: &'a str,
+    #[serde(rename = "open-lineage-hash")]
+    open_lineage_hash: &'a str,
+    producer: &'a str,
+    #[serde(rename = "querygraph-import", skip_serializing_if = "Option::is_none")]
+    querygraph_import: Option<CanonicalQueryGraphImport<'a>>,
+    #[serde(rename = "schema-version")]
+    schema_version: &'a str,
+    standards: &'a [String],
+    #[serde(rename = "table-artifacts")]
+    table_artifacts: CanonicalJsonSlice<'a, QueryGraphTableArtifactHashes>,
+    #[serde(rename = "view-artifacts")]
+    view_artifacts: CanonicalJsonSlice<'a, QueryGraphViewArtifactHashes>,
+}
+
+impl<'a> From<&'a QueryGraphBundleManifest> for CanonicalQueryGraphBundleManifest<'a> {
+    fn from(manifest: &'a QueryGraphBundleManifest) -> Self {
+        Self {
+            graph_hash: &manifest.graph_hash,
+            open_lineage_hash: &manifest.open_lineage_hash,
+            producer: &manifest.producer,
+            querygraph_import: manifest
+                .querygraph_import
+                .as_ref()
+                .map(CanonicalQueryGraphImport::from),
+            schema_version: &manifest.schema_version,
+            standards: &manifest.standards,
+            table_artifacts: CanonicalJsonSlice::new(&manifest.table_artifacts),
+            view_artifacts: CanonicalJsonSlice::new(&manifest.view_artifacts),
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct CanonicalQueryGraphImport<'a> {
+    #[serde(rename = "graph-hash")]
+    graph_hash: &'a str,
+    #[serde(rename = "schema-version")]
+    schema_version: &'a str,
+    #[serde(rename = "table-only-bundle-hash")]
+    table_only_bundle_hash: &'a str,
+    #[serde(rename = "view-count")]
+    view_count: usize,
+    #[serde(
+        rename = "view-receipt-evidence",
+        skip_serializing_if = "CanonicalJsonSlice::is_empty"
+    )]
+    view_receipt_evidence: CanonicalJsonSlice<'a, QueryGraphViewReceiptEvidence>,
+    #[serde(
+        rename = "view-receipt-evidence-hash",
+        skip_serializing_if = "Option::is_none"
+    )]
+    view_receipt_evidence_hash: Option<&'a str>,
+}
+
+impl<'a> From<&'a QueryGraphImportCompatibility> for CanonicalQueryGraphImport<'a> {
+    fn from(import: &'a QueryGraphImportCompatibility) -> Self {
+        Self {
+            graph_hash: &import.graph_hash,
+            schema_version: &import.schema_version,
+            table_only_bundle_hash: &import.table_only_bundle_hash,
+            view_count: import.view_count,
+            view_receipt_evidence: CanonicalJsonSlice::new(&import.view_receipt_evidence),
+            view_receipt_evidence_hash: import.view_receipt_evidence_hash.as_deref(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "kebab-case")]
+struct CanonicalQueryGraphViewReceiptEvidence<'a> {
+    receipt_chain_hash: &'a str,
+    receipt_hash: &'a str,
+    stable_id: &'a str,
+    view_version: u64,
+}
+
+impl CanonicalJson for QueryGraphViewReceiptEvidence {
+    type Projection<'a> = CanonicalQueryGraphViewReceiptEvidence<'a>;
+
+    fn canonical_json(&self) -> Self::Projection<'_> {
+        CanonicalQueryGraphViewReceiptEvidence {
+            receipt_chain_hash: &self.receipt_chain_hash,
+            receipt_hash: &self.receipt_hash,
+            stable_id: &self.stable_id,
+            view_version: self.view_version,
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "kebab-case")]
+struct CanonicalQueryGraphTableArtifact<'a> {
+    cdif_hash: &'a str,
+    croissant_hash: &'a str,
+    odrl_hash: &'a str,
+    osi_hash: &'a str,
+    policy_bindings_hash: &'a str,
+    stable_id: &'a str,
+}
+
+impl CanonicalJson for QueryGraphTableArtifactHashes {
+    type Projection<'a> = CanonicalQueryGraphTableArtifact<'a>;
+
+    fn canonical_json(&self) -> Self::Projection<'_> {
+        CanonicalQueryGraphTableArtifact {
+            cdif_hash: &self.cdif_hash,
+            croissant_hash: &self.croissant_hash,
+            odrl_hash: &self.odrl_hash,
+            osi_hash: &self.osi_hash,
+            policy_bindings_hash: &self.policy_bindings_hash,
+            stable_id: &self.stable_id,
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "kebab-case")]
+struct CanonicalQueryGraphViewArtifact<'a> {
+    osi_hash: &'a str,
+    stable_id: &'a str,
+}
+
+impl CanonicalJson for QueryGraphViewArtifactHashes {
+    type Projection<'a> = CanonicalQueryGraphViewArtifact<'a>;
+
+    fn canonical_json(&self) -> Self::Projection<'_> {
+        CanonicalQueryGraphViewArtifact {
+            osi_hash: &self.osi_hash,
+            stable_id: &self.stable_id,
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "kebab-case")]
+struct CanonicalQueryGraphTable<'a> {
+    cdif: &'a Value,
+    croissant: &'a Value,
+    format_version: Option<i64>,
+    ident: CanonicalTableIdent<'a>,
+    location: &'a str,
+    metadata_location: Option<&'a str>,
+    odrl: &'a Value,
+    osi: &'a Value,
+    policy_bindings: CanonicalJsonSlice<'a, QueryGraphPolicyBindingProjection>,
+    stable_id: &'a str,
+    version: u64,
+}
+
+impl CanonicalJson for QueryGraphTableProjection {
+    type Projection<'a> = CanonicalQueryGraphTable<'a>;
+
+    fn canonical_json(&self) -> Self::Projection<'_> {
+        CanonicalQueryGraphTable {
+            cdif: &self.cdif,
+            croissant: &self.croissant,
+            format_version: self.format_version,
+            ident: CanonicalTableIdent::from(&self.ident),
+            location: &self.location,
+            metadata_location: self.metadata_location.as_deref(),
+            odrl: &self.odrl,
+            osi: &self.osi,
+            policy_bindings: CanonicalJsonSlice::new(&self.policy_bindings),
+            stable_id: &self.stable_id,
+            version: self.version,
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "kebab-case")]
+struct CanonicalQueryGraphPolicyBinding<'a> {
+    enforced: bool,
+    namespace: Option<&'a [String]>,
+    odrl: &'a Value,
+    policy_id: &'a str,
+    table: Option<&'a str>,
+}
+
+impl CanonicalJson for QueryGraphPolicyBindingProjection {
+    type Projection<'a> = CanonicalQueryGraphPolicyBinding<'a>;
+
+    fn canonical_json(&self) -> Self::Projection<'_> {
+        CanonicalQueryGraphPolicyBinding {
+            enforced: self.enforced,
+            namespace: self.namespace.as_deref(),
+            odrl: &self.odrl,
+            policy_id: &self.policy_id,
+            table: self.table.as_deref(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "kebab-case")]
+struct CanonicalQueryGraphView<'a> {
+    columns: &'a Value,
+    dialect: &'a str,
+    name: &'a str,
+    namespace: &'a [String],
+    osi: &'a Value,
+    properties: &'a Value,
+    schema_version: Option<u64>,
+    sql: &'a str,
+    stable_id: &'a str,
+    view_version: u64,
+    warehouse: &'a str,
+}
+
+impl CanonicalJson for QueryGraphViewProjection {
+    type Projection<'a> = CanonicalQueryGraphView<'a>;
+
+    fn canonical_json(&self) -> Self::Projection<'_> {
+        CanonicalQueryGraphView {
+            columns: &self.columns,
+            dialect: &self.dialect,
+            name: &self.name,
+            namespace: &self.namespace,
+            osi: &self.osi,
+            properties: &self.properties,
+            schema_version: self.schema_version,
+            sql: &self.sql,
+            stable_id: &self.stable_id,
+            view_version: self.view_version,
+            warehouse: &self.warehouse,
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TableOnlyQueryGraphImport<'a> {
+    graph: CanonicalQueryGraph<'a>,
+    manifest: TableOnlyQueryGraphImportManifest<'a>,
+    #[serde(rename = "openLineage")]
+    open_lineage: &'a Value,
+    tables: TableOnlyQueryGraphImportTables<'a>,
+    warehouse: &'a str,
+}
+
+#[derive(Serialize)]
+struct TableOnlyQueryGraphImportManifest<'a> {
+    #[serde(rename = "open-lineage-hash")]
+    open_lineage_hash: &'a str,
+    producer: &'a str,
+    #[serde(rename = "schema-version")]
+    schema_version: &'a str,
+    standards: &'a [String],
+    #[serde(rename = "table-artifacts")]
+    table_artifacts: TableOnlyQueryGraphImportTableArtifacts<'a>,
+}
+
+impl<'a> From<&'a QueryGraphBundleManifest> for TableOnlyQueryGraphImportManifest<'a> {
+    fn from(manifest: &'a QueryGraphBundleManifest) -> Self {
+        Self {
+            open_lineage_hash: &manifest.open_lineage_hash,
+            producer: &manifest.producer,
+            schema_version: &manifest.schema_version,
+            standards: &manifest.standards,
+            table_artifacts: TableOnlyQueryGraphImportTableArtifacts(&manifest.table_artifacts),
+        }
+    }
+}
+
+struct TableOnlyQueryGraphImportTableArtifacts<'a>(&'a [QueryGraphTableArtifactHashes]);
+
+impl Serialize for TableOnlyQueryGraphImportTableArtifacts<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut sequence = serializer.serialize_seq(Some(self.0.len()))?;
+        for artifact in self.0 {
+            sequence.serialize_element(&TableOnlyQueryGraphImportTableArtifact {
+                cdif_hash: &artifact.cdif_hash,
+                croissant_hash: &artifact.croissant_hash,
+                odrl_hash: &artifact.odrl_hash,
+                osi_hash: &artifact.osi_hash,
+                stable_id: &artifact.stable_id,
+            })?;
+        }
+        sequence.end()
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "kebab-case")]
+struct TableOnlyQueryGraphImportTableArtifact<'a> {
+    cdif_hash: &'a str,
+    croissant_hash: &'a str,
+    odrl_hash: &'a str,
+    osi_hash: &'a str,
+    stable_id: &'a str,
+}
+
+struct TableOnlyQueryGraphImportTables<'a>(&'a [QueryGraphTableProjection]);
+
+impl Serialize for TableOnlyQueryGraphImportTables<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut sequence = serializer.serialize_seq(Some(self.0.len()))?;
+        for table in self.0 {
+            sequence.serialize_element(&TableOnlyQueryGraphImportTable::from(table))?;
+        }
+        sequence.end()
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "kebab-case")]
+struct TableOnlyQueryGraphImportTable<'a> {
+    cdif: &'a Value,
+    croissant: &'a Value,
+    format_version: Option<i64>,
+    ident: CanonicalTableIdent<'a>,
+    location: &'a str,
+    metadata_location: Option<&'a str>,
+    odrl: &'a Value,
+    osi: &'a Value,
+    stable_id: &'a str,
+    version: u64,
+}
+
+impl<'a> From<&'a QueryGraphTableProjection> for TableOnlyQueryGraphImportTable<'a> {
+    fn from(table: &'a QueryGraphTableProjection) -> Self {
+        Self {
+            cdif: &table.cdif,
+            croissant: &table.croissant,
+            format_version: table.format_version,
+            ident: CanonicalTableIdent::from(&table.ident),
+            location: &table.location,
+            metadata_location: table.metadata_location.as_deref(),
+            odrl: &table.odrl,
+            osi: &table.osi,
+            stable_id: &table.stable_id,
+            version: table.version,
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct CanonicalTableIdent<'a> {
+    name: &'a TableName,
+    namespace: &'a lakecat_core::Namespace,
+    warehouse: &'a WarehouseName,
+}
+
+impl<'a> From<&'a TableIdent> for CanonicalTableIdent<'a> {
+    fn from(ident: &'a TableIdent) -> Self {
+        Self {
+            name: &ident.name,
+            namespace: &ident.namespace,
+            warehouse: &ident.warehouse,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -690,7 +1162,10 @@ pub fn insert_node(nodes: &mut BTreeMap<String, QueryGraphNode>, node: QueryGrap
     nodes.entry(node.id.clone()).or_insert(node);
 }
 
-pub fn verify_hash(label: &str, expected: &str, value: &Value) -> LakeCatResult<()> {
+pub fn verify_hash<T>(label: &str, expected: &str, value: &T) -> LakeCatResult<()>
+where
+    T: Serialize + ?Sized,
+{
     let computed = content_hash_json(value)?;
     if expected != computed {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
@@ -704,7 +1179,7 @@ fn validate_duplicate_free_stable_ids<'a>(
     label: &str,
     values: impl IntoIterator<Item = &'a str>,
 ) -> LakeCatResult<()> {
-    let mut seen = BTreeSet::new();
+    let mut seen = HashSet::new();
     for value in values {
         if !seen.insert(value) {
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
@@ -713,4 +1188,20 @@ fn validate_duplicate_free_stable_ids<'a>(
         }
     }
     Ok(())
+}
+
+fn index_duplicate_free_stable_ids<'a, T>(
+    label: &str,
+    values: impl IntoIterator<Item = (&'a str, &'a T)>,
+) -> LakeCatResult<HashMap<&'a str, &'a T>> {
+    let values = values.into_iter();
+    let mut index = HashMap::with_capacity(values.size_hint().0);
+    for (stable_id, value) in values {
+        if index.insert(stable_id, value).is_some() {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label} must be duplicate-free by stable id: {stable_id}"
+            )));
+        }
+    }
+    Ok(index)
 }

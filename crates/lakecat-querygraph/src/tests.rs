@@ -2,13 +2,63 @@ use super::*;
 use lakecat_store::ViewColumnRecord;
 use std::collections::BTreeMap;
 
-use lakecat_core::{Namespace, Principal, TableIdent, TableName};
+use lakecat_core::{Namespace, Principal, TableIdent, TableName, content_hash_json};
 
 fn is_full_sha256_hash(value: &str) -> bool {
     let Some(digest) = value.strip_prefix("sha256:") else {
         return false;
     };
     digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn legacy_table_only_querygraph_import_hash(bundle: &QueryGraphBootstrap) -> String {
+    content_hash_json(&json!({
+        "warehouse": bundle.warehouse.as_str(),
+        "manifest": {
+            "schema-version": bundle.manifest.schema_version,
+            "producer": bundle.manifest.producer,
+            "standards": bundle.manifest.standards,
+            "table-artifacts": bundle.manifest.table_artifacts.iter().map(|artifact| json!({
+                "stable-id": artifact.stable_id,
+                "croissant-hash": artifact.croissant_hash,
+                "cdif-hash": artifact.cdif_hash,
+                "osi-hash": artifact.osi_hash,
+                "odrl-hash": artifact.odrl_hash,
+            })).collect::<Vec<_>>(),
+            "open-lineage-hash": bundle.manifest.open_lineage_hash,
+        },
+        "tables": bundle.tables.iter().map(|table| json!({
+            "ident": table.ident,
+            "stable-id": table.stable_id,
+            "location": table.location,
+            "metadata-location": table.metadata_location,
+            "version": table.version,
+            "format-version": table.format_version,
+            "croissant": table.croissant,
+            "cdif": table.cdif,
+            "osi": table.osi,
+            "odrl": table.odrl,
+        })).collect::<Vec<_>>(),
+        "graph": bundle.graph,
+        "openLineage": bundle.open_lineage,
+    }))
+    .unwrap()
+}
+
+fn legacy_querygraph_bundle_hash(bundle: &QueryGraphBootstrap) -> String {
+    content_hash_json(&json!({
+        "warehouse": bundle.warehouse.as_str(),
+        "manifest": bundle.manifest,
+        "tables": bundle.tables,
+        "views": bundle.views,
+        "graph": bundle.graph,
+        "openLineage": bundle.open_lineage,
+    }))
+    .unwrap()
+}
+
+fn legacy_view_receipt_evidence_hash(evidence: &[QueryGraphViewReceiptEvidence]) -> String {
+    content_hash_json(&serde_json::to_value(evidence).unwrap()).unwrap()
 }
 
 fn querygraph_test_table(name: &str) -> TableRecord {
@@ -117,6 +167,10 @@ fn projects_iceberg_table_into_querygraph_bundle() {
         bundle.manifest.graph_hash,
         graph_hash(&bundle.graph).unwrap()
     );
+    assert_eq!(
+        bundle.manifest.graph_hash,
+        content_hash_json(&serde_json::to_value(&bundle.graph).unwrap()).unwrap()
+    );
     let import_contract = bundle
         .manifest
         .querygraph_import
@@ -139,6 +193,11 @@ fn projects_iceberg_table_into_querygraph_bundle() {
         )
         .unwrap()
     );
+    assert_eq!(
+        import_contract.table_only_bundle_hash,
+        legacy_table_only_querygraph_import_hash(&bundle)
+    );
+    assert_eq!(bundle.bundle_hash, legacy_querygraph_bundle_hash(&bundle));
     assert!(bundle.manifest.standards.iter().any(|item| item == "CDIF"));
     assert!(
         bundle
@@ -233,6 +292,7 @@ fn projects_iceberg_table_into_querygraph_bundle() {
     assert!(bundle.tables[0].osi.get("semantic_model").is_none());
     assert_eq!(bundle.open_lineage["eventType"], "COMPLETE");
     let verification = bundle.verify_manifest().unwrap();
+    assert_eq!(bundle.construction_summary().unwrap(), verification);
     assert_eq!(verification.table_count, 1);
     assert_eq!(verification.bundle_hash, bundle.bundle_hash);
     assert_eq!(verification.graph_hash, bundle.manifest.graph_hash);
@@ -286,6 +346,11 @@ fn projects_policy_bindings_into_querygraph_bundle() {
         bootstrap_from_tables_with_policy_bindings(warehouse, vec![(table, vec![policy])]).unwrap();
 
     assert_eq!(bundle.tables[0].policy_bindings.len(), 1);
+    assert_eq!(bundle.bundle_hash, legacy_querygraph_bundle_hash(&bundle));
+    assert_eq!(
+        bundle.manifest.table_artifacts[0].policy_bindings_hash,
+        content_hash_json(&policy_bindings_value(&bundle.tables[0]).unwrap()).unwrap()
+    );
     assert_eq!(bundle.tables[0].policy_bindings[0].policy_id, "agent-read");
     assert_eq!(
         bundle.tables[0].policy_bindings[0].odrl["lakecat:read-restriction"]["allowed-columns"],
@@ -330,19 +395,23 @@ fn projects_catalog_views_into_querygraph_bundle() {
     ])
     .unwrap();
 
-    let bundle =
-        bootstrap_from_tables_views_with_policy_bindings(warehouse, Vec::new(), vec![view])
-            .unwrap()
-            .with_view_receipt_evidence(vec![QueryGraphViewReceiptEvidence {
-                stable_id: "lakecat:view:local:default:active_customers".to_string(),
-                view_version: 1,
-                receipt_hash: "sha256:view-version-receipt".to_string(),
-                receipt_chain_hash: "sha256:view-receipt-chain".to_string(),
-            }])
-            .unwrap();
+    let bundle = bootstrap_from_catalog_snapshot(
+        warehouse,
+        Vec::new(),
+        vec![view],
+        QueryGraphTenantProjection::default(),
+        vec![QueryGraphViewReceiptEvidence {
+            stable_id: "lakecat:view:local:default:active_customers".to_string(),
+            view_version: 1,
+            receipt_hash: "sha256:view-version-receipt".to_string(),
+            receipt_chain_hash: "sha256:view-receipt-chain".to_string(),
+        }],
+    )
+    .unwrap();
 
     assert_eq!(bundle.tables.len(), 0);
     assert_eq!(bundle.views.len(), 1);
+    assert_eq!(bundle.bundle_hash, legacy_querygraph_bundle_hash(&bundle));
     assert_eq!(bundle.views[0].name, "active_customers");
     assert_eq!(bundle.views[0].view_version, 1);
     assert_eq!(bundle.views[0].columns[0]["name"], json!("id"));
@@ -422,6 +491,17 @@ fn projects_catalog_views_into_querygraph_bundle() {
             .view_receipt_evidence,
     )
     .unwrap();
+    assert_eq!(
+        expected_evidence_hash,
+        legacy_view_receipt_evidence_hash(
+            &bundle
+                .manifest
+                .querygraph_import
+                .as_ref()
+                .unwrap()
+                .view_receipt_evidence
+        )
+    );
     assert_eq!(
         bundle
             .manifest
@@ -631,6 +711,33 @@ fn verification_rejects_missing_view_receipt_evidence() {
     assert!(
         err.to_string()
             .contains("view receipt evidence record(s) for 1 view artifact")
+    );
+}
+
+#[test]
+fn verification_rejects_duplicate_view_receipt_evidence() {
+    let bundle = bootstrap_from_tables_views_with_policy_bindings(
+        WarehouseName::new("local").unwrap(),
+        Vec::new(),
+        vec![
+            querygraph_test_view("active_events"),
+            querygraph_test_view("recent_events"),
+        ],
+    )
+    .unwrap();
+    let duplicate = QueryGraphViewReceiptEvidence {
+        stable_id: bundle.views[0].stable_id.clone(),
+        view_version: bundle.views[0].view_version,
+        receipt_hash: "receipt-hash".to_string(),
+        receipt_chain_hash: "receipt-chain-hash".to_string(),
+    };
+
+    let err = bundle
+        .with_view_receipt_evidence(vec![duplicate.clone(), duplicate])
+        .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("view receipt evidence must be duplicate-free")
     );
 }
 

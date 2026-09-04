@@ -41,4 +41,21 @@ url = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+criterion = { workspace = true }
 sail-catalog-iceberg = { workspace = true }
+sail-iceberg = { workspace = true }
+tempfile = { workspace = true }
+trybuild = { workspace = true }
+
+[[bench]]
+name = "commit_path"
+harness = false
+required-features = ["sail-local", "turso-local"]
+
+[[bench]]
+name = "scan_path"
+harness = false
+
+[[bench]]
+name = "querygraph_path"
+harness = false

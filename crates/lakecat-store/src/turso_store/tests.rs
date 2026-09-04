@@ -9,6 +9,7 @@ use crate::{
 };
 
 use super::*;
+use crate::TableCommitSnapshot;
 
 fn test_model_publication(version: u64) -> ModelPublication {
     ModelPublication {
@@ -533,6 +534,82 @@ async fn turso_write_transaction_retries_typed_transient_body_failures() {
     assert_eq!(store.write_pool.lock().unwrap().len(), 1);
 }
 
+async fn assert_warehouse_scoped_view_reads<S: CatalogStore>(store: &S) {
+    let local = WarehouseName::new("local").unwrap();
+    let other = WarehouseName::new("other").unwrap();
+    let alpha = "alpha".parse::<Namespace>().unwrap();
+    let beta = "beta".parse::<Namespace>().unwrap();
+    for (warehouse, namespace) in [
+        (&local, alpha.clone()),
+        (&local, beta.clone()),
+        (&other, alpha.clone()),
+    ] {
+        store.create_namespace(warehouse, namespace).await.unwrap();
+    }
+
+    let alpha_view = ViewRecord::new(
+        local.clone(),
+        alpha,
+        TableName::new("zeta_view").unwrap(),
+        "select 1",
+        "sql",
+        Some(1),
+        BTreeMap::new(),
+        Principal::anonymous(),
+    )
+    .unwrap();
+    let beta_view = ViewRecord::new(
+        local.clone(),
+        beta,
+        TableName::new("alpha_view").unwrap(),
+        "select 2",
+        "sql",
+        Some(1),
+        BTreeMap::new(),
+        Principal::anonymous(),
+    )
+    .unwrap();
+    let other_view = ViewRecord::new(
+        other.clone(),
+        "alpha".parse::<Namespace>().unwrap(),
+        TableName::new("other_view").unwrap(),
+        "select 3",
+        "sql",
+        Some(1),
+        BTreeMap::new(),
+        Principal::anonymous(),
+    )
+    .unwrap();
+    for view in [beta_view.clone(), other_view.clone(), alpha_view.clone()] {
+        store.upsert_view(view).await.unwrap();
+    }
+
+    assert_eq!(
+        store.list_warehouse_views(&local).await.unwrap(),
+        vec![alpha_view.clone(), beta_view.clone()]
+    );
+    assert_eq!(
+        store.list_warehouse_views(&other).await.unwrap(),
+        vec![other_view]
+    );
+    let receipts = store
+        .list_warehouse_view_version_receipts(&local)
+        .await
+        .unwrap();
+    assert_eq!(receipts.len(), 2);
+    assert_eq!(receipts[0].stable_id, "lakecat:view:local:alpha:zeta_view");
+    assert_eq!(receipts[1].stable_id, "lakecat:view:local:beta:alpha_view");
+}
+
+#[tokio::test]
+async fn warehouse_scoped_view_reads_span_namespaces_and_isolate_warehouses() {
+    let memory = MemoryCatalogStore::new();
+    assert_warehouse_scoped_view_reads(memory.as_ref()).await;
+
+    let turso = TursoCatalogStore::in_memory().await.unwrap();
+    assert_warehouse_scoped_view_reads(turso.as_ref()).await;
+}
+
 #[tokio::test]
 async fn turso_store_persists_server_records() {
     let store = TursoCatalogStore::in_memory().await.unwrap();
@@ -558,6 +635,12 @@ async fn turso_store_persists_server_records() {
     .unwrap();
     store.upsert_server(updated.clone()).await.unwrap();
 
+    assert_eq!(store.load_server("lakecat-local").await.unwrap(), updated);
+    assert!(matches!(
+        store.load_server("missing-server").await,
+        Err(LakeCatError::NotFound { object, name })
+            if object == "server" && name == "missing-server"
+    ));
     assert_eq!(store.list_servers().await.unwrap(), vec![updated]);
 }
 
@@ -1047,6 +1130,12 @@ async fn turso_store_persists_project_records() {
     .unwrap();
     store.upsert_project(updated.clone()).await.unwrap();
 
+    assert_eq!(store.load_project("default").await.unwrap(), updated);
+    assert!(matches!(
+        store.load_project("missing-project").await,
+        Err(LakeCatError::NotFound { object, name })
+            if object == "project" && name == "missing-project"
+    ));
     assert_eq!(store.list_projects().await.unwrap(), vec![updated]);
 
     let missing_server = ProjectRecord::new(
@@ -1718,6 +1807,16 @@ async fn turso_store_rejects_corrupt_view_receipts_on_read() {
 
     let err = store
         .list_namespace_view_version_receipts(&warehouse, &namespace)
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        LakeCatError::Internal(message)
+            if message.contains("view receipt hash must be a SHA-256 digest")
+    ));
+
+    let err = store
+        .list_warehouse_view_version_receipts(&warehouse)
         .await
         .unwrap_err();
     assert!(matches!(
@@ -5186,6 +5285,128 @@ async fn turso_store_rejects_blank_pending_outbox_sinks() {
 }
 
 #[tokio::test]
+async fn turso_snapshot_commit_cas_rejects_a_stale_same_pointer_version() {
+    let store = TursoCatalogStore::in_memory().await.unwrap();
+    let warehouse = WarehouseName::new("local").unwrap();
+    let namespace = "default".parse::<Namespace>().unwrap();
+    store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
+    let ident = TableIdent::new(warehouse, namespace, TableName::new("events").unwrap());
+    let metadata_location = "file:///tmp/events/metadata/00000.json";
+    store
+        .create_table(TableRecord::new(
+            ident.clone(),
+            "file:///tmp/events".to_string(),
+            Some(metadata_location.to_string()),
+            serde_json::json!({"format-version": 3, "counter": 0}),
+            Principal::anonymous(),
+        ))
+        .await
+        .unwrap();
+
+    let current = store.load_table(&ident).await.unwrap();
+    let snapshot_a = TableCommitSnapshot::try_from_table(&current).unwrap();
+    let snapshot_b = TableCommitSnapshot::try_from_table(&current).unwrap();
+    let commit = |counter| TableCommit {
+        requirements: vec![],
+        updates: vec![serde_json::json!({"action": "set-properties"})],
+        expected_previous_metadata_location: Some(metadata_location.to_string()),
+        // Keeping the pointer unchanged proves that the version predicate, not
+        // just the metadata-location predicate, rejects the stale snapshot.
+        new_metadata_location: Some(metadata_location.to_string()),
+        new_metadata: Some(serde_json::json!({
+            "format-version": 3,
+            "counter": counter,
+        })),
+        idempotency_key: None,
+        idempotency_request_hash: None,
+        principal: Principal::anonymous(),
+        authorization_receipt: None,
+    };
+
+    let committed = store
+        .commit_table_with_snapshot(snapshot_a, commit(1))
+        .await
+        .unwrap();
+    assert_eq!(committed.version, 1);
+    assert_eq!(committed.metadata["counter"], serde_json::json!(1));
+
+    let err = store
+        .commit_table_with_snapshot(snapshot_b, commit(2))
+        .await
+        .unwrap_err();
+    let LakeCatError::Conflict(message) = err else {
+        panic!("expected stale snapshot conflict");
+    };
+    assert!(message.contains("table version changed"));
+    assert!(message.contains("expected-version=0"));
+    assert!(message.contains("actual-version=1"));
+    let current = store.load_table(&ident).await.unwrap();
+    assert_eq!(current.version, 1);
+    assert_eq!(current.metadata["counter"], serde_json::json!(1));
+    assert_eq!(store.count_rows("metadata_pointer_log").await.unwrap(), 1);
+    assert_eq!(store.count_rows("audit_events").await.unwrap(), 1);
+    assert_eq!(store.count_rows("outbox_events").await.unwrap(), 1);
+}
+
+#[tokio::test]
+async fn turso_snapshot_commit_rejects_a_table_deleted_after_the_snapshot() {
+    let store = TursoCatalogStore::in_memory().await.unwrap();
+    let warehouse = WarehouseName::new("local").unwrap();
+    let namespace = "default".parse::<Namespace>().unwrap();
+    store
+        .create_namespace(&warehouse, namespace.clone())
+        .await
+        .unwrap();
+    let ident = TableIdent::new(warehouse, namespace, TableName::new("events").unwrap());
+    let metadata_location = "file:///tmp/events/metadata/00000.json";
+    store
+        .create_table(TableRecord::new(
+            ident.clone(),
+            "file:///tmp/events".to_string(),
+            Some(metadata_location.to_string()),
+            serde_json::json!({"format-version": 3}),
+            Principal::anonymous(),
+        ))
+        .await
+        .unwrap();
+    let snapshot =
+        TableCommitSnapshot::try_from_table(&store.load_table(&ident).await.unwrap()).unwrap();
+    store
+        .soft_delete_table(&ident, Principal::anonymous(), None)
+        .await
+        .unwrap();
+
+    let err = store
+        .commit_table_with_snapshot(
+            snapshot,
+            TableCommit {
+                requirements: vec![],
+                updates: vec![],
+                expected_previous_metadata_location: Some(metadata_location.to_string()),
+                new_metadata_location: Some("file:///tmp/events/metadata/00001.json".to_string()),
+                new_metadata: Some(serde_json::json!({"format-version": 3})),
+                idempotency_key: None,
+                idempotency_request_hash: None,
+                principal: Principal::anonymous(),
+                authorization_receipt: None,
+            },
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        LakeCatError::NotFound {
+            object: "table",
+            ..
+        }
+    ));
+    assert_eq!(store.count_rows("metadata_pointer_log").await.unwrap(), 0);
+}
+
+#[tokio::test]
 async fn turso_store_allows_only_one_concurrent_metadata_pointer_commit() {
     let store = TursoCatalogStore::in_memory().await.unwrap();
     let warehouse = WarehouseName::new("local").unwrap();
@@ -6722,6 +6943,16 @@ async fn turso_store_persists_policy_bindings_and_matches_table_scope() {
         active[0].odrl["uid"],
         serde_json::json!("policy:agent-read")
     );
+    let other_table = TableIdent::new(
+        warehouse,
+        "default".parse::<Namespace>().unwrap(),
+        TableName::new("other").unwrap(),
+    );
+    let batch = store
+        .policy_bindings_for_tables(&[table, other_table])
+        .await
+        .unwrap();
+    assert_eq!(batch, vec![active, Vec::new()]);
 }
 
 #[tokio::test]

@@ -21,4 +21,10 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
+criterion = { workspace = true }
 tokio = { workspace = true }
+
+[[bench]]
+name = "graph_events"
+harness = false
+required-features = ["grust-local"]

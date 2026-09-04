@@ -384,6 +384,231 @@
   reproduction discrepancies, and distinguishes historical results from the
   next current-version profile. Rebuilt and verified all tracked book formats
   at the current source revision as the public-architecture documentation gate.
+- Refresh the benchmark chapter from the final six-round, production-build
+  catalog sweep. LakeCat is the error-free leader at 153.0 concurrent and
+  335.5 sequential commits/s; Nessie's faster 190.0/s raw concurrent row is
+  retained as DQ because every measured round returned HTTP 500s. The chapter
+  now records strict validity, MinIO object auditing, the complete optimization
+  sequence, and the exact boundary of what the warm benchmark establishes.
+
+- Advance the locked Sail `lakecat` integration to revision `dbff52b0`,
+  consuming the cache-consistency hardening and the optimized Iceberg object
+  cache, metadata and manifest parsing, delete matching, SQL frontend, catalog
+  status, and metadata-discovery paths documented for upstream Sail PR #2400.
+
+- QueryGraph policy-binding and view-receipt evidence hashes now stream their
+  existing canonical projections without allocating intermediate JSON trees.
+  Policy hashing improves from about 1.702/99.03/403.11 microseconds at
+  1/64/256 bindings to 0.816/32.38/129.19 microseconds (52-68%); 256-record
+  receipt hashing falls from 239.43 to 94.96 microseconds (60.3%), reducing
+  receipt attach/verify by 8.2%/4.5%. The 1/64/256 table-and-view HTTP path
+  improves from about 0.226/9.96/40.17 to 0.211/9.18/37.31 milliseconds
+  (6.6-7.8%). Legacy-value equivalence tests cover both evidence contracts.
+
+- LakeCat now enables RustCrypto's runtime-dispatched assembly SHA-2 backend,
+  accelerating every content and evidence hash while preserving the portable
+  software fallback. On the benchmark runner's ARM SHA2-capable CPU,
+  representative small/100-field JSON hashes fall from about 2.996/61.66 to
+  1.706/33.69 microseconds (43-45%). QueryGraph construction at 256 tables
+  falls from 62.62 to 39.70 milliseconds (36.6%), verification from 46.68 to
+  23.61 milliseconds (49.4%), and the 1/64/256 table-and-view service path
+  from about 0.319/14.56/57.79 to 0.226/9.96/40.24 milliseconds (29-32%).
+
+- QueryGraph full-bundle hashes now share one canonical hashing path between
+  construction and verification and stream borrowed projections rather than
+  cloning the full bundle into an intermediate JSON tree. Equivalence tests
+  cover tables, policy bindings, views, artifacts, and receipt evidence. At
+  256 tables, full-bundle hashing falls from about 27.72 to 15.87 milliseconds
+  (42.8%) and construction from 72.02 to 62.64 milliseconds (13.0%). The
+  1/64/256 table-and-view service path improves from about 0.398/17.77/70.20
+  milliseconds to 0.319/14.56/57.79 milliseconds (17.7-19.9%).
+
+- QueryGraph graph and table-only import hashes now stream borrowed canonical
+  projections directly into SHA-256 instead of deep-materializing sorted JSON
+  trees and serializing them a second time. Legacy-value equivalence tests lock
+  the exact hash bytes. At 256 tables, graph hashing falls from about 1.315 to
+  0.774 milliseconds (41.4%), import hashing from 46.22 to 15.85 milliseconds
+  (65.6%), and full construction from 98.11 to 72.02 milliseconds (26.6%). The
+  already-optimized 1/64/256 service path improves again from about
+  0.484/21.46/86.9 milliseconds to 0.398/17.77/70.2 milliseconds.
+
+- QueryGraph production bootstrap now derives its audit summary from hashes
+  already computed by the trusted in-process constructor instead of immediately
+  re-verifying the freshly built bundle. Debug and test builds still run the
+  independent verifier and assert summary equivalence, and external bundles
+  still require full verification. The 256-item construction summary takes
+  about 9.37 microseconds versus 89.18 milliseconds for independent
+  verification; the end-to-end 1/64/256 service path falls from about
+  0.790/37.17/151.7–154.5 milliseconds to 0.484/21.46/86.9 milliseconds.
+
+- Added warehouse-scoped view and version-receipt store reads with compatible
+  namespace-based defaults and validated single-query Memory and Turso paths.
+  QueryGraph bootstrap now avoids up to 32 namespace fan-out reads. Across
+  1/64/256 views in up to 16 namespaces, Turso view loading falls from about
+  89.0/1,250.5/2,982.9 microseconds to 32.3/469.6/2,112.8 microseconds, while
+  receipt loading falls from 89.5/1,633.9/4,136.6 microseconds to
+  34.7/423.8/1,321.4 microseconds.
+
+- Added indexed project and server point reads to the catalog store contract,
+  with validated Memory and Turso implementations, and switched QueryGraph
+  tenant projection from catalog-wide list scans to scoped lookups. A new
+  1/64/256-tenant Turso benchmark shows the two-record read falling from about
+  70.8/417.8/1,545.9 microseconds to 52.3/54.4/54.7 microseconds, improving the
+  256-tenant case by 96.5% while retaining optional missing-link semantics.
+
+- QueryGraph catalog snapshots now attach validated view-receipt evidence
+  before computing the initial bundle hash, avoiding an immediately discarded
+  full-bundle digest while retaining the independent manifest verification.
+  Alternating same-container runs reduce the 256-table-plus-view service path
+  from about 173.8 to 150.1 milliseconds (13.7%).
+
+- Added Turso scale benchmarks for QueryGraph policy and view-receipt reads.
+  QueryGraph bootstrap now loads policies once per warehouse and receipt chains
+  once per namespace through compatible bulk store boundaries, while Memory
+  and Turso share validation and preserve per-table ordering. At 256 items,
+  policy loading falls from about 365.5 to 2.30 milliseconds (99.4%) and view
+  receipts from 13.47 to 1.26 milliseconds (90.6%).
+
+- Added a bounded end-to-end QueryGraph bootstrap benchmark spanning graph-read
+  authorization, tables and policy bindings, views and version receipts,
+  tenant projection, bundle and manifest construction, audit shaping, and Axum
+  response serialization at 1, 64, and 256 tables plus views. Same-container
+  baselines are about 0.934, 42.9, and 174.0 milliseconds respectively.
+
+- Added capability-access benchmarks for policy read restrictions and cached
+  the validated typed restriction when scan and credential authority is
+  established. Downstream planners now borrow capabilities, and audit shaping
+  consumes the cached restriction instead of cloning and decoding its JSON
+  representation. At 256 columns, repeated restriction access falls from about
+  9.25 microseconds to a borrow and construction improves by about 1.3%; six
+  isolated alternating end-to-end measurements improve the mean governed scan
+  path from 1.111 to 1.101 milliseconds (about 0.9%).
+
+- Added a bounded end-to-end service scan benchmark spanning Axum routing and
+  JSON decoding, TypeDID and policy authorization, catalog lookup, Sail
+  delegation, governed proof issuance, audit evidence, and response shaping at
+  1, 100, and 256 fields. Its no-accumulation benchmark store isolates service
+  work while preserving the complete request path; same-container 256-field
+  baselines are about 754 microseconds unrestricted and 1.086 milliseconds
+  governed.
+
+- Added scale benchmarks for Iceberg REST scan-request decoding and
+  normalization. Scan aliases now normalize into an owned canonical request,
+  moving projection, filter, and statistics payloads across the service
+  boundary and retaining only the one projection copy required by each Sail
+  adapter; the remote adapter also moves its policy predicate. Normalizing 256
+  fields and JSON filters fell from about 78.4 microseconds to 2.39
+  microseconds (about 97%) with unchanged alias and scan-mode semantics.
+
+- Extended core benchmarks across governed evidence domain hashing, proof
+  issuance, integrity validation, and snapshot/source-scope derivation.
+  Canonical evidence is now sorted in place and streamed with its domain
+  separator directly into SHA-256, avoiding a second JSON tree and two staging
+  buffers; bounded projection uniqueness uses a pre-sized hash set. At the
+  256-field limit, domain hashing is about 42% faster and proof issue,
+  validation, and scope derivation are about 35% faster with unchanged digest,
+  domain-separation, and tamper-detection contracts.
+
+- Added scale benchmarks for OpenLineage projection and hashing plus LakeCat
+  graph-event conversion and Grust memory persistence. Deterministic typed JSON
+  evidence can now stream through the shared content hasher, so lineage run and
+  receipt hashes borrow large payloads instead of cloning temporary JSON trees;
+  at 1,000 fields this reduces OpenLineage projection by about 27% and the full
+  hash-only receipt by about 21% with explicit hash-contract equivalence tests.
+  Allocation-free namespace formatting and direct composite graph IDs reduce
+  commit/column/snapshot ID generation by 58% and large Grust conversion by
+  about 4% without changing identifier bytes.
+
+- Added scale benchmarks for QueryGraph table projection, graph construction,
+  bundle creation, manifest verification, and view-receipt evidence. Bootstrap
+  construction now retains its typed tables, views, and graph instead of
+  rebuilding them through JSON, reducing 1–256 table bundle creation by
+  10–16%. Manifest and receipt lookups use duplicate-checking indexes, and
+  shared namespace nodes and edges are constructed once; the latter reduces
+  64–256 table graph construction by 15–20% while preserving sorted output.
+
+- Added scale benchmarks for ODRL read-restriction parsing, composition,
+  projection, and statistics filtering. Large column sets now use shared,
+  order-preserving hash indexes while small schemas retain the allocation-light
+  linear path. At 1,024 columns, projection and statistics filtering are about
+  90% faster, one-policy parsing is 89% faster, and two-policy composition is
+  87% faster, with unchanged ordering and duplicate semantics.
+
+- Added a lightweight validated table snapshot for optimistic commits. Turso
+  reuses the service's existing catalog read instead of reading and decoding
+  the same table again inside the write transaction, while preserving
+  idempotency and enforcing active-table, metadata-pointer, and version
+  compare-and-swap checks. A paired same-container benchmark reduces the
+  load-then-commit path from 762.9 to 697.2 microseconds (8.6%).
+
+- Extended the service commit benchmark to cover both one-field and 100-field
+  Iceberg schemas. The handler now moves Sail's prepared metadata and location
+  into the store commit instead of deep-cloning them after the metadata write,
+  reducing the 100-field in-memory commit path by about 7% without changing the
+  one-field path or commit semantics.
+
+- Added reproducible Criterion benchmarks for evidence hashing, metadata JSON
+  encoding, Sail commit preparation, Turso table commits and reads, and the
+  full service commit path with both Turso and memory stores. Commit
+  preparation now deserializes borrowed REST values and moves owned request
+  data instead of rebuilding and cloning JSON envelopes, metadata inspection
+  avoids a JSON byte round trip, evidence hashes stream directly into SHA-256,
+  metadata files use compact JSON, and Turso commit persistence reuses encoded
+  values and their exact hashes. The same-container benchmarks reduce Sail
+  commit preparation by 36–44% and metadata inspection by about 40% while
+  preserving the existing wire, evidence-hash, and commit semantics.
+
+- Reused a bounded pool of Turso read connections for table loads,
+  idempotency replay, storage-profile lookup, and policy-binding lookup,
+  eliminating repeated connection setup on commit-adjacent reads.
+
+- Updated the QGLake dependency-contract and local handoff scripts for
+  QueryGraph's consolidated repository root.
+
+- Hardened the governed-scan owner boundary for Marciana: proof schema and
+  proof-digest domain v2 now bind the catalog identity selected by trusted
+  LakeCat process configuration. Snapshot and source-scope v1 digests are
+  derived only from that integrity-checked proof, and fresh revalidation
+  returns an opaque, non-deserializable result containing the exact paired
+  digests, current projection, fresh decision digests, and an observation-only
+  completion time. Catalog drift fails before policy authorization; legacy v1
+  or identity-less proofs fail closed.
+
+- Updated the release-candidate book gate and dependency contract to use the
+  delegated FirstPair `--dist` interface for out-of-tree artifacts.
+
+- Modernized Service evidence conditionals for current strict Clippy while
+  preserving the existing validation order and error behavior.
+
+- Modernized the QueryGraph warehouse project fallback for current strict
+  Clippy without changing its existing precedence.
+
+- Modernized Store iterator calls and test values for current strict Clippy;
+  the complete persisted-view constructor keeps its intentional arity explicit.
+
+- Modernized the ODRL allowed-column and row-predicate alias lookup for current
+  strict Clippy while preserving the existing first-present-key precedence.
+
+- Promoted `GovernedScanProof` into a production, domain-separated evidence
+  contract and added durable, idempotent governed scan grants to both memory
+  and Turso catalog stores. Purpose-bound scans now return and audit a
+  secret-free proof while LakeCat retains only digests of plan, authorization,
+  policy, verified identity context, restriction, and metadata evidence; agent
+  grants require verified TypeDID attestation. Fresh grant
+  revalidation fails closed on proof drift, stale table snapshots or metadata,
+  revoked authorization, and changed purpose, projection, restriction, or
+  policy decisions; Turso grants survive service reopen. The living design and
+  book now document LakeCat's authority, the original-versus-fresh evidence
+  boundary, and the in-process adapter contract that preserves standard
+  Iceberg REST behavior. The public proof boundary now validates canonical,
+  bounded identities, projections, and namespaces before hashing or durable
+  lookup, including constructor-equivalent checks for deserialized catalog
+  names; persisted grant-only fields use the same shared limits. LakeCat now
+  also owns canonical, domain-separated snapshot identity over catalog and
+  exact table/version/snapshot; its source-scope digest composes that identity
+  with the durable grant for downstream QueryGraph and Marciana adapters.
+  Callers needing both receive them from one validation and canonicalization
+  pass.
 
 - Book: moved the LakeCat cover title and subtitle upward and tightened the
   subtitle typography, then regenerated the PDF, EPUB, MOBI, HTML, and

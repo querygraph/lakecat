@@ -172,7 +172,7 @@ impl LakeCatCatalogProvider {
         request: ProviderScanPlanningRequest,
     ) -> CatalogResult<ScanPlan> {
         let capability = self.authorize_table_scan(database, table).await?;
-        self.plan_table_scan_with_capability(capability, request)
+        self.plan_table_scan_with_capability(&capability, request)
             .await
     }
 
@@ -182,7 +182,7 @@ impl LakeCatCatalogProvider {
         request: ProviderScanPlanningRequest,
     ) -> CatalogResult<ScanPlan> {
         let capability = self.authorize_table_scan_for_ident(table).await?;
-        self.plan_table_scan_with_capability(capability, request)
+        self.plan_table_scan_with_capability(&capability, request)
             .await
     }
 
@@ -195,16 +195,16 @@ impl LakeCatCatalogProvider {
         request: ProviderScanPlanningRequest,
     ) -> CatalogResult<ScanPlan> {
         self.ensure_capability_warehouse(capability)?;
-        self.plan_table_scan_with_capability(capability.clone(), request)
+        self.plan_table_scan_with_capability(capability, request)
             .await
     }
 
     async fn plan_table_scan_with_capability(
         &self,
-        capability: TableScanCapability,
+        capability: &TableScanCapability,
         request: ProviderScanPlanningRequest,
     ) -> CatalogResult<ScanPlan> {
-        let restriction = capability.read_restriction().map_err(catalog_error)?;
+        let restriction = capability.read_restriction();
         let projection = restriction
             .effective_projection(&request.projection)
             .map_err(catalog_error)?;
@@ -239,7 +239,7 @@ impl LakeCatCatalogProvider {
         request: ProviderFetchScanTasksRequest,
     ) -> CatalogResult<FetchScanTasksPlan> {
         let capability = self.authorize_table_scan(database, table).await?;
-        self.fetch_table_scan_tasks_with_capability(capability, request)
+        self.fetch_table_scan_tasks_with_capability(&capability, request)
             .await
     }
 
@@ -249,7 +249,7 @@ impl LakeCatCatalogProvider {
         request: ProviderFetchScanTasksRequest,
     ) -> CatalogResult<FetchScanTasksPlan> {
         let capability = self.authorize_table_scan_for_ident(table).await?;
-        self.fetch_table_scan_tasks_with_capability(capability, request)
+        self.fetch_table_scan_tasks_with_capability(&capability, request)
             .await
     }
 
@@ -261,16 +261,16 @@ impl LakeCatCatalogProvider {
         request: ProviderFetchScanTasksRequest,
     ) -> CatalogResult<FetchScanTasksPlan> {
         self.ensure_capability_warehouse(capability)?;
-        self.fetch_table_scan_tasks_with_capability(capability.clone(), request)
+        self.fetch_table_scan_tasks_with_capability(capability, request)
             .await
     }
 
     async fn fetch_table_scan_tasks_with_capability(
         &self,
-        capability: TableScanCapability,
+        capability: &TableScanCapability,
         request: ProviderFetchScanTasksRequest,
     ) -> CatalogResult<FetchScanTasksPlan> {
-        let restriction = capability.read_restriction().map_err(catalog_error)?;
+        let restriction = capability.read_restriction();
         let record = self
             .store
             .load_table(capability.table())

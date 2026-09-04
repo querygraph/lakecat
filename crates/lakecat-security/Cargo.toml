@@ -19,4 +19,9 @@ serde_json = { workspace = true }
 typesec = { workspace = true, optional = true }
 
 [dev-dependencies]
+criterion = { workspace = true }
 tokio = { workspace = true }
+
+[[bench]]
+name = "read_restrictions"
+harness = false

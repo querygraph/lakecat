@@ -1,9 +1,11 @@
+use std::collections::HashMap;
+
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::HeaderMap;
 use lakecat_api::{
     FetchScanTasksRequest as ApiFetchScanTasksRequest, FetchScanTasksResponse,
-    PlanTableScanRequest, PlanTableScanResponse, TableIdentifier,
+    NormalizedPlanTableScanRequest, PlanTableScanRequest, PlanTableScanResponse, TableIdentifier,
 };
 #[cfg(not(feature = "sail-local"))]
 use lakecat_core::sail::FetchScanTasksRequest as SailFetchScanTasksRequest;
@@ -18,7 +20,7 @@ use lakecat_sail::catalog_provider::{
     LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
 };
 use lakecat_security::TableScanCapability;
-use lakecat_store::{CatalogAuditEvent, TableRecord, ViewRecord};
+use lakecat_store::{CatalogAuditEvent, TableRecord, ViewRecord, ViewVersionReceipt};
 use serde_json::json;
 
 use crate::*;
@@ -62,17 +64,24 @@ pub(crate) async fn plan_table_scan_in_warehouse(
     let ident = rest_table_ident(warehouse.as_str(), &namespace, table)?;
     let capability = authorize_table_scan(&state, identity, ident.clone()).await?;
     let table = state.store.load_table(capability.table()).await?;
-    let (scan, scan_request_extensions) =
+    let (scan, scan_request_extensions, governed_scan_proof) =
         plan_scan_with_capability(&state, &capability, &table, request).await?;
     let ident = capability.table().clone();
     let principal = capability.receipt().principal.clone();
-    let audit_payload = table_scan_planned_audit_payload(
+    let mut audit_payload = table_scan_planned_audit_payload(
         &ident,
         &table,
-        capability.receipt(),
+        &capability,
         &scan,
         &scan_request_extensions,
     );
+    if let Some(proof) = governed_scan_proof.as_ref() {
+        audit_payload["governed-scan-proof"] = serde_json::to_value(proof).map_err(|error| {
+            LakeCatError::Internal(format!(
+                "failed to encode governed scan proof for audit evidence: {error}"
+            ))
+        })?;
+    }
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
@@ -95,6 +104,7 @@ pub(crate) async fn plan_table_scan_in_warehouse(
             scan.residual_filter,
             scan_request_extensions,
         ),
+        governed_scan_proof,
     }))
 }
 
@@ -103,24 +113,43 @@ pub(crate) async fn plan_scan_with_capability(
     capability: &TableScanCapability,
     table: &TableRecord,
     request: PlanTableScanRequest,
-) -> Result<(lakecat_core::sail::ScanPlan, serde_json::Value), LakeCatHttpError> {
-    request.validate_scan_mode()?;
+) -> Result<
+    (
+        lakecat_core::sail::ScanPlan,
+        serde_json::Value,
+        Option<lakecat_core::sail::GovernedScanProof>,
+    ),
+    LakeCatHttpError,
+> {
+    let NormalizedPlanTableScanRequest {
+        projection: requested_projection,
+        filters,
+        limit,
+        snapshot_id,
+        case_sensitive,
+        use_snapshot_schema,
+        start_snapshot_id,
+        end_snapshot_id,
+        stats_fields: requested_stats_fields,
+    } = request.into_normalized()?;
     #[cfg(feature = "sail-local")]
     let _ = &table;
-    let requested_projection = request.projected_fields();
-    let restriction = capability.read_restriction()?;
+    let restriction = capability.read_restriction();
     let projection = restriction.effective_projection(&requested_projection)?;
-    let filters = request.filter_values();
-    let stats_fields = restriction.effective_stats_fields(&request.stats_fields);
+    let stats_fields = restriction.effective_stats_fields(&requested_stats_fields);
+    #[cfg(feature = "sail-local")]
+    let grant_requested_projection = requested_projection.clone();
+    #[cfg(not(feature = "sail-local"))]
+    let grant_effective_projection = projection.clone();
     let scan_request_extensions = json!({
-        "case-sensitive": request.case_sensitive,
-        "use-snapshot-schema": request.use_snapshot_schema,
-        "start-snapshot-id": request.start_snapshot_id,
-        "end-snapshot-id": request.end_snapshot_id,
+        "case-sensitive": case_sensitive,
+        "use-snapshot-schema": use_snapshot_schema,
+        "start-snapshot-id": start_snapshot_id,
+        "end-snapshot-id": end_snapshot_id,
         "requested-projection": requested_projection,
         "effective-projection": projection,
         "read-restriction": restriction,
-        "requested-stats-fields": request.stats_fields,
+        "requested-stats-fields": requested_stats_fields,
         "effective-stats-fields": stats_fields,
         "stats-fields": stats_fields,
     });
@@ -140,10 +169,10 @@ pub(crate) async fn plan_scan_with_capability(
                 ProviderScanPlanningRequest {
                     projection: requested_projection,
                     filters,
-                    limit: request.limit,
-                    snapshot_id: request.snapshot_id,
-                    start_snapshot_id: request.start_snapshot_id,
-                    end_snapshot_id: request.end_snapshot_id,
+                    limit,
+                    snapshot_id,
+                    start_snapshot_id,
+                    end_snapshot_id,
                 },
             )
             .await
@@ -165,13 +194,29 @@ pub(crate) async fn plan_scan_with_capability(
                 }
                 filters
             },
-            limit: request.limit,
-            snapshot_id: request.snapshot_id,
-            start_snapshot_id: request.start_snapshot_id,
-            end_snapshot_id: request.end_snapshot_id,
+            limit,
+            snapshot_id,
+            start_snapshot_id,
+            end_snapshot_id,
         })
         .await?;
-    Ok((scan, scan_request_extensions))
+    #[cfg(not(feature = "sail-local"))]
+    let grant_requested_projection = requested_projection;
+    #[cfg(feature = "sail-local")]
+    let grant_effective_projection = projection;
+    let governed_scan_grant = crate::governed_scan::issue_governed_scan_grant(
+        state.catalog_identity(),
+        capability,
+        table,
+        &scan,
+        grant_requested_projection,
+        grant_effective_projection,
+    )?;
+    let governed_scan_proof = match governed_scan_grant {
+        Some(grant) => Some(state.store.save_governed_scan_grant(grant).await?.proof),
+        None => None,
+    };
+    Ok((scan, scan_request_extensions, governed_scan_proof))
 }
 
 #[cfg(feature = "sail-local")]
@@ -239,7 +284,7 @@ pub(crate) async fn fetch_scan_tasks_in_warehouse(
     let audit_payload = table_scan_tasks_fetched_audit_payload(
         &ident,
         &table,
-        capability.receipt(),
+        &capability,
         &fetched,
         &fetch_extensions,
     );
@@ -277,7 +322,7 @@ pub(crate) async fn fetch_scan_tasks_with_capability(
     #[cfg(feature = "sail-local")]
     let _ = &table;
     #[cfg(not(feature = "sail-local"))]
-    let restriction = capability.read_restriction()?;
+    let restriction = capability.read_restriction();
     #[cfg(feature = "sail-local")]
     let fetched = {
         let provider = LakeCatCatalogProvider::new(
@@ -332,7 +377,7 @@ pub(crate) fn merge_scan_request_extensions(
 pub(crate) fn fetch_scan_tasks_extensions(
     capability: &TableScanCapability,
 ) -> Result<serde_json::Value, LakeCatHttpError> {
-    let restriction = capability.read_restriction()?;
+    let restriction = capability.read_restriction();
     let required_projection = restriction.effective_projection(&[])?;
     let required_filters = restriction.mandatory_filters();
     let stats_fields = required_projection.clone();
@@ -384,28 +429,42 @@ pub(crate) async fn querygraph_bootstrap(
 ) -> Result<Json<QueryGraphBootstrap>, LakeCatHttpError> {
     let capability = authorize_graph_read(&state, request_identity(&headers)?).await?;
     let tables = state.store.list_tables(&state.warehouse).await?;
-    let mut table_policy_bindings = Vec::with_capacity(tables.len());
-    let mut policy_binding_count = 0usize;
-    for table in tables {
-        let policy_bindings = state.store.policy_bindings_for_table(&table.ident).await?;
-        policy_binding_count += policy_bindings.len();
-        table_policy_bindings.push((table, policy_bindings));
+    let table_idents = tables
+        .iter()
+        .map(|table| table.ident.clone())
+        .collect::<Vec<_>>();
+    let policy_bindings = state
+        .store
+        .policy_bindings_for_tables(&table_idents)
+        .await?;
+    if policy_bindings.len() != tables.len() {
+        return Err(LakeCatError::Internal(
+            "bulk policy lookup returned the wrong number of table scopes".to_string(),
+        )
+        .into());
     }
-    let namespaces = state.store.list_namespaces(&state.warehouse).await?;
-    let mut views = Vec::new();
-    for namespace in namespaces {
-        views.extend(state.store.list_views(&state.warehouse, &namespace).await?);
-    }
+    let policy_binding_count = policy_bindings.iter().map(Vec::len).sum::<usize>();
+    let table_policy_bindings = tables.into_iter().zip(policy_bindings);
+    let views = state.store.list_warehouse_views(&state.warehouse).await?;
     let tenant = querygraph_tenant_projection(&state).await?;
-    let view_version_receipts = querygraph_view_version_receipts(&state, &views).await?;
-    let bundle = lakecat_querygraph::bootstrap_from_tables_views_with_policy_bindings_and_tenant(
+    let view_receipts = state
+        .store
+        .list_warehouse_view_version_receipts(&state.warehouse)
+        .await?;
+    let view_version_receipts = querygraph_view_version_receipts(&views, &view_receipts)?;
+    let bundle = lakecat_querygraph::bootstrap_from_catalog_snapshot(
         state.warehouse.clone(),
         table_policy_bindings,
         views,
         tenant,
-    )?
-    .with_view_receipt_evidence(view_version_receipts)?;
-    let verification = bundle.verify_manifest()?;
+        view_version_receipts,
+    )?;
+    let verification = bundle.construction_summary()?;
+    #[cfg(debug_assertions)]
+    {
+        let independently_verified = bundle.verify_manifest()?;
+        debug_assert_eq!(verification, independently_verified);
+    }
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
@@ -454,31 +513,26 @@ pub(crate) async fn querygraph_bootstrap(
 pub(crate) async fn querygraph_tenant_projection(
     state: &LakeCatState,
 ) -> LakeCatResult<QueryGraphTenantProjection> {
-    let warehouse_record = match state.store.load_warehouse(&state.warehouse).await {
-        Ok(record) => Some(record),
-        Err(LakeCatError::NotFound {
-            object: "warehouse",
-            ..
-        }) => None,
-        Err(err) => return Err(err),
+    let warehouse_record = optional_management_record(
+        state.store.load_warehouse(&state.warehouse).await,
+        "warehouse",
+    )?;
+    let project_record = match warehouse_record.as_ref() {
+        Some(warehouse) => optional_management_record(
+            state.store.load_project(&warehouse.project_id).await,
+            "project",
+        )?,
+        None => None,
     };
-    let projects = state.store.list_projects().await?;
-    let project_record = warehouse_record.as_ref().and_then(|warehouse| {
-        projects
-            .iter()
-            .find(|project| project.project_id == warehouse.project_id)
-            .cloned()
-    });
-    let servers = state.store.list_servers().await?;
-    let server_record = project_record
+    let server_record = match project_record
         .as_ref()
         .and_then(|project| project.server_id.as_ref())
-        .and_then(|server_id| {
-            servers
-                .iter()
-                .find(|server| server.server_id == *server_id)
-                .cloned()
-        });
+    {
+        Some(server_id) => {
+            optional_management_record(state.store.load_server(server_id).await, "server")?
+        }
+        None => None,
+    };
     Ok(lakecat_querygraph::tenant_projection_from_records(
         &state.warehouse,
         warehouse_record.as_ref(),
@@ -487,18 +541,40 @@ pub(crate) async fn querygraph_tenant_projection(
     ))
 }
 
-pub(crate) async fn querygraph_view_version_receipts(
-    state: &LakeCatState,
+fn optional_management_record<T>(
+    result: LakeCatResult<T>,
+    object: &'static str,
+) -> LakeCatResult<Option<T>> {
+    match result {
+        Ok(record) => Ok(Some(record)),
+        Err(LakeCatError::NotFound {
+            object: missing_object,
+            ..
+        }) if missing_object == object => Ok(None),
+        Err(err) => Err(err),
+    }
+}
+
+pub(crate) fn querygraph_view_version_receipts(
     views: &[ViewRecord],
+    receipts: &[ViewVersionReceipt],
 ) -> LakeCatResult<Vec<QueryGraphViewReceiptEvidence>> {
-    let mut receipts = Vec::new();
+    let mut receipt_chains = HashMap::with_capacity(views.len());
+    for receipt in receipts {
+        receipt_chains
+            .entry((&receipt.warehouse, &receipt.namespace, &receipt.name))
+            .or_insert_with(Vec::new)
+            .push(receipt);
+    }
+    let mut evidence = Vec::with_capacity(views.len());
     for view in views {
-        let version_receipts = state
-            .store
-            .list_view_version_receipts(&view.warehouse, &view.namespace, &view.name)
-            .await?;
+        let version_receipts = receipt_chains
+            .get(&(&view.warehouse, &view.namespace, &view.name))
+            .map(Vec::as_slice)
+            .unwrap_or_default();
         let response_receipts = version_receipts
             .iter()
+            .copied()
             .map(view_version_receipt_response)
             .collect::<LakeCatResult<Vec<_>>>()?;
         if !view_version_receipt_chain_verified(&response_receipts) {
@@ -514,7 +590,7 @@ pub(crate) async fn querygraph_view_version_receipts(
             .rev()
             .find(|receipt| receipt.view_version == view.view_version)
         {
-            receipts.push(QueryGraphViewReceiptEvidence {
+            evidence.push(QueryGraphViewReceiptEvidence {
                 stable_id: receipt.stable_id.clone(),
                 view_version: receipt.view_version,
                 receipt_hash: receipt.receipt_hash.clone(),
@@ -529,5 +605,5 @@ pub(crate) async fn querygraph_view_version_receipts(
             )));
         }
     }
-    Ok(receipts)
+    Ok(evidence)
 }

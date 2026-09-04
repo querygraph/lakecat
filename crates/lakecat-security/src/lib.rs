@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -176,11 +177,7 @@ impl ReadRestriction {
         if requested_projection.is_empty() {
             return Ok(allowed_columns.clone());
         }
-        let projection = requested_projection
-            .iter()
-            .filter(|column| allowed_columns.iter().any(|allowed| allowed == *column))
-            .cloned()
-            .collect::<Vec<_>>();
+        let projection = retain_allowed_columns(requested_projection, allowed_columns);
         if projection.is_empty() {
             return Err(LakeCatError::Conflict(
                 "requested projection is outside the governed read restriction".to_string(),
@@ -193,11 +190,7 @@ impl ReadRestriction {
         let Some(allowed_columns) = self.allowed_columns.as_ref() else {
             return requested.to_vec();
         };
-        requested
-            .iter()
-            .filter(|column| allowed_columns.iter().any(|allowed| allowed == *column))
-            .cloned()
-            .collect()
+        retain_allowed_columns(requested, allowed_columns)
     }
 
     pub fn mandatory_filters(&self) -> Vec<Value> {
@@ -532,6 +525,20 @@ fn jsonld_u64_value(value: &Value) -> Option<u64> {
 }
 
 fn dedup_columns(columns: Vec<String>) -> Vec<String> {
+    if columns.len() > LINEAR_COLUMN_LOOKUP_MAX {
+        let mut seen = HashSet::with_capacity(columns.len());
+        let keep = columns
+            .iter()
+            .map(|column| seen.insert(column.as_str()))
+            .collect::<Vec<_>>();
+        drop(seen);
+        return columns
+            .into_iter()
+            .zip(keep)
+            .filter_map(|(column, keep)| keep.then_some(column))
+            .collect();
+    }
+
     let mut out = Vec::with_capacity(columns.len());
     for column in columns {
         if !out.iter().any(|existing| existing == &column) {
@@ -542,8 +549,24 @@ fn dedup_columns(columns: Vec<String>) -> Vec<String> {
 }
 
 fn intersect_columns(left: &[String], right: &[String]) -> Vec<String> {
-    left.iter()
-        .filter(|column| right.iter().any(|allowed| allowed == *column))
+    retain_allowed_columns(left, right)
+}
+
+const LINEAR_COLUMN_LOOKUP_MAX: usize = 32;
+
+fn retain_allowed_columns(requested: &[String], allowed: &[String]) -> Vec<String> {
+    if allowed.len() <= LINEAR_COLUMN_LOOKUP_MAX {
+        return requested
+            .iter()
+            .filter(|column| allowed.iter().any(|allowed| allowed == *column))
+            .cloned()
+            .collect();
+    }
+
+    let allowed = allowed.iter().map(String::as_str).collect::<HashSet<_>>();
+    requested
+        .iter()
+        .filter(|column| allowed.contains(column.as_str()))
         .cloned()
         .collect()
 }
@@ -553,6 +576,16 @@ pub struct Capability<Action, Resource> {
     receipt: AuthorizationReceipt,
     resource: Resource,
     _action: std::marker::PhantomData<Action>,
+}
+
+/// Validated table scope carried by read capabilities.
+///
+/// The typed restriction is decoded once when authority is established and is
+/// then borrowed by downstream planners and credential adapters.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TableReadScope {
+    table: TableIdent,
+    restriction: ReadRestriction,
 }
 
 impl<Action, Resource> Capability<Action, Resource> {
@@ -675,8 +708,8 @@ pub type TableLoadCapability = Capability<CanLoadTable, TableIdent>;
 pub type TableCommitCapability = Capability<CanCommitTable, TableIdent>;
 pub type TableDropCapability = Capability<CanDropTable, TableIdent>;
 pub type TableRestoreCapability = Capability<CanRestoreTable, TableIdent>;
-pub type TableScanCapability = Capability<CanPlanScan, TableIdent>;
-pub type CredentialsVendCapability = Capability<CanVendCredentials, TableIdent>;
+pub type TableScanCapability = Capability<CanPlanScan, TableReadScope>;
+pub type CredentialsVendCapability = Capability<CanVendCredentials, TableReadScope>;
 pub type ServerManageCapability = Capability<CanManageServers, ()>;
 pub type ProjectManageCapability = Capability<CanManageProjects, ()>;
 pub type WarehouseManageCapability = Capability<CanManageWarehouses, ()>;
@@ -693,6 +726,16 @@ pub type NamespaceListCapability = Capability<CanListNamespaces, ()>;
 pub type NamespaceLoadCapability = Capability<CanLoadNamespace, ()>;
 pub type NamespaceUpdateCapability = Capability<CanUpdateNamespace, ()>;
 pub type NamespaceDropCapability = Capability<CanDropNamespace, ()>;
+
+impl<Action> Capability<Action, TableReadScope> {
+    pub fn table(&self) -> &TableIdent {
+        &self.resource().table
+    }
+
+    pub fn read_restriction(&self) -> &ReadRestriction {
+        &self.resource().restriction
+    }
+}
 
 impl TableCreateCapability {
     pub fn from_receipt(receipt: AuthorizationReceipt, table: TableIdent) -> LakeCatResult<Self> {
@@ -808,53 +851,23 @@ impl TableRestoreCapability {
 
 impl TableScanCapability {
     pub fn from_receipt(receipt: AuthorizationReceipt, table: TableIdent) -> LakeCatResult<Self> {
-        table_capability_from_receipt(
+        table_read_capability_from_receipt(
             receipt,
             table,
             CatalogAction::TablePlanScan,
             "plan table scans",
         )
     }
-
-    pub fn table(&self) -> &TableIdent {
-        self.resource()
-    }
-
-    pub fn read_restriction(&self) -> LakeCatResult<ReadRestriction> {
-        match self.receipt().context.get("read-restriction") {
-            Some(value) => serde_json::from_value(value.clone()).map_err(|err| {
-                LakeCatError::InvalidArgument(format!(
-                    "authorization receipt carries invalid read restriction: {err}"
-                ))
-            }),
-            None => Ok(ReadRestriction::unrestricted()),
-        }
-    }
 }
 
 impl CredentialsVendCapability {
     pub fn from_receipt(receipt: AuthorizationReceipt, table: TableIdent) -> LakeCatResult<Self> {
-        table_capability_from_receipt(
+        table_read_capability_from_receipt(
             receipt,
             table,
             CatalogAction::CredentialsVend,
             "vend table credentials",
         )
-    }
-
-    pub fn table(&self) -> &TableIdent {
-        self.resource()
-    }
-
-    pub fn read_restriction(&self) -> LakeCatResult<ReadRestriction> {
-        match self.receipt().context.get("read-restriction") {
-            Some(value) => serde_json::from_value(value.clone()).map_err(|err| {
-                LakeCatError::InvalidArgument(format!(
-                    "authorization receipt carries invalid read restriction: {err}"
-                ))
-            }),
-            None => Ok(ReadRestriction::unrestricted()),
-        }
     }
 }
 
@@ -1039,6 +1052,32 @@ fn validate_table_authorization_receipt(
         ));
     }
     Ok(())
+}
+
+fn table_read_capability_from_receipt<Action>(
+    receipt: AuthorizationReceipt,
+    table: TableIdent,
+    expected_action: CatalogAction,
+    action_description: &str,
+) -> LakeCatResult<Capability<Action, TableReadScope>> {
+    let capability: Capability<Action, TableIdent> =
+        table_capability_from_receipt(receipt, table, expected_action, action_description)?;
+    let restriction = match capability.receipt.context.get("read-restriction") {
+        Some(value) => ReadRestriction::deserialize(value).map_err(|err| {
+            LakeCatError::InvalidArgument(format!(
+                "authorization receipt carries invalid read restriction: {err}"
+            ))
+        })?,
+        None => ReadRestriction::unrestricted(),
+    };
+    Ok(Capability {
+        receipt: capability.receipt,
+        resource: TableReadScope {
+            table: capability.resource,
+            restriction,
+        },
+        _action: std::marker::PhantomData,
+    })
 }
 
 #[cfg(test)]

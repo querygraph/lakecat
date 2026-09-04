@@ -1,10 +1,11 @@
 use chrono::{DateTime, Utc};
-use lakecat_core::{LakeCatResult, WarehouseName, content_hash_json};
+use lakecat_core::{LakeCatResult, WarehouseName};
 use lakecat_store::{
     PolicyBinding, ProjectRecord, ServerRecord, TableRecord, ViewRecord, WarehouseRecord,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub use qglake_bundle::*;
@@ -44,6 +45,34 @@ pub fn bootstrap_from_tables_views_with_policy_bindings_and_tenant(
     tables: impl IntoIterator<Item = (TableRecord, Vec<PolicyBinding>)>,
     views: impl IntoIterator<Item = ViewRecord>,
     tenant: QueryGraphTenantProjection,
+) -> LakeCatResult<QueryGraphBootstrap> {
+    bootstrap_from_catalog_snapshot_inner(warehouse, tables, views, tenant, None)
+}
+
+/// Build a catalog snapshot whose initial bundle hash already includes the
+/// supplied, validated view-receipt evidence.
+pub fn bootstrap_from_catalog_snapshot(
+    warehouse: WarehouseName,
+    tables: impl IntoIterator<Item = (TableRecord, Vec<PolicyBinding>)>,
+    views: impl IntoIterator<Item = ViewRecord>,
+    tenant: QueryGraphTenantProjection,
+    view_receipt_evidence: Vec<QueryGraphViewReceiptEvidence>,
+) -> LakeCatResult<QueryGraphBootstrap> {
+    bootstrap_from_catalog_snapshot_inner(
+        warehouse,
+        tables,
+        views,
+        tenant,
+        Some(view_receipt_evidence),
+    )
+}
+
+fn bootstrap_from_catalog_snapshot_inner(
+    warehouse: WarehouseName,
+    tables: impl IntoIterator<Item = (TableRecord, Vec<PolicyBinding>)>,
+    views: impl IntoIterator<Item = ViewRecord>,
+    tenant: QueryGraphTenantProjection,
+    view_receipt_evidence: Option<Vec<QueryGraphViewReceiptEvidence>>,
 ) -> LakeCatResult<QueryGraphBootstrap> {
     let generated_at = Utc::now();
     let tables = tables
@@ -90,30 +119,17 @@ pub fn bootstrap_from_tables_views_with_policy_bindings_and_tenant(
         &open_lineage,
         views.len(),
     )?);
-    let bundle_payload = json!({
-        "warehouse": warehouse.as_str(),
-        "manifest": manifest,
-        "tables": tables,
-        "views": views,
-        "graph": graph,
-        "openLineage": open_lineage,
-    });
-    let bundle_hash = content_hash_json(&bundle_payload)?;
-    let tables = serde_json::from_value(bundle_payload["tables"].clone()).map_err(|err| {
-        lakecat_core::LakeCatError::Internal(format!(
-            "failed to rebuild QueryGraph table projections: {err}"
-        ))
-    })?;
-    let graph = serde_json::from_value(bundle_payload["graph"].clone()).map_err(|err| {
-        lakecat_core::LakeCatError::Internal(format!(
-            "failed to rebuild QueryGraph catalog graph: {err}"
-        ))
-    })?;
-    let views = serde_json::from_value(bundle_payload["views"].clone()).map_err(|err| {
-        lakecat_core::LakeCatError::Internal(format!(
-            "failed to rebuild QueryGraph view projections: {err}"
-        ))
-    })?;
+    if let Some(view_receipt_evidence) = view_receipt_evidence {
+        manifest.attach_view_receipt_evidence(&views, view_receipt_evidence)?;
+    }
+    let bundle_hash = querygraph_bundle_hash(
+        &warehouse,
+        &manifest,
+        &tables,
+        &views,
+        &graph,
+        &open_lineage,
+    )?;
     Ok(QueryGraphBootstrap {
         warehouse,
         generated_at,
@@ -276,20 +292,13 @@ pub fn catalog_graph_from_tables_and_views_for_warehouse(
     );
     insert_tenant_spine(&mut nodes, &mut edges, warehouse, tenant);
     for table in tables {
-        let namespace_id = format!(
-            "lakecat:namespace:{}:{}",
-            table.ident.warehouse, table.ident.namespace
-        );
-        insert_node(
+        let namespace_path = table.ident.namespace.path();
+        let namespace_id = insert_namespace_node(
             &mut nodes,
-            QueryGraphNode {
-                id: namespace_id.clone(),
-                label: "Namespace".to_string(),
-                properties: json!({
-                    "warehouse": table.ident.warehouse.as_str(),
-                    "namespace": table.ident.namespace.path(),
-                }),
-            },
+            &mut edges,
+            table.ident.warehouse.as_str(),
+            &namespace_path,
+            Some(&table.ident.warehouse),
         );
         insert_node(
             &mut nodes,
@@ -319,16 +328,6 @@ pub fn catalog_graph_from_tables_and_views_for_warehouse(
             },
         );
         edges.insert(QueryGraphEdge {
-            from: "lakecat:catalog".to_string(),
-            to: namespace_id.clone(),
-            label: "HAS_NAMESPACE".to_string(),
-        });
-        edges.insert(QueryGraphEdge {
-            from: warehouse_graph_id(&table.ident.warehouse),
-            to: namespace_id.clone(),
-            label: "HAS_NAMESPACE".to_string(),
-        });
-        edges.insert(QueryGraphEdge {
             from: namespace_id,
             to: table.stable_id.clone(),
             label: "CONTAINS_TABLE".to_string(),
@@ -340,21 +339,14 @@ pub fn catalog_graph_from_tables_and_views_for_warehouse(
         });
     }
     for view in views {
-        let namespace_id = format!(
-            "lakecat:namespace:{}:{}",
-            view.warehouse,
-            view.namespace.join(".")
-        );
-        insert_node(
+        let namespace_path = view.namespace.join(".");
+        let view_warehouse = WarehouseName::new(view.warehouse.clone()).ok();
+        let namespace_id = insert_namespace_node(
             &mut nodes,
-            QueryGraphNode {
-                id: namespace_id.clone(),
-                label: "Namespace".to_string(),
-                properties: json!({
-                    "warehouse": view.warehouse,
-                    "namespace": view.namespace.join("."),
-                }),
-            },
+            &mut edges,
+            &view.warehouse,
+            &namespace_path,
+            view_warehouse.as_ref(),
         );
         insert_node(
             &mut nodes,
@@ -371,18 +363,6 @@ pub fn catalog_graph_from_tables_and_views_for_warehouse(
             },
         );
         edges.insert(QueryGraphEdge {
-            from: "lakecat:catalog".to_string(),
-            to: namespace_id.clone(),
-            label: "HAS_NAMESPACE".to_string(),
-        });
-        if let Ok(view_warehouse) = WarehouseName::new(view.warehouse.clone()) {
-            edges.insert(QueryGraphEdge {
-                from: warehouse_graph_id(&view_warehouse),
-                to: namespace_id.clone(),
-                label: "HAS_NAMESPACE".to_string(),
-            });
-        }
-        edges.insert(QueryGraphEdge {
             from: namespace_id,
             to: view.stable_id.clone(),
             label: "CONTAINS_VIEW".to_string(),
@@ -392,6 +372,39 @@ pub fn catalog_graph_from_tables_and_views_for_warehouse(
         nodes: nodes.into_values().collect(),
         edges: edges.into_iter().collect(),
     }
+}
+
+fn insert_namespace_node(
+    nodes: &mut BTreeMap<String, QueryGraphNode>,
+    edges: &mut BTreeSet<QueryGraphEdge>,
+    warehouse: &str,
+    namespace: &str,
+    validated_warehouse: Option<&WarehouseName>,
+) -> String {
+    let namespace_id = format!("lakecat:namespace:{warehouse}:{namespace}");
+    if let Entry::Vacant(entry) = nodes.entry(namespace_id.clone()) {
+        entry.insert(QueryGraphNode {
+            id: namespace_id.clone(),
+            label: "Namespace".to_string(),
+            properties: json!({
+                "warehouse": warehouse,
+                "namespace": namespace,
+            }),
+        });
+        edges.insert(QueryGraphEdge {
+            from: "lakecat:catalog".to_string(),
+            to: namespace_id.clone(),
+            label: "HAS_NAMESPACE".to_string(),
+        });
+        if let Some(warehouse) = validated_warehouse {
+            edges.insert(QueryGraphEdge {
+                from: warehouse_graph_id(warehouse),
+                to: namespace_id.clone(),
+                label: "HAS_NAMESPACE".to_string(),
+            });
+        }
+    }
+    namespace_id
 }
 
 fn insert_tenant_spine(

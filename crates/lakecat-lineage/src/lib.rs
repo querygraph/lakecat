@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -83,15 +84,17 @@ pub struct LineageReceipt {
 }
 
 pub fn open_lineage_event(event: &LineageEvent) -> Value {
+    let identity = CanonicalLineageIdentity::from_event(event);
+    open_lineage_event_with_identity(event, &identity)
+}
+
+fn open_lineage_event_with_identity(
+    event: &LineageEvent,
+    identity: &CanonicalLineageIdentity,
+) -> Value {
     let event_type = lineage_event_type_name(&event.event_type);
-    let run_id = content_hash_json(&json!({
-        "event-type": event_type,
-        "principal": event.principal,
-        "table": event.table,
-        "payload": event.payload,
-        "emitted-at": event.emitted_at,
-    }))
-    .unwrap_or_else(|_| "unhashable-lineage-event".to_string());
+    let run_id = lineage_run_hash(event, event_type, identity)
+        .unwrap_or_else(|_| "unhashable-lineage-event".to_string());
     json!({
         "eventType": "COMPLETE",
         "eventTime": event.emitted_at,
@@ -130,10 +133,9 @@ impl HashOnlyLineageSink {
 #[async_trait]
 impl LineageSink for HashOnlyLineageSink {
     async fn emit(&self, event: LineageEvent) -> LakeCatResult<LineageReceipt> {
-        let event_hash = content_hash_json(&serde_json::to_value(&event).map_err(|err| {
-            lakecat_core::LakeCatError::Internal(format!("failed to encode lineage event: {err}"))
-        })?)?;
-        let open_lineage = open_lineage_event(&event);
+        let identity = CanonicalLineageIdentity::from_event(&event);
+        let event_hash = lineage_event_hash(&event, &identity)?;
+        let open_lineage = open_lineage_event_with_identity(&event, &identity);
         let open_lineage_hash = content_hash_json(&open_lineage)?;
         Ok(LineageReceipt {
             event_hash,
@@ -141,6 +143,67 @@ impl LineageSink for HashOnlyLineageSink {
             sink: "lakecat-openlineage-hash".to_string(),
         })
     }
+}
+
+struct CanonicalLineageIdentity {
+    principal: Value,
+    table: Option<Value>,
+}
+
+impl CanonicalLineageIdentity {
+    fn from_event(event: &LineageEvent) -> Self {
+        Self {
+            principal: json!(&event.principal),
+            table: event.table.as_ref().map(|table| json!(table)),
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct LineageEventHashEvidence<'a> {
+    emitted_at: &'a DateTime<Utc>,
+    event_type: &'a LineageEventType,
+    payload: &'a Value,
+    principal: &'a Value,
+    table: &'a Option<Value>,
+}
+
+fn lineage_event_hash(
+    event: &LineageEvent,
+    identity: &CanonicalLineageIdentity,
+) -> LakeCatResult<String> {
+    content_hash_json(&LineageEventHashEvidence {
+        emitted_at: &event.emitted_at,
+        event_type: &event.event_type,
+        payload: &event.payload,
+        principal: &identity.principal,
+        table: &identity.table,
+    })
+}
+
+#[derive(Serialize)]
+struct LineageRunHashEvidence<'a> {
+    #[serde(rename = "emitted-at")]
+    emitted_at: &'a DateTime<Utc>,
+    #[serde(rename = "event-type")]
+    event_type: &'a str,
+    payload: &'a Value,
+    principal: &'a Value,
+    table: &'a Option<Value>,
+}
+
+fn lineage_run_hash(
+    event: &LineageEvent,
+    event_type: &str,
+    identity: &CanonicalLineageIdentity,
+) -> LakeCatResult<String> {
+    content_hash_json(&LineageRunHashEvidence {
+        emitted_at: &event.emitted_at,
+        event_type,
+        payload: &event.payload,
+        principal: &identity.principal,
+        table: &identity.table,
+    })
 }
 
 fn lineage_inputs(event: &LineageEvent) -> Vec<Value> {
@@ -418,10 +481,10 @@ fn open_lineage_dataset(table: &TableIdent, payload: &Value) -> Value {
         .or_else(|| payload.get("location"))
         .or_else(|| payload.get("metadata-location"))
         .and_then(Value::as_str)
-        .map(ToString::to_string)
-        .unwrap_or_else(|| table.stable_id());
+        .map(Cow::Borrowed)
+        .unwrap_or_else(|| Cow::Owned(table.stable_id()));
     json!({
-        "namespace": format!("lakecat.{}.{}", table.warehouse.as_str(), table.namespace.path()),
+        "namespace": format!("lakecat.{}.{}", table.warehouse.as_str(), table.namespace),
         "name": table.name.as_str(),
         "facets": {
             "dataSource": {

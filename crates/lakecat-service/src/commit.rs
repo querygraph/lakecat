@@ -1,9 +1,9 @@
 use axum::Json;
 use axum::http::HeaderMap;
 use lakecat_api::{CommitTableRequest, CommitTableResponse};
-use lakecat_core::sail::CommitPreparationRequest;
+use lakecat_core::sail::{CommitPlan, CommitPreparationRequest};
 use lakecat_core::{LakeCatError, WarehouseName, content_hash_json};
-use lakecat_store::TableCommit;
+use lakecat_store::{TableCommit, TableCommitSnapshot};
 use serde_json::json;
 
 use crate::*;
@@ -60,6 +60,7 @@ pub(crate) async fn commit_table_in_warehouse(
         request.requirements
     };
     let storage_profile = state.store.storage_profile_for_table(&current).await?;
+    let commit_snapshot = TableCommitSnapshot::try_from_table(&current)?;
     let current_metadata_location = current.metadata_location.clone();
     let commit_plan = state
         .sail
@@ -80,16 +81,23 @@ pub(crate) async fn commit_table_in_warehouse(
         &storage_profile,
     )?;
     let metadata_write = write_planned_metadata(&commit_plan).await?;
+    let CommitPlan {
+        requirements,
+        updates,
+        new_metadata_location,
+        new_metadata,
+        ..
+    } = commit_plan;
     let table = match state
         .store
-        .commit_table(
-            capability.table(),
+        .commit_table_with_snapshot(
+            commit_snapshot,
             TableCommit {
-                requirements: commit_plan.requirements,
-                updates: commit_plan.updates,
+                requirements,
+                updates,
                 expected_previous_metadata_location: current_metadata_location.clone(),
-                new_metadata_location: commit_plan.new_metadata_location.clone(),
-                new_metadata: Some(commit_plan.new_metadata.clone()),
+                new_metadata_location,
+                new_metadata: Some(new_metadata),
                 idempotency_key,
                 idempotency_request_hash,
                 principal: capability.receipt().principal.clone(),

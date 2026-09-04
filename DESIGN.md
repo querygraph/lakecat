@@ -1,6 +1,6 @@
 # LakeCat Design
 
-Updated: 2026-06-23
+Updated: 2026-08-05
 
 Status: living design. This document supersedes the OPUS review/design notes
 that are now archived under `docs/completed/`.
@@ -664,6 +664,77 @@ policy + principal + purpose
 When the restriction is complete end to end, QGLake's
 metadata-visible/data-denied broker is just one policy shape: metadata remains
 visible, data columns are narrowed to none, and the receipt proves the decision.
+
+### Governed Scan Grant Authority
+
+LakeCat is the authority for the portable `GovernedScanProof` attached to a
+purpose-bound scan. The versioned proof binds the table and version, current
+Iceberg snapshot, ordered effective projection, principal subject, purpose, and
+domain-separated SHA-256 digests of the Sail plan tasks, verified identity
+context, original authorization receipt, and policy decision. Digest encoding
+is canonical lowercase `sha256:` plus 64 hexadecimal characters. Opaque plan
+tokens, reusable authorization receipts, TypeDID envelopes, credentials, and
+signing material are never part of the proof or durable grant.
+
+The proof is backed by an idempotently persisted `GovernedScanGrant` in both
+memory and Turso `CatalogStore` implementations. The grant records only the
+proof, typed principal, requested projection, policy-engine identity, safe
+evidence digests, and observational issuance time. The proof identifier is the
+stable idempotency key; a repeated save of the same stable evidence returns the
+winner, while reuse with different evidence fails closed. Turso grants survive
+service reopen and concurrent creation converges on one durable record.
+
+The proof is an untrusted serialized value until LakeCat validates it. The
+shared core validator caps each identity or field at 4 KiB, projections and
+namespaces at 256 entries and 64 KiB aggregate, requires nonempty trimmed text
+without control characters, rejects duplicate projection fields, and reruns
+the same catalog-name rules used by typed warehouse, namespace, and table
+constructors. `issue` and `validate_integrity` use this one contract, and
+integrity validation performs the bounded structural checks before JSON
+serialization or hashing. Durable grants reuse the same rules for principals,
+policy-engine identities, and optional requested projections. Consequently the
+public in-process revalidation API rejects malformed or oversized proof shape
+before a store lookup; downstream adapters should call LakeCat's validator
+rather than reproduce these bounds.
+
+LakeCat also owns the canonical governed-scan snapshot and source-scope
+digests. Proof schema v2 and its v2 proof-digest domain bind the stable catalog
+identity selected by trusted LakeCat process configuration at issuance. The
+default derives from the configured warehouse; an explicit
+`LAKECAT_CATALOG_IDENTITY` is a deployment setting, never request data. Its
+bounded type validates canonical shape but does not authenticate arbitrary
+strings, so only the service-owned instance is authoritative. Legacy v1 and
+identity-less proofs fail closed.
+
+The snapshot v1 domain binds that proof-owned catalog identity, exact table
+identity, table version, and snapshot identifier after full proof validation.
+The source-scope v1 domain composes that snapshot digest with the durable grant
+identifier. Those two domains remain v1 because their canonical fields and
+meaning did not change; ownership moved into the v2 proof instead. QueryGraph
+and Marciana consume the paired LakeCat result instead of supplying a catalog
+string or inventing another canonicalizer. The core pair has private fields and
+comes from one proof-validation and snapshot-hash pass.
+
+Application-time revalidation does not replace the original decision. LakeCat
+loads the exact durable proof, checks the current table version, snapshot, and
+metadata, reloads current policy bindings and the server-derived restriction,
+and asks the `GovernanceEngine` for a fresh authorization. Revocation or drift
+in subject, authority scope, purpose, ordered projection, restriction, or policy
+decision rejects the grant. A successful service operation derives both
+canonical source digests from that same durable proof and returns a sealed,
+non-deserializable result with borrowed getters for the proof, digest pair,
+projection, and separate fresh authorization and policy-decision digests. This
+prevents downstream Marciana or QueryGraph code from constructing a successful
+result, pairing unrelated digests, or silently substituting fresh evidence for
+the original source binding. Its `revalidated_at` value is LakeCat's local
+completion observation only: it is neither signed evidence nor an
+authorization lease.
+
+This remains an additive control-plane boundary. The existing scan-planning
+response may carry `governed-scan-proof`, while ordinary Iceberg REST behavior
+does not require it. LakeCat exposes revalidation as an in-process Rust API for
+an optional downstream adapter; it does not add a nonstandard Iceberg REST
+endpoint and does not own memory jobs, cognition, recall, or Grust persistence.
 
 ## Current State
 

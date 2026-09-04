@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use lakecat_api::StorageCredential;
+use lakecat_core::governed_scan::GovernedScanCatalogIdentity;
 #[cfg(not(feature = "sail-local"))]
 use lakecat_core::sail::DeferredSailCatalogEngine;
 use lakecat_core::sail::SailCatalogEngine;
@@ -19,6 +20,7 @@ use crate::*;
 pub struct LakeCatState {
     pub warehouse: WarehouseName,
     pub table_location_root: Option<String>,
+    catalog_identity: GovernedScanCatalogIdentity,
     pub store: Arc<dyn CatalogStore>,
     pub sail: Arc<dyn SailCatalogEngine>,
     pub governance: Arc<dyn GovernanceEngine>,
@@ -107,9 +109,11 @@ impl CredentialIssuer for ConservativeCredentialIssuer {
 }
 impl LakeCatState {
     pub fn new(warehouse: WarehouseName, store: Arc<dyn CatalogStore>) -> Self {
+        let catalog_identity = GovernedScanCatalogIdentity::for_warehouse(&warehouse);
         Self {
             warehouse,
             table_location_root: None,
+            catalog_identity,
             store,
             sail: default_sail_engine(),
             governance: AllowAllGovernanceEngine::new(),
@@ -142,6 +146,21 @@ impl LakeCatState {
         }
         self.table_location_root = Some(location_root.trim_end_matches('/').to_string());
         Ok(self)
+    }
+
+    /// Replace the default identity with trusted deployment configuration.
+    ///
+    /// Request handlers must never source this value from request data. It is
+    /// bound into governed proofs at issuance and checked again by the same
+    /// service state during revalidation.
+    pub fn with_catalog_identity(mut self, catalog_identity: GovernedScanCatalogIdentity) -> Self {
+        self.catalog_identity = catalog_identity;
+        self
+    }
+
+    /// Return the service-owned governed-scan catalog identity.
+    pub fn catalog_identity(&self) -> &GovernedScanCatalogIdentity {
+        &self.catalog_identity
     }
 
     pub fn with_integrations(

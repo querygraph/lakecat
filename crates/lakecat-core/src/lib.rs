@@ -1,6 +1,8 @@
+pub mod governed_scan;
 pub mod sail;
 
 use std::fmt::{Display, Formatter};
+use std::io::{self, Write};
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
@@ -135,7 +137,14 @@ impl FromStr for Namespace {
 
 impl Display for Namespace {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.path())
+        if let Some((first, rest)) = self.0.split_first() {
+            f.write_str(first)?;
+            for part in rest {
+                f.write_str(".")?;
+                f.write_str(part)?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -249,15 +258,54 @@ impl AuditStamp {
     }
 }
 
-pub fn content_hash_json(value: &serde_json::Value) -> LakeCatResult<String> {
-    let bytes = serde_json::to_vec(value)
+/// Hash the compact JSON serialization produced by Serde.
+///
+/// Evidence callers must use deterministic map and field ordering. Existing
+/// [`serde_json::Value`] callers retain their canonical sorted-map encoding,
+/// while typed callers can stream borrowed evidence without an intermediate
+/// JSON tree.
+pub fn content_hash_json<T>(value: &T) -> LakeCatResult<String>
+where
+    T: Serialize + ?Sized,
+{
+    let mut writer = Sha256Writer(Sha256::new());
+    serde_json::to_writer(&mut writer, value)
         .map_err(|err| LakeCatError::Internal(format!("failed to encode JSON: {err}")))?;
-    Ok(content_hash_bytes(&bytes))
+    Ok(finalize_json_hash(writer))
+}
+
+pub(crate) fn content_hash_domain_json<T>(domain: &str, value: &T) -> LakeCatResult<String>
+where
+    T: Serialize + ?Sized,
+{
+    let mut writer = Sha256Writer(Sha256::new());
+    writer.0.update(domain.as_bytes());
+    writer.0.update([0]);
+    serde_json::to_writer(&mut writer, value)
+        .map_err(|err| LakeCatError::Internal(format!("failed to encode JSON: {err}")))?;
+    Ok(finalize_json_hash(writer))
 }
 
 pub fn content_hash_bytes(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
     format!("sha256:{}", hex::encode(digest))
+}
+
+struct Sha256Writer(Sha256);
+
+fn finalize_json_hash(writer: Sha256Writer) -> String {
+    format!("sha256:{}", hex::encode(writer.0.finalize()))
+}
+
+impl Write for Sha256Writer {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.0.update(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 fn validate_name(kind: &str, value: &str) -> LakeCatResult<()> {
@@ -279,7 +327,7 @@ fn validate_name(kind: &str, value: &str) -> LakeCatResult<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::Namespace;
+    use super::*;
 
     #[test]
     fn namespace_storage_key_preserves_component_boundaries() {
@@ -290,5 +338,18 @@ mod tests {
         assert_eq!(dotted.storage_key(), "v1:3:a.b");
         assert_eq!(multipart.storage_key(), "v1:1:a:1:b");
         assert_ne!(dotted.storage_key(), multipart.storage_key());
+    }
+
+    #[test]
+    fn streaming_json_hash_preserves_the_encoded_evidence_contract() {
+        let value = serde_json::json!({
+            "z": [1, 2, 3],
+            "a": {"nested": true},
+        });
+        let encoded = serde_json::to_vec(&value).unwrap();
+        assert_eq!(
+            content_hash_json(&value).unwrap(),
+            content_hash_bytes(&encoded)
+        );
     }
 }
