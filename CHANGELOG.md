@@ -29,6 +29,9 @@ and one released dependency line: Grust 0.13.0 (Prawn), TypeSec 0.14.0
   contention policy, component-safe namespace keys and fresh field-id
   assignment were kept.
 - Bump the workspace and every intra-workspace requirement to `0.4.0`.
+- Recorded the v0.4.0 release-candidate proof from clean head `bd5c03ba`
+  (bundle `sha256:8e0c12befc66bca2…`, graph `sha256:5835bd73848046e7…`,
+  OpenLineage `sha256:059d1772b1adf474…`, QueryGraph import `sha256:597db83d1646e725…`).
 - Governed scan grants are issued only for identities the catalog verified:
   an agent whose identity rests on bare `x-lakecat-agent-did` headers keeps
   its TypeSec-governed scan but receives no durable Marciana grant, instead of

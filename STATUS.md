@@ -57,18 +57,19 @@ Updated: 2026-08-28
   under active development and not formally adopted. LakeCat continues to
   advertise only its extension-ready JSON bridge; typed model, planner, and
   compatibility work remains a Sail-owned pre-adoption task.
-- Latest release-candidate proof refresh: the broad local gate passed on July
-  4, 2026 from clean head `6bfce1ef`. The gate covered shell and dependency
-  contracts, default and all-feature Rust matrices, temporary book validation,
-  Grust Turso QGLake handoff, QueryGraph locked verify/import, and the final
-  clean-tree check. Its bundle hash was
-  `sha256:8d64b0b7e26788ae67ce513996d923911666d2b74b1759f38b400c943002af5b`,
+- Latest release-candidate proof refresh: the broad local gate passed on
+  September 4, 2026 from clean head `bd5c03ba`. The gate covered shell and
+  dependency contracts, default and all-feature Rust matrices, temporary book
+  validation, Grust Turso QGLake handoff, QueryGraph locked verify/import, and
+  the final clean-tree check, on the released Grust 0.13.0 / TypeSec 0.14.0
+  line with QueryGraph 0.5.0 driving the handoff. Its bundle hash was
+  `sha256:8e0c12befc66bca26a295bdfd5dcbba99fb7ba424128dbcff36a786d28be8e11`,
   graph hash
-  `sha256:41953a9530b465310f668c44107d335fb5d8295e95a0b63b0edeb489ee5d35a6`,
+  `sha256:5835bd73848046e79a8d76e818addac25147658fd9729f648d0318062c21d870`,
   OpenLineage hash
-  `sha256:4a1fdf0fbe043c0a96340838eef88d02f22d9f8b1455856d2fe687c1536fcf48`,
+  `sha256:059d1772b1adf474c5a4c23d47dba23646aa3c47c0d80bc659957e78159887bd`,
   and QueryGraph import hash
-  `sha256:778e9e0e8dfe35d9243b690440229969b6018c9be9a344b142b5f861084eaff1`.
+  `sha256:597db83d1646e7256fbff00aa385f828c535206c9c37f54dd99658716594f04e`.
 - Latest release-gate observability hardening: the local gate can now write
   its own final status to `LAKECAT_RELEASE_RESULT_FILE` from its cleanup trap,
   after removing temporary candidate artifacts. This preserves local evidence

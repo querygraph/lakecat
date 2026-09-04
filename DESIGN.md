@@ -449,8 +449,8 @@ Turso-backed store, memory-store parity, commit CAS, idempotency, pointer
 logs, audit/outbox, replay admission, governed scan/fetch, credential receipt
 proof, management surfaces, view receipt chains, QueryGraph bootstrap,
 OpenLineage replay, and QGLake handoff/import proof.
-The broad local release gate was refreshed on July 4, 2026 from clean head
-`6bfce1ef`. `scripts/check-release-readiness.sh --release-candidate` passed
+The broad local release gate was refreshed on September 4, 2026 from clean head
+`bd5c03ba`. `scripts/check-release-readiness.sh --release-candidate` passed
 locally, including shell-contract checks, dependency-contract checks, manual CI
 trigger contract checks, tracked book artifact validation, formatter checks,
 default and all-features workspace tests, explicit Turso/Sail/TypeSec/Grust
