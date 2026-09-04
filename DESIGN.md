@@ -513,7 +513,8 @@ boundary cleanup rather than new architecture:
   the cited proof commit as covered by the old full gate.
 - For the already-published `v0.1.0`, do not retag.
   For the already-published `v0.2.1`, do not retag.
-  For the already-published `v0.3.0`, do not retag. For a future version-bump
+  For the already-published `v0.3.0`, do not retag.
+  For the already-published `v0.4.0`, do not retag. For a future version-bump
   release, cut a tag only after the broad local gate, QGLake handoff,
   QueryGraph locked verify/import, dependency-contract check, and book build
   pass from a clean tree.

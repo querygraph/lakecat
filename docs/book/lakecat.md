@@ -2314,6 +2314,7 @@ The already-published `v0.1.0` tag is a baseline, not something to move.
 The already-published `v0.2.0` tag is a baseline, not something to move.
 The already-published `v0.2.1` tag is a baseline, not something to move.
 The already-published `v0.3.0` tag is a baseline, not something to move.
+The already-published `v0.4.0` tag is a baseline, not something to move either.
 The workspace version is `0.3.0`; post-Ocelot documentation and hardening stay
 under `Unreleased` until a deliberate future version bump. The release version
 contract checks that the workspace crates, release instructions, tracked book
