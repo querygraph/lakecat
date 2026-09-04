@@ -5,8 +5,8 @@
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
   <meta name="author" content="Alexy Khrabrov" />
-  <meta name="dcterms.date" content="2026-08-28" />
-  <title>Appendix B: Credential And Redaction Contract</title>
+  <meta name="dcterms.date" content="2026-09-04" />
+  <title>Appendix A: Replay Admission Matrix</title>
   <style>
     div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
     span.navlink { flex: 1; }
@@ -47,21 +47,22 @@
 </div>
 <div class="sitenav">
 <span class="navlink">
-<span class="navlink-label">Next:</span> <a href="chapter-017.html" accesskey="n" rel="next">Appendix C: View Receipt-Chain Rules</a>
+<span class="navlink-label">Next:</span> <a href="chapter-017.html" accesskey="n" rel="next">Appendix B: Credential And Redaction Contract</a>
 </span>
 <span class="navlink">
-<span class="navlink-label">Previous:</span> <a href="chapter-015.html" accesskey="p" rel="previous">Appendix A: Replay Admission Matrix</a>
+<span class="navlink-label">Previous:</span> <a href="chapter-015.html" accesskey="p" rel="previous">Caracal: The 0.4 Release</a>
 </span>
 </div>
 </nav>
-<h1 data-number="15"
-id="appendix-b-credential-and-redaction-contract"><span
-class="header-section-number">15</span> Appendix B: Credential And
-Redaction Contract</h1>
-<p>Credential handling is where catalog convenience can become security
-risk. LakeCat’s posture is therefore narrow: governed Sail-planned reads
-are the default for agents, while raw credentials are explicit audited
-exceptions.</p>
+<h1 data-number="15" id="appendix-a-replay-admission-matrix"><span
+class="header-section-number">15</span> Appendix A: Replay Admission
+Matrix</h1>
+<p>Replay admission is the line between durable catalog fact and
+downstream proof. An outbox row may be stored, but it is not allowed to
+become graph, OpenLineage, QGLake, or QueryGraph evidence until LakeCat
+has checked its shape, scope, authority, and redaction posture. The
+matrix below keeps the best review version of those checks in one
+place.</p>
 <table>
 <colgroup>
 <col style="width: 25%" />
@@ -71,84 +72,126 @@ exceptions.</p>
 </colgroup>
 <thead>
 <tr>
-<th>Surface</th>
-<th>Accepted shape</th>
-<th>Redaction rule</th>
-<th>Failure posture</th>
+<th>Event family</th>
+<th>Must prove</th>
+<th>Rejects</th>
+<th>Why it matters</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Warehouse storage root</td>
-<td>Plain URI rooted in the warehouse; no query, fragment, userinfo, or
-dot traversal</td>
-<td>Return <code>warehouse-storage-root-hash</code> rather than raw root
-on errors</td>
-<td>Reject before memory or Turso persistence</td>
+<td><code>catalog.config-read</code></td>
+<td>Warehouse scope, v4 bridge defaults, overrides, the exact supported
+canonical Apache Iceberg REST endpoint set, and authorization
+receipt</td>
+<td>Duplicate config keys, unsupported <code>lakecat.format.v4*</code>
+claims, missing Iceberg operations, deployment mounts or aliases,
+management/QueryGraph routes, unsupported extra endpoints, extra
+unverified config fields</td>
+<td>QueryGraph imports the same compatibility contract LakeCat
+advertised, without confusing transport topology or control-plane
+discovery with protocol capability</td>
 </tr>
 <tr>
-<td>Storage-profile prefix</td>
-<td>Provider-compatible URI prefix, longest-prefix match, no ambiguous
-tie</td>
-<td>Return <code>storage-profile-prefix-hash</code> or
-<code>location-prefix-hash</code></td>
-<td>Fail closed rather than guessing a credential root</td>
+<td>Namespace lifecycle</td>
+<td>Warehouse, namespace path or components, matching lifecycle action,
+valid principal</td>
+<td>Malformed namespace paths, count drift, action drift, unclosed
+wrapper fields</td>
+<td>Standard catalog discovery stays attributable and replayable</td>
 </tr>
 <tr>
-<td>Public config</td>
-<td>Non-secret string hints such as region, endpoint labels, or
-purpose</td>
-<td>Return <code>public-config-key-hash</code> for rejected
-keys/values</td>
-<td>Reject secret-looking keys, values, and LakeCat-reserved proof
-keys</td>
+<td>Table lifecycle</td>
+<td>Root table identity, warehouse/namespace/table hints matching that
+identity, action receipt, soft-delete format evidence when present</td>
+<td>Scope drift, action drift, conflicting
+<code>format-version</code>/<code>format_version</code> aliases,
+undecorated-location violations</td>
+<td>Table proof follows the Iceberg object it claims to describe</td>
 </tr>
 <tr>
-<td>Secret reference</td>
-<td>Clean external locator such as <code>vault://</code>,
-<code>aws-sm://</code>, <code>gcp-sm://</code>, or
-<code>azure-kv://</code></td>
-<td>Store and replay <code>secret-ref-present</code>, provider, and full
-<code>secret-ref-hash</code></td>
-<td>Reject decorated URIs, unsupported schemes, traversal, userinfo,
-query, fragment</td>
+<td>Table commit</td>
+<td>Table scope, authorization receipt, pointer transition, principal,
+idempotency/request/response/policy hashes, format, snapshot,
+timestamp</td>
+<td>Credential-bearing or decorated metadata-location evidence, unclosed
+nested commit fields, forged event type</td>
+<td>Commit proof stays tied to the accepted pointer movement without
+leaking object paths</td>
 </tr>
 <tr>
-<td>Resolver dispatch</td>
-<td>TypeSec authorizes the exact secret-ref resource before lookup</td>
-<td>Resolver failures report provider plus secret/error hashes</td>
-<td>Denied decisions do not call the resolver</td>
+<td>Governed scan and fetch</td>
+<td>Principal, <code>table-plan-scan</code> action, requested/effective
+projections, requested/effective stats fields, required filters,
+matching top-level and receipt read restrictions, non-empty full policy
+hashes, positive TTL cap</td>
+<td>Actorless scan proof, action drift, missing or widening
+projection/filter evidence, placeholder policy hashes, non-LakeCat or
+credential-bearing plan-task values</td>
+<td>A saved scan proof shows the same TypeSec restriction Sail planned
+and LakeCat replayed</td>
 </tr>
 <tr>
-<td>Returned credentials</td>
-<td>Prefix remains inside the selected profile; TTL honors policy cap;
-LakeCat-owned evidence is canonical</td>
-<td>Replay prefix hashes and issuer-config hashes, never raw secret
-material</td>
-<td>Reject widened prefixes before recording
-<code>credentials.vend-attempted</code></td>
+<td>Management upserts</td>
+<td>Valid server/project/warehouse/profile/policy IDs, parent scope,
+ODRL hash for policies, valid principal/action/engine/time</td>
+<td>Unknown wrapper fields, actorless mutations, endpoint/storage-root
+hash drift, malformed IDs, ODRL hash drift</td>
+<td>QueryGraph sees tenant and policy state as accepted catalog
+control-plane facts</td>
 </tr>
 <tr>
-<td>Restricted agent branch</td>
-<td>Zero credentials, explicit block reason, raw exception false, TTL
-cap present</td>
-<td>Empty credential-response evidence is explicit proof, not
-absence</td>
-<td>Agent is steered to governed Sail-planned reads</td>
+<td>Management lists</td>
+<td>Count-aligned duplicate-free ID arrays, valid warehouse/project
+scope, event-matching read action, principal evidence</td>
+<td>Count inflation, duplicate IDs, project/warehouse detachment,
+missing receipt hashes</td>
+<td>Inventory proof cannot turn a list response into anonymous or
+inflated management state</td>
 </tr>
 <tr>
-<td>Trusted human branch</td>
-<td>Positive credential count only when policy allows raw exception</td>
-<td>Returned prefixes are full hashes; exception reason is recorded</td>
-<td>Raw credentials remain auditable exceptions, not the default
-path</td>
+<td>View lifecycle</td>
+<td>Warehouse, namespace, view name, store-assigned positive version,
+expected-version guard when present, action-specific receipt</td>
+<td>Versionless lifecycle facts, non-positive guards, action drift,
+nested view scope drift</td>
+<td>View bootstrap evidence is tied to the catalog view object that
+produced it</td>
+</tr>
+<tr>
+<td>QueryGraph bootstrap</td>
+<td>Warehouse, table/view counts, verified stable IDs, artifact hashes,
+standards, bundle/graph/OpenLineage/import hashes, request identity,
+authorization receipt</td>
+<td>Missing standards, malformed artifact arrays, duplicate stable IDs,
+short hashes, extra unverified bootstrap fields</td>
+<td>The semantic bundle can be imported only if it matches accepted
+catalog state</td>
+</tr>
+<tr>
+<td>Credential vend attempt</td>
+<td>Table scope, selected storage profile, credential count, prefix
+hashes, issuer-config hashes, principal, <code>credentials-vend</code>
+action, read restriction and TTL posture</td>
+<td>Raw credential material, count drift, broadened prefix, malformed
+issuer proof, missing principal on zero-credential attempts</td>
+<td>Credential evidence stays useful without becoming a credential
+leak</td>
+</tr>
+<tr>
+<td>Outbox envelope</td>
+<td>Outer event type, inner <code>event-type</code>, event id, payload
+hash, created order</td>
+<td>Event-type mismatch, duplicate event IDs in one batch, malformed
+pending payloads, unsupported event types</td>
+<td>Graph and lineage drains cannot reinterpret one event family as
+another</td>
 </tr>
 </tbody>
 </table>
-<p>The important distinction is that storage-profile management proves a
-credential root exists, while credential vending proves whether a caller
-received raw storage reach. QueryGraph can reason over both without
-seeing the raw root, secret URI, backend error, token, or returned
-credential material.</p>
+<p>The pattern is deliberately repetitive in code but not in the
+narrative: every event must be scoped, actor-bound, action-bound, closed
+over the fields LakeCat actually verifies, and redacted before it
+becomes downstream evidence.</p>
 </body>
 </html>

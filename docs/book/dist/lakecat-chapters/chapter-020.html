@@ -5,8 +5,8 @@
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
   <meta name="author" content="Alexy Khrabrov" />
-  <meta name="dcterms.date" content="2026-08-28" />
-  <title>Future Work</title>
+  <meta name="dcterms.date" content="2026-09-04" />
+  <title>The Catalog Community and Semantic Supply Chain</title>
   <style>
     div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
     span.navlink { flex: 1; }
@@ -47,69 +47,56 @@
 </div>
 <div class="sitenav">
 <span class="navlink">
+<span class="navlink-label">Next:</span> <a href="chapter-021.html" accesskey="n" rel="next">Future Work</a>
 </span>
 <span class="navlink">
-<span class="navlink-label">Previous:</span> <a href="chapter-019.html" accesskey="p" rel="previous">The Catalog Community and Semantic Supply Chain</a>
+<span class="navlink-label">Previous:</span> <a href="chapter-019.html" accesskey="p" rel="previous">Appendix D: QGLake Handoff Proof Map</a>
 </span>
 </div>
 </nav>
-<h1 data-number="19" id="future-work"><span
-class="header-section-number">19</span> Future Work</h1>
-<p>LakeCat is a direction more than a single release. The next stage
-should keep the architecture more true without pushing engine, graph, or
-security semantics back into the catalog.</p>
-<p>Marciana v1 is complete as a durable local-service proof;
-implementing agent memory is therefore not a LakeCat backlog item.
-LakeCat now proves the narrower boundary: a downstream QueryGraph
-workflow binds an allowed answer to physical, model, artifact, policy,
-plan, graph, and lineage hashes. Future work should carry those accepted
-anchors into Marciana provenance without copying raw table data into the
-catalog or making LakeCat responsible for recall.</p>
-<ol type="1">
-<li>Point the Sail git dependency at upstream (or a published crate)
-only after the required helpers land there, then retire the
-querygraph/sail <code>lakecat</code> branch and its dependency-contract
-assertions.</li>
-<li>Keep pushing reusable table-status, planning, metadata-as-data,
-manifest, delete, and commit helpers into Sail.</li>
-<li>Treat typed Iceberg v4 as a Sail project after formal specification
-adoption. The active v4 draft includes relative metadata locations, but
-LakeCat should not turn a moving draft into catalog behavior; its bridge
-remains explicit and JSON-only until Sail can model and plan the adopted
-semantics.</li>
-<li>Make the transactional outbox the only path for graph and lineage
-side effects, while keeping graph persistence, traversal, and Cypher in
-Grust.</li>
-<li>Expand TypeSec-backed capability checks until every privileged path
-is unbypassable, with raw credentials remaining an explicit audited
-exception.</li>
-<li>Keep OSI, Croissant, CDIF, ODRL composition, and agent workflows in
-QueryGraph. Keep QueryGraph 0.4 Sentinel’s importer aligned with LakeCat
-<code>qglake-bundle</code>/<code>lakecat-core</code> <code>0.3.0</code>
-and the Grust/TypeSec <code>0.12.0</code> substrate while preserving the
-locked receipt-chain and graph-handoff proof.</li>
-<li>Prove the bootstrap bundle through QueryGraph import on every
-meaningful public-surface change, and keep local release evidence ahead
-of cloud CI.</li>
-<li>Define an optional handoff profile that binds governed answer text
-to LakeCat receipt and lineage hashes before qg-rust writes it to
-Marciana, while keeping capability minting, content rehydration, and
-recall wholly in TypeSec and QueryGraph.</li>
-</ol>
-<p>That optional binding must preserve the upstream v1 limits rather
-than turning them into LakeCat claims. <code>MemoryId::next()</code> is
-process-local, so a new write after qg-rust restarts can collide with an
-existing persisted id; Grust pushes down space equality but evaluates
-the other memory query dimensions through the shared matcher; the
-reference vector index is in-process and nonpersistent; and there is no
-hosted multi-tenant control plane yet. Those are upstream Marciana scale
-contracts to resolve before a production LakeCat-to-memory profile can
-claim restart-safe writes, full query pushdown, durable semantic
-ranking, or hosted tenancy.</p>
-<p>The payoff is a catalog foundation that feels ordinary to Iceberg
-clients and rich to QueryGraph. Tables remain portable. Policies become
-enforceable. Graph and lineage become replayable. Sail plans close to
-the data. QueryGraph gets a trustworthy substrate for the next version
-of its lakehouse intelligence.</p>
+<h1 data-number="19"
+id="the-catalog-community-and-semantic-supply-chain"><span
+class="header-section-number">19</span> The Catalog Community and
+Semantic Supply Chain</h1>
+<p>LakeCat’s public comparison program now treats Polaris, Gravitino,
+and Lakekeeper as protocol peers. The most useful evidence is not
+another isolated throughput chart: it is the work catalogs are expected
+to survive and explain. The neutral catalog-bench suite therefore
+publishes unranked stock-client correctness matrices for Spark, Flink,
+Trino, and DuckDB, plus explicit recovery, restart, cold-restore,
+metadata-pointer migration, and HadoopCatalog handoff evidence. Every
+result keeps catalog-specific deployment scope and known gaps next to
+the outcome.</p>
+<p>The same discipline extends into Apache Ossie. QueryGraph pins the
+upstream schema, validator, and TPC-DS model by commit and checksum. A
+clean run creates five physical Iceberg fixtures through stock Spark,
+asks Sail’s catalog boundary to validate the bindings, asks TypeSec’s
+vocabulary to authorize publication, and CAS-publishes the exact model
+artifact in LakeCat. The transactional outbox then emits one stable
+QueryGraph-model graph anchor for Grust and one OpenLineage event.
+Business-model interpretation stays in QueryGraph; LakeCat stores only
+the immutable pointer, version, physical and policy bindings, publisher,
+audit, and replay boundary.</p>
+<p>Five representative answers are bound to seven independently hashed
+bases: physical snapshots, canonical model, source artifact, governed
+policy, SQL plans, graph replay, and lineage replay. Deliberately
+changing physical state, model, policy, graph, lineage, or artifact
+invalidates the saved proof. This is small deterministic correctness
+evidence, not a TPC-DS performance claim or a cryptographic attestation
+of Spark.</p>
+<p>Interchange claims are equally bounded. The pinned Apache Ossie
+Polaris converter passes its 45 Java tests and preserves the TPC-DS
+model, five datasets, and 31 fields through live Polaris 1.7.0. It
+currently omits four relationships, five metrics, AI context, and the
+source model extensions while generating physical reconstruction
+extensions. The published result therefore says
+<code>verified-with-loss</code>, and the evidence motivates a
+machine-readable converter loss-report proposal rather than hiding gaps
+behind “conversion succeeded.”</p>
+<p>The 2026-Q3 packet links an immutable evidence index, generated known
+gaps, reproduction and demo guides, and public review issues for all
+four catalogs. An open review issue is an opportunity for correction,
+not maintainer endorsement. Corrections create a new feedback-bundle
+version; historical evidence is never rewritten.</p>
 </body>
 </html>

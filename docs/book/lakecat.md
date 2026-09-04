@@ -14,12 +14,17 @@ is **LakeCat** and the engine-side lakehouse implementation is **Sail**. Graph
 behavior belongs to **Grust**; governance and capability proof belong to
 **TypeSec**; the end-to-end integration target is **QueryGraph**.
 
-This edition is aligned with **LakeCat 0.3.0, Ocelot**, published on July 4,
-2026. Ocelot is the point where the architecture in this book became a shipped,
-announcement-ready claim: a stock PyIceberg client completed a real REST
-round-trip, the release-candidate gate passed from a clean tree, and the QGLake
-handoff proved that LakeCat replay, OpenLineage evidence, Grust projection, and
-QueryGraph verification/import agreed on the same catalog transition.
+This edition is aligned with **LakeCat 0.4.0, Caracal**, published on
+September 4, 2026. Ocelot (0.3.0) was the point where the architecture in this
+book became a shipped, announcement-ready claim: a stock PyIceberg client
+completed a real REST round-trip, the release-candidate gate passed from a
+clean tree, and the QGLake handoff proved that LakeCat replay, OpenLineage
+evidence, Grust projection, and QueryGraph verification/import agreed on the
+same catalog transition. Caracal takes that claim into public: stock Spark,
+Flink, Trino, DuckDB, and PyIceberg against peer catalogs in a neutral harness,
+deterministic fault and migration campaigns, an Apache Ossie semantic supply
+chain, and one released dependency line across Grust, TypeSec, Marciana, and
+QueryGraph.
 
 This book builds from first principles. Chapter 2 explains what a catalog is,
 what Iceberg makes the catalog responsible for, and what LakeCat adds without
@@ -2360,6 +2365,75 @@ verifier then repeats the same checks against saved artifacts. Appendix A lists
 the replay-admission contract, Appendix B captures credential redaction,
 Appendix C captures view receipt chains, and Appendix D maps the QGLake handoff
 proof.
+
+# Caracal: The 0.4 Release
+
+Caracal is the catalog-community release. Where Ocelot proved that a stock
+Iceberg client could use LakeCat, Caracal proves it in public, against peers,
+under strain, and with the rest of the QueryGraph stack on one released
+dependency line. It closes the six catalog-community phases recorded in the
+previous chapter and merges the governed-scan grant and performance line that
+had been developed beside them.
+
+## What shipped
+
+- **Neutral conformance.** Stock Spark 4.1.3, Flink 2.1.3, Trino 483, DuckDB
+  1.5.3, and PyIceberg 0.11.1 against LakeCat, Apache Polaris 1.7.0, Apache
+  Gravitino 1.3.0, Lakekeeper 0.13.3, and Apache Nessie through the unranked
+  `querygraph/catalog-bench` harness: every catalog–engine cell passes the
+  common write/read/evolution contract, and every defect found on the way was
+  fixed at its owner — REST and catalog behavior in LakeCat, reusable Iceberg
+  update semantics in Sail — without a client-specific shim.
+- **Recovery and migration.** Deterministic before-upstream and after-upstream
+  object-store faults, mid-request restart, cold restore from run-owned
+  volumes, transactional outbox outage and replay, four-direction
+  metadata-pointer migration with Polaris and Lakekeeper, and a HadoopCatalog
+  cookbook.
+- **The semantic supply chain.** Apache Ossie models are structurally and
+  physically validated, policy-bound, compare-and-swap published through the
+  new `ModelPublication` management boundary, projected into Grust and
+  OpenLineage from the outbox, and bound to seven proof bases before an answer
+  is admitted; six independent drift injections are rejected.
+- **Governed-scan grants.** Durable, secret-free scan grants with a sealed
+  owner proof, a bounded scan scope, and a trusted service-owned catalog
+  identity (`LAKECAT_CATALOG_IDENTITY`) that request data can never supply.
+- **Contention and identity hardening.** Eight-writer same-table contention
+  now resolves to exactly one winner plus honest 409 conflicts with zero
+  request errors, exhausted transient contention returns 503 rather than 500,
+  and namespace identity is component-safe at every durable boundary
+  (`v1:1:a:1:b` can no longer alias `v1:3:a.b`).
+- **Evidence performance.** Streamed canonical hashing, batched catalog reads,
+  bulk policy-binding lookup, and warehouse-scoped view and receipt reads on
+  the QueryGraph bootstrap path, with Criterion benchmarks for the commit,
+  scan, and bootstrap paths.
+- **Two papers.** *LakeCat: A Thin, Governed, Replayable Catalog Foundation*
+  and *Getting Out of the Way: Engine Truth, Typed Governance, and the Thin
+  Catalog*, both published through First Pair.
+
+## Caracal's dependency baseline
+
+| Component | Caracal baseline | Relationship to LakeCat |
+| --- | --- | --- |
+| LakeCat workspace | `0.4.0`, Caracal | All LakeCat crates and `qglake-bundle` share the workspace version. |
+| Grust | `0.13.0`, Prawn, crates.io | The first Grust line in which every publishable crate ships in lockstep; `grust-graph` and `grust-turso` provide graph projection, Cypher, and the durable Turso graph backend. |
+| TypeSec | `0.14.0`, Dorsoduro, crates.io | Tracks Grust 0.13 from crates.io only and adds signed, immutable-model-bound semantic decision receipts, which the Ossie publication path consumes. |
+| Turso | `0.7.2`, crates.io | The store moves from the `0.7.0-pre.10` prerelease to the stable line that `grust-turso` 0.13 uses, so one Turso is linked; the MVCC `BEGIN CONCURRENT` contention tests pass unchanged. |
+| Sail | `0.6.4`, git branch `querygraph/sail#lakecat` | Iceberg planning, commit-update, staged-create, `add-spec`, and object-store-cache behavior not yet consumed from a published release. |
+| Marciana | `0.13.0`, crates.io | Acceptance peer; consumes `lakecat-core` for governed cognition sources. |
+| QueryGraph | `0.5.0`, Harrier | Acceptance peer; its importer consumes `qglake-bundle` and `lakecat-core` `0.4.0` while the QGLake handoff gate drives verify/import under `--locked`. |
+
+## What Caracal does not claim
+
+Every catalog-community result is a bounded correctness observation, not a
+throughput ranking or a production-availability claim; the disclosed
+deployment topologies, engine versions, and known gaps travel with each
+bundle. The Ossie evaluation covers five representative answers and one
+converter, whose round trip is recorded as `verified-with-loss`. The governance
+findings that FABLE-REVIEW-1 left open — context-blind policy invocation, the
+header-trusted principal and its raw-credential heuristic, the unlabeled
+TypeSec allow-all path, and unsigned legacy plan-task forms — remain open and
+are the next hardening line. Typed Iceberg v4 remains Sail work behind the
+explicit JSON bridge.
 
 # Appendix A: Replay Admission Matrix
 

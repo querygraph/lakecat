@@ -95,7 +95,7 @@ Turso-backed `TursoCatalogStore` for namespaces, table records, metadata pointer
 history, audit/outbox rows, and idempotent commit replay; without it the binary
 keeps the in-memory store.
 
-The Grust feature gates consume the published Grust `0.12.0` crates so LakeCat
+The Grust feature gates consume the published Grust `0.13.0` crates so LakeCat
 can use the dedicated `grust-turso` crate for durable catalog graph projection.
 Plain `grust-local` keeps the fast memory-backed Grust sink;
 `grust-turso-local` constructs a bootstrapped `grust_turso::TursoGraphStore`,

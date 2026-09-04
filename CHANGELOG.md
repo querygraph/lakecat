@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+## 0.4.0 - 2026-09-04
+
+Caracal: the catalog-community and stack-alignment release. Everything from
+Phases 0-6 of the catalog-community program (stock Spark, Flink, Trino, DuckDB
+and PyIceberg conformance against Polaris, Gravitino, Lakekeeper and Nessie;
+deterministic fault, restart, cold-restore and migration campaigns; the Apache
+Ossie semantic supply chain), the governed-scan grant boundary and
+performance line from `agent/marciana-production-path`, two published papers,
+and one released dependency line: Grust 0.13.0 (Prawn), TypeSec 0.14.0
+(Dorsoduro), Sail `querygraph/sail#lakecat`.
+
+- Dependencies: Grust `0.12.0 -> 0.13.0` (`grust-graph`, `grust-turso`) and
+  TypeSec `0.12.0 -> 0.14.0`. No LakeCat API change was required; the full
+  feature matrix (`cargo test --workspace --all-features`, 1400 tests) plus
+  strict Clippy and fmt pass on the released line.
+- Merge `agent/marciana-production-path` (which contained `main` and
+  `agent/sail-performance-alignment`) onto the catalog-community line: durable
+  governed scan grants with sealed owner proof and bounded scope, a trusted
+  service-owned catalog identity (`LAKECAT_CATALOG_IDENTITY`), streamed
+  evidence hashing and batched catalog reads on the QueryGraph bootstrap path,
+  service benchmarks for commit, scan and bootstrap, bulk policy-binding
+  lookup, direct server/project lookups, warehouse-scoped view and receipt
+  reads, and a version-checked `commit_table_with_snapshot`. Where both lines
+  solved the same problem independently, the newer catalog-community Turso
+  contention policy, component-safe namespace keys and fresh field-id
+  assignment were kept.
+- Bump the workspace and every intra-workspace requirement to `0.4.0`.
+
 - Add the "Getting Out of the Way" blog post announcing the engine-truth paper
   under `docs/blog/getting-out-of-the-way/`, with its Ulysses/Omnighost
   `.textpack` deliverable bundling the paper's headboard and two figures.
@@ -28,8 +56,6 @@
 
 - Record the completed fresh four-catalog stock-Trino interoperability bundle
   and advance the catalog-community execution front to DuckDB.
-
-## Unreleased
 
 - Project governed semantic-model publications through LakeCat's outbox into
   stable QueryGraph model graph anchors and hash-bound OpenLineage events.

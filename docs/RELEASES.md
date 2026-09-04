@@ -13,6 +13,8 @@ existing release commit.
 | `v0.2.1` | Lynx | Maintenance: Turso/object-store commit-path performance (cached per-bucket object-store clients, pooled pragma-warmed write connections), dependency modernization (published TypeSec/Grust 0.11), the `catalog-commit-bench` harness and book chapter, and the `qglake-bundle` DRY extraction of the QueryGraph bootstrap-bundle wire contract. No wire-format or governance change vs `v0.2.0`. |
 | `v0.3.0` | Ocelot | Stock-client Iceberg REST conformance proven by a PyIceberg round-trip: object-shaped map fields, `listTables`, real `ErrorModel` exception types (403 on authz denial, 409 duplicate namespace, 404 missing namespace), honest update rejection on the default build, and fail-closed commit-requirement validation. Plus FABLE-REVIEW-1 (full finding re-verification, phased plan, guardrail warnings), the Benchmark Suite chapter + Foyer cache story, `LAKECAT-SAIL.md`, tolerant-by-policy handoff verification, gate-contract repairs, and published Grust/TypeSec 0.12 (Lobster/Torcello). Wire-format change vs `v0.2.1`: error `type` strings and authz-denial status moved to Iceberg-spec values. |
 
+| `v0.4.0` | Caracal | The catalog-community release: neutral, unranked stock-client conformance for Spark, Flink, Trino, DuckDB and PyIceberg against Polaris, Gravitino, Lakekeeper and Nessie; deterministic fault-injection, restart, cold-restore, peer and HadoopCatalog migration campaigns; the Apache Ossie semantic supply chain (CAS-published models, seven proof bases, six-way drift rejection); the governed-scan grant boundary and streamed-evidence performance line; component-safe namespace keys; two published papers; and one released dependency line (Grust 0.13.0 Prawn, TypeSec 0.14.0 Dorsoduro). |
+
 `bobcat` is an annotated companion tag for the immutable `v0.1.0` commit. It
 exists for discovery only; package versioning and dependency resolution use the
 SemVer tag and crate version.
@@ -26,7 +28,6 @@ ready.
 | Planned line | Codename | Intended emphasis |
 | --- | --- | --- |
 | `0.3.x` | Ocelot | Governed access and TypeSec capability hardening (FABLE-REVIEW-1 Phase 2: verified principals, distinct raw-vend action, signed decision receipts). |
-| `0.4` | Caracal | QueryGraph/QGLake operational integration. |
 | `0.5` | Serval | Catalog management and durable tenancy operations. |
 | `0.6` | Puma | Scale, observability, and deployment hardening. |
 | `0.7` | Leopard | Cross-catalog interoperability and migration tooling. |

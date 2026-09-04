@@ -5,7 +5,7 @@
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
   <meta name="author" content="Alexy Khrabrov" />
-  <meta name="dcterms.date" content="2026-08-28" />
+  <meta name="dcterms.date" content="2026-09-04" />
   <title>The Benchmark Suite</title>
   <style>
     div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
@@ -197,17 +197,14 @@ href="https://github.com/querygraph/lakecat/blob/dcc3d397cc594345ecdeb052b236435
 and the neutral <a
 href="https://github.com/querygraph/catalog-bench/blob/fdb2a9af1d8570ef36491beb408aabb71570cce6/docs/COMMIT-CONFORMANCE.md"><code>catalog-bench</code>
 report</a>.</p>
-<p>This is also why Rust did not, by itself, win the benchmark. The
-commit path is I/O-bound, so runtime CPU speed is nearly irrelevant
-against a network PUT and an fsynced transaction, and a warm,
-long-running server running a tight commit loop is the JVM’s best case —
-JIT-compiled hot paths and warm connection pools, with its real
-weaknesses of cold start and memory footprint nowhere in frame. Where
-the Rust implementation keeps its edge is exactly what a warm
-steady-state benchmark hides: no GC pauses and so steadier tail latency,
-a far smaller resident footprint, and instant cold start — properties
-that matter for serverless, edge, and many-tenant-per-host deployments
-rather than for a single warm server in a loop.</p>
+<p>Rust did not, by itself, win the benchmark. The accepted path
+includes a network object write plus private-state work, so connection
+reuse and transaction setup matter more than runtime CPU speed. A warm,
+long-running server running a tight commit loop is also the JVM’s best
+case: JIT-compiled paths and connection pools are hot. Cold start,
+resident memory, and garbage-collection behavior are outside this
+experiment and need separate measurements rather than being inferred
+from it.</p>
 <p>The driver, impartial Docker/MinIO harness, versioned contract, raw
 evidence, and generated reports live in <a
 href="https://github.com/querygraph/catalog-bench"><code>querygraph/catalog-bench</code></a>.</p>
@@ -240,14 +237,19 @@ is ported from lancedb/ocra, attributed in the crate, with the original
 Moka backing store swapped for Foyer. It is opt-in:
 <code>SAIL_OBJECT_STORE_CACHE</code> turns it on, and
 <code>SAIL_OBJECT_STORE_CACHE_PAGE_SIZE</code>, <code>_MEMORY</code>,
-and <code>_METADATA</code> tune it — by default 1 MiB pages, 1 GiB of
-value memory, and 64 MiB of metadata. Because <code>object_store</code>
-exposes its read methods as a non-overridable blanket trait, the cache
-cannot wrap them directly; it intercepts the two range entry points the
-engine actually reads through — <code>get_opts</code> and
-<code>get_ranges</code> — and serves whole pages from memory. The
-current tier is in-memory only; Foyer’s hybrid disk tiering is a
-follow-up the same seam already anticipates.</p>
+<code>_METADATA</code>, and <code>_METADATA_TTL_SECS</code> tune it — by
+default 1 MiB pages, 1 GiB of value memory, 64 MiB of combined
+metadata/path-identity memory, and a 60 second metadata TTL. Because
+<code>object_store</code> exposes its read methods as a non-overridable
+blanket trait, the cache cannot wrap them directly; it intercepts the
+two range entry points the engine actually reads through —
+<code>get_opts</code> and <code>get_ranges</code> — and serves whole
+pages from memory. The current tier is in-memory only; Foyer’s hybrid
+disk tiering is a follow-up the same seam already anticipates. Writes
+invalidate before and after mutation; external replacements rotate the
+object’s compact cache identity after TTL revalidation; conditional and
+version-specific requests bypass the cache. Page, metadata, and
+path-identity state are all capacity bounded.</p>
 <p>On the same files the difference is roughly twenty-six fold: the
 per-file scan median falls from about 47.5 ms cold and uncached to 1.81
 ms warm. None of this lives in LakeCat. A read-through object-store

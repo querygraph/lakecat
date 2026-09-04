@@ -12,15 +12,15 @@ graph behavior to Grust, and governance semantics to TypeSec.
 
 ## Current Stage
 
-- The latest release is v0.3.0 (Ocelot — stock-client Iceberg REST
-  conformance, FABLE-REVIEW-1, Grust/TypeSec 0.12); see `RELEASE.md`,
+- The latest release is v0.4.0 (Caracal — the catalog-community release,
+  governed-scan grants, Grust 0.13/TypeSec 0.14); see `RELEASE.md`,
   `STATUS.md`, `docs/RELEASES.md`, and `CHANGELOG.md` for the recorded
   release-candidate proof.
 - Do not rebuild tracked book artifacts unless deliberately finishing a release.
   Keep `docs/book/lakecat.md` current as behavior and workflows change.
 - Keep CI manual-only. Local release evidence is authoritative.
-- Current LakeCat dependencies are the published Grust `0.12.0` (Lobster) and
-  TypeSec `0.12.0` (Torcello) crates, plus Sail as a Cargo git dependency on
+- Current LakeCat dependencies are the published Grust `0.13.0` (Prawn) and
+  TypeSec `0.14.0` (Dorsoduro) crates, plus Sail as a Cargo git dependency on
   `querygraph/sail#lakecat` (see `LAKECAT-SAIL.md`). QueryGraph's live `qg-rust`
   importer matches LakeCat's receipt-chain contract; refresh its stale
   dependency-guide examples before QueryGraph's next public release.

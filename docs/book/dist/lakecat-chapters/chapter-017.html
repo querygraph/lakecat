@@ -5,8 +5,8 @@
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
   <meta name="author" content="Alexy Khrabrov" />
-  <meta name="dcterms.date" content="2026-08-28" />
-  <title>Appendix C: View Receipt-Chain Rules</title>
+  <meta name="dcterms.date" content="2026-09-04" />
+  <title>Appendix B: Credential And Redaction Contract</title>
   <style>
     div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
     span.navlink { flex: 1; }
@@ -47,98 +47,108 @@
 </div>
 <div class="sitenav">
 <span class="navlink">
-<span class="navlink-label">Next:</span> <a href="chapter-018.html" accesskey="n" rel="next">Appendix D: QGLake Handoff Proof Map</a>
+<span class="navlink-label">Next:</span> <a href="chapter-018.html" accesskey="n" rel="next">Appendix C: View Receipt-Chain Rules</a>
 </span>
 <span class="navlink">
-<span class="navlink-label">Previous:</span> <a href="chapter-016.html" accesskey="p" rel="previous">Appendix B: Credential And Redaction Contract</a>
+<span class="navlink-label">Previous:</span> <a href="chapter-016.html" accesskey="p" rel="previous">Appendix A: Replay Admission Matrix</a>
 </span>
 </div>
 </nav>
-<h1 data-number="16" id="appendix-c-view-receipt-chain-rules"><span
-class="header-section-number">16</span> Appendix C: View Receipt-Chain
-Rules</h1>
-<p>Ocelot does not claim full Iceberg view-history semantics. It keeps a
-compact, catalog-owned receipt chain so QueryGraph can prove which view
-version was exported, updated, dropped, or tombstoned. Richer view
-semantics remain a Sail-aligned future target.</p>
+<h1 data-number="16"
+id="appendix-b-credential-and-redaction-contract"><span
+class="header-section-number">16</span> Appendix B: Credential And
+Redaction Contract</h1>
+<p>Credential handling is where catalog convenience can become security
+risk. LakeCat’s posture is therefore narrow: governed Sail-planned reads
+are the default for agents, while raw credentials are explicit audited
+exceptions.</p>
 <table>
 <colgroup>
-<col style="width: 33%" />
-<col style="width: 33%" />
-<col style="width: 33%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
 </colgroup>
 <thead>
 <tr>
-<th>Rule</th>
-<th>Required evidence</th>
-<th>Rejects</th>
+<th>Surface</th>
+<th>Accepted shape</th>
+<th>Redaction rule</th>
+<th>Failure posture</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Stable identity</td>
-<td><code>lakecat:view:&lt;warehouse&gt;:&lt;namespace&gt;:&lt;name&gt;</code>
-plus matching component fields</td>
-<td>Stable IDs that do not match warehouse/namespace/name</td>
+<td>Warehouse storage root</td>
+<td>Plain URI rooted in the warehouse; no query, fragment, userinfo, or
+dot traversal</td>
+<td>Return <code>warehouse-storage-root-hash</code> rather than raw root
+on errors</td>
+<td>Reject before memory or Turso persistence</td>
 </tr>
 <tr>
-<td>First receipt</td>
-<td>Version 1 <code>upsert</code>, no previous version, no previous
-receipt hash</td>
-<td>Zero-version chains, first tombstones, forged first previous-link
-fields</td>
+<td>Storage-profile prefix</td>
+<td>Provider-compatible URI prefix, longest-prefix match, no ambiguous
+tie</td>
+<td>Return <code>storage-profile-prefix-hash</code> or
+<code>location-prefix-hash</code></td>
+<td>Fail closed rather than guessing a credential root</td>
 </tr>
 <tr>
-<td>Later upsert</td>
-<td>Previous receipt hash points at the prior receipt; version advances
-by exactly one</td>
-<td>Skipped versions, unsupported operations, broken previous links</td>
+<td>Public config</td>
+<td>Non-secret string hints such as region, endpoint labels, or
+purpose</td>
+<td>Return <code>public-config-key-hash</code> for rejected
+keys/values</td>
+<td>Reject secret-looking keys, values, and LakeCat-reserved proof
+keys</td>
 </tr>
 <tr>
-<td>Drop tombstone</td>
-<td>Operation <code>drop</code>, previous receipt hash set,
-<code>view-version</code> remains the deleted version</td>
-<td>Drops that advance the version or omit the previous receipt</td>
+<td>Secret reference</td>
+<td>Clean external locator such as <code>vault://</code>,
+<code>aws-sm://</code>, <code>gcp-sm://</code>, or
+<code>azure-kv://</code></td>
+<td>Store and replay <code>secret-ref-present</code>, provider, and full
+<code>secret-ref-hash</code></td>
+<td>Reject decorated URIs, unsupported schemes, traversal, userinfo,
+query, fragment</td>
 </tr>
 <tr>
-<td>Recreate</td>
-<td>New upsert links after the tombstone and advances to the next
-version</td>
-<td>A second unrelated version-1 chain for the same stable view id</td>
+<td>Resolver dispatch</td>
+<td>TypeSec authorizes the exact secret-ref resource before lookup</td>
+<td>Resolver failures report provider plus secret/error hashes</td>
+<td>Denied decisions do not call the resolver</td>
 </tr>
 <tr>
-<td>Chain header</td>
-<td><code>receipt-count</code>, latest version, latest operation, and
-tombstone flag agree with the last receipt</td>
-<td>Headers that shed receipts or present a forged head</td>
+<td>Returned credentials</td>
+<td>Prefix remains inside the selected profile; TTL honors policy cap;
+LakeCat-owned evidence is canonical</td>
+<td>Replay prefix hashes and issuer-config hashes, never raw secret
+material</td>
+<td>Reject widened prefixes before recording
+<code>credentials.vend-attempted</code></td>
 </tr>
 <tr>
-<td>Hash coverage</td>
-<td><code>receipt-hashes</code>, <code>drop-receipt-hashes</code>, and
-<code>chain-hashes</code> exactly cover the nested receipt bodies and
-chains</td>
-<td>Convenient full-looking hashes that do not match the embedded
-chain</td>
+<td>Restricted agent branch</td>
+<td>Zero credentials, explicit block reason, raw exception false, TTL
+cap present</td>
+<td>Empty credential-response evidence is explicit proof, not
+absence</td>
+<td>Agent is steered to governed Sail-planned reads</td>
 </tr>
 <tr>
-<td>Durable row binding</td>
-<td>Turso row warehouse/namespace/view columns agree with decoded
-receipt JSON</td>
-<td>A valid-looking receipt body riding a corrupted row index into
-another view</td>
-</tr>
-<tr>
-<td>QueryGraph handoff</td>
-<td>Accepted view receipt hashes match bootstrap view artifacts and
-compact handoff proof</td>
-<td>Spliced receipt arrays from another view or another run</td>
+<td>Trusted human branch</td>
+<td>Positive credential count only when policy allows raw exception</td>
+<td>Returned prefixes are full hashes; exception reason is recorded</td>
+<td>Raw credentials remain auditable exceptions, not the default
+path</td>
 </tr>
 </tbody>
 </table>
-<p>The receipt chain is intentionally compact: it proves catalog state
-changes and tombstones, not full SQL engine view semantics. That is
-enough for QueryGraph to reject a bootstrap that lost or borrowed view
-proof while LakeCat keeps richer view interpretation out of the
-catalog.</p>
+<p>The important distinction is that storage-profile management proves a
+credential root exists, while credential vending proves whether a caller
+received raw storage reach. QueryGraph can reason over both without
+seeing the raw root, secret URI, backend error, token, or returned
+credential material.</p>
 </body>
 </html>

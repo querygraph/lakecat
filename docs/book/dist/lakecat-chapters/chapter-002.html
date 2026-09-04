@@ -5,7 +5,7 @@
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
   <meta name="author" content="Alexy Khrabrov" />
-  <meta name="dcterms.date" content="2026-08-28" />
+  <meta name="dcterms.date" content="2026-09-04" />
   <title>Preface</title>
   <style>
     div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
@@ -72,13 +72,18 @@ lakehouse implementation is <strong>Sail</strong>. Graph behavior
 belongs to <strong>Grust</strong>; governance and capability proof
 belong to <strong>TypeSec</strong>; the end-to-end integration target is
 <strong>QueryGraph</strong>.</p>
-<p>This edition is aligned with <strong>LakeCat 0.3.0, Ocelot</strong>,
-published on July 4, 2026. Ocelot is the point where the architecture in
-this book became a shipped, announcement-ready claim: a stock PyIceberg
-client completed a real REST round-trip, the release-candidate gate
-passed from a clean tree, and the QGLake handoff proved that LakeCat
-replay, OpenLineage evidence, Grust projection, and QueryGraph
-verification/import agreed on the same catalog transition.</p>
+<p>This edition is aligned with <strong>LakeCat 0.4.0, Caracal</strong>,
+published on September 4, 2026. Ocelot (0.3.0) was the point where the
+architecture in this book became a shipped, announcement-ready claim: a
+stock PyIceberg client completed a real REST round-trip, the
+release-candidate gate passed from a clean tree, and the QGLake handoff
+proved that LakeCat replay, OpenLineage evidence, Grust projection, and
+QueryGraph verification/import agreed on the same catalog transition.
+Caracal takes that claim into public: stock Spark, Flink, Trino, DuckDB,
+and PyIceberg against peer catalogs in a neutral harness, deterministic
+fault and migration campaigns, an Apache Ossie semantic supply chain,
+and one released dependency line across Grust, TypeSec, Marciana, and
+QueryGraph.</p>
 <p>This book builds from first principles. Chapter 2 explains what a
 catalog is, what Iceberg makes the catalog responsible for, and what
 LakeCat adds without changing the table format. Chapter 3 fixes the

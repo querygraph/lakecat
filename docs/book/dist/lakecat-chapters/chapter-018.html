@@ -5,8 +5,8 @@
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
   <meta name="author" content="Alexy Khrabrov" />
-  <meta name="dcterms.date" content="2026-08-28" />
-  <title>Appendix D: QGLake Handoff Proof Map</title>
+  <meta name="dcterms.date" content="2026-09-04" />
+  <title>Appendix C: View Receipt-Chain Rules</title>
   <style>
     div.sitenav { display: flex; flex-direction: row; flex-wrap: wrap; }
     span.navlink { flex: 1; }
@@ -47,22 +47,20 @@
 </div>
 <div class="sitenav">
 <span class="navlink">
-<span class="navlink-label">Next:</span> <a href="chapter-019.html" accesskey="n" rel="next">The Catalog Community and Semantic Supply Chain</a>
+<span class="navlink-label">Next:</span> <a href="chapter-019.html" accesskey="n" rel="next">Appendix D: QGLake Handoff Proof Map</a>
 </span>
 <span class="navlink">
-<span class="navlink-label">Previous:</span> <a href="chapter-017.html" accesskey="p" rel="previous">Appendix C: View Receipt-Chain Rules</a>
+<span class="navlink-label">Previous:</span> <a href="chapter-017.html" accesskey="p" rel="previous">Appendix B: Credential And Redaction Contract</a>
 </span>
 </div>
 </nav>
-<h1 data-number="17" id="appendix-d-qglake-handoff-proof-map"><span
-class="header-section-number">17</span> Appendix D: QGLake Handoff Proof
-Map</h1>
-<p>The QGLake handoff is a compact acceptance artifact over several raw
-artifacts: the LakeCat bootstrap bundle, lineage-drain response,
-QueryGraph import plan, captured verifier output, captured replay
-output, and service log. The summary is useful only because every
-compact field can be traced back to a parsed raw artifact and a
-replay-admitted catalog event.</p>
+<h1 data-number="17" id="appendix-c-view-receipt-chain-rules"><span
+class="header-section-number">17</span> Appendix C: View Receipt-Chain
+Rules</h1>
+<p>Ocelot does not claim full Iceberg view-history semantics. It keeps a
+compact, catalog-owned receipt chain so QueryGraph can prove which view
+version was exported, updated, dropped, or tombstoned. Richer view
+semantics remain a Sail-aligned future target.</p>
 <table>
 <colgroup>
 <col style="width: 33%" />
@@ -71,88 +69,76 @@ replay-admitted catalog event.</p>
 </colgroup>
 <thead>
 <tr>
-<th>Proof section</th>
-<th>Binds</th>
-<th>Compared against</th>
+<th>Rule</th>
+<th>Required evidence</th>
+<th>Rejects</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>requestIdentityProof</code></td>
-<td>Principal subject/kind, identity source/state, lineage-drain
-receipt, TypeDID hash slots</td>
-<td>Captured LakeCat replay request identity and saved handoff-verifier
-output</td>
+<td>Stable identity</td>
+<td><code>lakecat:view:&lt;warehouse&gt;:&lt;namespace&gt;:&lt;name&gt;</code>
+plus matching component fields</td>
+<td>Stable IDs that do not match warehouse/namespace/name</td>
 </tr>
 <tr>
-<td><code>queryGraphBootstrapProof</code></td>
-<td>Bundle hash, graph hash, OpenLineage hash, QueryGraph import hash,
-standards, artifact counts, policy count, view receipt hashes</td>
-<td>Bootstrap replay event, bundle manifest, QueryGraph verify/import
-output</td>
+<td>First receipt</td>
+<td>Version 1 <code>upsert</code>, no previous version, no previous
+receipt hash</td>
+<td>Zero-version chains, first tombstones, forged first previous-link
+fields</td>
 </tr>
 <tr>
-<td><code>governedScanProof</code></td>
-<td>Planned/fetched task counts, projections, stats fields, filters,
-read restrictions, policy hashes, TTL cap</td>
-<td>Scan replay sections and operator replay text</td>
+<td>Later upsert</td>
+<td>Previous receipt hash points at the prior receipt; version advances
+by exactly one</td>
+<td>Skipped versions, unsupported operations, broken previous links</td>
 </tr>
 <tr>
-<td><code>tableCommitHistoryProof</code></td>
-<td>Commit count, positive increasing sequence numbers, duplicate-free
-commit hashes, replay/OpenLineage hashes</td>
-<td>Pointer-log read replay and compact summary</td>
+<td>Drop tombstone</td>
+<td>Operation <code>drop</code>, previous receipt hash set,
+<code>view-version</code> remains the deleted version</td>
+<td>Drops that advance the version or omit the previous receipt</td>
 </tr>
 <tr>
-<td><code>viewReceiptChainProof</code></td>
-<td>Accepted view versions, receipt hashes, receipt-chain hashes,
-tombstone receipts, verified-chain counts</td>
-<td>View replay sections, bootstrap view artifacts, receipt-chain
-reads</td>
+<td>Recreate</td>
+<td>New upsert links after the tombstone and advances to the next
+version</td>
+<td>A second unrelated version-1 chain for the same stable view id</td>
 </tr>
 <tr>
-<td><code>managementProof</code></td>
-<td>Server/project/warehouse/policy/storage-profile counts, ID arrays,
-graph event counts, replay/OpenLineage hashes</td>
-<td>Management-list replay sections and QueryGraph bootstrap policy
-count</td>
+<td>Chain header</td>
+<td><code>receipt-count</code>, latest version, latest operation, and
+tombstone flag agree with the last receipt</td>
+<td>Headers that shed receipts or present a forged head</td>
 </tr>
 <tr>
-<td><code>policyUpsertProof</code></td>
-<td>Policy id, ODRL hash, principal/action, graph events,
-replay/OpenLineage hashes</td>
-<td>Policy upsert replay and policy-list proof</td>
+<td>Hash coverage</td>
+<td><code>receipt-hashes</code>, <code>drop-receipt-hashes</code>, and
+<code>chain-hashes</code> exactly cover the nested receipt bodies and
+chains</td>
+<td>Convenient full-looking hashes that do not match the embedded
+chain</td>
 </tr>
 <tr>
-<td><code>storageProfileUpsertProof</code></td>
-<td>Profile id, provider, issuance mode, location-prefix hash,
-secret-ref posture, principal/action</td>
-<td>Storage-profile upsert replay and credential branches</td>
+<td>Durable row binding</td>
+<td>Turso row warehouse/namespace/view columns agree with decoded
+receipt JSON</td>
+<td>A valid-looking receipt body riding a corrupted row index into
+another view</td>
 </tr>
 <tr>
-<td><code>credentialVendingProof</code></td>
-<td>Restricted-agent block, trusted-human exception, credential counts,
-prefix hashes, TTL caps, storage-profile anchor</td>
-<td>Credential replay sections and operator replay text</td>
-</tr>
-<tr>
-<td>Artifact manifest</td>
-<td>Bundle, lineage drain, import plan, captured outputs, service log,
-saved handoff verifier output</td>
-<td>Recomputed file hashes under the handoff summary directory</td>
+<td>QueryGraph handoff</td>
+<td>Accepted view receipt hashes match bootstrap view artifacts and
+compact handoff proof</td>
+<td>Spliced receipt arrays from another view or another run</td>
 </tr>
 </tbody>
 </table>
-<p>The verifier enforces three global rules. First, artifact paths
-resolve under the handoff summary directory before hashing or parsing,
-so a summary cannot splice matching bytes from outside the bundle.
-Second, all integrity anchors are full <code>sha256:</code>-prefixed
-64-hex digests, not readable placeholders. Third, saved sidecars are
-closed over the schema LakeCat compares; a hash match does not make
-extra unverified fields part of the proof.</p>
-<p>This is why the handoff is a release acceptance artifact instead of a
-convenient log bundle. It proves that LakeCat replay, graph projection,
-OpenLineage, QueryGraph verification, and QueryGraph import all agreed
-on the same catalog state.</p>
+<p>The receipt chain is intentionally compact: it proves catalog state
+changes and tombstones, not full SQL engine view semantics. That is
+enough for QueryGraph to reject a bootstrap that lost or borrowed view
+proof while LakeCat keeps richer view interpretation out of the
+catalog.</p>
 </body>
 </html>

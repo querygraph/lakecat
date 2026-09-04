@@ -5,7 +5,7 @@
   <meta name="generator" content="pandoc 3.10.1" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
   <meta name="author" content="Alexy Khrabrov" />
-  <meta name="dcterms.date" content="2026-08-28" />
+  <meta name="dcterms.date" content="2026-09-04" />
   <title>LakeCat</title>
   <style>
 
@@ -141,7 +141,7 @@ height: 0;
 <p class="subtitle">Ocelot: Governed Iceberg REST with Proof Built
 In</p>
 <p class="author">Alexy Khrabrov</p>
-<p class="date">2026-08-28</p>
+<p class="date">2026-09-04</p>
 </header>
 <nav id="TOC" role="doc-toc">
 <ul>
@@ -249,17 +249,25 @@ claim</a></li>
 posture</a></li>
 <li><a href="#reproducing-the-proof" id="toc-reproducing-the-proof"><span class="toc-section-number">13.8</span> Reproducing the proof</a></li>
 </ul></li>
-<li><a href="#appendix-a-replay-admission-matrix" id="toc-appendix-a-replay-admission-matrix"><span class="toc-section-number">14</span> Appendix A: Replay Admission
+<li><a href="#caracal-the-0.4-release" id="toc-caracal-the-0.4-release"><span class="toc-section-number">14</span> Caracal: The 0.4 Release</a>
+<ul>
+<li><a href="#what-shipped-1" id="toc-what-shipped-1"><span class="toc-section-number">14.1</span> What shipped</a></li>
+<li><a href="#caracals-dependency-baseline" id="toc-caracals-dependency-baseline"><span class="toc-section-number">14.2</span> Caracal’s dependency
+baseline</a></li>
+<li><a href="#what-caracal-does-not-claim" id="toc-what-caracal-does-not-claim"><span class="toc-section-number">14.3</span> What Caracal does not
+claim</a></li>
+</ul></li>
+<li><a href="#appendix-a-replay-admission-matrix" id="toc-appendix-a-replay-admission-matrix"><span class="toc-section-number">15</span> Appendix A: Replay Admission
 Matrix</a></li>
-<li><a href="#appendix-b-credential-and-redaction-contract" id="toc-appendix-b-credential-and-redaction-contract"><span class="toc-section-number">15</span> Appendix B: Credential And
+<li><a href="#appendix-b-credential-and-redaction-contract" id="toc-appendix-b-credential-and-redaction-contract"><span class="toc-section-number">16</span> Appendix B: Credential And
 Redaction Contract</a></li>
-<li><a href="#appendix-c-view-receipt-chain-rules" id="toc-appendix-c-view-receipt-chain-rules"><span class="toc-section-number">16</span> Appendix C: View Receipt-Chain
+<li><a href="#appendix-c-view-receipt-chain-rules" id="toc-appendix-c-view-receipt-chain-rules"><span class="toc-section-number">17</span> Appendix C: View Receipt-Chain
 Rules</a></li>
-<li><a href="#appendix-d-qglake-handoff-proof-map" id="toc-appendix-d-qglake-handoff-proof-map"><span class="toc-section-number">17</span> Appendix D: QGLake Handoff Proof
+<li><a href="#appendix-d-qglake-handoff-proof-map" id="toc-appendix-d-qglake-handoff-proof-map"><span class="toc-section-number">18</span> Appendix D: QGLake Handoff Proof
 Map</a></li>
-<li><a href="#the-catalog-community-and-semantic-supply-chain" id="toc-the-catalog-community-and-semantic-supply-chain"><span class="toc-section-number">18</span> The Catalog Community and Semantic
+<li><a href="#the-catalog-community-and-semantic-supply-chain" id="toc-the-catalog-community-and-semantic-supply-chain"><span class="toc-section-number">19</span> The Catalog Community and Semantic
 Supply Chain</a></li>
-<li><a href="#future-work" id="toc-future-work"><span class="toc-section-number">19</span> Future Work</a></li>
+<li><a href="#future-work" id="toc-future-work"><span class="toc-section-number">20</span> Future Work</a></li>
 </ul>
 </nav>
 <section class="cover-page image-cover" epub:type="titlepage">
@@ -282,13 +290,18 @@ lakehouse implementation is <strong>Sail</strong>. Graph behavior
 belongs to <strong>Grust</strong>; governance and capability proof
 belong to <strong>TypeSec</strong>; the end-to-end integration target is
 <strong>QueryGraph</strong>.</p>
-<p>This edition is aligned with <strong>LakeCat 0.3.0, Ocelot</strong>,
-published on July 4, 2026. Ocelot is the point where the architecture in
-this book became a shipped, announcement-ready claim: a stock PyIceberg
-client completed a real REST round-trip, the release-candidate gate
-passed from a clean tree, and the QGLake handoff proved that LakeCat
-replay, OpenLineage evidence, Grust projection, and QueryGraph
-verification/import agreed on the same catalog transition.</p>
+<p>This edition is aligned with <strong>LakeCat 0.4.0, Caracal</strong>,
+published on September 4, 2026. Ocelot (0.3.0) was the point where the
+architecture in this book became a shipped, announcement-ready claim: a
+stock PyIceberg client completed a real REST round-trip, the
+release-candidate gate passed from a clean tree, and the QGLake handoff
+proved that LakeCat replay, OpenLineage evidence, Grust projection, and
+QueryGraph verification/import agreed on the same catalog transition.
+Caracal takes that claim into public: stock Spark, Flink, Trino, DuckDB,
+and PyIceberg against peer catalogs in a neutral harness, deterministic
+fault and migration campaigns, an Apache Ossie semantic supply chain,
+and one released dependency line across Grust, TypeSec, Marciana, and
+QueryGraph.</p>
 <p>This book builds from first principles. Chapter 2 explains what a
 catalog is, what Iceberg makes the catalog responsible for, and what
 LakeCat adds without changing the table format. Chapter 3 fixes the
@@ -1003,17 +1016,14 @@ transcripts. The complete contract, exact artifact and transcript
 hashes, matrix, cleanup proof, and non-claims are in <a href="https://github.com/querygraph/lakecat/blob/dcc3d397cc594345ecdeb052b2364352d47a7a52/docs/ICEBERG-COMMITS.md"><code>ICEBERG-COMMITS.md</code></a>
 and the neutral <a href="https://github.com/querygraph/catalog-bench/blob/fdb2a9af1d8570ef36491beb408aabb71570cce6/docs/COMMIT-CONFORMANCE.md"><code>catalog-bench</code>
 report</a>.</p>
-<p>This is also why Rust did not, by itself, win the benchmark. The
-commit path is I/O-bound, so runtime CPU speed is nearly irrelevant
-against a network PUT and an fsynced transaction, and a warm,
-long-running server running a tight commit loop is the JVM’s best case —
-JIT-compiled hot paths and warm connection pools, with its real
-weaknesses of cold start and memory footprint nowhere in frame. Where
-the Rust implementation keeps its edge is exactly what a warm
-steady-state benchmark hides: no GC pauses and so steadier tail latency,
-a far smaller resident footprint, and instant cold start — properties
-that matter for serverless, edge, and many-tenant-per-host deployments
-rather than for a single warm server in a loop.</p>
+<p>Rust did not, by itself, win the benchmark. The accepted path
+includes a network object write plus private-state work, so connection
+reuse and transaction setup matter more than runtime CPU speed. A warm,
+long-running server running a tight commit loop is also the JVM’s best
+case: JIT-compiled paths and connection pools are hot. Cold start,
+resident memory, and garbage-collection behavior are outside this
+experiment and need separate measurements rather than being inferred
+from it.</p>
 <p>The driver, impartial Docker/MinIO harness, versioned contract, raw
 evidence, and generated reports live in <a href="https://github.com/querygraph/catalog-bench"><code>querygraph/catalog-bench</code></a>.</p>
 <h2 data-number="8.6" id="the-realistic-data-write-path"><span class="header-section-number">8.6</span> The realistic data-write
@@ -1042,14 +1052,19 @@ is ported from lancedb/ocra, attributed in the crate, with the original
 Moka backing store swapped for Foyer. It is opt-in:
 <code>SAIL_OBJECT_STORE_CACHE</code> turns it on, and
 <code>SAIL_OBJECT_STORE_CACHE_PAGE_SIZE</code>, <code>_MEMORY</code>,
-and <code>_METADATA</code> tune it — by default 1 MiB pages, 1 GiB of
-value memory, and 64 MiB of metadata. Because <code>object_store</code>
-exposes its read methods as a non-overridable blanket trait, the cache
-cannot wrap them directly; it intercepts the two range entry points the
-engine actually reads through — <code>get_opts</code> and
-<code>get_ranges</code> — and serves whole pages from memory. The
-current tier is in-memory only; Foyer’s hybrid disk tiering is a
-follow-up the same seam already anticipates.</p>
+<code>_METADATA</code>, and <code>_METADATA_TTL_SECS</code> tune it — by
+default 1 MiB pages, 1 GiB of value memory, 64 MiB of combined
+metadata/path-identity memory, and a 60 second metadata TTL. Because
+<code>object_store</code> exposes its read methods as a non-overridable
+blanket trait, the cache cannot wrap them directly; it intercepts the
+two range entry points the engine actually reads through —
+<code>get_opts</code> and <code>get_ranges</code> — and serves whole
+pages from memory. The current tier is in-memory only; Foyer’s hybrid
+disk tiering is a follow-up the same seam already anticipates. Writes
+invalidate before and after mutation; external replacements rotate the
+object’s compact cache identity after TTL revalidation; conditional and
+version-specific requests bypass the cache. Page, metadata, and
+path-identity state are all capacity bounded.</p>
 <p>On the same files the difference is roughly twenty-six fold: the
 per-file scan median falls from about 47.5 ms cold and uncached to 1.81
 ms warm. None of this lives in LakeCat. A read-through object-store
@@ -1242,10 +1257,14 @@ to read?</li>
 resolve from the <code>lakecat</code> branch of
 <code>github.com/querygraph/sail</code>. <code>Cargo.lock</code> pins
 that branch to revision
-<code>bddb1706ba2308e5029d47f04f03121236edbfa6</code>. The branch is
+<code>dbff52b0dfff5fed302d09a72eeb7feb92f50725</code>. The branch is
 explicit release provenance: it carries the Iceberg planning,
-snapshot-append, and Foyer cache work LakeCat needs until those APIs can
-move to an upstream or published Sail line.</p>
+snapshot-append, Foyer cache, and measured SQL/Iceberg hot-path work
+LakeCat needs until those APIs can move to an upstream or published Sail
+line. The reusable cache and hot-path changes are proposed to LakeSail
+in <a href="https://github.com/lakehq/sail/pull/2400"><code>lakehq/sail#2400</code></a>;
+QueryGraph’s cache implementation is aligned with that reviewed source
+while retaining LakeCat-only provider and commit seams.</p>
 <p>LakeCat evolves under three rules: conform to Iceberg v3 for ordinary
 clients; preserve unknown/emerging v4 metadata without claiming settled
 semantics; prefer typed Sail support the moment it exists, using JSON
@@ -1382,10 +1401,11 @@ receipt boundary used by <code>lakecat-security</code>.</td>
 <tr>
 <td>Sail</td>
 <td><code>0.6.4</code>, git branch <code>querygraph/sail#lakecat</code>,
-locked at <code>bddb1706</code></td>
-<td>Sail supplies Iceberg planning, model, commit-update, and
-object-store-cache behavior not yet consumed from a published
-release.</td>
+locked at <code>dbff52b0</code></td>
+<td>Sail supplies Iceberg planning, model, commit-update, finalized
+object-store-cache behavior, and measured SQL/Iceberg hot paths not yet
+consumed from a published release; reusable work is proposed upstream in
+<code>lakehq/sail#2400</code>.</td>
 </tr>
 <tr>
 <td>QueryGraph</td>
@@ -2230,6 +2250,62 @@ evidence, and secret-ref posture rather than leaking credential
 material. This is an extension today. The future proposal candidate is
 not “TypeSec in Iceberg”; it is a policy-engine-neutral governed access
 profile with proof-carrying scan and credential posture.</p>
+<p>For a purpose-bound scan, LakeCat now makes that binding durable. The
+additive scan response can carry a versioned
+<code>GovernedScanProof</code> over the current table version and
+snapshot, ordered effective projection, principal, purpose, and
+canonical domain-separated digests of the Sail plan tasks, verified
+identity, original authorization receipt, and policy decision. The
+memory and Turso catalog stores retain the corresponding grant without
+raw plan tokens, reusable receipts, TypeDID envelopes, credentials, or
+signing material. Turso creation is idempotent under concurrent requests
+and the grant remains available after the service reopens.</p>
+<p>A received proof is not trusted merely because it deserializes.
+LakeCat’s shared core validator limits each identity or field to 4 KiB
+and limits projections and namespaces to 256 entries and 64 KiB in
+total. It also requires trimmed, control-free text, unique projection
+fields, and constructor-equivalent validation of warehouse, namespace,
+and table names. Issuance and integrity checking share this contract,
+and structural validation runs before proof JSON is serialized or
+hashed. Persisted grant principals, policy-engine identities, and
+optional requested projections reuse the same limits. This makes the
+public in-process adapter fail before durable lookup on malformed or
+oversized proof shape and gives Marciana and QueryGraph one
+LakeCat-owned validator to reuse.</p>
+<p>LakeCat likewise owns the canonical snapshot and source-scope digests
+used by those adapters. Proof schema v2 and its v2 proof-digest domain
+now bind the catalog identity selected by trusted LakeCat process
+configuration at issuance. <code>LAKECAT_CATALOG_IDENTITY</code> may set
+it at deployment time; otherwise LakeCat derives a bounded stable
+default from the warehouse. Request data never selects it, and its
+bounded type validates canonical shape rather than authenticating an
+arbitrary string. Legacy v1 and identity-less proofs therefore fail
+closed.</p>
+<p>The snapshot v1 domain binds the proof-owned catalog identity to the
+exact table identity, table version, and snapshot after proof
+validation. The source-scope v1 domain composes that snapshot digest
+with the durable grant ID. Their fields and semantics did not change, so
+both digest domains remain v1 while ownership moved into the v2 proof.
+QueryGraph and Marciana consume one LakeCat-produced pair instead of
+supplying a catalog string or reproducing canonicalization; the pair’s
+private fields come from one proof-validation and snapshot-hash
+pass.</p>
+<p>Before downstream cognition applies a proposal, LakeCat’s in-process
+revalidation API reloads the exact grant, checks current table and
+policy state, and requests a fresh governance decision. Stale snapshots,
+revocation, or drift in purpose, ordered projection, restriction,
+subject, authority scope, or policy decision fail closed. The sealed,
+non-deserializable result keeps the exact durable proof, paired
+snapshot/source-scope digests, and current projection while reporting
+fresh authorization and policy digests separately; callers cannot
+construct the result or pair unrelated values. Its local
+<code>revalidated_at</code> completion time is an observation, not
+signed evidence and not an authorization lease. One digest pair is
+source provenance and the fresh decisions are application-time
+authority, so callers must not substitute them. Marciana or QueryGraph
+can consume this through an optional adapter. LakeCat does not add a
+revalidation REST route, and normal Iceberg clients do not depend on the
+proof schema.</p>
 <p>QueryGraph and QGLake handoff surfaces are product integration
 surfaces, not standard Iceberg semantics. QueryGraph needs bootstrap
 evidence, management inventory, table and view manifests, OpenLineage
@@ -2329,13 +2405,14 @@ effects recoverable, and downstream proof admission fail-closed.</td>
 reliability and event-admission profiles.</td>
 </tr>
 <tr>
-<td>Governed scan receipts</td>
+<td>Governed scan grants</td>
 <td>Iceberg provides table metadata that engines can plan; it does not
-define TypeSec authorization receipts.</td>
-<td>TypeSec decides capability and restriction, LakeCat binds the
-receipt to catalog state, and Sail produces bounded table work.</td>
-<td>Extension today. Plausible future proof-carrying scan profile if
-policy-engine-neutral and engine-neutral.</td>
+define TypeSec authorization receipts or cognition grants.</td>
+<td>TypeSec decides capability and restriction, Sail produces bounded
+table work, and LakeCat issues, durably stores, and freshly revalidates
+a secret-free proof over both.</td>
+<td>Additive extension today. It stays beside standard Iceberg routes
+and is consumed through an optional in-process adapter.</td>
 </tr>
 <tr>
 <td>Governed credential receipts</td>
@@ -2742,7 +2819,134 @@ compact handoff verifier then repeats the same checks against saved
 artifacts. Appendix A lists the replay-admission contract, Appendix B
 captures credential redaction, Appendix C captures view receipt chains,
 and Appendix D maps the QGLake handoff proof.</p>
-<h1 data-number="14" id="appendix-a-replay-admission-matrix"><span class="header-section-number">14</span> Appendix A: Replay Admission
+<h1 data-number="14" id="caracal-the-0.4-release"><span class="header-section-number">14</span> Caracal: The 0.4 Release</h1>
+<p>Caracal is the catalog-community release. Where Ocelot proved that a
+stock Iceberg client could use LakeCat, Caracal proves it in public,
+against peers, under strain, and with the rest of the QueryGraph stack
+on one released dependency line. It closes the six catalog-community
+phases recorded in the previous chapter and merges the governed-scan
+grant and performance line that had been developed beside them.</p>
+<h2 data-number="14.1" id="what-shipped-1"><span class="header-section-number">14.1</span> What shipped</h2>
+<ul>
+<li><strong>Neutral conformance.</strong> Stock Spark 4.1.3, Flink
+2.1.3, Trino 483, DuckDB 1.5.3, and PyIceberg 0.11.1 against LakeCat,
+Apache Polaris 1.7.0, Apache Gravitino 1.3.0, Lakekeeper 0.13.3, and
+Apache Nessie through the unranked <code>querygraph/catalog-bench</code>
+harness: every catalog–engine cell passes the common
+write/read/evolution contract, and every defect found on the way was
+fixed at its owner — REST and catalog behavior in LakeCat, reusable
+Iceberg update semantics in Sail — without a client-specific shim.</li>
+<li><strong>Recovery and migration.</strong> Deterministic
+before-upstream and after-upstream object-store faults, mid-request
+restart, cold restore from run-owned volumes, transactional outbox
+outage and replay, four-direction metadata-pointer migration with
+Polaris and Lakekeeper, and a HadoopCatalog cookbook.</li>
+<li><strong>The semantic supply chain.</strong> Apache Ossie models are
+structurally and physically validated, policy-bound, compare-and-swap
+published through the new <code>ModelPublication</code> management
+boundary, projected into Grust and OpenLineage from the outbox, and
+bound to seven proof bases before an answer is admitted; six independent
+drift injections are rejected.</li>
+<li><strong>Governed-scan grants.</strong> Durable, secret-free scan
+grants with a sealed owner proof, a bounded scan scope, and a trusted
+service-owned catalog identity (<code>LAKECAT_CATALOG_IDENTITY</code>)
+that request data can never supply.</li>
+<li><strong>Contention and identity hardening.</strong> Eight-writer
+same-table contention now resolves to exactly one winner plus honest 409
+conflicts with zero request errors, exhausted transient contention
+returns 503 rather than 500, and namespace identity is component-safe at
+every durable boundary (<code>v1:1:a:1:b</code> can no longer alias
+<code>v1:3:a.b</code>).</li>
+<li><strong>Evidence performance.</strong> Streamed canonical hashing,
+batched catalog reads, bulk policy-binding lookup, and warehouse-scoped
+view and receipt reads on the QueryGraph bootstrap path, with Criterion
+benchmarks for the commit, scan, and bootstrap paths.</li>
+<li><strong>Two papers.</strong> <em>LakeCat: A Thin, Governed,
+Replayable Catalog Foundation</em> and <em>Getting Out of the Way:
+Engine Truth, Typed Governance, and the Thin Catalog</em>, both
+published through First Pair.</li>
+</ul>
+<h2 data-number="14.2" id="caracals-dependency-baseline"><span class="header-section-number">14.2</span> Caracal’s dependency
+baseline</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Component</th>
+<th>Caracal baseline</th>
+<th>Relationship to LakeCat</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LakeCat workspace</td>
+<td><code>0.4.0</code>, Caracal</td>
+<td>All LakeCat crates and <code>qglake-bundle</code> share the
+workspace version.</td>
+</tr>
+<tr>
+<td>Grust</td>
+<td><code>0.13.0</code>, Prawn, crates.io</td>
+<td>The first Grust line in which every publishable crate ships in
+lockstep; <code>grust-graph</code> and <code>grust-turso</code> provide
+graph projection, Cypher, and the durable Turso graph backend.</td>
+</tr>
+<tr>
+<td>TypeSec</td>
+<td><code>0.14.0</code>, Dorsoduro, crates.io</td>
+<td>Tracks Grust 0.13 from crates.io only and adds signed,
+immutable-model-bound semantic decision receipts, which the Ossie
+publication path consumes.</td>
+</tr>
+<tr>
+<td>Turso</td>
+<td><code>0.7.2</code>, crates.io</td>
+<td>The store moves from the <code>0.7.0-pre.10</code> prerelease to the
+stable line that <code>grust-turso</code> 0.13 uses, so one Turso is
+linked; the MVCC <code>BEGIN CONCURRENT</code> contention tests pass
+unchanged.</td>
+</tr>
+<tr>
+<td>Sail</td>
+<td><code>0.6.4</code>, git branch
+<code>querygraph/sail#lakecat</code></td>
+<td>Iceberg planning, commit-update, staged-create,
+<code>add-spec</code>, and object-store-cache behavior not yet consumed
+from a published release.</td>
+</tr>
+<tr>
+<td>Marciana</td>
+<td><code>0.13.0</code>, crates.io</td>
+<td>Acceptance peer; consumes <code>lakecat-core</code> for governed
+cognition sources.</td>
+</tr>
+<tr>
+<td>QueryGraph</td>
+<td><code>0.5.0</code>, Harrier</td>
+<td>Acceptance peer; its importer consumes <code>qglake-bundle</code>
+and <code>lakecat-core</code> <code>0.4.0</code> while the QGLake
+handoff gate drives verify/import under <code>--locked</code>.</td>
+</tr>
+</tbody>
+</table>
+<h2 data-number="14.3" id="what-caracal-does-not-claim"><span class="header-section-number">14.3</span> What Caracal does not
+claim</h2>
+<p>Every catalog-community result is a bounded correctness observation,
+not a throughput ranking or a production-availability claim; the
+disclosed deployment topologies, engine versions, and known gaps travel
+with each bundle. The Ossie evaluation covers five representative
+answers and one converter, whose round trip is recorded as
+<code>verified-with-loss</code>. The governance findings that
+FABLE-REVIEW-1 left open — context-blind policy invocation, the
+header-trusted principal and its raw-credential heuristic, the unlabeled
+TypeSec allow-all path, and unsigned legacy plan-task forms — remain
+open and are the next hardening line. Typed Iceberg v4 remains Sail work
+behind the explicit JSON bridge.</p>
+<h1 data-number="15" id="appendix-a-replay-admission-matrix"><span class="header-section-number">15</span> Appendix A: Replay Admission
 Matrix</h1>
 <p>Replay admission is the line between durable catalog fact and
 downstream proof. An outbox row may be stored, but it is not allowed to
@@ -2880,7 +3084,7 @@ another</td>
 narrative: every event must be scoped, actor-bound, action-bound, closed
 over the fields LakeCat actually verifies, and redacted before it
 becomes downstream evidence.</p>
-<h1 data-number="15" id="appendix-b-credential-and-redaction-contract"><span class="header-section-number">15</span> Appendix B: Credential And
+<h1 data-number="16" id="appendix-b-credential-and-redaction-contract"><span class="header-section-number">16</span> Appendix B: Credential And
 Redaction Contract</h1>
 <p>Credential handling is where catalog convenience can become security
 risk. LakeCat’s posture is therefore narrow: governed Sail-planned reads
@@ -2974,7 +3178,7 @@ credential root exists, while credential vending proves whether a caller
 received raw storage reach. QueryGraph can reason over both without
 seeing the raw root, secret URI, backend error, token, or returned
 credential material.</p>
-<h1 data-number="16" id="appendix-c-view-receipt-chain-rules"><span class="header-section-number">16</span> Appendix C: View Receipt-Chain
+<h1 data-number="17" id="appendix-c-view-receipt-chain-rules"><span class="header-section-number">17</span> Appendix C: View Receipt-Chain
 Rules</h1>
 <p>Ocelot does not claim full Iceberg view-history semantics. It keeps a
 compact, catalog-owned receipt chain so QueryGraph can prove which view
@@ -3059,7 +3263,7 @@ changes and tombstones, not full SQL engine view semantics. That is
 enough for QueryGraph to reject a bootstrap that lost or borrowed view
 proof while LakeCat keeps richer view interpretation out of the
 catalog.</p>
-<h1 data-number="17" id="appendix-d-qglake-handoff-proof-map"><span class="header-section-number">17</span> Appendix D: QGLake Handoff Proof
+<h1 data-number="18" id="appendix-d-qglake-handoff-proof-map"><span class="header-section-number">18</span> Appendix D: QGLake Handoff Proof
 Map</h1>
 <p>The QGLake handoff is a compact acceptance artifact over several raw
 artifacts: the LakeCat bootstrap bundle, lineage-drain response,
@@ -3158,7 +3362,7 @@ extra unverified fields part of the proof.</p>
 convenient log bundle. It proves that LakeCat replay, graph projection,
 OpenLineage, QueryGraph verification, and QueryGraph import all agreed
 on the same catalog state.</p>
-<h1 data-number="18" id="the-catalog-community-and-semantic-supply-chain"><span class="header-section-number">18</span> The Catalog Community and
+<h1 data-number="19" id="the-catalog-community-and-semantic-supply-chain"><span class="header-section-number">19</span> The Catalog Community and
 Semantic Supply Chain</h1>
 <p>LakeCat’s public comparison program now treats Polaris, Gravitino,
 and Lakekeeper as protocol peers. The most useful evidence is not
@@ -3200,7 +3404,7 @@ gaps, reproduction and demo guides, and public review issues for all
 four catalogs. An open review issue is an opportunity for correction,
 not maintainer endorsement. Corrections create a new feedback-bundle
 version; historical evidence is never rewritten.</p>
-<h1 data-number="19" id="future-work"><span class="header-section-number">19</span> Future Work</h1>
+<h1 data-number="20" id="future-work"><span class="header-section-number">20</span> Future Work</h1>
 <p>LakeCat is a direction more than a single release. The next stage
 should keep the architecture more true without pushing engine, graph, or
 security semantics back into the catalog.</p>
@@ -3210,7 +3414,14 @@ LakeCat now proves the narrower boundary: a downstream QueryGraph
 workflow binds an allowed answer to physical, model, artifact, policy,
 plan, graph, and lineage hashes. Future work should carry those accepted
 anchors into Marciana provenance without copying raw table data into the
-catalog or making LakeCat responsible for recall.</p>
+catalog or making LakeCat responsible for recall. Implementing agent
+memory is not a LakeCat backlog item. LakeCat now owns the narrow
+governed-source boundary needed by downstream Marciana work: a durable
+secret-free scan grant plus fresh in-process revalidation of current
+catalog and policy state. Marciana still owns cognition, proposals,
+protected memory, jobs, and recall; its optional LakeCat adapter joins
+the original grant and fresh authority evidence to the TypeSec
+application request without copying raw table data into the catalog.</p>
 <ol type="1">
 <li>Point the Sail git dependency at upstream (or a published crate)
 only after the required helpers land there, then retire the
@@ -3237,10 +3448,10 @@ locked receipt-chain and graph-handoff proof.</li>
 <li>Prove the bootstrap bundle through QueryGraph import on every
 meaningful public-surface change, and keep local release evidence ahead
 of cloud CI.</li>
-<li>Define an optional handoff profile that binds governed answer text
-to LakeCat receipt and lineage hashes before qg-rust writes it to
-Marciana, while keeping capability minting, content rehydration, and
-recall wholly in TypeSec and QueryGraph.</li>
+<li>Keep the governed-scan proof schema versioned and exercise the
+optional Marciana/QueryGraph adapter against LakeCat’s in-process
+revalidation API, while keeping capability minting, content rehydration,
+cognition, and recall outside LakeCat.</li>
 </ol>
 <p>That optional binding must preserve the upstream v1 limits rather
 than turning them into LakeCat claims. <code>MemoryId::next()</code> is
