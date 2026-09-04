@@ -45,6 +45,18 @@ Start from a clean repo:
 git status --short --branch
 ```
 
+Check the stack-wide dependency graph before anything else. LakeCat sits
+between TypeSec/Grust (upstream) and Marciana/QueryGraph (downstream); the
+authoritative pin matrix and its checker live in the QueryGraph repository:
+
+```sh
+python3 ../querygraph/scripts/check-stack-dependencies.py --check
+```
+
+A stale pin anywhere in `grust -> typesec -> marciana -> lakecat -> querygraph`
+is a release blocker. Regenerate the matrix there (`--write`) in the same
+change that bumps a pin, and release downstream siblings after LakeCat.
+
 Confirm dependency posture before the heavy gate:
 
 ```sh
